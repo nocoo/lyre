@@ -139,13 +139,13 @@ describe("getStatusInfo", () => {
   test("returns correct info for transcribing", () => {
     const info = getStatusInfo("transcribing");
     expect(info.label).toBe("Transcribing");
-    expect(info.variant).toBe("outline");
+    expect(info.variant).toBe("warning");
   });
 
   test("returns correct info for completed", () => {
     const info = getStatusInfo("completed");
     expect(info.label).toBe("Completed");
-    expect(info.variant).toBe("default");
+    expect(info.variant).toBe("success");
   });
 
   test("returns correct info for failed", () => {

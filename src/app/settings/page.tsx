@@ -172,7 +172,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="success" className="text-xs">
                   Connected
                 </Badge>
                 <span className="text-xs text-muted-foreground">

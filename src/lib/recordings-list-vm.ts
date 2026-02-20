@@ -71,13 +71,13 @@ export function formatDate(timestampMs: number): string {
 
 export interface StatusInfo {
   label: string;
-  variant: "default" | "secondary" | "destructive" | "outline";
+  variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info";
 }
 
 const STATUS_MAP: Record<RecordingStatus, StatusInfo> = {
   uploaded: { label: "Uploaded", variant: "secondary" },
-  transcribing: { label: "Transcribing", variant: "outline" },
-  completed: { label: "Completed", variant: "default" },
+  transcribing: { label: "Transcribing", variant: "warning" },
+  completed: { label: "Completed", variant: "success" },
   failed: { label: "Failed", variant: "destructive" },
 };
 
