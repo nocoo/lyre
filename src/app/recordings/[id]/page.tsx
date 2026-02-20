@@ -71,7 +71,6 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [transcribing, setTranscribing] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [pollStatus, setPollStatus] = useState<string | null>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Load recording detail ──
   const loadDetail = useCallback(async () => {
@@ -120,8 +119,12 @@ function RecordingDetailContent({ id }: { id: string }) {
   }, [id, detail?.ossKey]);
 
   // ── Poll job status ──
+  // Uses visibilitychange to pause polling when tab is hidden
+  // and immediately re-poll when the user returns.
   useEffect(() => {
     if (!activeJobId) return;
+
+    let timer: ReturnType<typeof setInterval> | null = null;
 
     const pollJob = async () => {
       try {
@@ -142,15 +145,36 @@ function RecordingDetailContent({ id }: { id: string }) {
       }
     };
 
-    // Run immediately, then set interval
-    void pollJob();
-    pollTimerRef.current = setInterval(() => void pollJob(), POLL_INTERVAL_MS);
+    const startPolling = () => {
+      if (timer) return;
+      void pollJob(); // Immediate poll
+      timer = setInterval(() => void pollJob(), POLL_INTERVAL_MS);
+    };
+
+    const stopPolling = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        startPolling(); // Re-poll immediately when user returns
+      } else {
+        stopPolling(); // Pause in background to save resources
+      }
+    };
+
+    // Start polling if tab is currently visible
+    if (document.visibilityState === "visible") {
+      startPolling();
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [activeJobId, loadDetail]);
 
