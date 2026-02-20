@@ -144,21 +144,21 @@ settings
 
 | #  | Commit | Status |
 | -- | ------ | ------ |
-| 1  | `feat: add recording types and mock data` | pending |
-| 2  | `feat: add recordings list view model` | pending |
-| 3  | `test: add recordings list view model tests` | pending |
-| 4  | `feat: add recording detail view model` | pending |
-| 5  | `test: add recording detail view model tests` | pending |
-| 6  | `feat: add recording card component` | pending |
-| 7  | `feat: add recordings list page` | pending |
-| 8  | `feat: add audio player component` | pending |
-| 9  | `feat: add transcript viewer component` | pending |
-| 10 | `feat: add recording detail page` | pending |
-| 11 | `feat: add settings page` | pending |
-| 12 | `test: add page render tests and raise coverage baseline` | pending |
-| 13 | `feat: add mock api routes for recordings` | pending |
-| 14 | `feat: add health check api route` | pending |
-| 15 | `test: add e2e tests for mock api routes` | pending |
+| 1  | `feat: add recording types and mock data` | done |
+| 2  | `feat: add recordings list view model` | done |
+| 3  | `test: add recordings list view model tests` | done |
+| 4  | `feat: add recording detail view model` | done |
+| 5  | `test: add recording detail view model tests` | done |
+| 6  | `feat: add recording card component` | done |
+| 7  | `feat: add recordings list page` | done |
+| 8  | `feat: add audio player component` | done |
+| 9  | `feat: add transcript viewer component` | done |
+| 10 | `feat: add recording detail page` | done |
+| 11 | `feat: add settings page` | done |
+| 12 | `test: raise coverage baseline to ≥90%` | done |
+| 13 | `feat: add mock api routes for recordings` | done |
+| 14 | `feat: add health check api route` | done (phase 1) |
+| 15 | `test: add e2e tests for mock api routes` | done |
 
 ## Phase 4: Database Layer
 
