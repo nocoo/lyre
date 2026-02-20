@@ -225,6 +225,7 @@ export function UploadDialog({
           duration,
           format: file.type.split("/")[1] ?? "unknown",
           ossKey,
+          recordedAt: file.lastModified || null,
         }),
       });
 
