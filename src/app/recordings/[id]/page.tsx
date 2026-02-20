@@ -3,12 +3,22 @@
 import { use, useRef, useState, useCallback, useEffect } from "react";
 import {
   ArrowLeft,
-  Play,
+  Calendar,
+  Check,
+  ChevronsUpDown,
+  Download,
+  FileText,
+  Folder,
+  FolderOpen,
   Loader2,
   AlertCircle,
-  FileText,
+  Play,
+  Plus,
+  StickyNote,
+  Tag,
   Trash2,
   RotateCcw,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,6 +33,22 @@ import {
 } from "@/components/transcript-viewer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +61,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
-import type { RecordingDetail, TranscriptionJob } from "@/lib/types";
+import type {
+  RecordingDetail,
+  TranscriptionJob,
+  Tag as TagType,
+  Folder as FolderType,
+} from "@/lib/types";
 
 type PageParams = { params: Promise<{ id: string }> };
 
@@ -71,6 +102,20 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [transcribing, setTranscribing] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [pollStatus, setPollStatus] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  // Editable fields
+  const [notes, setNotes] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [recordedAtDate, setRecordedAtDate] = useState("");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [allTags, setAllTags] = useState<TagType[]>([]);
+  const [allFolders, setAllFolders] = useState<FolderType[]>([]);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [folderOpen, setFolderOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [creatingTag, setCreatingTag] = useState(false);
 
   // ── Load recording detail ──
   const loadDetail = useCallback(async () => {
@@ -79,6 +124,13 @@ function RecordingDetailContent({ id }: { id: string }) {
       if (res.ok) {
         const data = (await res.json()) as RecordingDetail;
         setDetail(data);
+        // Sync editable fields
+        setNotes(data.notes ?? "");
+        setRecordedAtDate(
+          data.recordedAt ? toDateInputValue(data.recordedAt) : "",
+        );
+        setSelectedTagIds(data.resolvedTags.map((t) => t.id));
+        setSelectedFolderId(data.folderId);
         return data;
       }
     } catch {
@@ -87,10 +139,26 @@ function RecordingDetailContent({ id }: { id: string }) {
     return null;
   }, [id]);
 
+  // ── Load user's tags and folders ──
+  const loadTagsAndFolders = useCallback(async () => {
+    const [tagsRes, foldersRes] = await Promise.all([
+      fetch("/api/tags"),
+      fetch("/api/folders"),
+    ]);
+    if (tagsRes.ok) {
+      const data = (await tagsRes.json()) as { items: TagType[] };
+      setAllTags(data.items);
+    }
+    if (foldersRes.ok) {
+      const data = (await foldersRes.json()) as { items: FolderType[] };
+      setAllFolders(data.items);
+    }
+  }, []);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const data = await loadDetail();
+      const [data] = await Promise.all([loadDetail(), loadTagsAndFolders()]);
       setLoading(false);
 
       // If the recording is currently transcribing with an active job, resume polling
@@ -103,7 +171,7 @@ function RecordingDetailContent({ id }: { id: string }) {
       }
     }
     void load();
-  }, [loadDetail]);
+  }, [loadDetail, loadTagsAndFolders]);
 
   // ── Fetch presigned play URL ──
   useEffect(() => {
@@ -228,6 +296,102 @@ function RecordingDetailContent({ id }: { id: string }) {
     }
   }, [id, router]);
 
+  // ── Download handler ──
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/recordings/${id}/download-url`);
+      if (res.ok) {
+        const data = (await res.json()) as { downloadUrl: string };
+        window.open(data.downloadUrl, "_blank");
+      }
+    } finally {
+      setDownloading(false);
+    }
+  }, [id]);
+
+  // ── Save field via PUT ──
+  const updateRecording = useCallback(
+    async (updates: Record<string, unknown>) => {
+      await fetch(`/api/recordings/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+    },
+    [id],
+  );
+
+  // ── Notes save on blur ──
+  const handleNotesSave = useCallback(async () => {
+    if (notes === (detail?.notes ?? "")) return;
+    setNotesSaving(true);
+    await updateRecording({ notes: notes || null });
+    setNotesSaving(false);
+  }, [notes, detail?.notes, updateRecording]);
+
+  // ── Tag toggle ──
+  const handleToggleTag = useCallback(
+    async (tagId: string) => {
+      const next = selectedTagIds.includes(tagId)
+        ? selectedTagIds.filter((t) => t !== tagId)
+        : [...selectedTagIds, tagId];
+      setSelectedTagIds(next);
+      await updateRecording({ tagIds: next });
+      await loadDetail();
+    },
+    [selectedTagIds, updateRecording, loadDetail],
+  );
+
+  // ── Create new tag and assign ──
+  const handleCreateTag = useCallback(async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    setCreatingTag(true);
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok || res.status === 409) {
+        const data = (await res.json()) as TagType | { error: string; tag: TagType };
+        const tag = "tag" in data ? data.tag : data;
+        setAllTags((prev) =>
+          prev.some((t) => t.id === tag.id) ? prev : [...prev, tag],
+        );
+        const next = [...selectedTagIds, tag.id];
+        setSelectedTagIds(next);
+        await updateRecording({ tagIds: next });
+        await loadDetail();
+      }
+    } finally {
+      setNewTagName("");
+      setCreatingTag(false);
+    }
+  }, [newTagName, selectedTagIds, updateRecording, loadDetail]);
+
+  // ── Folder change ──
+  const handleFolderChange = useCallback(
+    async (folderId: string | null) => {
+      setSelectedFolderId(folderId);
+      setFolderOpen(false);
+      await updateRecording({ folderId });
+      await loadDetail();
+    },
+    [updateRecording, loadDetail],
+  );
+
+  // ── RecordedAt change ──
+  const handleRecordedAtChange = useCallback(
+    async (dateStr: string) => {
+      setRecordedAtDate(dateStr);
+      const ms = dateStr ? new Date(dateStr).getTime() : null;
+      await updateRecording({ recordedAt: ms });
+    },
+    [updateRecording],
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -271,6 +435,22 @@ function RecordingDetailContent({ id }: { id: string }) {
 
           {/* Actions */}
           <div className="flex shrink-0 gap-2">
+            {/* Download */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={handleDownload}
+              disabled={downloading}
+            >
+              {downloading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" strokeWidth={1.5} />
+              )}
+              Download
+            </Button>
+
             {vm.metadata.canTranscribe && (
               <Button
                 size="sm"
@@ -353,7 +533,33 @@ function RecordingDetailContent({ id }: { id: string }) {
         format={vm.metadata.format}
         sampleRate={vm.metadata.sampleRate}
         createdAt={vm.metadata.createdAt}
-        tags={vm.metadata.tags}
+        recordedAt={vm.metadata.recordedAt}
+        folderName={vm.metadata.folderName}
+        tags={vm.metadata.resolvedTags}
+      />
+
+      {/* Editable properties */}
+      <EditableProperties
+        notes={notes}
+        onNotesChange={setNotes}
+        onNotesSave={handleNotesSave}
+        notesSaving={notesSaving}
+        recordedAtDate={recordedAtDate}
+        onRecordedAtChange={handleRecordedAtChange}
+        selectedTagIds={selectedTagIds}
+        allTags={allTags}
+        tagsOpen={tagsOpen}
+        onTagsOpenChange={setTagsOpen}
+        onToggleTag={handleToggleTag}
+        newTagName={newTagName}
+        onNewTagNameChange={setNewTagName}
+        onCreateTag={handleCreateTag}
+        creatingTag={creatingTag}
+        selectedFolderId={selectedFolderId}
+        allFolders={allFolders}
+        folderOpen={folderOpen}
+        onFolderOpenChange={setFolderOpen}
+        onFolderChange={handleFolderChange}
       />
 
       {/* Audio player */}
@@ -446,6 +652,15 @@ function NotFound() {
   );
 }
 
+/** Convert Unix ms to YYYY-MM-DD for <input type="date"> */
+function toDateInputValue(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function MetadataGrid({
   fileName,
   fileSize,
@@ -453,6 +668,8 @@ function MetadataGrid({
   format,
   sampleRate,
   createdAt,
+  recordedAt,
+  folderName,
   tags,
 }: {
   fileName: string;
@@ -461,7 +678,9 @@ function MetadataGrid({
   format: string;
   sampleRate: string;
   createdAt: string;
-  tags: string[];
+  recordedAt: string;
+  folderName: string;
+  tags: TagType[];
 }) {
   const items = [
     { label: "File", value: fileName },
@@ -470,11 +689,13 @@ function MetadataGrid({
     { label: "Format", value: format },
     { label: "Sample Rate", value: sampleRate },
     { label: "Created", value: createdAt },
+    ...(recordedAt ? [{ label: "Recorded", value: recordedAt }] : []),
+    ...(folderName ? [{ label: "Folder", value: folderName }] : []),
   ];
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 md:grid-cols-4">
         {items.map((item) => (
           <div key={item.label}>
             <p className="text-xs font-medium text-muted-foreground">
@@ -489,8 +710,8 @@ function MetadataGrid({
       {tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
           {tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-xs">
-              {tag}
+            <Badge key={tag.id} variant="secondary" className="text-xs">
+              {tag.name}
             </Badge>
           ))}
         </div>
@@ -592,6 +813,246 @@ function JobInfoCard({
           <p className="text-xs text-muted-foreground">Processing Time</p>
           <p className="text-sm text-foreground">{processingDuration}</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Editable Properties ──
+
+function EditableProperties({
+  notes,
+  onNotesChange,
+  onNotesSave,
+  notesSaving,
+  recordedAtDate,
+  onRecordedAtChange,
+  selectedTagIds,
+  allTags,
+  tagsOpen,
+  onTagsOpenChange,
+  onToggleTag,
+  newTagName,
+  onNewTagNameChange,
+  onCreateTag,
+  creatingTag,
+  selectedFolderId,
+  allFolders,
+  folderOpen,
+  onFolderOpenChange,
+  onFolderChange,
+}: {
+  notes: string;
+  onNotesChange: (v: string) => void;
+  onNotesSave: () => void;
+  notesSaving: boolean;
+  recordedAtDate: string;
+  onRecordedAtChange: (v: string) => void;
+  selectedTagIds: string[];
+  allTags: TagType[];
+  tagsOpen: boolean;
+  onTagsOpenChange: (open: boolean) => void;
+  onToggleTag: (tagId: string) => void;
+  newTagName: string;
+  onNewTagNameChange: (v: string) => void;
+  onCreateTag: () => void;
+  creatingTag: boolean;
+  selectedFolderId: string | null;
+  allFolders: FolderType[];
+  folderOpen: boolean;
+  onFolderOpenChange: (open: boolean) => void;
+  onFolderChange: (folderId: string | null) => void;
+}) {
+  const selectedFolder = allFolders.find((f) => f.id === selectedFolderId);
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+      <p className="text-xs font-medium text-muted-foreground">Properties</p>
+
+      {/* Recorded date */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />
+          Recorded Date
+        </label>
+        <Input
+          type="date"
+          value={recordedAtDate}
+          onChange={(e) => onRecordedAtChange(e.target.value)}
+          className="w-48"
+        />
+      </div>
+
+      {/* Folder picker */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Folder className="h-3.5 w-3.5" strokeWidth={1.5} />
+          Folder
+        </label>
+        <Popover open={folderOpen} onOpenChange={onFolderOpenChange}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-48 justify-between"
+            >
+              {selectedFolder ? (
+                <span className="flex items-center gap-1.5 truncate">
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
+                  {selectedFolder.name}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">No folder</span>
+              )}
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-0" align="start">
+            <Command>
+              <CommandList>
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => onFolderChange(null)}
+                    className="gap-2"
+                  >
+                    <Check
+                      className={`h-3.5 w-3.5 ${selectedFolderId === null ? "opacity-100" : "opacity-0"}`}
+                    />
+                    <span className="text-muted-foreground">No folder</span>
+                  </CommandItem>
+                  {allFolders.map((folder) => (
+                    <CommandItem
+                      key={folder.id}
+                      onSelect={() => onFolderChange(folder.id)}
+                      className="gap-2"
+                    >
+                      <Check
+                        className={`h-3.5 w-3.5 ${selectedFolderId === folder.id ? "opacity-100" : "opacity-0"}`}
+                      />
+                      {folder.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Tags combobox */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
+          Tags
+        </label>
+        {/* Selected tags */}
+        {selectedTagIds.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selectedTagIds.map((tagId) => {
+              const tag = allTags.find((t) => t.id === tagId);
+              if (!tag) return null;
+              return (
+                <Badge
+                  key={tag.id}
+                  variant="secondary"
+                  className="gap-1 text-xs cursor-pointer"
+                  onClick={() => onToggleTag(tag.id)}
+                >
+                  {tag.name}
+                  <X className="h-3 w-3" strokeWidth={1.5} />
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+        <Popover open={tagsOpen} onOpenChange={onTagsOpenChange}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
+              Add tag
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-0" align="start">
+            <Command>
+              <CommandInput
+                placeholder="Search tags..."
+                value={newTagName}
+                onValueChange={onNewTagNameChange}
+              />
+              <CommandList>
+                <CommandEmpty>
+                  {newTagName.trim() ? (
+                    <button
+                      className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                      onClick={onCreateTag}
+                      disabled={creatingTag}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Create &ldquo;{newTagName.trim()}&rdquo;
+                    </button>
+                  ) : (
+                    "No tags found."
+                  )}
+                </CommandEmpty>
+                <CommandGroup>
+                  {allTags.map((tag) => (
+                    <CommandItem
+                      key={tag.id}
+                      onSelect={() => onToggleTag(tag.id)}
+                      className="gap-2"
+                    >
+                      <Check
+                        className={`h-3.5 w-3.5 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
+                      />
+                      {tag.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                {newTagName.trim() &&
+                  !allTags.some(
+                    (t) =>
+                      t.name.toLowerCase() === newTagName.trim().toLowerCase(),
+                  ) && (
+                    <>
+                      <CommandSeparator />
+                      <CommandGroup>
+                        <CommandItem
+                          onSelect={onCreateTag}
+                          disabled={creatingTag}
+                          className="gap-2"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Create &ldquo;{newTagName.trim()}&rdquo;
+                        </CommandItem>
+                      </CommandGroup>
+                    </>
+                  )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Notes */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <StickyNote className="h-3.5 w-3.5" strokeWidth={1.5} />
+          Notes
+          {notesSaving && (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          )}
+        </label>
+        <Textarea
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          onBlur={onNotesSave}
+          placeholder="Add notes about this recording..."
+          className="min-h-20 text-sm"
+        />
       </div>
     </div>
   );
