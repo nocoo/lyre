@@ -77,8 +77,8 @@ function RecordingDetailContent({ id }: { id: string }) {
     async function fetchPlayUrl() {
       const res = await fetch(`/api/recordings/${id}/play-url`);
       if (res.ok) {
-        const data = (await res.json()) as { url: string };
-        setAudioUrl(data.url);
+        const data = (await res.json()) as { playUrl: string };
+        setAudioUrl(data.playUrl);
       }
     }
     void fetchPlayUrl();
