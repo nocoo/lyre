@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 7025",
     "lint": "eslint",
-    "test": "bun test src/__tests__/utils.test.ts src/__tests__/proxy-matcher.test.ts src/__tests__/theme.test.ts src/__tests__/recordings-list-vm.test.ts src/__tests__/recording-detail-vm.test.ts",
+    "test": "bun test src/__tests__/utils.test.ts src/__tests__/proxy-matcher.test.ts src/__tests__/theme.test.ts src/__tests__/recordings-list-vm.test.ts src/__tests__/recording-detail-vm.test.ts src/__tests__/audio-player-vm.test.ts",
     "test:coverage": "bun run scripts/check-coverage.ts",
     "test:e2e": "bun run scripts/run-e2e.ts",
     "prepare": "husky"

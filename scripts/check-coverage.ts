@@ -20,6 +20,7 @@ async function main() {
       "src/__tests__/theme.test.ts",
       "src/__tests__/recordings-list-vm.test.ts",
       "src/__tests__/recording-detail-vm.test.ts",
+      "src/__tests__/audio-player-vm.test.ts",
       "--coverage",
     ],
     {
