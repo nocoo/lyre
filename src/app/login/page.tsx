@@ -108,11 +108,15 @@ function LoginContent() {
 
           {/* Badge content */}
           <div className="flex flex-1 flex-col items-center px-6 pt-6 pb-14">
-            {/* Icon placeholder */}
-            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-secondary dark:bg-[#171717] ring-1 ring-border">
-              <Mic
-                className="h-12 w-12 text-foreground/80"
-                strokeWidth={1.2}
+            {/* Logo */}
+            <div className="h-24 w-24 overflow-hidden rounded-full bg-secondary dark:bg-[#171717] ring-1 ring-border p-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo-80.png"
+                alt="Lyre"
+                width={80}
+                height={80}
+                className="h-full w-full object-contain"
               />
             </div>
 

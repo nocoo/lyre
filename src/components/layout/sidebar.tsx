@@ -49,10 +49,14 @@ export function Sidebar() {
           /* Collapsed (icon-only) view */
           <div className="flex h-screen w-[68px] flex-col items-center">
             {/* Logo */}
-            <div className="flex h-14 w-full items-center justify-start pl-5 pr-3">
-              <Mic
-                className="h-6 w-6 shrink-0 text-foreground"
-                strokeWidth={1.5}
+            <div className="flex h-14 w-full items-center justify-start pl-6 pr-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo-24.png"
+                alt="Lyre"
+                width={24}
+                height={24}
+                className="shrink-0"
               />
             </div>
 
@@ -143,9 +147,13 @@ export function Sidebar() {
             <div className="px-3 h-14 flex items-center">
               <div className="flex w-full items-center justify-between px-3">
                 <div className="flex items-center gap-3">
-                  <Mic
-                    className="h-6 w-6 shrink-0 text-foreground"
-                    strokeWidth={1.5}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/logo-24.png"
+                    alt="Lyre"
+                    width={24}
+                    height={24}
+                    className="shrink-0"
                   />
                   <span className="text-lg font-bold tracking-tighter">
                     lyre
