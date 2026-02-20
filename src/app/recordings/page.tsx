@@ -1,22 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Search, SlidersHorizontal, Mic } from "lucide-react";
 import { AppShell } from "@/components/layout";
 import { RecordingCard } from "@/components/recording-card";
+import { UploadDialog } from "@/components/upload-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MOCK_RECORDINGS } from "@/lib/mock-data";
 import {
-  filterRecordings,
-  sortRecordings,
-  paginateRecordings,
   toRecordingsListVM,
   type SortField,
   type SortDirection,
 } from "@/lib/recordings-list-vm";
-import type { RecordingStatus } from "@/lib/types";
+import type { Recording, RecordingStatus, PaginatedResponse } from "@/lib/types";
 
 const STATUS_OPTIONS: { value: RecordingStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -44,13 +41,59 @@ export default function RecordingsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
 
-  const listVM = useMemo(() => {
-    const filtered = filterRecordings(MOCK_RECORDINGS, query, statusFilter);
-    const sorted = sortRecordings(filtered, sortField, sortDirection);
-    const paginated = paginateRecordings(sorted, page, PAGE_SIZE);
-    return toRecordingsListVM(paginated);
+  const [recordings, setRecordings] = useState<PaginatedResponse<Recording>>({
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: PAGE_SIZE,
+    totalPages: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  const fetchRecordings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      params.set("sortBy", sortField);
+      params.set("sortDir", sortDirection);
+      params.set("page", page.toString());
+      params.set("pageSize", PAGE_SIZE.toString());
+
+      const res = await fetch(`/api/recordings?${params.toString()}`);
+      if (res.ok) {
+        const data = (await res.json()) as PaginatedResponse<Recording>;
+        setRecordings(data);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [query, statusFilter, sortField, sortDirection, page]);
+
+  useEffect(() => {
+    void fetchRecordings();
+  }, [fetchRecordings]);
+
+  // Debounce search input
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Re-fetch when debounced query changes
+  useEffect(() => {
+    void fetchRecordings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery]);
+
+  const listVM = toRecordingsListVM(recordings);
 
   const handleSortToggle = (field: SortField) => {
     if (sortField === field) {
@@ -62,13 +105,21 @@ export default function RecordingsPage() {
     setPage(1);
   };
 
+  const handleUploadComplete = useCallback(() => {
+    void fetchRecordings();
+  }, [fetchRecordings]);
+
   return (
     <AppShell breadcrumbs={[{ label: "Recordings" }]}>
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Recordings</h1>
-          <Button size="sm" className="gap-2">
+          <Button
+            size="sm"
+            className="gap-2"
+            onClick={() => setShowUpload(true)}
+          >
             <Mic className="h-4 w-4" strokeWidth={1.5} />
             Upload
           </Button>
@@ -81,10 +132,7 @@ export default function RecordingsPage() {
             <Input
               placeholder="Search recordings..."
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setQuery(e.target.value)}
               className="pl-9"
             />
           </div>
@@ -149,12 +197,13 @@ export default function RecordingsPage() {
 
         {/* Results count */}
         <p className="text-xs text-muted-foreground">
-          {listVM.total} recording{listVM.total !== 1 ? "s" : ""}
-          {statusFilter !== "all" && ` (${statusFilter})`}
+          {loading
+            ? "Loading..."
+            : `${listVM.total} recording${listVM.total !== 1 ? "s" : ""}${statusFilter !== "all" ? ` (${statusFilter})` : ""}`}
         </p>
 
         {/* Recording cards */}
-        {listVM.isEmpty ? (
+        {listVM.isEmpty && !loading ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Mic className="h-12 w-12 mb-3" strokeWidth={1} />
             <p className="text-sm">No recordings found</p>
@@ -197,6 +246,13 @@ export default function RecordingsPage() {
           </div>
         )}
       </div>
+
+      {/* Upload dialog */}
+      <UploadDialog
+        open={showUpload}
+        onOpenChange={setShowUpload}
+        onUploadComplete={handleUploadComplete}
+      />
     </AppShell>
   );
 }
