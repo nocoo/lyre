@@ -92,6 +92,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         );
         const parsed = parseTranscriptionResult(rawResult);
 
+        // Remove existing transcription if re-transcribing (unique constraint on recordingId)
+        transcriptionsRepo.deleteByRecordingId(job.recordingId);
+
         // Save transcription to database
         transcriptionsRepo.create({
           id: crypto.randomUUID(),
