@@ -8,6 +8,7 @@ import {
   countWords,
   computeProcessingDuration,
   toSentenceVM,
+  findActiveSentenceIndex,
 } from "@/lib/recording-detail-vm";
 import { MOCK_RECORDING_DETAILS } from "@/lib/mock-data";
 import type { RecordingDetail, TranscriptionSentence } from "@/lib/types";
@@ -105,6 +106,12 @@ describe("toSentenceVM", () => {
     const vm = toSentenceVM(sentence);
     expect(vm.language).toBe("en");
     expect(vm.emotion).toBe("neutral");
+  });
+
+  test("includes raw millisecond times", () => {
+    const vm = toSentenceVM(sentence);
+    expect(vm.beginTimeMs).toBe(0);
+    expect(vm.endTimeMs).toBe(3200);
   });
 });
 
@@ -284,5 +291,54 @@ describe("toRecordingDetailVM", () => {
     expect(vm.isTranscribing).toBe(false);
     expect(vm.hasTranscription).toBe(false);
     expect(vm.job!.isFailed).toBe(true);
+  });
+});
+
+// ── findActiveSentenceIndex ──
+
+describe("findActiveSentenceIndex", () => {
+  // Create test sentences: [0-3200ms], [3200-7800ms], [7800-12400ms]
+  const sentences = [
+    { sentenceId: 0, beginTime: 0, endTime: 3200, text: "First", language: "en", emotion: "neutral" },
+    { sentenceId: 1, beginTime: 3200, endTime: 7800, text: "Second", language: "en", emotion: "neutral" },
+    { sentenceId: 2, beginTime: 7800, endTime: 12400, text: "Third", language: "en", emotion: "neutral" },
+  ].map(toSentenceVM);
+
+  test("returns 0 for time at start of first sentence", () => {
+    expect(findActiveSentenceIndex(sentences, 0)).toBe(0);
+  });
+
+  test("returns 0 for time within first sentence", () => {
+    expect(findActiveSentenceIndex(sentences, 1.5)).toBe(0);
+  });
+
+  test("returns 1 for time at start of second sentence", () => {
+    expect(findActiveSentenceIndex(sentences, 3.2)).toBe(1);
+  });
+
+  test("returns 1 for time within second sentence", () => {
+    expect(findActiveSentenceIndex(sentences, 5.0)).toBe(1);
+  });
+
+  test("returns 2 for time within third sentence", () => {
+    expect(findActiveSentenceIndex(sentences, 10.0)).toBe(2);
+  });
+
+  test("returns -1 for time after all sentences", () => {
+    expect(findActiveSentenceIndex(sentences, 13.0)).toBe(-1);
+  });
+
+  test("returns -1 for empty sentences array", () => {
+    expect(findActiveSentenceIndex([], 5.0)).toBe(-1);
+  });
+
+  test("returns -1 for negative time", () => {
+    // -1 seconds = -1000ms, no sentence covers that
+    expect(findActiveSentenceIndex(sentences, -1)).toBe(-1);
+  });
+
+  test("handles boundary: endTime is exclusive", () => {
+    // At exactly 3.2s (3200ms), first sentence [0,3200) is done, second [3200,7800) starts
+    expect(findActiveSentenceIndex(sentences, 3.2)).toBe(1);
   });
 });

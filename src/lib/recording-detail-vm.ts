@@ -64,6 +64,8 @@ export interface SentenceVM {
   startTime: string; // formatted MM:SS.ms
   endTime: string;
   duration: string;
+  beginTimeMs: number; // raw milliseconds for seeking
+  endTimeMs: number; // raw milliseconds for active detection
   language: string;
   emotion: string;
 }
@@ -84,6 +86,8 @@ export function toSentenceVM(sentence: TranscriptionSentence): SentenceVM {
     startTime: formatTimestamp(sentence.beginTime),
     endTime: formatTimestamp(sentence.endTime),
     duration: `${(durationMs / 1000).toFixed(1)}s`,
+    beginTimeMs: sentence.beginTime,
+    endTimeMs: sentence.endTime,
     language: sentence.language,
     emotion: sentence.emotion,
   };
@@ -119,6 +123,27 @@ export function countWords(text: string): number {
   // Split on whitespace, filter empties
   const tokens = text.trim().split(/\s+/);
   return tokens.length;
+}
+
+/**
+ * Find the index of the active sentence based on current playback time.
+ * Returns -1 if no sentence matches the current time.
+ *
+ * @param sentences - Sentence VMs with raw millisecond times
+ * @param currentTimeSeconds - Current audio playback time in seconds
+ */
+export function findActiveSentenceIndex(
+  sentences: SentenceVM[],
+  currentTimeSeconds: number,
+): number {
+  const currentMs = currentTimeSeconds * 1000;
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i]!;
+    if (currentMs >= s.beginTimeMs && currentMs < s.endTimeMs) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 // ── Job Status VM ──
