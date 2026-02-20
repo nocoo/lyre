@@ -1,11 +1,22 @@
 "use client";
 
 import { use, useRef, useState, useCallback, useEffect } from "react";
-import { ArrowLeft, Play, Loader2, AlertCircle, FileText, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Play,
+  Loader2,
+  AlertCircle,
+  FileText,
+  Trash2,
+  RotateCcw,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout";
-import { AudioPlayer, type AudioPlayerHandle } from "@/components/audio-player";
+import {
+  AudioPlayer,
+  type AudioPlayerHandle,
+} from "@/components/audio-player";
 import {
   TranscriptViewer,
   TranscriptFullText,
@@ -24,7 +35,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
-import type { RecordingDetail } from "@/lib/types";
+import type { RecordingDetail, TranscriptionJob } from "@/lib/types";
 
 type PageParams = { params: Promise<{ id: string }> };
 
@@ -43,6 +54,9 @@ export default function RecordingDetailPage({ params }: PageParams) {
   );
 }
 
+/** Poll interval for job status in milliseconds */
+const POLL_INTERVAL_MS = 3000;
+
 function RecordingDetailContent({ id }: { id: string }) {
   const router = useRouter();
   const playerRef = useRef<AudioPlayerHandle>(null);
@@ -54,24 +68,45 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [pollStatus, setPollStatus] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Load recording detail ──
+  const loadDetail = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/recordings/${id}`);
+      if (res.ok) {
+        const data = (await res.json()) as RecordingDetail;
+        setDetail(data);
+        return data;
+      }
+    } catch {
+      // Silently fail — UI handles null detail
+    }
+    return null;
+  }, [id]);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
-      try {
-        const res = await fetch(`/api/recordings/${id}`);
-        if (res.ok) {
-          const data = (await res.json()) as RecordingDetail;
-          setDetail(data);
+      const data = await loadDetail();
+      setLoading(false);
+
+      // If the recording is currently transcribing with an active job, resume polling
+      if (data?.status === "transcribing" && data.latestJob) {
+        const job = data.latestJob;
+        if (job.status === "PENDING" || job.status === "RUNNING") {
+          setActiveJobId(job.id);
+          setPollStatus(job.status);
         }
-      } finally {
-        setLoading(false);
       }
     }
     void load();
-  }, [id]);
+  }, [loadDetail]);
 
-  // Fetch presigned play URL once we have the detail
+  // ── Fetch presigned play URL ──
   useEffect(() => {
     if (!detail?.ossKey) return;
     async function fetchPlayUrl() {
@@ -83,6 +118,71 @@ function RecordingDetailContent({ id }: { id: string }) {
     }
     void fetchPlayUrl();
   }, [id, detail?.ossKey]);
+
+  // ── Poll job status ──
+  useEffect(() => {
+    if (!activeJobId) return;
+
+    const pollJob = async () => {
+      try {
+        const res = await fetch(`/api/jobs/${activeJobId}`);
+        if (!res.ok) return;
+
+        const job = (await res.json()) as TranscriptionJob;
+        setPollStatus(job.status);
+
+        if (job.status === "SUCCEEDED" || job.status === "FAILED") {
+          // Stop polling
+          setActiveJobId(null);
+          // Refresh the full detail to get transcription data
+          await loadDetail();
+        }
+      } catch {
+        // Retry on next interval
+      }
+    };
+
+    // Run immediately, then set interval
+    void pollJob();
+    pollTimerRef.current = setInterval(() => void pollJob(), POLL_INTERVAL_MS);
+
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [activeJobId, loadDetail]);
+
+  // ── Handlers ──
+  const handleTranscribe = useCallback(async () => {
+    setTranscribing(true);
+    try {
+      const res = await fetch(`/api/recordings/${id}/transcribe`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const err = (await res.json()) as { error: string };
+        console.error("Transcription submit failed:", err.error);
+        setTranscribing(false);
+        return;
+      }
+
+      const job = (await res.json()) as TranscriptionJob;
+
+      // Update local state to show transcribing status immediately
+      setDetail((prev) =>
+        prev ? { ...prev, status: "transcribing", latestJob: job } : prev,
+      );
+      setActiveJobId(job.id);
+      setPollStatus(job.status);
+    } catch (error) {
+      console.error("Transcription submit error:", error);
+    } finally {
+      setTranscribing(false);
+    }
+  }, [id]);
 
   const handleSeek = useCallback((timeInSeconds: number) => {
     playerRef.current?.seekTo(timeInSeconds);
@@ -148,20 +248,43 @@ function RecordingDetailContent({ id }: { id: string }) {
           {/* Actions */}
           <div className="flex shrink-0 gap-2">
             {vm.metadata.canTranscribe && (
-              <Button size="sm" className="gap-2">
-                <Play className="h-4 w-4" strokeWidth={1.5} />
-                Transcribe
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={handleTranscribe}
+                disabled={transcribing}
+              >
+                {transcribing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" strokeWidth={1.5} />
+                )}
+                {transcribing ? "Submitting..." : "Transcribe"}
               </Button>
             )}
             {vm.metadata.canRetranscribe && (
-              <Button size="sm" variant="outline" className="gap-2">
-                <Play className="h-4 w-4" strokeWidth={1.5} />
-                Re-transcribe
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={handleTranscribe}
+                disabled={transcribing}
+              >
+                {transcribing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" strokeWidth={1.5} />
+                )}
+                {transcribing ? "Submitting..." : "Re-transcribe"}
               </Button>
             )}
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-2 text-destructive hover:text-destructive">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2 text-destructive hover:text-destructive"
+                >
                   <Trash2 className="h-4 w-4" strokeWidth={1.5} />
                   Delete
                 </Button>
@@ -170,7 +293,9 @@ function RecordingDetailContent({ id }: { id: string }) {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete recording?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete &ldquo;{vm.metadata.title}&rdquo; and its audio file from storage. This action cannot be undone.
+                    This will permanently delete &ldquo;{vm.metadata.title}
+                    &rdquo; and its audio file from storage. This action cannot
+                    be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -217,11 +342,15 @@ function RecordingDetailContent({ id }: { id: string }) {
         />
       )}
 
-      {/* Transcribing state */}
-      {vm.isTranscribing && vm.job && <TranscribingCard />}
+      {/* Transcribing state — show when actively polling or VM says transcribing */}
+      {(activeJobId || vm.isTranscribing) && (
+        <TranscribingCard status={pollStatus} />
+      )}
 
       {/* Job error */}
-      {vm.job?.isFailed && <JobErrorCard message={vm.job.errorMessage} />}
+      {vm.job?.isFailed && !activeJobId && (
+        <JobErrorCard message={vm.job.errorMessage} />
+      )}
 
       {/* Transcription */}
       {vm.hasTranscription && vm.transcription && (
@@ -343,7 +472,14 @@ function MetadataGrid({
   );
 }
 
-function TranscribingCard() {
+function TranscribingCard({ status }: { status: string | null }) {
+  const statusLabel =
+    status === "PENDING"
+      ? "Queued"
+      : status === "RUNNING"
+        ? "Processing"
+        : "Submitting";
+
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
       <Loader2
@@ -353,6 +489,9 @@ function TranscribingCard() {
       <div>
         <p className="text-sm font-medium text-foreground">
           Transcription in progress
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            ({statusLabel})
+          </span>
         </p>
         <p className="text-xs text-muted-foreground">
           This may take a few minutes depending on the audio length.
