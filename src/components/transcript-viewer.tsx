@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState, useCallback, forwardRef } from "react";
-import { Loader2, ChevronDown } from "lucide-react";
+import { Loader2, ChevronDown, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   findActiveSentenceIndex,
@@ -57,6 +57,7 @@ export function TranscriptViewer({
         sentenceCount={transcription.sentenceCount}
         wordCount={transcription.wordCount}
         language={transcription.language}
+        copyText={transcription.fullText}
       />
 
       {/* Content */}
@@ -85,6 +86,7 @@ export function TranscriptFullText({
         sentenceCount={transcription.sentenceCount}
         wordCount={transcription.wordCount}
         language={transcription.language}
+        copyText={transcription.fullText}
       />
       <div className="p-4">
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
@@ -101,11 +103,25 @@ function TranscriptTabs({
   sentenceCount,
   wordCount,
   language,
+  copyText,
 }: {
   sentenceCount: number;
   wordCount: number;
   language: string;
+  copyText: string;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(copyText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may fail in insecure contexts — silently ignore
+    }
+  }, [copyText]);
+
   return (
     <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
       <span className="text-sm font-medium text-foreground">Transcript</span>
@@ -113,6 +129,23 @@ function TranscriptTabs({
         <span>{sentenceCount} sentences</span>
         <span>{wordCount} words</span>
         <span className="uppercase">{language}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={copied ? "Copied" : "Copy transcript"}
+          className={cn(
+            "ml-1 flex h-6 w-6 items-center justify-center rounded-md transition-colors",
+            copied
+              ? "text-emerald-500"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent",
+          )}
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5" strokeWidth={2} />
+          ) : (
+            <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+          )}
+        </button>
       </div>
     </div>
   );
