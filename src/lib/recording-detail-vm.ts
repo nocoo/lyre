@@ -187,14 +187,11 @@ export function computeProcessingDuration(
   endTime: string | null,
 ): string {
   if (!submitTime || !endTime) return "—";
-  try {
-    const start = new Date(submitTime).getTime();
-    const end = new Date(endTime).getTime();
-    const diffSeconds = Math.max(0, (end - start) / 1000);
-    return formatDuration(diffSeconds);
-  } catch {
-    return "—";
-  }
+  const start = new Date(submitTime).getTime();
+  const end = new Date(endTime).getTime();
+  if (isNaN(start) || isNaN(end)) return "—";
+  const diffSeconds = Math.max(0, (end - start) / 1000);
+  return formatDuration(diffSeconds);
 }
 
 // ── Combined detail VM ──
