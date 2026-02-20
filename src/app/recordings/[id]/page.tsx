@@ -402,6 +402,7 @@ function RecordingDetailContent({ id }: { id: string }) {
           {viewMode === "sentences" ? (
             <TranscriptViewer
               transcription={vm.transcription}
+              recordingId={id}
               currentTime={currentTime}
               onSeek={handleSeek}
             />
