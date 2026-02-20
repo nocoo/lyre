@@ -108,10 +108,8 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     );
   }
 
-  // Delete in FK order: transcriptions → jobs → recording
-  transcriptionsRepo.deleteByRecordingId(id);
-  jobsRepo.deleteByRecordingId(id);
-  recordingsRepo.delete(id);
+  // Delete recording + related data in a single transaction
+  recordingsRepo.deleteCascade(id);
 
   // Delete OSS object (best-effort, don't fail the request)
   if (existing.ossKey) {

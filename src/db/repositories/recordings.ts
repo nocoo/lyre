@@ -7,7 +7,7 @@
 
 import { eq, desc } from "drizzle-orm";
 import { db } from "../index";
-import { recordings, type DbRecording } from "../schema";
+import { recordings, transcriptions, transcriptionJobs, type DbRecording } from "../schema";
 import type { RecordingStatus } from "@/lib/types";
 
 /** Parse tags JSON string to array */
@@ -167,6 +167,26 @@ export const recordingsRepo = {
       .where(eq(recordings.id, id))
       .run() as unknown as { changes: number };
     return result.changes > 0;
+  },
+
+  /**
+   * Delete a recording and all related transcriptions/jobs in a single transaction.
+   * Returns true if the recording was deleted.
+   */
+  deleteCascade(id: string): boolean {
+    return db.transaction((tx: typeof db) => {
+      tx.delete(transcriptions)
+        .where(eq(transcriptions.recordingId, id))
+        .run();
+      tx.delete(transcriptionJobs)
+        .where(eq(transcriptionJobs.recordingId, id))
+        .run();
+      const result = tx
+        .delete(recordings)
+        .where(eq(recordings.id, id))
+        .run() as unknown as { changes: number };
+      return result.changes > 0;
+    });
   },
 
   /** Helper: parse tags from a DB row */
