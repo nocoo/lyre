@@ -181,6 +181,8 @@ settings
 | 4  | `feat: add upload presign and play url api routes` | done |
 | 5  | `feat: add upload dialog and wire recordings page to api` | done |
 | 6  | `test: rewrite e2e tests for real database` | done |
+| 7  | `fix: wire recording detail page to real api and extract audio duration` | done |
+| 8  | `feat: add recording delete with oss cleanup and confirmation dialog` | done |
 
 ## Phase 6: ASR Integration
 
