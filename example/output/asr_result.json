@@ -1,0 +1,16 @@
+{
+  "request_id": "e71d9d7f-0817-44f1-b383-1bdb9a2874a3",
+  "output": {
+    "task_id": "aae0b0a3-2751-4121-9cf3-67d7e0a3d9d1",
+    "task_status": "SUCCEEDED",
+    "submit_time": "2026-02-20 08:15:01.152",
+    "scheduled_time": "2026-02-20 08:15:01.187",
+    "end_time": "2026-02-20 08:15:58.880",
+    "result": {
+      "transcription_url": "http://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/prod/qwen3-asr-flash-filetrans/20260220/08%3A15/aae0b0a3-2751-4121-9cf3-67d7e0a3d9d1.json?Expires=1771632958&OSSAccessKeyId=LTAI5tGzqbGcEmE58b221XQy&Signature=pQRLT9jm8TFFyrFTlAwr1csgvls%3D&response-content-disposition=attachment%3Bfilename%3Daae0b0a3-2751-4121-9cf3-67d7e0a3d9d1.json"
+    }
+  },
+  "usage": {
+    "seconds": 1673
+  }
+}
