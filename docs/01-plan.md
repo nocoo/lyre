@@ -164,12 +164,12 @@ settings
 
 | #  | Commit | Status |
 | -- | ------ | ------ |
-| 1  | `feat: add drizzle orm schema` | pending |
-| 2  | `feat: add database connection management` | pending |
-| 3  | `feat: add user repository` | pending |
-| 4  | `feat: add recording repository` | pending |
-| 5  | `feat: add transcription and job repositories` | pending |
-| 6  | `test: add repository unit tests` | pending |
+| 1  | `feat: add drizzle orm schema` | done |
+| 2  | `feat: add database connection management` | done |
+| 3  | `feat: add user repository` | done |
+| 4  | `feat: add recording repository` | done |
+| 5  | `feat: add transcription and job repositories` | done |
+| 6  | `test: add repository unit tests` | done |
 
 ## Phase 5: Upload + Recording CRUD
 
