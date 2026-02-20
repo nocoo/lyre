@@ -148,6 +148,26 @@ export function findActiveSentenceIndex(
 
 // ── Job Status VM ──
 
+/** DashScope model used for ASR */
+export const ASR_MODEL = "qwen3-asr-flash-filetrans";
+
+/** Price per second in CNY (mainland China pricing) */
+export const ASR_PRICE_PER_SECOND_CNY = 0.00022;
+
+/**
+ * Compute the estimated cost in CNY for a given usage in seconds.
+ * Returns a formatted string like "¥0.41" or "—" if usage is null.
+ */
+export function computeEstimatedCost(
+  usageSeconds: number | null,
+): string {
+  if (usageSeconds === null || usageSeconds <= 0) return "—";
+  const cost = usageSeconds * ASR_PRICE_PER_SECOND_CNY;
+  // Show 2 decimal places for ≥ ¥0.01, 4 for smaller amounts
+  const formatted = cost >= 0.01 ? cost.toFixed(2) : cost.toFixed(4);
+  return `¥${formatted}`;
+}
+
 export interface JobStatusVM {
   status: string;
   isRunning: boolean;
@@ -158,6 +178,8 @@ export interface JobStatusVM {
   processingDuration: string;
   usageSeconds: string;
   errorMessage: string;
+  model: string;
+  estimatedCost: string;
 }
 
 export function toJobStatusVM(job: TranscriptionJob | null): JobStatusVM | null {
@@ -178,6 +200,8 @@ export function toJobStatusVM(job: TranscriptionJob | null): JobStatusVM | null 
       ? formatDuration(job.usageSeconds)
       : "—",
     errorMessage: job.errorMessage ?? "",
+    model: ASR_MODEL,
+    estimatedCost: computeEstimatedCost(job.usageSeconds),
   };
 }
 

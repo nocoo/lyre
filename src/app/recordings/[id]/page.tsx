@@ -390,10 +390,12 @@ function RecordingDetailContent({ id }: { id: string }) {
       {/* Job info (for completed) */}
       {vm.job?.isCompleted && (
         <JobInfoCard
+          model={vm.job.model}
           submitTime={vm.job.submitTime}
           endTime={vm.job.endTime}
           processingDuration={vm.job.processingDuration}
           usageSeconds={vm.job.usageSeconds}
+          estimatedCost={vm.job.estimatedCost}
         />
       )}
     </div>
@@ -521,22 +523,38 @@ function JobErrorCard({ message }: { message: string }) {
 }
 
 function JobInfoCard({
+  model,
   submitTime,
   endTime,
   processingDuration,
   usageSeconds,
+  estimatedCost,
 }: {
+  model: string;
   submitTime: string;
   endTime: string;
   processingDuration: string;
   usageSeconds: string;
+  estimatedCost: string;
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <p className="mb-2 text-xs font-medium text-muted-foreground">
         Job Details
       </p>
-      <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-3">
+        <div>
+          <p className="text-xs text-muted-foreground">Model</p>
+          <p className="text-sm text-foreground font-mono">{model}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Audio Processed</p>
+          <p className="text-sm text-foreground">{usageSeconds}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Estimated Cost</p>
+          <p className="text-sm text-foreground">{estimatedCost}</p>
+        </div>
         <div>
           <p className="text-xs text-muted-foreground">Submitted</p>
           <p className="text-sm text-foreground">{submitTime}</p>
@@ -546,12 +564,8 @@ function JobInfoCard({
           <p className="text-sm text-foreground">{endTime}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Processing</p>
+          <p className="text-xs text-muted-foreground">Processing Time</p>
           <p className="text-sm text-foreground">{processingDuration}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Audio Processed</p>
-          <p className="text-sm text-foreground">{usageSeconds}</p>
         </div>
       </div>
     </div>

@@ -7,8 +7,10 @@ import {
   formatTimestamp,
   countWords,
   computeProcessingDuration,
+  computeEstimatedCost,
   toSentenceVM,
   findActiveSentenceIndex,
+  ASR_MODEL,
 } from "@/lib/recording-detail-vm";
 import { MOCK_RECORDING_DETAILS } from "@/lib/mock-data";
 import type { RecordingDetail, TranscriptionSentence } from "@/lib/types";
@@ -352,5 +354,61 @@ describe("findActiveSentenceIndex", () => {
   test("handles boundary: endTime is exclusive", () => {
     // At exactly 3.2s (3200ms), first sentence [0,3200) is done, second [3200,7800) starts
     expect(findActiveSentenceIndex(sentences, 3.2)).toBe(1);
+  });
+});
+
+// ── computeEstimatedCost ──
+
+describe("computeEstimatedCost", () => {
+  test("returns dash for null usage", () => {
+    expect(computeEstimatedCost(null)).toBe("—");
+  });
+
+  test("returns dash for zero usage", () => {
+    expect(computeEstimatedCost(0)).toBe("—");
+  });
+
+  test("returns dash for negative usage", () => {
+    expect(computeEstimatedCost(-10)).toBe("—");
+  });
+
+  test("computes cost for small usage (< ¥0.01)", () => {
+    // 10 seconds × ¥0.00022 = ¥0.0022
+    expect(computeEstimatedCost(10)).toBe("¥0.0022");
+  });
+
+  test("computes cost for typical usage", () => {
+    // 1848 seconds × ¥0.00022 = ¥0.4065... → ¥0.41
+    expect(computeEstimatedCost(1848)).toBe("¥0.41");
+  });
+
+  test("computes cost for 1 hour", () => {
+    // 3600 seconds × ¥0.00022 = ¥0.792 → ¥0.79
+    expect(computeEstimatedCost(3600)).toBe("¥0.79");
+  });
+
+  test("computes cost for large usage", () => {
+    // 36000 seconds (10h) × ¥0.00022 = ¥7.92
+    expect(computeEstimatedCost(36000)).toBe("¥7.92");
+  });
+});
+
+// ── toJobStatusVM includes model and cost ──
+
+describe("toJobStatusVM model and cost", () => {
+  test("includes model name for succeeded job", () => {
+    const vm = toJobStatusVM(completedDetail.latestJob);
+    expect(vm!.model).toBe(ASR_MODEL);
+  });
+
+  test("includes estimated cost for succeeded job with usage", () => {
+    const vm = toJobStatusVM(completedDetail.latestJob);
+    // completedDetail has usageSeconds = 1848 → ¥0.41
+    expect(vm!.estimatedCost).toBe("¥0.41");
+  });
+
+  test("returns dash for cost when no usage", () => {
+    const vm = toJobStatusVM(transcribingDetail.latestJob);
+    expect(vm!.estimatedCost).toBe("—");
   });
 });
