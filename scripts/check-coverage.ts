@@ -26,6 +26,7 @@ async function main() {
       "src/__tests__/jobs-repo.test.ts",
       "src/__tests__/transcriptions-repo.test.ts",
       "src/__tests__/settings-repo.test.ts",
+      "src/__tests__/oss-service.test.ts",
       "--coverage",
     ],
     {
