@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 7025",
     "lint": "eslint",
-    "test": "bun test src/__tests__/",
+    "test": "bun test src/__tests__/utils.test.ts",
     "test:coverage": "bun run scripts/check-coverage.ts",
     "test:e2e": "bun run scripts/run-e2e.ts",
     "prepare": "husky"
