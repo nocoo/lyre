@@ -18,7 +18,7 @@ FROM oven/bun:1 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=7025
+ENV HOSTNAME=0.0.0.0
 
 # Create data directory for SQLite volume mount
 RUN mkdir -p /data
@@ -27,7 +27,5 @@ RUN mkdir -p /data
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-
-EXPOSE 7025
 
 CMD ["bun", "server.js"]
