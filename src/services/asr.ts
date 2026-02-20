@@ -393,7 +393,7 @@ export function createRealAsrProvider(apiKey: string): AsrProvider {
           body: JSON.stringify({
             model: "qwen3-asr-flash-filetrans",
             input: {
-              file_urls: [fileUrl],
+              file_url: fileUrl,
             },
             parameters: {
               language_hints: ["zh", "en"],
