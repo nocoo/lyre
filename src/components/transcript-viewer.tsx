@@ -88,7 +88,7 @@ export function TranscriptFullText({
         language={transcription.language}
       />
       <div className="p-4">
-        <ScrollArea className="max-h-[400px]">
+        <ScrollArea className="max-h-[60vh]">
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
             {transcription.fullText}
           </p>
@@ -165,7 +165,7 @@ function SentenceList({
   );
 
   return (
-    <ScrollArea className="max-h-[400px]">
+    <ScrollArea className="max-h-[60vh]">
       <div className="space-y-1">
         {sentences.map((sentence, idx) => (
           <SentenceRow

@@ -376,6 +376,18 @@ function RecordingDetailContent({ id }: { id: string }) {
         <JobErrorCard message={vm.job.errorMessage} />
       )}
 
+      {/* Job info (for completed) — above transcript for quick reference */}
+      {vm.job?.isCompleted && (
+        <JobInfoCard
+          model={vm.job.model}
+          submitTime={vm.job.submitTime}
+          endTime={vm.job.endTime}
+          processingDuration={vm.job.processingDuration}
+          usageSeconds={vm.job.usageSeconds}
+          estimatedCost={vm.job.estimatedCost}
+        />
+      )}
+
       {/* Transcription */}
       {vm.hasTranscription && vm.transcription && (
         <div className="space-y-3">
@@ -410,18 +422,6 @@ function RecordingDetailContent({ id }: { id: string }) {
             <TranscriptFullText transcription={vm.transcription} />
           )}
         </div>
-      )}
-
-      {/* Job info (for completed) */}
-      {vm.job?.isCompleted && (
-        <JobInfoCard
-          model={vm.job.model}
-          submitTime={vm.job.submitTime}
-          endTime={vm.job.endTime}
-          processingDuration={vm.job.processingDuration}
-          usageSeconds={vm.job.usageSeconds}
-          estimatedCost={vm.job.estimatedCost}
-        />
       )}
     </div>
   );
