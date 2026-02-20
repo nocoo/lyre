@@ -103,6 +103,7 @@ settings
 | `/api/recordings/[id]`             | DELETE | Delete recording + OSS file     |
 | `/api/recordings/[id]/transcribe`  | POST   | Trigger ASR job                 |
 | `/api/recordings/[id]/play-url`    | GET    | Fresh OSS signed URL            |
+| `/api/recordings/[id]/words`       | GET    | Lazy-load word-level data       |
 | `/api/jobs/[id]`                   | GET    | Poll ASR job status             |
 | `/api/upload/presign`              | POST   | Get OSS presigned upload URL    |
 | `/api/settings`                    | GET    | Get user settings               |
@@ -188,12 +189,21 @@ settings
 
 | #  | Commit | Status |
 | -- | ------ | ------ |
-| 1  | `feat: add asr service` | pending |
-| 2  | `test: add asr service unit tests` | pending |
-| 3  | `feat: add transcribe api route` | pending |
-| 4  | `feat: add job polling api route` | pending |
-| 5  | `feat: add asr raw result archival to oss` | pending |
-| 6  | `feat: wire transcription ui to real api` | pending |
+| 1  | `feat: add asr service with types, mock provider, and result parser` | done |
+| 2  | `feat: add transcribe trigger and job poll api routes with mock asr provider` | done |
+| 3  | `feat: wire transcribe button and job polling to recording detail page` | done |
+| 4  | `test: add e2e tests for asr transcription flow and fix re-transcribe unique constraint` | done |
+| 5  | `feat: implement real dashscope asr provider with unit tests` | done |
+| 6  | `fix: use file_url (singular) for qwen3-asr-flash-filetrans api` | done |
+| 7  | `feat: add safeFetch with curl fallback for tls-restricted environments` | done |
+| 8  | `fix: add missing findActiveSentenceIndex import in transcript-viewer` | done |
+| 9  | `feat: display asr model name and estimated cost in job details` | done |
+| 10 | `fix: smooth progress bar animation using requestAnimationFrame instead of ontimeupdate` | done |
+| 11 | `fix: pause job polling in background tabs and re-poll on visibility change` | done |
+| 12 | `feat: enable word-level timestamps in asr submit request` | done |
+| 13 | `feat: add word-level api route, types, vm logic, and unit tests` | done |
+| 14 | `fix: resolve exactOptionalPropertyTypes violations in api routes and services` | done |
+| 15 | `feat: wire word-level karaoke ui into transcript viewer` | done |
 
 ## Phase 7: Deploy
 
