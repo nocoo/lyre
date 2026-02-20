@@ -193,6 +193,17 @@ describe("toRecordingCardVM", () => {
     const vm = toRecordingCardVM(rec);
     expect(vm.tags).toEqual(["meeting", "product", "quarterly"]);
   });
+
+  test("maps recordedAt when present", () => {
+    const vm = toRecordingCardVM(rec);
+    expect(vm.recordedAt).not.toBe("");
+  });
+
+  test("maps empty recordedAt when null", () => {
+    const noDate = { ...rec, recordedAt: null };
+    const vm = toRecordingCardVM(noDate);
+    expect(vm.recordedAt).toBe("");
+  });
 });
 
 // ── toRecordingsListVM ──

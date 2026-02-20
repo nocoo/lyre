@@ -171,6 +171,50 @@ describe("toRecordingMetadataVM", () => {
   test("canRetranscribe is false for uploaded", () => {
     expect(toRecordingMetadataVM(uploadedDetail).canRetranscribe).toBe(false);
   });
+
+  test("maps resolvedTags from detail", () => {
+    const vm = toRecordingMetadataVM(completedDetail);
+    expect(vm.resolvedTags.length).toBeGreaterThan(0);
+    expect(vm.resolvedTags[0]!.name).toBe("meeting");
+  });
+
+  test("maps notes from detail", () => {
+    const vm = toRecordingMetadataVM(completedDetail);
+    expect(vm.notes).toContain("23% MAU growth");
+  });
+
+  test("maps empty notes for null", () => {
+    const vm = toRecordingMetadataVM(uploadedDetail);
+    expect(vm.notes).toBe("");
+  });
+
+  test("maps folderName and folderIcon", () => {
+    const vm = toRecordingMetadataVM(completedDetail);
+    expect(vm.folderName).toBe("Meetings");
+    expect(vm.folderIcon).toBe("users");
+  });
+
+  test("maps empty folder fields when no folder", () => {
+    const vm = toRecordingMetadataVM(uploadedDetail);
+    expect(vm.folderName).toBe("");
+    expect(vm.folderIcon).toBe("");
+  });
+
+  test("maps recordedAt date string", () => {
+    const vm = toRecordingMetadataVM(completedDetail);
+    expect(vm.recordedAt).not.toBe("");
+    expect(vm.recordedAtRaw).toBe(completedDetail.recordedAt);
+  });
+
+  test("maps empty recordedAt when null", () => {
+    const noDate: RecordingDetail = {
+      ...completedDetail,
+      recordedAt: null,
+    };
+    const vm = toRecordingMetadataVM(noDate);
+    expect(vm.recordedAt).toBe("");
+    expect(vm.recordedAtRaw).toBeNull();
+  });
 });
 
 // ── toTranscriptionVM ──
