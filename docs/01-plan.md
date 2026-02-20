@@ -175,13 +175,12 @@ settings
 
 | #  | Commit | Status |
 | -- | ------ | ------ |
-| 1  | `feat: add oss service` | pending |
-| 2  | `test: add oss service unit tests` | pending |
-| 3  | `feat: wire api routes to real database` | pending |
-| 4  | `feat: add upload presign api route` | pending |
-| 5  | `feat: add upload dialog component` | pending |
-| 6  | `feat: add recording play url api route` | pending |
-| 7  | `test: update e2e tests for real database` | pending |
+| 1  | `feat: add oss service` | done |
+| 2  | `test: add oss service unit tests` | done |
+| 3  | `feat: wire api routes to real database` | done |
+| 4  | `feat: add upload presign and play url api routes` | done |
+| 5  | `feat: add upload dialog and wire recordings page to api` | done |
+| 6  | `test: rewrite e2e tests for real database` | done |
 
 ## Phase 6: ASR Integration
 
