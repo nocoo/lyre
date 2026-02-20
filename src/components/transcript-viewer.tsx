@@ -248,11 +248,11 @@ const SentenceRow = forwardRef<
       )}
     >
       {/* Sentence header row */}
-      <div className="group flex items-start gap-3 px-3 py-2">
+      <div className="group flex items-baseline gap-3 px-3 py-2">
         {/* Timestamp button */}
         <button
           type="button"
-          className="shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground"
+          className="shrink-0 text-xs leading-relaxed tabular-nums text-muted-foreground transition-colors hover:text-foreground"
           onClick={() => onSeek?.(sentence.beginTimeMs / 1000)}
           aria-label={`Seek to ${sentence.startTime}`}
         >
@@ -273,7 +273,7 @@ const SentenceRow = forwardRef<
         {/* Expand indicator */}
         <ChevronDown
           className={cn(
-            "mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-200",
+            "h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-200 translate-y-[3px]",
             isExpanded && "rotate-180",
           )}
           strokeWidth={1.5}
