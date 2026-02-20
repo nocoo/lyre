@@ -6,13 +6,14 @@ import { useSession, signOut } from "next-auth/react";
 import {
   LayoutDashboard,
   Mic,
-  FileText,
   Settings,
   PanelLeft,
   LogOut,
 } from "lucide-react";
 import { cn, getAvatarColor } from "@/lib/utils";
+import { APP_VERSION } from "@/lib/version";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -24,7 +25,6 @@ import { useSidebar } from "./sidebar-context";
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/recordings", label: "Recordings", icon: Mic },
-  { href: "/transcriptions", label: "Transcriptions", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -158,6 +158,9 @@ export function Sidebar() {
                   <span className="text-lg font-bold tracking-tighter">
                     lyre
                   </span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground">
+                    v{APP_VERSION}
+                  </Badge>
                 </div>
                 <button
                   onClick={toggle}

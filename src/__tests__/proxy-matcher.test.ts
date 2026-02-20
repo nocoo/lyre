@@ -19,10 +19,6 @@ describe("proxy matcher", () => {
     expect(MATCHER_REGEX.test("/recordings")).toBe(true);
   });
 
-  test("matches /transcriptions", () => {
-    expect(MATCHER_REGEX.test("/transcriptions")).toBe(true);
-  });
-
   test("matches /settings", () => {
     expect(MATCHER_REGEX.test("/settings")).toBe(true);
   });
