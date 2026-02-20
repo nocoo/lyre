@@ -10,6 +10,8 @@ import {
   computeEstimatedCost,
   toSentenceVM,
   findActiveSentenceIndex,
+  toWordVM,
+  findActiveWordIndex,
   ASR_MODEL,
 } from "@/lib/recording-detail-vm";
 import { MOCK_RECORDING_DETAILS } from "@/lib/mock-data";
@@ -410,5 +412,97 @@ describe("toJobStatusVM model and cost", () => {
   test("returns dash for cost when no usage", () => {
     const vm = toJobStatusVM(transcribingDetail.latestJob);
     expect(vm!.estimatedCost).toBe("—");
+  });
+});
+
+// ── toWordVM ──
+
+describe("toWordVM", () => {
+  test("maps raw word to WordVM", () => {
+    const vm = toWordVM({
+      begin_time: 876,
+      end_time: 956,
+      text: "阿",
+      punctuation: "",
+    });
+    expect(vm.text).toBe("阿");
+    expect(vm.punctuation).toBe("");
+    expect(vm.display).toBe("阿");
+    expect(vm.beginTimeMs).toBe(876);
+    expect(vm.endTimeMs).toBe(956);
+  });
+
+  test("includes punctuation in display", () => {
+    const vm = toWordVM({
+      begin_time: 1276,
+      end_time: 1356,
+      text: "好",
+      punctuation: "，",
+    });
+    expect(vm.display).toBe("好，");
+  });
+
+  test("handles English word with period", () => {
+    const vm = toWordVM({
+      begin_time: 3800,
+      end_time: 5000,
+      text: "transcription",
+      punctuation: ".",
+    });
+    expect(vm.display).toBe("transcription.");
+  });
+});
+
+// ── findActiveWordIndex ──
+
+describe("findActiveWordIndex", () => {
+  // "阿姨好，阿姨好。" — 6 words with real timing data
+  const words = [
+    { begin_time: 876, end_time: 956, text: "阿", punctuation: "" },
+    { begin_time: 956, end_time: 1196, text: "姨", punctuation: "" },
+    { begin_time: 1276, end_time: 1356, text: "好", punctuation: "，" },
+    { begin_time: 2076, end_time: 2156, text: "阿", punctuation: "" },
+    { begin_time: 2956, end_time: 2956, text: "姨", punctuation: "" },   // instantaneous
+    { begin_time: 3276, end_time: 3436, text: "好", punctuation: "。" },
+  ].map(toWordVM);
+
+  test("returns 0 for time within first word", () => {
+    expect(findActiveWordIndex(words, 0.9)).toBe(0); // 900ms
+  });
+
+  test("returns 1 for time within second word", () => {
+    expect(findActiveWordIndex(words, 1.0)).toBe(1); // 1000ms
+  });
+
+  test("returns 2 for time within third word", () => {
+    expect(findActiveWordIndex(words, 1.3)).toBe(2); // 1300ms
+  });
+
+  test("returns -1 for time in gap between words", () => {
+    expect(findActiveWordIndex(words, 1.4)).toBe(-1); // 1400ms — gap between word 2 end (1356) and word 3 start (2076)
+  });
+
+  test("returns 3 for time within fourth word", () => {
+    expect(findActiveWordIndex(words, 2.1)).toBe(3); // 2100ms
+  });
+
+  test("handles instantaneous word (begin_time === end_time)", () => {
+    expect(findActiveWordIndex(words, 2.96)).toBe(4); // 2960ms — at the instantaneous word
+  });
+
+  test("returns 5 for time within last word", () => {
+    expect(findActiveWordIndex(words, 3.3)).toBe(5); // 3300ms
+  });
+
+  test("returns -1 for time after all words", () => {
+    expect(findActiveWordIndex(words, 4.0)).toBe(-1); // 4000ms
+  });
+
+  test("returns -1 for time before all words", () => {
+    expect(findActiveWordIndex(words, 0.5)).toBe(-1); // 500ms — before first word starts at 876
+  });
+
+  test("returns -1 for empty words array", () => {
+    expect(findActiveWordIndex([], 1.0)).toBe(-1);
   });
 });

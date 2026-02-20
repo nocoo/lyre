@@ -218,6 +218,66 @@ export function computeProcessingDuration(
   return formatDuration(diffSeconds);
 }
 
+// ── Word-level VM ──
+
+export interface WordVM {
+  text: string;
+  punctuation: string;
+  /** Display text: text + punctuation */
+  display: string;
+  beginTimeMs: number;
+  endTimeMs: number;
+}
+
+/** Raw word from API response */
+export interface RawWord {
+  begin_time: number;
+  end_time: number;
+  text: string;
+  punctuation: string;
+}
+
+export function toWordVM(raw: RawWord): WordVM {
+  return {
+    text: raw.text,
+    punctuation: raw.punctuation,
+    display: raw.text + raw.punctuation,
+    beginTimeMs: raw.begin_time,
+    endTimeMs: raw.end_time,
+  };
+}
+
+/**
+ * Find the index of the active word based on current playback time.
+ * Returns -1 if no word matches.
+ */
+export function findActiveWordIndex(
+  words: WordVM[],
+  currentTimeSeconds: number,
+): number {
+  const currentMs = currentTimeSeconds * 1000;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]!;
+    if (currentMs >= w.beginTimeMs && currentMs < w.endTimeMs) {
+      return i;
+    }
+  }
+  // If between words or past last word but within sentence, find nearest
+  // This handles words with begin_time === end_time (instantaneous)
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]!;
+    const next = words[i + 1];
+    if (w.beginTimeMs === w.endTimeMs && currentMs >= w.beginTimeMs) {
+      // Instantaneous word — active if current time is at or past it
+      // but before the next word starts
+      if (!next || currentMs < next.beginTimeMs) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
 // ── Combined detail VM ──
 
 export interface RecordingDetailVM {
