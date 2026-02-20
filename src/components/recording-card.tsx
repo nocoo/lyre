@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clock, HardDrive, Mic } from "lucide-react";
+import { Calendar, Clock, HardDrive, Mic } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { RecordingCardVM } from "@/lib/recordings-list-vm";
 
@@ -48,6 +48,12 @@ export function RecordingCard({ recording }: RecordingCardProps) {
           <HardDrive className="h-3 w-3" strokeWidth={1.5} />
           {recording.fileSize}
         </span>
+        {recording.recordedAt && (
+          <span className="flex items-center gap-1">
+            <Calendar className="h-3 w-3" strokeWidth={1.5} />
+            {recording.recordedAt}
+          </span>
+        )}
         <span className="ml-auto">{recording.createdAtRelative}</span>
       </div>
 
