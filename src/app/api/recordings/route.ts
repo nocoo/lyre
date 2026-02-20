@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = (await request.json()) as {
+    id?: string;
     title?: string;
     description?: string;
     fileName?: string;
@@ -99,7 +100,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const id = crypto.randomUUID();
+  // Use client-provided id (from presign) or generate a new one
+  const id = body.id ?? crypto.randomUUID();
 
   const recording = recordingsRepo.create({
     id,

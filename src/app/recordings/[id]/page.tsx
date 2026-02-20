@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useRef, useState, useCallback } from "react";
+import { use, useRef, useState, useCallback, useEffect } from "react";
 import { ArrowLeft, Play, Loader2, AlertCircle, FileText } from "lucide-react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout";
@@ -11,29 +11,19 @@ import {
 } from "@/components/transcript-viewer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MOCK_RECORDING_DETAILS } from "@/lib/mock-data";
 import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
+import type { RecordingDetail } from "@/lib/types";
 
 type PageParams = { params: Promise<{ id: string }> };
 
 export default function RecordingDetailPage({ params }: PageParams) {
   const { id } = use(params);
 
-  const detail = MOCK_RECORDING_DETAILS.find((d) => d.id === id);
-
-  if (!detail) {
-    return (
-      <AppShell breadcrumbs={[{ label: "Recordings", href: "/recordings" }]}>
-        <NotFound />
-      </AppShell>
-    );
-  }
-
   return (
     <AppShell
       breadcrumbs={[
         { label: "Recordings", href: "/recordings" },
-        { label: detail.title },
+        { label: "Detail" },
       ]}
     >
       <RecordingDetailContent id={id} />
@@ -47,6 +37,38 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [viewMode, setViewMode] = useState<"sentences" | "fulltext">(
     "sentences",
   );
+  const [detail, setDetail] = useState<RecordingDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/recordings/${id}`);
+        if (res.ok) {
+          const data = (await res.json()) as RecordingDetail;
+          setDetail(data);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    void load();
+  }, [id]);
+
+  // Fetch presigned play URL once we have the detail
+  useEffect(() => {
+    if (!detail?.ossKey) return;
+    async function fetchPlayUrl() {
+      const res = await fetch(`/api/recordings/${id}/play-url`);
+      if (res.ok) {
+        const data = (await res.json()) as { url: string };
+        setAudioUrl(data.url);
+      }
+    }
+    void fetchPlayUrl();
+  }, [id, detail?.ossKey]);
 
   const handleSeek = useCallback((timeInSeconds: number) => {
     playerRef.current?.seekTo(timeInSeconds);
@@ -56,7 +78,14 @@ function RecordingDetailContent({ id }: { id: string }) {
     setCurrentTime(time);
   }, []);
 
-  const detail = MOCK_RECORDING_DETAILS.find((d) => d.id === id);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   if (!detail) return <NotFound />;
 
   const vm = toRecordingDetailVM(detail);
@@ -119,13 +148,15 @@ function RecordingDetailContent({ id }: { id: string }) {
         tags={vm.metadata.tags}
       />
 
-      {/* Audio player (mock URL) */}
-      <AudioPlayer
-        ref={playerRef}
-        src={`/api/audio/${id}`}
-        title={vm.metadata.title}
-        onTimeUpdate={handleTimeUpdate}
-      />
+      {/* Audio player */}
+      {audioUrl && (
+        <AudioPlayer
+          ref={playerRef}
+          src={audioUrl}
+          title={vm.metadata.title}
+          onTimeUpdate={handleTimeUpdate}
+        />
+      )}
 
       {/* Transcribing state */}
       {vm.isTranscribing && vm.job && <TranscribingCard />}

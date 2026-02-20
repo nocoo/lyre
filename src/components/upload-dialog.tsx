@@ -38,6 +38,24 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Extract duration in seconds from an audio File using the Audio element. */
+function getAudioDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const audio = new Audio();
+    audio.addEventListener("loadedmetadata", () => {
+      const d = Number.isFinite(audio.duration) ? audio.duration : null;
+      URL.revokeObjectURL(url);
+      resolve(d);
+    });
+    audio.addEventListener("error", () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    });
+    audio.src = url;
+  });
+}
+
 const ACCEPTED_TYPES = [
   "audio/mpeg",
   "audio/mp3",
@@ -194,14 +212,17 @@ export function UploadDialog({
 
       // Step 3: Create recording in database
       setState("creating");
+      const duration = await getAudioDuration(file);
       const createRes = await fetch("/api/recordings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: recordingId,
           title: title || file.name,
           description: description || null,
           fileName: file.name,
           fileSize: file.size,
+          duration,
           format: file.type.split("/")[1] ?? "unknown",
           ossKey,
         }),
