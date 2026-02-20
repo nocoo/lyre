@@ -97,6 +97,7 @@ export interface RecordingCardVM {
   tags: string[];
   createdAt: string;
   createdAtRelative: string;
+  recordedAt: string;
 }
 
 export function toRecordingCardVM(recording: Recording): RecordingCardVM {
@@ -110,6 +111,7 @@ export function toRecordingCardVM(recording: Recording): RecordingCardVM {
     tags: recording.tags,
     createdAt: formatDate(recording.createdAt),
     createdAtRelative: formatRelativeTime(recording.createdAt),
+    recordedAt: recording.recordedAt ? formatDate(recording.recordedAt) : "",
   };
 }
 

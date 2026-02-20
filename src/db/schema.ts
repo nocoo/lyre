@@ -2,11 +2,11 @@
  * Drizzle ORM schema for Lyre.
  *
  * All tables use text primary keys (UUIDs) and integer timestamps (Unix ms).
- * Tags are stored as JSON text arrays.
+ * Tags are managed via a separate tags table with a join table.
  * Transcription sentences are stored as JSON text.
  */
 
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
 
 // ── Users ──
 
@@ -22,6 +22,22 @@ export const users = sqliteTable("users", {
 export type DbUser = typeof users.$inferSelect;
 export type NewDbUser = typeof users.$inferInsert;
 
+// ── Folders (flat, one level only) ──
+
+export const folders = sqliteTable("folders", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  name: text("name").notNull(),
+  icon: text("icon").notNull().default("folder"), // lucide icon name
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export type DbFolder = typeof folders.$inferSelect;
+export type NewDbFolder = typeof folders.$inferInsert;
+
 // ── Recordings ──
 
 export const recordings = sqliteTable("recordings", {
@@ -29,6 +45,7 @@ export const recordings = sqliteTable("recordings", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id),
+  folderId: text("folder_id").references(() => folders.id),
   title: text("title").notNull(),
   description: text("description"),
   fileName: text("file_name").notNull(),
@@ -37,7 +54,10 @@ export const recordings = sqliteTable("recordings", {
   format: text("format"),
   sampleRate: integer("sample_rate"),
   ossKey: text("oss_key").notNull(),
-  tags: text("tags").notNull().default("[]"), // JSON array
+  tags: text("tags").notNull().default("[]"), // Legacy JSON array (kept for migration compat)
+  notes: text("notes"),
+  aiSummary: text("ai_summary"),
+  recordedAt: integer("recorded_at"), // Unix ms — defaults to file lastModified on upload
   status: text("status", {
     enum: ["uploaded", "transcribing", "completed", "failed"],
   }).notNull(),
@@ -92,6 +112,38 @@ export const transcriptions = sqliteTable("transcriptions", {
 
 export type DbTranscription = typeof transcriptions.$inferSelect;
 export type NewDbTranscription = typeof transcriptions.$inferInsert;
+
+// ── Tags (per-user tag library) ──
+
+export const tags = sqliteTable("tags", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  name: text("name").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+export type DbTag = typeof tags.$inferSelect;
+export type NewDbTag = typeof tags.$inferInsert;
+
+// ── Recording ↔ Tag join table ──
+
+export const recordingTags = sqliteTable(
+  "recording_tags",
+  {
+    recordingId: text("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (table) => [primaryKey({ columns: [table.recordingId, table.tagId] })],
+);
+
+export type DbRecordingTag = typeof recordingTags.$inferSelect;
+export type NewDbRecordingTag = typeof recordingTags.$inferInsert;
 
 // ── Settings ──
 

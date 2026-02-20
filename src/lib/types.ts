@@ -36,9 +36,26 @@ export interface User {
   updatedAt: number;
 }
 
+export interface Tag {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: number;
+}
+
+export interface Folder {
+  id: string;
+  userId: string;
+  name: string;
+  icon: string; // lucide icon name
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Recording {
   id: string;
   userId: string;
+  folderId: string | null;
   title: string;
   description: string | null;
   fileName: string;
@@ -47,7 +64,10 @@ export interface Recording {
   format: string | null;
   sampleRate: number | null;
   ossKey: string;
-  tags: string[]; // stored as JSON in DB
+  tags: string[]; // legacy JSON tags (for backward compat)
+  notes: string | null;
+  aiSummary: string | null;
+  recordedAt: number | null; // Unix ms
   status: RecordingStatus;
   createdAt: number;
   updatedAt: number;
@@ -101,6 +121,8 @@ export interface Setting {
 export interface RecordingDetail extends Recording {
   transcription: Transcription | null;
   latestJob: TranscriptionJob | null;
+  folder: Folder | null;
+  resolvedTags: Tag[];
 }
 
 /** Paginated list response */

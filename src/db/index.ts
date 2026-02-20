@@ -54,9 +54,19 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS folders (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  icon TEXT NOT NULL DEFAULT 'folder',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS recordings (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
+  folder_id TEXT REFERENCES folders(id),
   title TEXT NOT NULL,
   description TEXT,
   file_name TEXT NOT NULL,
@@ -66,9 +76,25 @@ CREATE TABLE IF NOT EXISTS recordings (
   sample_rate INTEGER,
   oss_key TEXT NOT NULL,
   tags TEXT NOT NULL DEFAULT '[]',
+  notes TEXT,
+  ai_summary TEXT,
+  recorded_at INTEGER,
   status TEXT NOT NULL CHECK(status IN ('uploaded','transcribing','completed','failed')),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tags (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS recording_tags (
+  recording_id TEXT NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+  tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (recording_id, tag_id)
 );
 
 CREATE TABLE IF NOT EXISTS transcription_jobs (
@@ -174,7 +200,10 @@ export function resetDb(): void {
     "settings",
     "transcriptions",
     "transcription_jobs",
+    "recording_tags",
     "recordings",
+    "tags",
+    "folders",
     "users",
   ];
 

@@ -9,6 +9,8 @@ import type {
   Transcription,
   TranscriptionJob,
   TranscriptionSentence,
+  Tag,
+  Folder,
 } from "./types";
 
 const NOW = 1740000000000; // ~2025-02-19 in ms
@@ -67,6 +69,7 @@ export const MOCK_RECORDINGS: Recording[] = [
   {
     id: "rec-001",
     userId: "user-001",
+    folderId: "folder-001",
     title: "Q4 Product Review Meeting",
     description:
       "Quarterly review covering user growth, retention metrics, and infrastructure updates.",
@@ -77,6 +80,9 @@ export const MOCK_RECORDINGS: Recording[] = [
     sampleRate: 48000,
     ossKey: "recordings/user-001/rec-001/q4-product-review.mp3",
     tags: ["meeting", "product", "quarterly"],
+    notes: "Key takeaway: 23% MAU growth, 68% D30 retention.",
+    aiSummary: null,
+    recordedAt: NOW - 8 * DAY,
     status: "completed",
     createdAt: NOW - 7 * DAY,
     updatedAt: NOW - 7 * DAY,
@@ -84,6 +90,7 @@ export const MOCK_RECORDINGS: Recording[] = [
   {
     id: "rec-002",
     userId: "user-001",
+    folderId: "folder-001",
     title: "Design Sprint Kickoff",
     description: "Initial brainstorming session for the new dashboard redesign.",
     fileName: "design-sprint-kickoff.mp3",
@@ -93,6 +100,9 @@ export const MOCK_RECORDINGS: Recording[] = [
     sampleRate: 44100,
     ossKey: "recordings/user-001/rec-002/design-sprint-kickoff.mp3",
     tags: ["design", "sprint"],
+    notes: null,
+    aiSummary: null,
+    recordedAt: NOW - 4 * DAY,
     status: "transcribing",
     createdAt: NOW - 3 * DAY,
     updatedAt: NOW - 3 * DAY,
@@ -100,6 +110,7 @@ export const MOCK_RECORDINGS: Recording[] = [
   {
     id: "rec-003",
     userId: "user-001",
+    folderId: null,
     title: "Customer Interview - Acme Corp",
     description: "Discovery call with Acme Corp engineering lead about their workflow.",
     fileName: "acme-interview.mp3",
@@ -109,6 +120,9 @@ export const MOCK_RECORDINGS: Recording[] = [
     sampleRate: 48000,
     ossKey: "recordings/user-001/rec-003/acme-interview.mp3",
     tags: ["interview", "customer", "acme"],
+    notes: null,
+    aiSummary: null,
+    recordedAt: NOW - 2 * DAY,
     status: "uploaded",
     createdAt: NOW - 1 * DAY,
     updatedAt: NOW - 1 * DAY,
@@ -116,6 +130,7 @@ export const MOCK_RECORDINGS: Recording[] = [
   {
     id: "rec-004",
     userId: "user-001",
+    folderId: "folder-002",
     title: "Team Standup - Feb 18",
     description: null,
     fileName: "standup-feb18.mp3",
@@ -125,6 +140,9 @@ export const MOCK_RECORDINGS: Recording[] = [
     sampleRate: 44100,
     ossKey: "recordings/user-001/rec-004/standup-feb18.mp3",
     tags: ["standup"],
+    notes: null,
+    aiSummary: null,
+    recordedAt: NOW - 2 * DAY,
     status: "completed",
     createdAt: NOW - 2 * DAY,
     updatedAt: NOW - 2 * DAY,
@@ -132,6 +150,7 @@ export const MOCK_RECORDINGS: Recording[] = [
   {
     id: "rec-005",
     userId: "user-001",
+    folderId: null,
     title: "Podcast Episode Draft",
     description: "Raw recording for episode 12 on developer productivity.",
     fileName: "podcast-ep12-raw.mp3",
@@ -141,10 +160,48 @@ export const MOCK_RECORDINGS: Recording[] = [
     sampleRate: 48000,
     ossKey: "recordings/user-001/rec-005/podcast-ep12-raw.mp3",
     tags: ["podcast", "draft"],
+    notes: "Need to re-record the intro section.",
+    aiSummary: null,
+    recordedAt: NOW - 6 * DAY,
     status: "failed",
     createdAt: NOW - 5 * DAY,
     updatedAt: NOW - 5 * DAY,
   },
+];
+
+// ── Mock folders ──
+
+export const MOCK_FOLDERS: Folder[] = [
+  {
+    id: "folder-001",
+    userId: "user-001",
+    name: "Meetings",
+    icon: "users",
+    createdAt: NOW - 30 * DAY,
+    updatedAt: NOW - 30 * DAY,
+  },
+  {
+    id: "folder-002",
+    userId: "user-001",
+    name: "Standups",
+    icon: "calendar",
+    createdAt: NOW - 20 * DAY,
+    updatedAt: NOW - 20 * DAY,
+  },
+];
+
+// ── Mock tags ──
+
+export const MOCK_TAGS: Tag[] = [
+  { id: "tag-001", userId: "user-001", name: "meeting", createdAt: NOW - 30 * DAY },
+  { id: "tag-002", userId: "user-001", name: "product", createdAt: NOW - 30 * DAY },
+  { id: "tag-003", userId: "user-001", name: "quarterly", createdAt: NOW - 30 * DAY },
+  { id: "tag-004", userId: "user-001", name: "design", createdAt: NOW - 20 * DAY },
+  { id: "tag-005", userId: "user-001", name: "sprint", createdAt: NOW - 20 * DAY },
+  { id: "tag-006", userId: "user-001", name: "interview", createdAt: NOW - 10 * DAY },
+  { id: "tag-007", userId: "user-001", name: "customer", createdAt: NOW - 10 * DAY },
+  { id: "tag-008", userId: "user-001", name: "standup", createdAt: NOW - 10 * DAY },
+  { id: "tag-009", userId: "user-001", name: "podcast", createdAt: NOW - 10 * DAY },
 ];
 
 // ── Mock transcription job ──
@@ -179,6 +236,19 @@ export const MOCK_TRANSCRIPTION: Transcription = {
 
 // ── Mock recording details ──
 
+/** Helper to find a folder by ID */
+function findFolder(id: string | null): Folder | null {
+  if (!id) return null;
+  return MOCK_FOLDERS.find((f) => f.id === id) ?? null;
+}
+
+/** Helper to resolve tags from legacy tag names */
+function resolveTags(tagNames: string[]): Tag[] {
+  return tagNames
+    .map((name) => MOCK_TAGS.find((t) => t.name === name))
+    .filter((t): t is Tag => t !== undefined);
+}
+
 export const MOCK_RECORDING_DETAILS: RecordingDetail[] = MOCK_RECORDINGS.map(
   (rec) => ({
     ...rec,
@@ -208,5 +278,7 @@ export const MOCK_RECORDING_DETAILS: RecordingDetail[] = MOCK_RECORDINGS.map(
               usageSeconds: null,
             }
           : null,
+    folder: findFolder(rec.folderId),
+    resolvedTags: resolveTags(rec.tags),
   }),
 );

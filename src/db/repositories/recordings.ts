@@ -7,7 +7,7 @@
 
 import { eq, desc } from "drizzle-orm";
 import { db } from "../index";
-import { recordings, transcriptions, transcriptionJobs, type DbRecording } from "../schema";
+import { recordings, transcriptions, transcriptionJobs, recordingTags, type DbRecording } from "../schema";
 import type { RecordingStatus } from "@/lib/types";
 
 /** Parse tags JSON string to array */
@@ -117,6 +117,9 @@ export const recordingsRepo = {
     ossKey: string;
     tags: string[];
     status: RecordingStatus;
+    folderId?: string | null;
+    notes?: string | null;
+    recordedAt?: number | null;
   }): DbRecording {
     const now = Date.now();
     return db
@@ -124,6 +127,9 @@ export const recordingsRepo = {
       .values({
         ...data,
         tags: JSON.stringify(data.tags),
+        folderId: data.folderId ?? null,
+        notes: data.notes ?? null,
+        recordedAt: data.recordedAt ?? null,
         createdAt: now,
         updatedAt: now,
       })
@@ -140,6 +146,9 @@ export const recordingsRepo = {
       status: RecordingStatus;
       duration: number | null;
       fileSize: number | null;
+      folderId: string | null;
+      notes: string | null;
+      recordedAt: number | null;
     }>,
   ): DbRecording | undefined {
     const updateData: Record<string, unknown> = {
@@ -152,6 +161,9 @@ export const recordingsRepo = {
     if (data.status !== undefined) updateData.status = data.status;
     if (data.duration !== undefined) updateData.duration = data.duration;
     if (data.fileSize !== undefined) updateData.fileSize = data.fileSize;
+    if (data.folderId !== undefined) updateData.folderId = data.folderId;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.recordedAt !== undefined) updateData.recordedAt = data.recordedAt;
 
     return db
       .update(recordings)
@@ -180,6 +192,9 @@ export const recordingsRepo = {
         .run();
       tx.delete(transcriptionJobs)
         .where(eq(transcriptionJobs.recordingId, id))
+        .run();
+      tx.delete(recordingTags)
+        .where(eq(recordingTags.recordingId, id))
         .run();
       const result = tx
         .delete(recordings)

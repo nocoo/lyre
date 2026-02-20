@@ -9,6 +9,7 @@ import type {
   RecordingDetail,
   TranscriptionSentence,
   TranscriptionJob,
+  Tag,
 } from "./types";
 import {
   formatFileSize,
@@ -31,6 +32,12 @@ export interface RecordingMetadataVM {
   sampleRate: string;
   status: StatusInfo;
   tags: string[];
+  resolvedTags: Tag[];
+  notes: string;
+  folderName: string;
+  folderIcon: string;
+  recordedAt: string;
+  recordedAtRaw: number | null;
   createdAt: string;
   canTranscribe: boolean;
   canRetranscribe: boolean;
@@ -50,6 +57,12 @@ export function toRecordingMetadataVM(
     sampleRate: detail.sampleRate ? `${detail.sampleRate} Hz` : "—",
     status: getStatusInfo(detail.status),
     tags: detail.tags,
+    resolvedTags: detail.resolvedTags,
+    notes: detail.notes ?? "",
+    folderName: detail.folder?.name ?? "",
+    folderIcon: detail.folder?.icon ?? "",
+    recordedAt: detail.recordedAt ? formatDate(detail.recordedAt) : "",
+    recordedAtRaw: detail.recordedAt,
     createdAt: formatDate(detail.createdAt),
     canTranscribe: detail.status === "uploaded",
     canRetranscribe: detail.status === "completed" || detail.status === "failed",
