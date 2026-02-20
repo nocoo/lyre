@@ -14,6 +14,9 @@ interface Recording {
   ossKey: string;
   status: string;
   tags: string[];
+  notes: string | null;
+  folderId: string | null;
+  recordedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -26,9 +29,27 @@ interface PaginatedResponse {
   totalPages: number;
 }
 
+interface Tag {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: number;
+}
+
+interface Folder {
+  id: string;
+  userId: string;
+  name: string;
+  icon: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 interface RecordingDetail extends Recording {
   transcription: unknown;
   latestJob: unknown;
+  folder: Folder | null;
+  resolvedTags: Tag[];
 }
 
 async function createRecording(data: {
@@ -39,6 +60,7 @@ async function createRecording(data: {
   format?: string;
   ossKey: string;
   tags?: string[];
+  recordedAt?: number;
 }): Promise<Recording> {
   const res = await fetch(`${BASE_URL}/api/recordings`, {
     method: "POST",
@@ -145,6 +167,32 @@ describe("POST /api/recordings", () => {
 
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain("Missing required fields");
+  });
+
+  test("creates a recording with recordedAt", async () => {
+    const recordedAt = Date.now() - 86_400_000; // yesterday
+    const res = await fetch(`${BASE_URL}/api/recordings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Recorded Yesterday",
+        fileName: "yesterday.mp3",
+        ossKey: "uploads/e2e/yesterday.mp3",
+        recordedAt,
+      }),
+    });
+    expect(res.status).toBe(201);
+
+    const body = (await res.json()) as Recording;
+    expect(body.recordedAt).toBe(recordedAt);
+
+    // Verify via GET detail
+    const detailRes = await fetch(`${BASE_URL}/api/recordings/${body.id}`);
+    const detail = (await detailRes.json()) as RecordingDetail;
+    expect(detail.recordedAt).toBe(recordedAt);
+
+    // Cleanup
+    await fetch(`${BASE_URL}/api/recordings/${body.id}`, { method: "DELETE" });
   });
 });
 
@@ -286,6 +334,136 @@ describe("PUT /api/recordings/[id]", () => {
     );
     expect(res.status).toBe(404);
   });
+
+  test("updates notes field", async () => {
+    const id = createdIds[0]!;
+    const res = await fetch(`${BASE_URL}/api/recordings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: "Important meeting notes" }),
+    });
+    expect(res.status).toBe(200);
+
+    // Verify via GET detail
+    const detailRes = await fetch(`${BASE_URL}/api/recordings/${id}`);
+    const detail = (await detailRes.json()) as RecordingDetail;
+    expect(detail.notes).toBe("Important meeting notes");
+
+    // Clear notes
+    await fetch(`${BASE_URL}/api/recordings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: null }),
+    });
+  });
+
+  test("updates recordedAt field", async () => {
+    const id = createdIds[0]!;
+    const recordedAt = 1700000000000; // fixed timestamp
+    const res = await fetch(`${BASE_URL}/api/recordings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recordedAt }),
+    });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as Recording;
+    expect(body.recordedAt).toBe(recordedAt);
+
+    // Clear recordedAt
+    await fetch(`${BASE_URL}/api/recordings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recordedAt: null }),
+    });
+  });
+
+  test("assigns and clears folderId", async () => {
+    // Create a folder
+    const folderRes = await fetch(`${BASE_URL}/api/folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "PUT Test Folder", icon: "mic" }),
+    });
+    const folder = (await folderRes.json()) as Folder;
+
+    const id = createdIds[1]!;
+
+    // Assign folder
+    const res = await fetch(`${BASE_URL}/api/recordings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId: folder.id }),
+    });
+    expect(res.status).toBe(200);
+
+    // Verify via GET detail — should have folder object
+    const detailRes = await fetch(`${BASE_URL}/api/recordings/${id}`);
+    const detail = (await detailRes.json()) as RecordingDetail;
+    expect(detail.folderId).toBe(folder.id);
+    expect(detail.folder).not.toBeNull();
+    expect(detail.folder!.name).toBe("PUT Test Folder");
+
+    // Clear folder
+    await fetch(`${BASE_URL}/api/recordings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId: null }),
+    });
+
+    // Cleanup folder
+    await fetch(`${BASE_URL}/api/folders/${folder.id}`, { method: "DELETE" });
+  });
+
+  test("updates tagIds and resolvedTags appear in detail", async () => {
+    // Create two tags
+    const tag1Res = await fetch(`${BASE_URL}/api/tags`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "e2e-rec-tag-1" }),
+    });
+    const tag1 = (await tag1Res.json()) as Tag;
+
+    const tag2Res = await fetch(`${BASE_URL}/api/tags`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "e2e-rec-tag-2" }),
+    });
+    const tag2 = (await tag2Res.json()) as Tag;
+
+    const id = createdIds[2]!;
+
+    // Assign tags via PUT
+    const res = await fetch(`${BASE_URL}/api/recordings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tagIds: [tag1.id, tag2.id] }),
+    });
+    expect(res.status).toBe(200);
+
+    // Verify via GET detail — resolvedTags should contain both
+    const detailRes = await fetch(`${BASE_URL}/api/recordings/${id}`);
+    const detail = (await detailRes.json()) as RecordingDetail;
+    const tagNames = detail.resolvedTags.map((t) => t.name);
+    expect(tagNames).toContain("e2e-rec-tag-1");
+    expect(tagNames).toContain("e2e-rec-tag-2");
+
+    // Clear tags
+    await fetch(`${BASE_URL}/api/recordings/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tagIds: [] }),
+    });
+
+    // Verify cleared
+    const detailRes2 = await fetch(`${BASE_URL}/api/recordings/${id}`);
+    const detail2 = (await detailRes2.json()) as RecordingDetail;
+    expect(detail2.resolvedTags).toEqual([]);
+
+    // Cleanup tags
+    await fetch(`${BASE_URL}/api/tags/${tag1.id}`, { method: "DELETE" });
+    await fetch(`${BASE_URL}/api/tags/${tag2.id}`, { method: "DELETE" });
+  });
 });
 
 describe("DELETE /api/recordings/[id]", () => {
@@ -398,5 +576,39 @@ describe("GET /api/recordings/[id]/play-url", () => {
       `${BASE_URL}/api/recordings/nonexistent-id-12345/play-url`,
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/recordings/[id]/download-url", () => {
+  test("returns presigned download URL for existing recording", async () => {
+    const id = createdIds[0]!;
+    const res = await fetch(`${BASE_URL}/api/recordings/${id}/download-url`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { downloadUrl: string };
+    expect(body.downloadUrl).toContain("https://");
+    expect(body.downloadUrl).toContain("OSSAccessKeyId");
+    // Should include content-disposition for download
+    expect(body.downloadUrl).toContain("response-content-disposition");
+  });
+
+  test("returns 404 for unknown recording", async () => {
+    const res = await fetch(
+      `${BASE_URL}/api/recordings/nonexistent-id-12345/download-url`,
+    );
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/recordings/[id] — new fields", () => {
+  test("returns folder and resolvedTags as null/empty for fresh recording", async () => {
+    const id = createdIds[3]!;
+    const res = await fetch(`${BASE_URL}/api/recordings/${id}`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as RecordingDetail;
+    expect(body.folder).toBeNull();
+    expect(body.resolvedTags).toEqual([]);
+    expect(body.notes).toBeNull();
   });
 });
