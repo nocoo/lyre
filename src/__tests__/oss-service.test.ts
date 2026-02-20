@@ -126,20 +126,20 @@ describe("presignPut", () => {
 
 describe("presignGet", () => {
   test("returns a valid URL", () => {
-    const url = presignGet("uploads/u/r/test.mp3", 3600, TEST_CONFIG);
+    const url = presignGet("uploads/u/r/test.mp3", 3600, undefined, TEST_CONFIG);
     expect(url).toContain("https://test-bucket.oss-cn-beijing.aliyuncs.com/");
     expect(url).toContain("uploads/u/r/test.mp3");
   });
 
   test("includes required query parameters", () => {
-    const url = new URL(presignGet("key.mp3", 3600, TEST_CONFIG));
+    const url = new URL(presignGet("key.mp3", 3600, undefined, TEST_CONFIG));
     expect(url.searchParams.get("OSSAccessKeyId")).toBe("test-key-id");
     expect(url.searchParams.get("Expires")).toBeTruthy();
     expect(url.searchParams.get("Signature")).toBeTruthy();
   });
 
   test("default expiry is 1 hour", () => {
-    const url = new URL(presignGet("key.mp3", undefined, TEST_CONFIG));
+    const url = new URL(presignGet("key.mp3", undefined, undefined, TEST_CONFIG));
     const expires = Number(url.searchParams.get("Expires"));
     const now = Math.floor(Date.now() / 1000);
     expect(expires).toBeGreaterThan(now + 3500);
@@ -147,11 +147,21 @@ describe("presignGet", () => {
   });
 
   test("GET and PUT produce different signatures for same key", () => {
-    const getUrl = presignGet("key.mp3", 900, TEST_CONFIG);
+    const getUrl = presignGet("key.mp3", 900, undefined, TEST_CONFIG);
     const putUrl = presignPut("key.mp3", "audio/mpeg", 900, TEST_CONFIG);
     const getSig = new URL(getUrl).searchParams.get("Signature");
     const putSig = new URL(putUrl).searchParams.get("Signature");
     expect(getSig).not.toBe(putSig);
+  });
+
+  test("includes response override params in URL and signature", () => {
+    const url = new URL(presignGet("key.mp3", 3600, {
+      "response-content-disposition": 'attachment; filename="test.mp3"',
+    }, TEST_CONFIG));
+    expect(url.searchParams.get("response-content-disposition")).toBe(
+      'attachment; filename="test.mp3"',
+    );
+    expect(url.searchParams.get("Signature")).toBeTruthy();
   });
 });
 

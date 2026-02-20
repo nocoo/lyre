@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
     sampleRate?: number;
     ossKey?: string;
     tags?: string[];
+    recordedAt?: number;
   };
 
   if (!body.title || !body.fileName || !body.ossKey) {
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
     ossKey: body.ossKey,
     tags: body.tags ?? [],
     status: "uploaded",
+    recordedAt: body.recordedAt ?? null,
   });
 
   return NextResponse.json(

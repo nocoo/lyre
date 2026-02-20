@@ -131,16 +131,27 @@ export function presignPut(
  *
  * @param key - The OSS object key
  * @param expiresInSec - URL validity in seconds (default 1 hour)
+ * @param responseOverrides - Optional response header overrides (e.g. response-content-disposition)
+ * @param config - Optional OSS config override
  * @returns Presigned URL string
  */
 export function presignGet(
   key: string,
   expiresInSec: number = 3600,
+  responseOverrides?: Record<string, string>,
   config?: OssConfig,
 ): string {
   const cfg = config ?? getConfig();
   const expires = Math.floor(Date.now() / 1000) + expiresInSec;
-  const resource = `/${cfg.bucket}/${key}`;
+
+  // Build canonical resource — must include response override params for V1 signature
+  let resource = `/${cfg.bucket}/${key}`;
+  if (responseOverrides && Object.keys(responseOverrides).length > 0) {
+    const overrideParts = Object.entries(responseOverrides)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`);
+    resource += `?${overrideParts.join("&")}`;
+  }
 
   const signature = signV1(cfg.accessKeySecret, "GET", resource, expires);
 
@@ -148,6 +159,13 @@ export function presignGet(
   url.searchParams.set("OSSAccessKeyId", cfg.accessKeyId);
   url.searchParams.set("Expires", expires.toString());
   url.searchParams.set("Signature", signature);
+
+  // Append response override params to URL
+  if (responseOverrides) {
+    for (const [k, v] of Object.entries(responseOverrides)) {
+      url.searchParams.set(k, v);
+    }
+  }
 
   return url.toString();
 }

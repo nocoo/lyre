@@ -4,6 +4,8 @@ import {
   recordingsRepo,
   transcriptionsRepo,
   jobsRepo,
+  foldersRepo,
+  tagsRepo,
 } from "@/db/repositories";
 import { deleteObject } from "@/services/oss";
 import type { RecordingDetail, TranscriptionSentence } from "@/lib/types";
@@ -46,6 +48,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     tags: recordingsRepo.parseTags(recording.tags),
     transcription,
     latestJob,
+    folder: recording.folderId
+      ? foldersRepo.findById(recording.folderId) ?? null
+      : null,
+    resolvedTags: tagsRepo.findTagsForRecording(id),
   };
 
   return NextResponse.json(detail);
@@ -71,6 +77,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     title?: string;
     description?: string | null;
     tags?: string[];
+    notes?: string | null;
+    folderId?: string | null;
+    recordedAt?: number | null;
+    tagIds?: string[];
   };
 
   // Build update object, omitting undefined fields to satisfy exactOptionalPropertyTypes
@@ -78,6 +88,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (body.title !== undefined) updates.title = body.title;
   if (body.description !== undefined) updates.description = body.description;
   if (body.tags !== undefined) updates.tags = body.tags;
+  if (body.notes !== undefined) updates.notes = body.notes;
+  if (body.folderId !== undefined) updates.folderId = body.folderId;
+  if (body.recordedAt !== undefined) updates.recordedAt = body.recordedAt;
 
   const updated = recordingsRepo.update(id, updates);
 
@@ -86,6 +99,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       { error: "Failed to update recording" },
       { status: 500 },
     );
+  }
+
+  // Update tag associations if tagIds provided
+  if (body.tagIds !== undefined) {
+    tagsRepo.setTagsForRecording(id, body.tagIds);
   }
 
   return NextResponse.json({
