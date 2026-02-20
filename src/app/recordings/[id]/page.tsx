@@ -1,0 +1,330 @@
+"use client";
+
+import { use, useRef, useState, useCallback } from "react";
+import { ArrowLeft, Play, Loader2, AlertCircle, FileText } from "lucide-react";
+import Link from "next/link";
+import { AppShell } from "@/components/layout";
+import { AudioPlayer, type AudioPlayerHandle } from "@/components/audio-player";
+import {
+  TranscriptViewer,
+  TranscriptFullText,
+} from "@/components/transcript-viewer";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { MOCK_RECORDING_DETAILS } from "@/lib/mock-data";
+import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
+
+type PageParams = { params: Promise<{ id: string }> };
+
+export default function RecordingDetailPage({ params }: PageParams) {
+  const { id } = use(params);
+
+  const detail = MOCK_RECORDING_DETAILS.find((d) => d.id === id);
+
+  if (!detail) {
+    return (
+      <AppShell breadcrumbs={[{ label: "Recordings", href: "/recordings" }]}>
+        <NotFound />
+      </AppShell>
+    );
+  }
+
+  return (
+    <AppShell
+      breadcrumbs={[
+        { label: "Recordings", href: "/recordings" },
+        { label: detail.title },
+      ]}
+    >
+      <RecordingDetailContent id={id} />
+    </AppShell>
+  );
+}
+
+function RecordingDetailContent({ id }: { id: string }) {
+  const playerRef = useRef<AudioPlayerHandle>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [viewMode, setViewMode] = useState<"sentences" | "fulltext">(
+    "sentences",
+  );
+
+  const handleSeek = useCallback((timeInSeconds: number) => {
+    playerRef.current?.seekTo(timeInSeconds);
+  }, []);
+
+  const handleTimeUpdate = useCallback((time: number) => {
+    setCurrentTime(time);
+  }, []);
+
+  const detail = MOCK_RECORDING_DETAILS.find((d) => d.id === id);
+  if (!detail) return <NotFound />;
+
+  const vm = toRecordingDetailVM(detail);
+
+  return (
+    <div className="space-y-6">
+      {/* Back link + header */}
+      <div className="space-y-4">
+        <Link
+          href="/recordings"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
+          Back to recordings
+        </Link>
+
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-semibold truncate">
+                {vm.metadata.title}
+              </h1>
+              <Badge variant={vm.metadata.status.variant} className="shrink-0">
+                {vm.metadata.status.label}
+              </Badge>
+            </div>
+            {vm.metadata.description && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {vm.metadata.description}
+              </p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex shrink-0 gap-2">
+            {vm.metadata.canTranscribe && (
+              <Button size="sm" className="gap-2">
+                <Play className="h-4 w-4" strokeWidth={1.5} />
+                Transcribe
+              </Button>
+            )}
+            {vm.metadata.canRetranscribe && (
+              <Button size="sm" variant="outline" className="gap-2">
+                <Play className="h-4 w-4" strokeWidth={1.5} />
+                Re-transcribe
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Metadata grid */}
+      <MetadataGrid
+        fileName={vm.metadata.fileName}
+        fileSize={vm.metadata.fileSize}
+        duration={vm.metadata.duration}
+        format={vm.metadata.format}
+        sampleRate={vm.metadata.sampleRate}
+        createdAt={vm.metadata.createdAt}
+        tags={vm.metadata.tags}
+      />
+
+      {/* Audio player (mock URL) */}
+      <AudioPlayer
+        ref={playerRef}
+        src={`/api/audio/${id}`}
+        title={vm.metadata.title}
+        onTimeUpdate={handleTimeUpdate}
+      />
+
+      {/* Transcribing state */}
+      {vm.isTranscribing && vm.job && <TranscribingCard />}
+
+      {/* Job error */}
+      {vm.job?.isFailed && <JobErrorCard message={vm.job.errorMessage} />}
+
+      {/* Transcription */}
+      {vm.hasTranscription && vm.transcription && (
+        <div className="space-y-3">
+          {/* View mode toggle */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={viewMode === "sentences" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("sentences")}
+            >
+              Sentences
+            </Button>
+            <Button
+              variant={viewMode === "fulltext" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("fulltext")}
+              className="gap-1.5"
+            >
+              <FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
+              Full Text
+            </Button>
+          </div>
+
+          {viewMode === "sentences" ? (
+            <TranscriptViewer
+              transcription={vm.transcription}
+              currentTime={currentTime}
+              onSeek={handleSeek}
+            />
+          ) : (
+            <TranscriptFullText transcription={vm.transcription} />
+          )}
+        </div>
+      )}
+
+      {/* Job info (for completed) */}
+      {vm.job?.isCompleted && (
+        <JobInfoCard
+          submitTime={vm.job.submitTime}
+          endTime={vm.job.endTime}
+          processingDuration={vm.job.processingDuration}
+          usageSeconds={vm.job.usageSeconds}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Sub-components ──
+
+function NotFound() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+      <p className="text-lg font-medium">Recording not found</p>
+      <p className="mt-1 text-sm">
+        The recording you&apos;re looking for doesn&apos;t exist.
+      </p>
+      <Link href="/recordings">
+        <Button variant="outline" size="sm" className="mt-4 gap-2">
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
+          Back to recordings
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+function MetadataGrid({
+  fileName,
+  fileSize,
+  duration,
+  format,
+  sampleRate,
+  createdAt,
+  tags,
+}: {
+  fileName: string;
+  fileSize: string;
+  duration: string;
+  format: string;
+  sampleRate: string;
+  createdAt: string;
+  tags: string[];
+}) {
+  const items = [
+    { label: "File", value: fileName },
+    { label: "Size", value: fileSize },
+    { label: "Duration", value: duration },
+    { label: "Format", value: format },
+    { label: "Sample Rate", value: sampleRate },
+    { label: "Created", value: createdAt },
+  ];
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
+        {items.map((item) => (
+          <div key={item.label}>
+            <p className="text-xs font-medium text-muted-foreground">
+              {item.label}
+            </p>
+            <p className="mt-0.5 text-sm text-foreground truncate">
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </div>
+      {tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
+          {tags.map((tag) => (
+            <Badge key={tag} variant="secondary" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TranscribingCard() {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
+      <Loader2
+        className="h-5 w-5 animate-spin text-muted-foreground"
+        strokeWidth={1.5}
+      />
+      <div>
+        <p className="text-sm font-medium text-foreground">
+          Transcription in progress
+        </p>
+        <p className="text-xs text-muted-foreground">
+          This may take a few minutes depending on the audio length.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function JobErrorCard({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-destructive/50 bg-destructive/5 p-4">
+      <AlertCircle
+        className="h-5 w-5 shrink-0 text-destructive"
+        strokeWidth={1.5}
+      />
+      <div>
+        <p className="text-sm font-medium text-foreground">
+          Transcription failed
+        </p>
+        {message && (
+          <p className="mt-0.5 text-xs text-muted-foreground">{message}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function JobInfoCard({
+  submitTime,
+  endTime,
+  processingDuration,
+  usageSeconds,
+}: {
+  submitTime: string;
+  endTime: string;
+  processingDuration: string;
+  usageSeconds: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">
+        Job Details
+      </p>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-4">
+        <div>
+          <p className="text-xs text-muted-foreground">Submitted</p>
+          <p className="text-sm text-foreground">{submitTime}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Completed</p>
+          <p className="text-sm text-foreground">{endTime}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Processing</p>
+          <p className="text-sm text-foreground">{processingDuration}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Audio Processed</p>
+          <p className="text-sm text-foreground">{usageSeconds}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
