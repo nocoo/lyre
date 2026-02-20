@@ -358,6 +358,61 @@ export function createMockAsrProvider(
   };
 }
 
+// ── TLS-safe fetch helper ──
+
+/**
+ * Fetch wrapper that falls back to curl subprocess when Bun's native fetch
+ * hits TLS certificate verification errors (e.g. MITM proxies on macOS).
+ *
+ * On production (Linux/Railway), native fetch works fine.
+ * On dev (macOS with system proxy), curl bypasses the issue.
+ */
+async function safeFetch(
+  url: string,
+  options: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  } = {},
+): Promise<{ status: number; body: string }> {
+  try {
+    const response = await fetch(url, {
+      method: options.method,
+      headers: options.headers,
+      body: options.body,
+    });
+    return { status: response.status, body: await response.text() };
+  } catch (error) {
+    const msg =
+      error instanceof Error ? error.message : String(error);
+    if (!msg.includes("certificate")) throw error;
+
+    // Fallback to curl
+    const args = ["curl", "-s", "-w", "\n%{http_code}", "--max-time", "30"];
+    if (options.method === "POST") args.push("-X", "POST");
+    if (options.headers) {
+      for (const [key, value] of Object.entries(options.headers)) {
+        args.push("-H", `${key}: ${value}`);
+      }
+    }
+    if (options.body) args.push("-d", options.body);
+    args.push(url);
+
+    const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
+    const output = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(`curl failed (exit ${exitCode}): ${stderr}`);
+    }
+
+    const lines = output.trimEnd().split("\n");
+    const statusCode = parseInt(lines.pop()!, 10);
+    const body = lines.join("\n");
+    return { status: statusCode, body };
+  }
+}
+
 // ── Real DashScope provider ──
 
 /**
@@ -375,14 +430,14 @@ export function createMockAsrProvider(
 const DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/api/v1";
 
 export function createRealAsrProvider(apiKey: string): AsrProvider {
-  const headers = {
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
   };
 
   return {
     async submit(fileUrl: string): Promise<AsrSubmitResponse> {
-      const response = await fetch(
+      const { status, body } = await safeFetch(
         `${DASHSCOPE_BASE_URL}/services/audio/asr/transcription`,
         {
           method: "POST",
@@ -402,44 +457,39 @@ export function createRealAsrProvider(apiKey: string): AsrProvider {
         },
       );
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(
-          `DashScope submit failed (${response.status}): ${text}`,
-        );
+      if (status < 200 || status >= 300) {
+        throw new Error(`DashScope submit failed (${status}): ${body}`);
       }
 
-      return (await response.json()) as AsrSubmitResponse;
+      return JSON.parse(body) as AsrSubmitResponse;
     },
 
     async poll(taskId: string): Promise<AsrPollResponse> {
-      const response = await fetch(
+      const { status, body } = await safeFetch(
         `${DASHSCOPE_BASE_URL}/tasks/${taskId}`,
         { headers },
       );
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`DashScope poll failed (${response.status}): ${text}`);
+      if (status < 200 || status >= 300) {
+        throw new Error(`DashScope poll failed (${status}): ${body}`);
       }
 
-      return (await response.json()) as AsrPollResponse;
+      return JSON.parse(body) as AsrPollResponse;
     },
 
     async fetchResult(
       transcriptionUrl: string,
     ): Promise<AsrTranscriptionResult> {
       // transcription_url is a presigned OSS URL — no auth needed
-      const response = await fetch(transcriptionUrl);
+      const { status, body } = await safeFetch(transcriptionUrl);
 
-      if (!response.ok) {
-        const text = await response.text();
+      if (status < 200 || status >= 300) {
         throw new Error(
-          `Failed to fetch transcription result (${response.status}): ${text}`,
+          `Failed to fetch transcription result (${status}): ${body}`,
         );
       }
 
-      return (await response.json()) as AsrTranscriptionResult;
+      return JSON.parse(body) as AsrTranscriptionResult;
     },
   };
 }
