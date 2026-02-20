@@ -58,7 +58,7 @@ export const recordingsRepo = {
     const pageSize = options?.pageSize ?? 10;
 
     // Build conditions
-    let allRows = db
+    let allRows: DbRecording[] = db
       .select()
       .from(recordings)
       .where(eq(recordings.userId, userId))

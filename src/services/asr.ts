@@ -376,11 +376,11 @@ async function safeFetch(
   } = {},
 ): Promise<{ status: number; body: string }> {
   try {
-    const response = await fetch(url, {
-      method: options.method,
-      headers: options.headers,
-      body: options.body,
-    });
+    const init: RequestInit = {};
+    if (options.method) init.method = options.method;
+    if (options.headers) init.headers = options.headers;
+    if (options.body) init.body = options.body;
+    const response = await fetch(url, init);
     return { status: response.status, body: await response.text() };
   } catch (error) {
     const msg =

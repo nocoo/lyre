@@ -48,14 +48,20 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, parseInt(pageParam, 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(pageSizeParam, 10) || 10));
 
-  const { items, total } = recordingsRepo.findByUserId(user.id, {
-    status: status === "all" ? undefined : (status as RecordingStatus),
-    query: query || undefined,
+  // Build filter options, omitting undefined to satisfy exactOptionalPropertyTypes
+  const filterStatus = status === "all" ? undefined : (status as RecordingStatus);
+  const filterQuery = query || undefined;
+
+  const opts: Parameters<typeof recordingsRepo.findByUserId>[1] = {
     sortBy,
     sortDir,
     page,
     pageSize,
-  });
+  };
+  if (filterStatus !== undefined) opts.status = filterStatus;
+  if (filterQuery !== undefined) opts.query = filterQuery;
+
+  const { items, total } = recordingsRepo.findByUserId(user.id, opts);
 
   // Convert DB rows to domain shape (parse tags)
   const recordings = items.map((row) => ({

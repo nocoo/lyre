@@ -73,11 +73,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     tags?: string[];
   };
 
-  const updated = recordingsRepo.update(id, {
-    title: body.title,
-    description: body.description,
-    tags: body.tags,
-  });
+  // Build update object, omitting undefined fields to satisfy exactOptionalPropertyTypes
+  const updates: Parameters<typeof recordingsRepo.update>[1] = {};
+  if (body.title !== undefined) updates.title = body.title;
+  if (body.description !== undefined) updates.description = body.description;
+  if (body.tags !== undefined) updates.tags = body.tags;
+
+  const updated = recordingsRepo.update(id, updates);
 
   if (!updated) {
     return NextResponse.json(
