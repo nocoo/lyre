@@ -26,13 +26,15 @@ let dbInstance: DbInstance | null = null;
 
 const DEFAULT_DB_PATH = "database/lyre.db";
 
-function resolveDbPath(): string {
+/** Resolve the database file path from env or default */
+export function resolveDbPath(): string {
   const envPath = process.env.LYRE_DB;
   if (envPath) return envPath;
   return DEFAULT_DB_PATH;
 }
 
-function ensureDir(filePath: string): void {
+/** Ensure parent directory exists (skip for :memory:) */
+export function ensureDir(filePath: string): void {
   if (filePath === ":memory:") return;
   const dir = dirname(filePath);
   if (!existsSync(dir)) {
@@ -161,7 +163,7 @@ function getDb(): DbInstance {
 // ── Reset (for E2E tests) ──
 
 export function resetDb(): void {
-  if (!isTestEnv() && !process.env.E2E_SKIP_AUTH) {
+  if (!isTestEnv() && process.env.E2E_SKIP_AUTH !== "true") {
     throw new Error("resetDb() can only be called in test environments");
   }
 

@@ -1,10 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, mock, beforeEach, afterEach } from "bun:test";
 import {
   signV1,
   makeUploadKey,
   makeResultKey,
   presignPut,
   presignGet,
+  deleteObject,
   type OssConfig,
 } from "@/services/oss";
 
@@ -151,5 +152,157 @@ describe("presignGet", () => {
     const getSig = new URL(getUrl).searchParams.get("Signature");
     const putSig = new URL(putUrl).searchParams.get("Signature");
     expect(getSig).not.toBe(putSig);
+  });
+});
+
+// ── deleteObject ──
+
+describe("deleteObject", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("returns true on 204 No Content", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(null, { status: 204 })),
+    );
+    const result = await deleteObject("uploads/u/r/test.mp3", TEST_CONFIG);
+    expect(result).toBe(true);
+  });
+
+  test("returns true on 200 OK", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(null, { status: 200 })),
+    );
+    const result = await deleteObject("key.mp3", TEST_CONFIG);
+    expect(result).toBe(true);
+  });
+
+  test("returns false on 403 Forbidden", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response("Forbidden", { status: 403 })),
+    );
+    const result = await deleteObject("key.mp3", TEST_CONFIG);
+    expect(result).toBe(false);
+  });
+
+  test("returns false on 404 Not Found", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response("Not Found", { status: 404 })),
+    );
+    const result = await deleteObject("key.mp3", TEST_CONFIG);
+    expect(result).toBe(false);
+  });
+
+  test("returns false on 500 Server Error", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response("Error", { status: 500 })),
+    );
+    const result = await deleteObject("key.mp3", TEST_CONFIG);
+    expect(result).toBe(false);
+  });
+
+  test("sends DELETE method with Authorization header", async () => {
+    let capturedUrl = "";
+    let capturedInit: RequestInit | undefined;
+    globalThis.fetch = mock((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedInit = init;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    await deleteObject("uploads/u/r/test.mp3", TEST_CONFIG);
+
+    expect(capturedUrl).toBe(
+      "https://test-bucket.oss-cn-beijing.aliyuncs.com/uploads/u/r/test.mp3",
+    );
+    expect(capturedInit?.method).toBe("DELETE");
+    const headers = capturedInit?.headers as Record<string, string>;
+    expect(headers.Authorization).toMatch(/^OSS test-key-id:.+$/);
+    expect(headers.Date).toBeTruthy();
+  });
+
+  test("Authorization signature is base64", async () => {
+    let capturedInit: RequestInit | undefined;
+    globalThis.fetch = mock((_url: string, init?: RequestInit) => {
+      capturedInit = init;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    await deleteObject("key.mp3", TEST_CONFIG);
+
+    const headers = capturedInit?.headers as Record<string, string>;
+    const sig = headers.Authorization.replace("OSS test-key-id:", "");
+    expect(sig).toMatch(/^[A-Za-z0-9+/=]+$/);
+  });
+});
+
+// ── getConfig (via presignPut without explicit config) ──
+
+describe("getConfig (env var validation)", () => {
+  const envKeys = [
+    "OSS_ACCESS_KEY_ID",
+    "OSS_ACCESS_KEY_SECRET",
+    "OSS_BUCKET",
+    "OSS_REGION",
+    "OSS_ENDPOINT",
+  ] as const;
+
+  // Save and restore env for each test
+  let savedEnv: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    savedEnv = {};
+    for (const key of envKeys) {
+      savedEnv[key] = process.env[key];
+    }
+    // Set all env vars to valid values
+    process.env.OSS_ACCESS_KEY_ID = "test-id";
+    process.env.OSS_ACCESS_KEY_SECRET = "test-secret";
+    process.env.OSS_BUCKET = "test-bucket";
+    process.env.OSS_REGION = "oss-cn-beijing";
+    process.env.OSS_ENDPOINT = "https://oss-cn-beijing.aliyuncs.com";
+  });
+
+  afterEach(() => {
+    for (const key of envKeys) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = savedEnv[key];
+      }
+    }
+  });
+
+  test("throws when OSS_ACCESS_KEY_ID is missing", () => {
+    delete process.env.OSS_ACCESS_KEY_ID;
+    expect(() => presignPut("key.mp3", "audio/mpeg")).toThrow("Missing OSS config");
+  });
+
+  test("throws when OSS_ACCESS_KEY_SECRET is missing", () => {
+    delete process.env.OSS_ACCESS_KEY_SECRET;
+    expect(() => presignPut("key.mp3", "audio/mpeg")).toThrow("Missing OSS config");
+  });
+
+  test("throws when OSS_BUCKET is missing", () => {
+    delete process.env.OSS_BUCKET;
+    expect(() => presignPut("key.mp3", "audio/mpeg")).toThrow("Missing OSS config");
+  });
+
+  test("throws when OSS_REGION is missing", () => {
+    delete process.env.OSS_REGION;
+    expect(() => presignPut("key.mp3", "audio/mpeg")).toThrow("Missing OSS config");
+  });
+
+  test("throws when OSS_ENDPOINT is missing", () => {
+    delete process.env.OSS_ENDPOINT;
+    expect(() => presignPut("key.mp3", "audio/mpeg")).toThrow("Missing OSS config");
+  });
+
+  test("succeeds when all env vars are set", () => {
+    const url = presignPut("key.mp3", "audio/mpeg");
+    expect(url).toContain("https://test-bucket.oss-cn-beijing.aliyuncs.com/");
   });
 });

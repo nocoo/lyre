@@ -225,6 +225,18 @@ describe("computeProcessingDuration", () => {
     );
     expect(result).toBe("—"); // 0 seconds → dash
   });
+
+  test("returns dash for invalid date strings", () => {
+    expect(computeProcessingDuration("not-a-date", "also-not-a-date")).toBe("—");
+  });
+
+  test("returns dash when only submit time is invalid", () => {
+    expect(computeProcessingDuration("invalid", "2025-01-01 00:00:00")).toBe("—");
+  });
+
+  test("returns dash when only end time is invalid", () => {
+    expect(computeProcessingDuration("2025-01-01 00:00:00", "invalid")).toBe("—");
+  });
 });
 
 // ── toJobStatusVM ──

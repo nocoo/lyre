@@ -2,6 +2,8 @@ import { describe, expect, test, beforeEach } from "bun:test";
 import { resetDb } from "@/db/index";
 import { usersRepo } from "@/db/repositories/users";
 import { recordingsRepo } from "@/db/repositories/recordings";
+import { jobsRepo } from "@/db/repositories/jobs";
+import { transcriptionsRepo } from "@/db/repositories/transcriptions";
 
 // Seed a user (recordings have FK to users)
 function seedUser() {
@@ -289,6 +291,66 @@ describe("recordingsRepo", () => {
       const domain = recordingsRepo.toDomain(rec);
       expect(domain.parsedTags).toEqual(["x", "y"]);
       expect(domain.id).toBe(rec.id);
+    });
+  });
+
+  describe("deleteCascade", () => {
+    test("deletes recording and related transcriptions and jobs", () => {
+      const rec = recordingsRepo.create(makeRecording());
+      const job = jobsRepo.create({
+        id: "job-1",
+        recordingId: rec.id,
+        taskId: "task-1",
+        requestId: null,
+        status: "SUCCEEDED",
+      });
+      transcriptionsRepo.create({
+        id: "trans-1",
+        recordingId: rec.id,
+        jobId: job.id,
+        fullText: "Hello world",
+        sentences: [],
+        language: "en",
+      });
+
+      expect(recordingsRepo.deleteCascade(rec.id)).toBe(true);
+
+      // All gone
+      expect(recordingsRepo.findById(rec.id)).toBeUndefined();
+      expect(jobsRepo.findById(job.id)).toBeUndefined();
+      expect(transcriptionsRepo.findById("trans-1")).toBeUndefined();
+    });
+
+    test("returns false when recording does not exist", () => {
+      expect(recordingsRepo.deleteCascade("nonexistent")).toBe(false);
+    });
+
+    test("works when recording has no related data", () => {
+      recordingsRepo.create(makeRecording());
+      expect(recordingsRepo.deleteCascade("rec-1")).toBe(true);
+      expect(recordingsRepo.findById("rec-1")).toBeUndefined();
+    });
+
+    test("deletes multiple jobs for same recording", () => {
+      const rec = recordingsRepo.create(makeRecording());
+      jobsRepo.create({
+        id: "job-1",
+        recordingId: rec.id,
+        taskId: "task-1",
+        requestId: null,
+        status: "FAILED",
+      });
+      jobsRepo.create({
+        id: "job-2",
+        recordingId: rec.id,
+        taskId: "task-2",
+        requestId: null,
+        status: "SUCCEEDED",
+      });
+
+      expect(recordingsRepo.deleteCascade(rec.id)).toBe(true);
+      expect(jobsRepo.findById("job-1")).toBeUndefined();
+      expect(jobsRepo.findById("job-2")).toBeUndefined();
     });
   });
 });
