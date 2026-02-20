@@ -124,7 +124,7 @@ function LoginContent() {
               Lyre
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Audio recording management & transcription
+              Audio transcription manager
             </p>
 
             {/* Error message */}
