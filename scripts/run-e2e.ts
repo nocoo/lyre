@@ -67,6 +67,8 @@ async function main() {
       LYRE_DB: E2E_DB_FILE,
       NEXT_DIST_DIR: E2E_DIST_DIR,
       E2E_SKIP_AUTH: "true",
+      // Force mock ASR provider in E2E (unset real API key)
+      DASHSCOPE_API_KEY: "",
     },
     stdout: "pipe",
     stderr: "pipe",
