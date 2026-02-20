@@ -2,7 +2,6 @@
 
 import { useRef, useEffect, useState, useCallback, forwardRef } from "react";
 import { Loader2, ChevronDown } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
   findActiveSentenceIndex,
@@ -88,11 +87,9 @@ export function TranscriptFullText({
         language={transcription.language}
       />
       <div className="p-4">
-        <ScrollArea className="max-h-[60vh]">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-            {transcription.fullText}
-          </p>
-        </ScrollArea>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {transcription.fullText}
+        </p>
       </div>
     </div>
   );
@@ -165,24 +162,22 @@ function SentenceList({
   );
 
   return (
-    <ScrollArea className="max-h-[60vh]">
-      <div className="space-y-1">
-        {sentences.map((sentence, idx) => (
-          <SentenceRow
-            key={sentence.id}
-            ref={idx === activeIndex ? activeRef : undefined}
-            sentence={sentence}
-            isActive={idx === activeIndex}
-            isExpanded={expandedId === sentence.id}
-            words={wordsBySentence?.get(sentence.id) ?? null}
-            wordsLoading={loading && expandedId === sentence.id}
-            currentTime={currentTime}
-            onSeek={onSeek}
-            onToggle={handleToggle}
-          />
-        ))}
-      </div>
-    </ScrollArea>
+    <div className="space-y-1">
+      {sentences.map((sentence, idx) => (
+        <SentenceRow
+          key={sentence.id}
+          ref={idx === activeIndex ? activeRef : undefined}
+          sentence={sentence}
+          isActive={idx === activeIndex}
+          isExpanded={expandedId === sentence.id}
+          words={wordsBySentence?.get(sentence.id) ?? null}
+          wordsLoading={loading && expandedId === sentence.id}
+          currentTime={currentTime}
+          onSeek={onSeek}
+          onToggle={handleToggle}
+        />
+      ))}
+    </div>
   );
 }
 
