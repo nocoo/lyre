@@ -131,14 +131,14 @@ settings
 
 | #  | Commit | Status |
 | -- | ------ | ------ |
-| 1  | `feat: add nextauth v5 google oauth config` | pending |
-| 2  | `feat: add auth provider wrapper` | pending |
-| 3  | `feat: add proxy middleware for auth guard` | pending |
-| 4  | `feat: add badge login page` | pending |
-| 5  | `feat: add theme toggle component` | pending |
-| 6  | `feat: add sidebar component` | pending |
-| 7  | `feat: add app shell layout` | pending |
-| 8  | `test: add auth and layout component tests` | pending |
+| 1  | `feat: add nextauth v5 google oauth config` | done |
+| 2  | `feat: add auth provider wrapper` | done |
+| 3  | `feat: add proxy middleware for auth guard` | done |
+| 4  | `feat: add badge login page` | done |
+| 5  | `feat: add theme toggle component` | done |
+| 6  | `feat: add sidebar component` | done |
+| 7  | `feat: add app shell layout` | done |
+| 8  | `test: add auth and layout component tests` | done |
 
 ## Phase 3: Mock UI + Test Baseline
 
