@@ -209,6 +209,6 @@ settings
 
 | #  | Commit | Status |
 | -- | ------ | ------ |
-| 1  | `chore: add dockerfile` | pending |
-| 2  | `chore: add env example file` | pending |
-| 3  | `chore: add seed script for demo data` | pending |
+| 1  | `chore: add dockerfile` | done |
+| 2  | `chore: add env example file` | done |
+| 3  | `chore: add seed script for demo data` | done |
