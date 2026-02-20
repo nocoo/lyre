@@ -18,6 +18,7 @@ async function main() {
       "src/__tests__/utils.test.ts",
       "src/__tests__/proxy-matcher.test.ts",
       "src/__tests__/theme.test.ts",
+      "src/__tests__/recordings-list-vm.test.ts",
       "--coverage",
     ],
     {
