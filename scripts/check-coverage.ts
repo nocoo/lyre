@@ -16,6 +16,8 @@ async function main() {
       "bun",
       "test",
       "src/__tests__/utils.test.ts",
+      "src/__tests__/proxy-matcher.test.ts",
+      "src/__tests__/theme.test.ts",
       "--coverage",
     ],
     {
