@@ -34,6 +34,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
   function AudioPlayer({ src, title, onTimeUpdate }, ref) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const progressBarRef = useRef<HTMLDivElement>(null);
+    const rafRef = useRef<number | null>(null);
 
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -52,6 +53,35 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       },
     }));
 
+    // Smooth progress animation via requestAnimationFrame
+    useEffect(() => {
+      if (!isPlaying) {
+        if (rafRef.current !== null) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+        return;
+      }
+
+      const tick = () => {
+        if (audioRef.current) {
+          const time = audioRef.current.currentTime;
+          setCurrentTime(time);
+          onTimeUpdate?.(time);
+        }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+
+      rafRef.current = requestAnimationFrame(tick);
+
+      return () => {
+        if (rafRef.current !== null) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+      };
+    }, [isPlaying, onTimeUpdate]);
+
     // Audio event handlers
     const handleLoadedMetadata = useCallback(() => {
       if (audioRef.current) {
@@ -59,16 +89,12 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       }
     }, []);
 
-    const handleTimeUpdate = useCallback(() => {
-      if (audioRef.current) {
-        const time = audioRef.current.currentTime;
-        setCurrentTime(time);
-        onTimeUpdate?.(time);
-      }
-    }, [onTimeUpdate]);
-
     const handleEnded = useCallback(() => {
       setIsPlaying(false);
+      // Final sync to ensure we're at the end
+      if (audioRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
     }, []);
 
     // Playback controls
@@ -88,6 +114,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           0,
           audioRef.current.currentTime - 10,
         );
+        setCurrentTime(audioRef.current.currentTime);
       }
     }, []);
 
@@ -97,6 +124,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           duration,
           audioRef.current.currentTime + 10,
         );
+        setCurrentTime(audioRef.current.currentTime);
       }
     }, [duration]);
 
@@ -136,7 +164,6 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           src={src}
           preload="metadata"
           onLoadedMetadata={handleLoadedMetadata}
-          onTimeUpdate={handleTimeUpdate}
           onEnded={handleEnded}
         />
 
@@ -160,7 +187,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           tabIndex={0}
         >
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-foreground transition-all"
+            className="absolute inset-y-0 left-0 rounded-full bg-foreground"
             style={{ width: `${vm.progress}%` }}
           />
           {/* Thumb */}
