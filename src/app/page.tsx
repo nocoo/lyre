@@ -1,8 +1,14 @@
+"use client";
+
+import { AppShell } from "@/components/layout";
+
 export default function Home() {
   return (
-    <main>
-      <h1>Lyre</h1>
-      <p>Audio recording management and transcription.</p>
-    </main>
+    <AppShell>
+      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <p className="mt-2 text-muted-foreground">
+        Audio recording management and transcription.
+      </p>
+    </AppShell>
   );
 }
