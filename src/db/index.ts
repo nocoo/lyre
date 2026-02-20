@@ -109,7 +109,11 @@ PRAGMA foreign_keys=ON;
 
 // ── Database creation ──
 
-function createDatabase(dbPath: string): DbInstance {
+/**
+ * Open a raw SQLite connection, apply PRAGMAs and schema bootstrap,
+ * then wrap with Drizzle ORM.
+ */
+function openAndInit(dbPath: string): DbInstance {
   ensureDir(dbPath);
 
   if (isBun) {
@@ -118,8 +122,7 @@ function createDatabase(dbPath: string): DbInstance {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { drizzle } = require("drizzle-orm/bun-sqlite");
     const sqlite = new Database(dbPath);
-    sqlite.exec("PRAGMA journal_mode=WAL;");
-    sqlite.exec("PRAGMA foreign_keys=ON;");
+    sqlite.exec(INIT_SQL);
     return drizzle(sqlite, { schema });
   }
 
@@ -129,25 +132,8 @@ function createDatabase(dbPath: string): DbInstance {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { drizzle } = require("drizzle-orm/better-sqlite3");
   const sqlite = new BetterSqlite(dbPath);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
+  sqlite.exec(INIT_SQL);
   return drizzle(sqlite, { schema });
-}
-
-function initSchema(dbPath: string): void {
-  if (isBun) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Database } = require("bun:sqlite");
-    const sqlite = new Database(dbPath);
-    sqlite.exec(INIT_SQL);
-    sqlite.close();
-  } else {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const BetterSqlite = require("better-sqlite3");
-    const sqlite = new BetterSqlite(dbPath);
-    sqlite.exec(INIT_SQL);
-    sqlite.close();
-  }
 }
 
 // ── Test database ──
@@ -159,8 +145,7 @@ function isTestEnv(): boolean {
 }
 
 function createTestDb(): void {
-  initSchema(":memory:");
-  dbInstance = createDatabase(":memory:");
+  dbInstance = openAndInit(":memory:");
 }
 
 // ── Production database ──
@@ -169,8 +154,7 @@ function getDb(): DbInstance {
   if (dbInstance) return dbInstance;
 
   const dbPath = resolveDbPath();
-  initSchema(dbPath);
-  dbInstance = createDatabase(dbPath);
+  dbInstance = openAndInit(dbPath);
   return dbInstance;
 }
 
