@@ -449,9 +449,11 @@ describe("createRealAsrProvider", () => {
     const body = JSON.parse(req.init.body as string) as {
       model: string;
       input: { file_url: string };
+      parameters: { language_hints: string[]; enable_words: boolean };
     };
     expect(body.model).toBe("qwen3-asr-flash-filetrans");
     expect(body.input.file_url).toBe("https://oss.example.com/audio.mp3");
+    expect(body.parameters.enable_words).toBe(true);
   });
 
   test("submit throws on non-ok response", async () => {

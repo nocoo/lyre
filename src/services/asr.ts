@@ -452,6 +452,7 @@ export function createRealAsrProvider(apiKey: string): AsrProvider {
             },
             parameters: {
               language_hints: ["zh", "en"],
+              enable_words: true,
             },
           }),
         },
