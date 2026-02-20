@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Mic } from "lucide-react";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import LoadingScreen from "@/components/loading-screen";
 
 function Barcode() {
@@ -51,6 +52,10 @@ function LoginContent() {
           ].join(" "),
         }}
       />
+      {/* Top-right controls */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-1">
+        <ThemeToggle />
+      </div>
       <div className="flex flex-col items-center">
         {/* Badge card — bank card flipped vertical: 54/86 */}
         <div
