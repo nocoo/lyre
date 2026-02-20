@@ -28,6 +28,7 @@ async function main() {
       "src/__tests__/settings-repo.test.ts",
       "src/__tests__/oss-service.test.ts",
       "src/__tests__/db-utils.test.ts",
+      "src/__tests__/asr-service.test.ts",
       "--coverage",
     ],
     {
