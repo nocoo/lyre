@@ -1,8 +1,9 @@
 "use client";
 
 import { use, useRef, useState, useCallback, useEffect } from "react";
-import { ArrowLeft, Play, Loader2, AlertCircle, FileText } from "lucide-react";
+import { ArrowLeft, Play, Loader2, AlertCircle, FileText, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout";
 import { AudioPlayer, type AudioPlayerHandle } from "@/components/audio-player";
 import {
@@ -11,6 +12,17 @@ import {
 } from "@/components/transcript-viewer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
 import type { RecordingDetail } from "@/lib/types";
 
@@ -32,6 +44,7 @@ export default function RecordingDetailPage({ params }: PageParams) {
 }
 
 function RecordingDetailContent({ id }: { id: string }) {
+  const router = useRouter();
   const playerRef = useRef<AudioPlayerHandle>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [viewMode, setViewMode] = useState<"sentences" | "fulltext">(
@@ -40,6 +53,7 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [detail, setDetail] = useState<RecordingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -77,6 +91,18 @@ function RecordingDetailContent({ id }: { id: string }) {
   const handleTimeUpdate = useCallback((time: number) => {
     setCurrentTime(time);
   }, []);
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/recordings/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        router.push("/recordings");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }, [id, router]);
 
   if (loading) {
     return (
@@ -133,6 +159,39 @@ function RecordingDetailContent({ id }: { id: string }) {
                 Re-transcribe
               </Button>
             )}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-2 text-destructive hover:text-destructive">
+                  <Trash2 className="h-4 w-4" strokeWidth={1.5} />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete recording?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete &ldquo;{vm.metadata.title}&rdquo; and its audio file from storage. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      "Delete"
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </div>

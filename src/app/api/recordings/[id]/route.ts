@@ -5,6 +5,7 @@ import {
   transcriptionsRepo,
   jobsRepo,
 } from "@/db/repositories";
+import { deleteObject } from "@/services/oss";
 import type { RecordingDetail, TranscriptionSentence } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -112,6 +113,13 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   jobsRepo.deleteByRecordingId(id);
   recordingsRepo.delete(id);
 
-  // TODO: Delete OSS object in Phase 5 when OSS is wired
+  // Delete OSS object (best-effort, don't fail the request)
+  if (existing.ossKey) {
+    deleteObject(existing.ossKey).catch(() => {
+      // Log but don't block the response
+      console.warn(`Failed to delete OSS object: ${existing.ossKey}`);
+    });
+  }
+
   return NextResponse.json({ deleted: true });
 }
