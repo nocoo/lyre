@@ -6,6 +6,7 @@ import { Menu } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { SidebarProvider, useSidebar } from "./sidebar-context";
 import { ThemeToggle } from "./theme-toggle";
+import { GitHubLink } from "./github-link";
 import { Breadcrumbs } from "./breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -76,6 +77,7 @@ function AppShellInner({ children, breadcrumbs = [] }: AppShellProps) {
             />
           </div>
           <div className="flex items-center gap-1">
+            <GitHubLink />
             <ThemeToggle />
           </div>
         </header>
