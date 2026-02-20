@@ -114,18 +114,18 @@ settings
 
 | #  | Commit | Status |
 | -- | ------ | ------ |
-| 1  | `chore: initialize next.js 16 project with bun` | pending |
-| 2  | `chore: configure typescript strict mode` | pending |
-| 3  | `chore: configure eslint` | pending |
-| 4  | `chore: add basalt design tokens` | pending |
-| 5  | `chore: configure shadcn/ui` | pending |
-| 6  | `chore: add base shadcn/ui components` | pending |
-| 7  | `chore: add google fonts and root layout` | pending |
-| 8  | `chore: configure next.config.ts` | pending |
-| 9  | `chore: add bun test infrastructure` | pending |
-| 10 | `chore: add husky git hooks` | pending |
-| 11 | `chore: add e2e test runner script` | pending |
-| 12 | `chore: add coverage check script` | pending |
+| 1  | `chore: initialize next.js 16 project with bun` | done |
+| 2  | `chore: configure typescript strict mode` | done |
+| 3  | `chore: configure eslint` | done |
+| 4  | `chore: add basalt design tokens` | done |
+| 5  | `chore: configure shadcn/ui` | done |
+| 6  | `chore: add base shadcn/ui components` | done |
+| 7  | `chore: add google fonts and root layout` | done |
+| 8  | `chore: configure next.config.ts` | done |
+| 9  | `chore: add bun test infrastructure` | done |
+| 10 | `chore: add husky git hooks` | done |
+| 11 | `chore: add e2e test runner script` | done |
+| 12 | `chore: add coverage check script` | done |
 
 ## Phase 2: Auth + Layout
 
