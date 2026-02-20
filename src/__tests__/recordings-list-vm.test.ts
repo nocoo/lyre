@@ -314,6 +314,16 @@ describe("sortRecordings", () => {
     expect(sorted[0]!.id).toBe("rec-004"); // shortest: 412s
   });
 
+  test("sorts by fileSize ascending", () => {
+    const sorted = sortRecordings(MOCK_RECORDINGS, "fileSize", "asc");
+    expect(sorted[0]!.id).toBe("rec-004"); // smallest: 3_456_789
+  });
+
+  test("sorts by fileSize descending", () => {
+    const sorted = sortRecordings(MOCK_RECORDINGS, "fileSize", "desc");
+    expect(sorted[0]!.id).toBe("rec-005"); // largest: 45_678_901
+  });
+
   test("does not mutate original array", () => {
     const original = [...MOCK_RECORDINGS];
     sortRecordings(MOCK_RECORDINGS, "title", "asc");
