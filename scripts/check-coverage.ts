@@ -21,6 +21,11 @@ async function main() {
       "src/__tests__/recordings-list-vm.test.ts",
       "src/__tests__/recording-detail-vm.test.ts",
       "src/__tests__/audio-player-vm.test.ts",
+      "src/__tests__/users-repo.test.ts",
+      "src/__tests__/recordings-repo.test.ts",
+      "src/__tests__/jobs-repo.test.ts",
+      "src/__tests__/transcriptions-repo.test.ts",
+      "src/__tests__/settings-repo.test.ts",
       "--coverage",
     ],
     {
