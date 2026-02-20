@@ -4,6 +4,7 @@ import { usersRepo } from "@/db/repositories/users";
 import { recordingsRepo } from "@/db/repositories/recordings";
 import { jobsRepo } from "@/db/repositories/jobs";
 import { transcriptionsRepo } from "@/db/repositories/transcriptions";
+import { foldersRepo } from "@/db/repositories/folders";
 
 // Seed a user (recordings have FK to users)
 function seedUser() {
@@ -74,6 +75,31 @@ describe("recordingsRepo", () => {
       expect(rec.description).toBeNull();
       expect(rec.fileSize).toBeNull();
       expect(rec.duration).toBeNull();
+    });
+
+    test("stores folderId when provided", () => {
+      // Need a folder first
+      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test Folder" });
+      const rec = recordingsRepo.create(makeRecording({ folderId: "f-1" }));
+      expect(rec.folderId).toBe("f-1");
+    });
+
+    test("stores notes when provided", () => {
+      const rec = recordingsRepo.create(makeRecording({ notes: "Some notes" }));
+      expect(rec.notes).toBe("Some notes");
+    });
+
+    test("stores recordedAt when provided", () => {
+      const ts = Date.now() - 86400000;
+      const rec = recordingsRepo.create(makeRecording({ recordedAt: ts }));
+      expect(rec.recordedAt).toBe(ts);
+    });
+
+    test("defaults new fields to null", () => {
+      const rec = recordingsRepo.create(makeRecording());
+      expect(rec.folderId).toBeNull();
+      expect(rec.notes).toBeNull();
+      expect(rec.recordedAt).toBeNull();
     });
   });
 
@@ -252,6 +278,33 @@ describe("recordingsRepo", () => {
 
     test("returns undefined when not found", () => {
       expect(recordingsRepo.update("nope", { title: "X" })).toBeUndefined();
+    });
+
+    test("updates notes", () => {
+      recordingsRepo.create(makeRecording());
+      const updated = recordingsRepo.update("rec-1", { notes: "My notes" });
+      expect(updated?.notes).toBe("My notes");
+    });
+
+    test("updates folderId", () => {
+      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Folder" });
+      recordingsRepo.create(makeRecording());
+      const updated = recordingsRepo.update("rec-1", { folderId: "f-1" });
+      expect(updated?.folderId).toBe("f-1");
+    });
+
+    test("clears folderId with null", () => {
+      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Folder" });
+      recordingsRepo.create(makeRecording({ folderId: "f-1" }));
+      const updated = recordingsRepo.update("rec-1", { folderId: null });
+      expect(updated?.folderId).toBeNull();
+    });
+
+    test("updates recordedAt", () => {
+      recordingsRepo.create(makeRecording());
+      const ts = Date.now() - 86400000;
+      const updated = recordingsRepo.update("rec-1", { recordedAt: ts });
+      expect(updated?.recordedAt).toBe(ts);
     });
   });
 
