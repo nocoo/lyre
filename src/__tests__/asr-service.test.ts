@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, mock, beforeEach, afterEach } from "bun:test";
 import {
   parseTranscriptionResult,
   createMockAsrProvider,
+  createRealAsrProvider,
   type AsrTranscriptionResult,
 } from "@/services/asr";
 
@@ -400,5 +401,147 @@ describe("createMockAsrProvider", () => {
     expect(parsed.sentences).toHaveLength(2);
     expect(parsed.language).toBe("en");
     expect(parsed.audioFormat).toBe("mp3");
+  });
+});
+
+// ── createRealAsrProvider ──
+
+describe("createRealAsrProvider", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    // Will be overridden per test
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("submit sends correct request to DashScope API", async () => {
+    const capturedRequests: { url: string; init: RequestInit }[] = [];
+
+    globalThis.fetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      capturedRequests.push({ url: url.toString(), init: init ?? {} });
+      return new Response(
+        JSON.stringify({
+          request_id: "test-req-id",
+          output: { task_id: "test-task-id", task_status: "PENDING" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const provider = createRealAsrProvider("sk-test-api-key");
+    const result = await provider.submit("https://oss.example.com/audio.mp3");
+
+    expect(result.output.task_id).toBe("test-task-id");
+    expect(result.output.task_status).toBe("PENDING");
+
+    expect(capturedRequests).toHaveLength(1);
+    const req = capturedRequests[0]!;
+    expect(req.url).toContain("/services/audio/asr/transcription");
+    expect(req.init.method).toBe("POST");
+
+    const headers = req.init.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer sk-test-api-key");
+    expect(headers["X-DashScope-Async"]).toBe("enable");
+
+    const body = JSON.parse(req.init.body as string) as {
+      model: string;
+      input: { file_urls: string[] };
+    };
+    expect(body.model).toBe("qwen3-asr-flash-filetrans");
+    expect(body.input.file_urls).toEqual(["https://oss.example.com/audio.mp3"]);
+  });
+
+  test("submit throws on non-ok response", async () => {
+    globalThis.fetch = mock(async () => {
+      return new Response("Unauthorized", { status: 401 });
+    }) as typeof fetch;
+
+    const provider = createRealAsrProvider("bad-key");
+    await expect(
+      provider.submit("https://oss.example.com/audio.mp3"),
+    ).rejects.toThrow("DashScope submit failed (401)");
+  });
+
+  test("poll sends correct request", async () => {
+    const capturedRequests: { url: string; init: RequestInit }[] = [];
+
+    globalThis.fetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      capturedRequests.push({ url: url.toString(), init: init ?? {} });
+      return new Response(
+        JSON.stringify({
+          request_id: "poll-req-id",
+          output: {
+            task_id: "task-123",
+            task_status: "RUNNING",
+            submit_time: "2026-02-20 10:00:00.000",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const provider = createRealAsrProvider("sk-test-key");
+    const result = await provider.poll("task-123");
+
+    expect(result.output.task_status).toBe("RUNNING");
+    expect(capturedRequests[0]!.url).toContain("/tasks/task-123");
+
+    const headers = capturedRequests[0]!.init.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer sk-test-key");
+  });
+
+  test("poll throws on non-ok response", async () => {
+    globalThis.fetch = mock(async () => {
+      return new Response("Not Found", { status: 404 });
+    }) as typeof fetch;
+
+    const provider = createRealAsrProvider("sk-test-key");
+    await expect(provider.poll("bad-task-id")).rejects.toThrow(
+      "DashScope poll failed (404)",
+    );
+  });
+
+  test("fetchResult fetches transcription URL without auth header", async () => {
+    const capturedRequests: { url: string; init: RequestInit }[] = [];
+
+    globalThis.fetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      capturedRequests.push({ url: url.toString(), init: init ?? {} });
+      return new Response(
+        JSON.stringify({
+          file_url: "https://oss.example.com/audio.mp3",
+          audio_info: { format: "mp3", sample_rate: 16000 },
+          transcripts: [
+            { channel_id: 0, text: "Test", sentences: [] },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const provider = createRealAsrProvider("sk-test-key");
+    const result = await provider.fetchResult(
+      "https://dashscope-result.oss.example.com/result.json",
+    );
+
+    expect(result.transcripts[0]!.text).toBe("Test");
+    expect(capturedRequests[0]!.url).toBe(
+      "https://dashscope-result.oss.example.com/result.json",
+    );
+    // fetchResult should NOT send Authorization header (presigned URL)
+    expect(capturedRequests[0]!.init.headers).toBeUndefined();
+  });
+
+  test("fetchResult throws on non-ok response", async () => {
+    globalThis.fetch = mock(async () => {
+      return new Response("Expired", { status: 403 });
+    }) as typeof fetch;
+
+    const provider = createRealAsrProvider("sk-test-key");
+    await expect(
+      provider.fetchResult("https://expired-url.example.com"),
+    ).rejects.toThrow("Failed to fetch transcription result (403)");
   });
 });

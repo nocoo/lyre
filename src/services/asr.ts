@@ -358,9 +358,96 @@ export function createMockAsrProvider(
   };
 }
 
+// ── Real DashScope provider ──
+
+/**
+ * Real ASR provider that calls the DashScope async file-transcription API.
+ *
+ * API endpoints:
+ *   - Submit: POST https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription
+ *   - Poll:   GET  https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}
+ *   - Fetch:  GET  transcription_url (presigned OSS URL, no auth needed)
+ *
+ * Model: qwen3-asr-flash-filetrans
+ * Supports audio files up to 12 hours / 2GB.
+ */
+
+const DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/api/v1";
+
+export function createRealAsrProvider(apiKey: string): AsrProvider {
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+
+  return {
+    async submit(fileUrl: string): Promise<AsrSubmitResponse> {
+      const response = await fetch(
+        `${DASHSCOPE_BASE_URL}/services/audio/asr/transcription`,
+        {
+          method: "POST",
+          headers: {
+            ...headers,
+            "X-DashScope-Async": "enable",
+          },
+          body: JSON.stringify({
+            model: "qwen3-asr-flash-filetrans",
+            input: {
+              file_urls: [fileUrl],
+            },
+            parameters: {
+              language_hints: ["zh", "en"],
+            },
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(
+          `DashScope submit failed (${response.status}): ${text}`,
+        );
+      }
+
+      return (await response.json()) as AsrSubmitResponse;
+    },
+
+    async poll(taskId: string): Promise<AsrPollResponse> {
+      const response = await fetch(
+        `${DASHSCOPE_BASE_URL}/tasks/${taskId}`,
+        { headers },
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`DashScope poll failed (${response.status}): ${text}`);
+      }
+
+      return (await response.json()) as AsrPollResponse;
+    },
+
+    async fetchResult(
+      transcriptionUrl: string,
+    ): Promise<AsrTranscriptionResult> {
+      // transcription_url is a presigned OSS URL — no auth needed
+      const response = await fetch(transcriptionUrl);
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(
+          `Failed to fetch transcription result (${response.status}): ${text}`,
+        );
+      }
+
+      return (await response.json()) as AsrTranscriptionResult;
+    },
+  };
+}
+
 // ── Service barrel ──
 
 export const asrService = {
   parseTranscriptionResult,
   createMockAsrProvider,
+  createRealAsrProvider,
 };

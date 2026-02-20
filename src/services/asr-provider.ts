@@ -7,6 +7,7 @@
 
 import {
   createMockAsrProvider,
+  createRealAsrProvider,
   type AsrProvider,
 } from "./asr";
 
@@ -14,7 +15,8 @@ let provider: AsrProvider | null = null;
 
 /**
  * Get the ASR provider singleton.
- * Uses mock provider unless DASHSCOPE_API_KEY is set.
+ * Uses real DashScope provider when DASHSCOPE_API_KEY is set,
+ * otherwise falls back to mock provider.
  */
 export function getAsrProvider(): AsrProvider {
   if (provider) return provider;
@@ -22,9 +24,8 @@ export function getAsrProvider(): AsrProvider {
   const apiKey = process.env.DASHSCOPE_API_KEY;
 
   if (apiKey) {
-    // Real provider — will be implemented in Phase 6 when we swap to real API
-    // For now, fall through to mock
-    console.log("DashScope API key detected — using real ASR provider (TODO)");
+    provider = createRealAsrProvider(apiKey);
+    return provider;
   }
 
   // Default to mock provider with realistic timing
