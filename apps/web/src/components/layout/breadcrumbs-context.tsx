@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useEffect,
+  useCallback,
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
@@ -14,9 +15,16 @@ interface BreadcrumbItem {
   href?: string;
 }
 
-interface BreadcrumbsContextValue {
+/** Internal state stores items tagged with the pathname they belong to. */
+interface BreadcrumbState {
+  pathname: string;
   items: BreadcrumbItem[];
-  setItems: (items: BreadcrumbItem[]) => void;
+}
+
+interface BreadcrumbsContextValue {
+  /** Returns items only if they match the current pathname, otherwise []. */
+  items: BreadcrumbItem[];
+  setItems: (items: BreadcrumbItem[], pathname: string) => void;
 }
 
 const BreadcrumbsContext = createContext<BreadcrumbsContextValue>({
@@ -26,17 +34,22 @@ const BreadcrumbsContext = createContext<BreadcrumbsContextValue>({
 
 export function BreadcrumbsProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const [state, setState] = useState<BreadcrumbState>({
+    pathname,
+    items: [],
+  });
 
-  // Key the inner provider on pathname so state resets on navigation.
-  return (
-    <BreadcrumbsProviderInner key={pathname}>
-      {children}
-    </BreadcrumbsProviderInner>
+  // Derive items: only expose them if they belong to the current pathname.
+  // When navigating to a new page, stale breadcrumbs from the old page are
+  // automatically ignored until the new page calls useSetBreadcrumbs().
+  const items = state.pathname === pathname ? state.items : [];
+
+  const setItems = useCallback(
+    (newItems: BreadcrumbItem[], forPathname: string) => {
+      setState({ pathname: forPathname, items: newItems });
+    },
+    [],
   );
-}
-
-function BreadcrumbsProviderInner({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<BreadcrumbItem[]>([]);
 
   return (
     <BreadcrumbsContext.Provider value={{ items, setItems }}>
@@ -55,9 +68,10 @@ export function useBreadcrumbs() {
  */
 export function useSetBreadcrumbs(items: BreadcrumbItem[]) {
   const { setItems } = useBreadcrumbs();
+  const pathname = usePathname();
   const serialized = JSON.stringify(items);
 
   useEffect(() => {
-    setItems(JSON.parse(serialized) as BreadcrumbItem[]);
-  }, [serialized, setItems]);
+    setItems(JSON.parse(serialized) as BreadcrumbItem[], pathname);
+  }, [serialized, setItems, pathname]);
 }
