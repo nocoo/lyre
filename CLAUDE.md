@@ -22,7 +22,7 @@ bun dev                # Start dev server (port 7025)
 bun run build          # Production build
 bun run test           # Run unit tests
 bun run test:coverage  # Run tests with coverage check
-bun run test:e2e       # Run E2E tests
+bun run test:e2e       # Run E2E tests (port 17025, independent DB)
 bun run lint           # Run ESLint
 bun run db:push        # Apply schema to database
 bun run db:studio      # Open Drizzle Studio
@@ -34,6 +34,23 @@ bun run db:studio      # Open Drizzle Studio
 - **pre-push**: `bun run test:coverage && bun run lint && bun run test:e2e`
 
 All code must pass UT + lint before commit. Coverage + E2E are enforced before push.
+
+## E2E Test Infrastructure
+
+- **Port**: E2E server runs on port **17025** (dev/prod uses 7025)
+- **Auth bypass**: `PLAYWRIGHT=1` env var skips login/auth in E2E. Set automatically by the runner script.
+- **Database**: Each E2E run uses an independent SQLite DB (auto-created, isolated from dev data)
+- **ASR mock**: The runner unsets `DASHSCOPE_API_KEY` to force mock ASR mode
+- **Runner**: `scripts/run-e2e.ts` — spawns a Next.js dev server, waits for health, runs tests, then tears down
+
+### Real LLM Integration Tests
+
+Some E2E tests make **real API calls** to an LLM provider. These require credentials stored in `.env.e2e` (gitignored, never committed).
+
+- **Template**: `.env.e2e.example` is checked in — copy it to `.env.e2e` and fill in real values
+- **Required vars**: `AI_E2E_AUTH_TOKEN`, `AI_E2E_BASE_URL`, `AI_E2E_MODEL`
+- **Graceful skip**: Tests use `test.skipIf(!HAS_AI_CREDS)` — they skip cleanly when `.env.e2e` is absent or incomplete
+- **CI/local**: Works in both — CI can inject secrets via env vars; locally just populate `.env.e2e`
 
 ## Architecture Notes
 
