@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.lyre.recorder",
   "build": {
+    "beforeDevCommand": "cd ../frontend && bun run dev",
+    "beforeBuildCommand": "cd ../frontend && bun run build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../frontend/dist"
   },
