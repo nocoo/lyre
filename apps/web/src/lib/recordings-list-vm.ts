@@ -351,3 +351,117 @@ export function paginateRecordings(
 
   return { items, total, page: safePage, pageSize, totalPages };
 }
+
+// ── Bulk filter (for batch management) ──
+
+/** Criteria for bulk-filtering recordings. All conditions use OR logic. */
+export interface BulkFilterCriteria {
+  /** Select recordings created before this timestamp (ms) */
+  createdBefore?: number;
+  /** Select recordings shorter than this duration (seconds) */
+  durationBelow?: number;
+  /** Select recordings longer than this duration (seconds) */
+  durationAbove?: number;
+  /** Select recordings larger than this file size (bytes) */
+  fileSizeAbove?: number;
+}
+
+/** Minimal card shape needed for bulk filtering */
+interface BulkFilterableCard {
+  id: string;
+  createdAtMs: number;
+  durationRaw: number | null;
+  fileSizeRaw: number | null;
+}
+
+/**
+ * Apply bulk filter criteria to a list of recordings.
+ * Conditions are combined with OR logic: a recording matches if ANY criterion is met.
+ * Returns an array of matching recording IDs (deduplicated).
+ */
+export function bulkFilterRecordings(
+  cards: BulkFilterableCard[],
+  criteria: BulkFilterCriteria,
+): string[] {
+  const hasCriteria =
+    criteria.createdBefore !== undefined ||
+    criteria.durationBelow !== undefined ||
+    criteria.durationAbove !== undefined ||
+    criteria.fileSizeAbove !== undefined;
+
+  if (!hasCriteria) return [];
+
+  const matchedIds = new Set<string>();
+
+  for (const card of cards) {
+    if (
+      criteria.createdBefore !== undefined &&
+      card.createdAtMs < criteria.createdBefore
+    ) {
+      matchedIds.add(card.id);
+      continue;
+    }
+    if (
+      criteria.durationBelow !== undefined &&
+      card.durationRaw !== null &&
+      card.durationRaw < criteria.durationBelow
+    ) {
+      matchedIds.add(card.id);
+      continue;
+    }
+    if (
+      criteria.durationAbove !== undefined &&
+      card.durationRaw !== null &&
+      card.durationRaw > criteria.durationAbove
+    ) {
+      matchedIds.add(card.id);
+      continue;
+    }
+    if (
+      criteria.fileSizeAbove !== undefined &&
+      card.fileSizeRaw !== null &&
+      card.fileSizeRaw > criteria.fileSizeAbove
+    ) {
+      matchedIds.add(card.id);
+    }
+  }
+
+  return Array.from(matchedIds);
+}
+
+/** Preset filter definitions for common bulk-management scenarios */
+export interface BulkFilterPreset {
+  id: string;
+  label: string;
+  description: string;
+  criteria: BulkFilterCriteria;
+}
+
+const DAY_MS = 86_400_000;
+
+export const BULK_FILTER_PRESETS: BulkFilterPreset[] = [
+  {
+    id: "old",
+    label: "Old recordings",
+    description: "Created more than 90 days ago",
+    criteria: { createdBefore: Date.now() - 90 * DAY_MS },
+  },
+  {
+    id: "short",
+    label: "Very short",
+    description: "Less than 30 seconds",
+    criteria: { durationBelow: 30 },
+  },
+  {
+    id: "long",
+    label: "Very long",
+    description: "Longer than 2 hours",
+    criteria: { durationAbove: 7200 },
+  },
+  {
+    id: "large",
+    label: "Large files",
+    description: "Larger than 100 MB",
+    criteria: { fileSizeAbove: 100 * 1024 * 1024 },
+  },
+];

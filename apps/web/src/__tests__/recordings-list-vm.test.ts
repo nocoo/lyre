@@ -16,6 +16,9 @@ import {
   filterRecordings,
   sortRecordings,
   paginateRecordings,
+  type BulkFilterCriteria,
+  bulkFilterRecordings,
+  BULK_FILTER_PRESETS,
 } from "@/lib/recordings-list-vm";
 import {
   MOCK_RECORDINGS,
@@ -623,5 +626,168 @@ describe("filterRecordings — aiSummary search", () => {
     // rec-003 has no aiSummary; search for something not in title/desc/tags
     const result = filterRecordings(MOCK_RECORDINGS, "nonexistent summary text", "all");
     expect(result).toHaveLength(0);
+  });
+});
+
+// ── bulkFilterRecordings ──
+
+describe("bulkFilterRecordings", () => {
+  const NOW = 1740000000000; // same as mock-data.ts
+  const DAY = 86_400_000;
+
+  // Build cards with known raw values for filtering
+  const cards: Parameters<typeof bulkFilterRecordings>[0] = [
+    {
+      id: "old",
+      createdAtMs: NOW - 120 * DAY, // 120 days ago — old
+      durationRaw: 60,
+      fileSizeRaw: 5_000_000,
+    },
+    {
+      id: "short",
+      createdAtMs: NOW - 2 * DAY, // recent
+      durationRaw: 10, // 10 seconds — very short
+      fileSizeRaw: 500_000,
+    },
+    {
+      id: "long",
+      createdAtMs: NOW - 5 * DAY,
+      durationRaw: 10800, // 3 hours — very long
+      fileSizeRaw: 200_000_000, // 200MB — also large
+    },
+    {
+      id: "large",
+      createdAtMs: NOW - 3 * DAY,
+      durationRaw: 300,
+      fileSizeRaw: 500_000_000, // 500MB — very large
+    },
+    {
+      id: "normal",
+      createdAtMs: NOW - 1 * DAY,
+      durationRaw: 300, // 5 min — normal
+      fileSizeRaw: 10_000_000, // 10MB — normal
+    },
+    {
+      id: "null-duration",
+      createdAtMs: NOW - 1 * DAY,
+      durationRaw: null,
+      fileSizeRaw: null,
+    },
+  ];
+
+  test("returns empty when no criteria specified", () => {
+    const result = bulkFilterRecordings(cards, {});
+    expect(result).toEqual([]);
+  });
+
+  test("filters by createdBefore (time too old)", () => {
+    const result = bulkFilterRecordings(cards, {
+      createdBefore: NOW - 90 * DAY,
+    });
+    expect(result).toEqual(["old"]);
+  });
+
+  test("filters by durationBelow (too short)", () => {
+    const result = bulkFilterRecordings(cards, {
+      durationBelow: 30,
+    });
+    expect(result).toEqual(["short"]);
+  });
+
+  test("filters by durationAbove (too long)", () => {
+    const result = bulkFilterRecordings(cards, {
+      durationAbove: 7200, // 2 hours
+    });
+    expect(result).toEqual(["long"]);
+  });
+
+  test("filters by fileSizeAbove (too large)", () => {
+    const result = bulkFilterRecordings(cards, {
+      fileSizeAbove: 100_000_000, // 100MB
+    });
+    // long (200MB) and large (500MB) match
+    expect(result).toContain("long");
+    expect(result).toContain("large");
+    expect(result).toHaveLength(2);
+  });
+
+  test("combines multiple criteria with OR logic", () => {
+    const result = bulkFilterRecordings(cards, {
+      createdBefore: NOW - 90 * DAY,
+      durationBelow: 30,
+    });
+    // "old" matches createdBefore, "short" matches durationBelow
+    expect(result).toContain("old");
+    expect(result).toContain("short");
+    expect(result).toHaveLength(2);
+  });
+
+  test("deduplicates IDs when a card matches multiple criteria", () => {
+    const result = bulkFilterRecordings(cards, {
+      durationAbove: 7200,
+      fileSizeAbove: 100_000_000,
+    });
+    // "long" matches both criteria; "large" matches fileSizeAbove
+    expect(result).toContain("long");
+    expect(result).toContain("large");
+    expect(result).toHaveLength(2);
+  });
+
+  test("skips null values (does not match)", () => {
+    const result = bulkFilterRecordings(cards, {
+      durationBelow: 30,
+    });
+    // null-duration should NOT match
+    expect(result).not.toContain("null-duration");
+  });
+
+  test("returns empty for empty input", () => {
+    const result = bulkFilterRecordings([], {
+      createdBefore: NOW,
+    });
+    expect(result).toEqual([]);
+  });
+});
+
+// ── BULK_FILTER_PRESETS ──
+
+describe("BULK_FILTER_PRESETS", () => {
+  test("has expected preset keys", () => {
+    const keys = BULK_FILTER_PRESETS.map((p) => p.id);
+    expect(keys).toContain("old");
+    expect(keys).toContain("short");
+    expect(keys).toContain("long");
+    expect(keys).toContain("large");
+  });
+
+  test("each preset has label and criteria", () => {
+    for (const preset of BULK_FILTER_PRESETS) {
+      expect(preset.label).toBeTruthy();
+      expect(typeof preset.criteria).toBe("object");
+    }
+  });
+
+  test("old preset uses createdBefore", () => {
+    const old = BULK_FILTER_PRESETS.find((p) => p.id === "old")!;
+    expect(old.criteria.createdBefore).toBeDefined();
+    expect(old.criteria.createdBefore).toBeLessThan(Date.now());
+  });
+
+  test("short preset uses durationBelow", () => {
+    const short = BULK_FILTER_PRESETS.find((p) => p.id === "short")!;
+    expect(short.criteria.durationBelow).toBeDefined();
+    expect(short.criteria.durationBelow).toBeGreaterThan(0);
+  });
+
+  test("long preset uses durationAbove", () => {
+    const long = BULK_FILTER_PRESETS.find((p) => p.id === "long")!;
+    expect(long.criteria.durationAbove).toBeDefined();
+    expect(long.criteria.durationAbove).toBeGreaterThan(0);
+  });
+
+  test("large preset uses fileSizeAbove", () => {
+    const large = BULK_FILTER_PRESETS.find((p) => p.id === "large")!;
+    expect(large.criteria.fileSizeAbove).toBeDefined();
+    expect(large.criteria.fileSizeAbove).toBeGreaterThan(0);
   });
 });
