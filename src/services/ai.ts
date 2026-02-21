@@ -93,9 +93,9 @@ export interface AiSettingsInput {
   apiKey: string;
   model: string; // empty = use provider default
   /** Only used when provider === "custom" */
-  baseURL?: string;
+  baseURL?: string | undefined;
   /** Only used when provider === "custom" */
-  sdkType?: SdkType;
+  sdkType?: SdkType | undefined;
 }
 
 /**

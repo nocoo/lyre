@@ -11,6 +11,7 @@ import {
   resolveAiConfig,
   createAiClient,
   type AiProvider,
+  type SdkType,
 } from "@/services/ai";
 import { generateText } from "ai";
 
@@ -28,6 +29,8 @@ export async function POST() {
   const provider = map.get("ai.provider") ?? "";
   const apiKey = map.get("ai.apiKey") ?? "";
   const model = map.get("ai.model") ?? "";
+  const baseURL = map.get("ai.baseURL") ?? "";
+  const sdkType = map.get("ai.sdkType") ?? "";
 
   if (!provider || !apiKey) {
     return NextResponse.json(
@@ -41,6 +44,8 @@ export async function POST() {
       provider: provider as AiProvider,
       apiKey,
       model,
+      baseURL: baseURL || undefined,
+      sdkType: (sdkType || undefined) as SdkType | undefined,
     });
 
     const client = createAiClient(config);

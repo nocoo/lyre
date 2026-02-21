@@ -6,7 +6,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/api-auth";
 import { settingsRepo } from "@/db/repositories";
-import { AI_PROVIDERS, type AiProvider } from "@/services/ai";
+import { isValidProvider, type AiProvider, type SdkType } from "@/services/ai";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +19,17 @@ function readAiSettings(userId: string) {
     apiKey: map.get("ai.apiKey") ?? "",
     model: map.get("ai.model") ?? "",
     autoSummarize: map.get("ai.autoSummarize") === "true",
+    baseURL: map.get("ai.baseURL") ?? "",
+    sdkType: (map.get("ai.sdkType") ?? "") as SdkType | "",
   };
 }
 
 export type AiSettingsResponse = ReturnType<typeof readAiSettings>;
+
+function maskApiKey(key: string): string {
+  if (!key) return "";
+  return `${"*".repeat(Math.max(0, key.length - 4))}${key.slice(-4)}`;
+}
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -31,10 +38,9 @@ export async function GET() {
   }
 
   const settings = readAiSettings(user.id);
-  // Mask the API key for security (show last 4 chars only)
   return NextResponse.json({
     ...settings,
-    apiKey: settings.apiKey ? `${"*".repeat(Math.max(0, settings.apiKey.length - 4))}${settings.apiKey.slice(-4)}` : "",
+    apiKey: maskApiKey(settings.apiKey),
     hasApiKey: !!settings.apiKey,
   });
 }
@@ -50,13 +56,25 @@ export async function PUT(request: NextRequest) {
     apiKey?: string;
     model?: string;
     autoSummarize?: boolean;
+    baseURL?: string;
+    sdkType?: string;
   };
 
   // Validate provider if provided
   if (body.provider !== undefined && body.provider !== "") {
-    if (!AI_PROVIDERS[body.provider as AiProvider]) {
+    if (!isValidProvider(body.provider)) {
       return NextResponse.json(
         { error: `Invalid provider: ${body.provider}` },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Validate sdkType if provided
+  if (body.sdkType !== undefined && body.sdkType !== "") {
+    if (body.sdkType !== "openai" && body.sdkType !== "anthropic") {
+      return NextResponse.json(
+        { error: `Invalid SDK type: ${body.sdkType}` },
         { status: 400 },
       );
     }
@@ -75,11 +93,17 @@ export async function PUT(request: NextRequest) {
   if (body.autoSummarize !== undefined) {
     settingsRepo.upsert(user.id, "ai.autoSummarize", String(body.autoSummarize));
   }
+  if (body.baseURL !== undefined) {
+    settingsRepo.upsert(user.id, "ai.baseURL", body.baseURL);
+  }
+  if (body.sdkType !== undefined) {
+    settingsRepo.upsert(user.id, "ai.sdkType", body.sdkType);
+  }
 
   const updated = readAiSettings(user.id);
   return NextResponse.json({
     ...updated,
-    apiKey: updated.apiKey ? `${"*".repeat(Math.max(0, updated.apiKey.length - 4))}${updated.apiKey.slice(-4)}` : "",
+    apiKey: maskApiKey(updated.apiKey),
     hasApiKey: !!updated.apiKey,
   });
 }
