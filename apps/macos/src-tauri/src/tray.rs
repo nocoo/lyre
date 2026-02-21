@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{App, AppHandle, Manager, Wry};
+use tauri::{App, AppHandle, Emitter, Manager, Wry};
 
 use crate::audio::AudioDeviceManager;
 use crate::recorder::{Recorder, RecorderConfig, RecorderState};
@@ -195,6 +195,7 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
                     Ok(path) => {
                         println!("recording saved: {}", path.display());
                         update_tray_icon(app, false);
+                        let _ = app.emit("recording-saved", ());
                     }
                     Err(e) => {
                         eprintln!("failed to stop recording: {e}");

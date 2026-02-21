@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
   Play,
   Square,
@@ -56,6 +57,16 @@ export function RecordingsPage() {
 
   useEffect(() => {
     loadRecordings();
+  }, [loadRecordings]);
+
+  // Auto-refresh when a new recording is saved
+  useEffect(() => {
+    const unlisten = listen("recording-saved", () => {
+      loadRecordings();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, [loadRecordings]);
 
   // Cleanup audio on unmount
