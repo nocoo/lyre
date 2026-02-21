@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 
-const BASE_URL = `http://localhost:${process.env.E2E_PORT || "7026"}`;
+const BASE_URL = `http://localhost:${process.env.E2E_PORT || "17025"}`;
 
 // ── Types ──
 
