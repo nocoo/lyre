@@ -9,7 +9,7 @@ import {
   LayoutGrid,
   ArrowUpDown,
 } from "lucide-react";
-import { AppShell } from "@/components/layout";
+import { useSetBreadcrumbs } from "@/components/layout";
 import { RecordingListItem } from "@/components/recording-list-item";
 import { RecordingTileCard } from "@/components/recording-tile-card";
 import { UploadDialog } from "@/components/upload-dialog";
@@ -58,6 +58,9 @@ export default function RecordingsPage() {
 }
 
 function RecordingsPageInner() {
+  // ── Breadcrumbs ──
+  useSetBreadcrumbs([{ label: "Recordings" }]);
+
   // ── State ──
   const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<RecordingStatus | "all">("all");
@@ -138,7 +141,7 @@ function RecordingsPageInner() {
   }, [fetchRecordings]);
 
   return (
-    <AppShell breadcrumbs={[{ label: "Recordings" }]}>
+    <>
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -339,6 +342,6 @@ function RecordingsPageInner() {
         onOpenChange={setShowUpload}
         onUploadComplete={handleUploadComplete}
       />
-    </AppShell>
+    </>
   );
 }

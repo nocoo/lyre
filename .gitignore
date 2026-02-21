@@ -46,3 +46,7 @@ next-env.d.ts
 # python
 .ruff_cache/
 __pycache__/
+
+# tauri / rust
+apps/macos/src-tauri/target/
+apps/macos/frontend/dist/

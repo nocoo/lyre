@@ -4,12 +4,31 @@
   "version": "0.1.0",
   "identifier": "com.lyre.recorder",
   "build": {
-    "frontendDist": "../frontend"
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../frontend/dist"
   },
   "app": {
     "withGlobalTauri": false,
-    "windows": [],
+    "windows": [
+      {
+        "label": "main",
+        "title": "Lyre Recorder",
+        "width": 480,
+        "height": 520,
+        "resizable": true,
+        "visible": false,
+        "decorations": true,
+        "center": true,
+        "minWidth": 380,
+        "minHeight": 400
+      }
+    ],
     "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$AUDIO/**", "$HOME/Music/**"]
+      },
+      "csp": "default-src 'self' ipc: http://ipc.localhost; media-src 'self' asset: http://asset.localhost",
       "capabilities": ["default"]
     }
   },

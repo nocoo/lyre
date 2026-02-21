@@ -123,6 +123,15 @@ CREATE TABLE IF NOT EXISTS transcriptions (
   updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS device_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  last_used_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   user_id TEXT NOT NULL REFERENCES users(id),
   key TEXT NOT NULL,
@@ -197,6 +206,7 @@ export function resetDb(): void {
 
   // Delete in reverse FK order
   const tables = [
+    "device_tokens",
     "settings",
     "transcriptions",
     "transcription_jobs",
