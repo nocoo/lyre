@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AppShell } from "@/components/layout";
+import { useSetBreadcrumbs } from "@/components/layout";
 import {
   AudioPlayer,
   type AudioPlayerHandle,
@@ -79,16 +79,12 @@ type PageParams = { params: Promise<{ id: string }> };
 export default function RecordingDetailPage({ params }: PageParams) {
   const { id } = use(params);
 
-  return (
-    <AppShell
-      breadcrumbs={[
-        { label: "Recordings", href: "/recordings" },
-        { label: "Detail" },
-      ]}
-    >
-      <RecordingDetailContent id={id} />
-    </AppShell>
-  );
+  useSetBreadcrumbs([
+    { label: "Recordings", href: "/recordings" },
+    { label: "Detail" },
+  ]);
+
+  return <RecordingDetailContent id={id} />;
 }
 
 /** Poll interval for job status in milliseconds */

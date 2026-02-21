@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, Rocket } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { SidebarProvider, useSidebar } from "./sidebar-context";
+import { BreadcrumbsProvider, useBreadcrumbs } from "./breadcrumbs-context";
 import { ThemeToggle } from "./theme-toggle";
 import { GitHubLink } from "./github-link";
 import { Breadcrumbs } from "./breadcrumbs";
@@ -13,15 +14,15 @@ import { cn } from "@/lib/utils";
 
 interface AppShellProps {
   children: React.ReactNode;
-  breadcrumbs?: { label: string; href?: string }[];
 }
 
 /** Scroll threshold (px) before showing the scroll-to-top FAB */
 const SCROLL_THRESHOLD = 300;
 
-function AppShellInner({ children, breadcrumbs = [] }: AppShellProps) {
+function AppShellInner({ children }: AppShellProps) {
   const isMobile = useIsMobile();
   const { mobileOpen, setMobileOpen } = useSidebar();
+  const { items: breadcrumbItems } = useBreadcrumbs();
   const pathname = usePathname();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -55,6 +56,11 @@ function AppShellInner({ children, breadcrumbs = [] }: AppShellProps) {
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Reset scroll position on route change
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [pathname]);
 
   const scrollToTop = useCallback(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -102,7 +108,7 @@ function AppShellInner({ children, breadcrumbs = [] }: AppShellProps) {
               </button>
             )}
             <Breadcrumbs
-              items={[{ label: "Home", href: "/" }, ...breadcrumbs]}
+              items={[{ label: "Home", href: "/" }, ...breadcrumbItems]}
             />
           </div>
           <div className="flex items-center gap-1">
@@ -144,10 +150,12 @@ function AppShellInner({ children, breadcrumbs = [] }: AppShellProps) {
   );
 }
 
-export function AppShell({ children, breadcrumbs = [] }: AppShellProps) {
+export function AppShell({ children }: AppShellProps) {
   return (
     <SidebarProvider>
-      <AppShellInner breadcrumbs={breadcrumbs}>{children}</AppShellInner>
+      <BreadcrumbsProvider>
+        <AppShellInner>{children}</AppShellInner>
+      </BreadcrumbsProvider>
     </SidebarProvider>
   );
 }
