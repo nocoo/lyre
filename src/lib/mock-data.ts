@@ -5,6 +5,7 @@
 
 import type {
   Recording,
+  RecordingListItem,
   RecordingDetail,
   Transcription,
   TranscriptionJob,
@@ -81,7 +82,7 @@ export const MOCK_RECORDINGS: Recording[] = [
     ossKey: "recordings/user-001/rec-001/q4-product-review.mp3",
     tags: ["meeting", "product", "quarterly"],
     notes: "Key takeaway: 23% MAU growth, 68% D30 retention.",
-    aiSummary: null,
+    aiSummary: "Quarterly review covering user growth metrics with 23% MAU increase, mobile app retention reaching 68% at D30, and successful database cluster migration. Action items include scaling infrastructure and setting Q1 targets.",
     recordedAt: NOW - 8 * DAY,
     status: "completed",
     createdAt: NOW - 7 * DAY,
@@ -101,7 +102,7 @@ export const MOCK_RECORDINGS: Recording[] = [
     ossKey: "recordings/user-001/rec-002/design-sprint-kickoff.mp3",
     tags: ["design", "sprint"],
     notes: null,
-    aiSummary: null,
+    aiSummary: "Kickoff session for the dashboard redesign sprint. Team brainstormed key UX improvements including simplified navigation, enhanced data visualization, and mobile-first approach.",
     recordedAt: NOW - 4 * DAY,
     status: "transcribing",
     createdAt: NOW - 3 * DAY,
@@ -233,6 +234,16 @@ export const MOCK_TRANSCRIPTION: Transcription = {
   createdAt: NOW - 7 * DAY,
   updatedAt: NOW - 7 * DAY,
 };
+
+// ── Mock recording list items (enriched with folder + resolved tags) ──
+
+export const MOCK_RECORDING_LIST_ITEMS: RecordingListItem[] = MOCK_RECORDINGS.map(
+  (rec) => ({
+    ...rec,
+    folder: findFolder(rec.folderId),
+    resolvedTags: resolveTags(rec.tags),
+  }),
+);
 
 // ── Mock recording details ──
 

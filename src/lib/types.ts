@@ -117,6 +117,12 @@ export interface Setting {
 
 // ── API response shapes ──
 
+/** Recording enriched with folder + resolved tags (for list view) */
+export interface RecordingListItem extends Recording {
+  folder: Folder | null;
+  resolvedTags: Tag[];
+}
+
 /** Recording with optional transcription (for detail view) */
 export interface RecordingDetail extends Recording {
   transcription: Transcription | null;

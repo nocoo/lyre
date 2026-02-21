@@ -9,6 +9,7 @@ import {
   Settings,
   PanelLeft,
   LogOut,
+  Search,
 } from "lucide-react";
 import { cn, getAvatarColor } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/version";
@@ -20,6 +21,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { GlobalSearch } from "@/components/global-search";
 import { useSidebar } from "./sidebar-context";
 
 const navItems = [
@@ -66,7 +68,7 @@ export function Sidebar() {
                 <button
                   onClick={toggle}
                   aria-label="Expand sidebar"
-                  className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors mb-2"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors mb-1"
                 >
                   <PanelLeft
                     className="h-4 w-4"
@@ -77,6 +79,35 @@ export function Sidebar() {
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={8}>
                 Expand sidebar
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Search icon */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    // Dispatch a keyboard shortcut to open global search
+                    document.dispatchEvent(
+                      new KeyboardEvent("keydown", {
+                        key: "k",
+                        metaKey: true,
+                        bubbles: true,
+                      }),
+                    );
+                  }}
+                  aria-label="Search (⌘K)"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors mb-2"
+                >
+                  <Search
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                    strokeWidth={1.5}
+                  />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                Search (⌘K)
               </TooltipContent>
             </Tooltip>
 
@@ -176,6 +207,30 @@ export function Sidebar() {
               </div>
             </div>
 
+            {/* Search button */}
+            <div className="px-3 pb-1">
+              <button
+                onClick={() => {
+                  document.dispatchEvent(
+                    new KeyboardEvent("keydown", {
+                      key: "k",
+                      metaKey: true,
+                      bubbles: true,
+                    }),
+                  );
+                }}
+                className="flex w-full items-center gap-3 rounded-lg bg-secondary px-3 py-1.5 transition-colors hover:bg-accent cursor-pointer"
+              >
+                <Search className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+                <span className="flex-1 text-left text-sm text-muted-foreground">Search</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center">
+                  <kbd className="pointer-events-none hidden rounded-sm border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
+                    ⌘K
+                  </kbd>
+                </span>
+              </button>
+            </div>
+
             {/* Navigation */}
             <nav className="flex-1 overflow-y-auto pt-1">
               <div className="flex flex-col gap-0.5 px-3">
@@ -252,6 +307,9 @@ export function Sidebar() {
           </div>
         )}
       </aside>
+
+      {/* Global search dialog (renders the CommandDialog) */}
+      <GlobalSearch />
     </TooltipProvider>
   );
 }

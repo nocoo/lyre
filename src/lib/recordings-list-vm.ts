@@ -1,11 +1,18 @@
 /**
  * Recordings List View Model
  *
- * Pure functions that transform Recording[] data into view-ready shapes.
- * No React hooks — consumed by the recordings list page.
+ * Pure functions that transform Recording[] / RecordingListItem[] data into view-ready shapes.
+ * No React hooks — consumed by the recordings list page and global search.
  */
 
-import type { Recording, RecordingStatus, PaginatedResponse } from "./types";
+import type {
+  Recording,
+  RecordingListItem,
+  RecordingStatus,
+  PaginatedResponse,
+  Tag,
+  Folder,
+} from "./types";
 
 // ── Formatting helpers ──
 
@@ -67,6 +74,19 @@ export function formatDate(timestampMs: number): string {
   });
 }
 
+/** Format audio format string to uppercase display label */
+export function formatAudioFormat(format: string | null): string {
+  if (!format) return "—";
+  return format.toUpperCase();
+}
+
+/** Format sample rate to human-readable (e.g. "48 kHz") */
+export function formatSampleRate(rate: number | null): string {
+  if (rate === null || rate <= 0) return "—";
+  if (rate >= 1000) return `${(rate / 1000).toFixed(rate % 1000 === 0 ? 0 : 1)} kHz`;
+  return `${rate} Hz`;
+}
+
 // ── Status helpers ──
 
 export interface StatusInfo {
@@ -85,33 +105,140 @@ export function getStatusInfo(status: RecordingStatus): StatusInfo {
   return STATUS_MAP[status];
 }
 
-// ── Recording card view model ──
+// ── Tag color helpers ──
+
+/**
+ * Stable color palette for tags.
+ * Each tag name is hashed to a consistent color from this palette.
+ */
+const TAG_COLORS = [
+  { bg: "bg-blue-100 dark:bg-blue-900/40", text: "text-blue-700 dark:text-blue-300" },
+  { bg: "bg-green-100 dark:bg-green-900/40", text: "text-green-700 dark:text-green-300" },
+  { bg: "bg-purple-100 dark:bg-purple-900/40", text: "text-purple-700 dark:text-purple-300" },
+  { bg: "bg-orange-100 dark:bg-orange-900/40", text: "text-orange-700 dark:text-orange-300" },
+  { bg: "bg-pink-100 dark:bg-pink-900/40", text: "text-pink-700 dark:text-pink-300" },
+  { bg: "bg-teal-100 dark:bg-teal-900/40", text: "text-teal-700 dark:text-teal-300" },
+  { bg: "bg-indigo-100 dark:bg-indigo-900/40", text: "text-indigo-700 dark:text-indigo-300" },
+  { bg: "bg-amber-100 dark:bg-amber-900/40", text: "text-amber-700 dark:text-amber-300" },
+  { bg: "bg-cyan-100 dark:bg-cyan-900/40", text: "text-cyan-700 dark:text-cyan-300" },
+  { bg: "bg-rose-100 dark:bg-rose-900/40", text: "text-rose-700 dark:text-rose-300" },
+] as const;
+
+export interface TagVM {
+  id: string;
+  name: string;
+  bgClass: string;
+  textClass: string;
+}
+
+/** Hash a string to a stable index */
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+/** Convert a tag to a colorized view model */
+export function toTagVM(tag: Tag): TagVM {
+  const colorIndex = hashString(tag.name) % TAG_COLORS.length;
+  const color = TAG_COLORS[colorIndex]!;
+  return {
+    id: tag.id,
+    name: tag.name,
+    bgClass: color.bg,
+    textClass: color.text,
+  };
+}
+
+/** Convert legacy tag names to colorized view models (without resolved Tag objects) */
+export function toTagVMFromName(name: string, index: number): TagVM {
+  const colorIndex = hashString(name) % TAG_COLORS.length;
+  const color = TAG_COLORS[colorIndex]!;
+  return {
+    id: `legacy-${index}`,
+    name,
+    bgClass: color.bg,
+    textClass: color.text,
+  };
+}
+
+// ── Folder info ──
+
+export interface FolderInfo {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+export function toFolderInfo(folder: Folder | null): FolderInfo | null {
+  if (!folder) return null;
+  return {
+    id: folder.id,
+    name: folder.name,
+    icon: folder.icon,
+  };
+}
+
+// ── Recording card view model (enriched) ──
 
 export interface RecordingCardVM {
   id: string;
   title: string;
   description: string;
   duration: string;
+  durationRaw: number | null;
   fileSize: string;
+  fileSizeRaw: number | null;
+  format: string;
+  sampleRate: string;
   status: StatusInfo;
-  tags: string[];
+  statusRaw: RecordingStatus;
+  tags: string[]; // legacy tag names
+  colorTags: TagVM[]; // colorized resolved tags (preferred) or legacy fallback
+  folder: FolderInfo | null;
+  aiSummary: string; // truncated for card display
   createdAt: string;
   createdAtRelative: string;
   recordedAt: string;
 }
 
+/** Convert a Recording (basic) to card VM — backward compatible */
 export function toRecordingCardVM(recording: Recording): RecordingCardVM {
+  return toRecordingListItemCardVM({
+    ...recording,
+    folder: null,
+    resolvedTags: [],
+  });
+}
+
+/** Convert a RecordingListItem (enriched) to card VM */
+export function toRecordingListItemCardVM(item: RecordingListItem): RecordingCardVM {
+  // Prefer resolved tags over legacy tag names
+  const colorTags = item.resolvedTags.length > 0
+    ? item.resolvedTags.map(toTagVM)
+    : item.tags.map(toTagVMFromName);
+
   return {
-    id: recording.id,
-    title: recording.title,
-    description: recording.description ?? "",
-    duration: formatDuration(recording.duration),
-    fileSize: formatFileSize(recording.fileSize),
-    status: getStatusInfo(recording.status),
-    tags: recording.tags,
-    createdAt: formatDate(recording.createdAt),
-    createdAtRelative: formatRelativeTime(recording.createdAt),
-    recordedAt: recording.recordedAt ? formatDate(recording.recordedAt) : "",
+    id: item.id,
+    title: item.title,
+    description: item.description ?? "",
+    duration: formatDuration(item.duration),
+    durationRaw: item.duration,
+    fileSize: formatFileSize(item.fileSize),
+    fileSizeRaw: item.fileSize,
+    format: formatAudioFormat(item.format),
+    sampleRate: formatSampleRate(item.sampleRate),
+    status: getStatusInfo(item.status),
+    statusRaw: item.status,
+    tags: item.tags,
+    colorTags,
+    folder: toFolderInfo(item.folder),
+    aiSummary: item.aiSummary ?? "",
+    createdAt: formatDate(item.createdAt),
+    createdAtRelative: formatRelativeTime(item.createdAt),
+    recordedAt: item.recordedAt ? formatDate(item.recordedAt) : "",
   };
 }
 
@@ -128,6 +255,21 @@ export interface RecordingsListVM {
 }
 
 export function toRecordingsListVM(
+  response: PaginatedResponse<RecordingListItem>,
+): RecordingsListVM {
+  return {
+    cards: response.items.map(toRecordingListItemCardVM),
+    total: response.total,
+    page: response.page,
+    totalPages: response.totalPages,
+    hasNextPage: response.page < response.totalPages,
+    hasPreviousPage: response.page > 1,
+    isEmpty: response.items.length === 0,
+  };
+}
+
+/** Legacy overload: convert PaginatedResponse<Recording> (without enrichment) */
+export function toBasicRecordingsListVM(
   response: PaginatedResponse<Recording>,
 ): RecordingsListVM {
   return {
@@ -163,7 +305,8 @@ export function filterRecordings(
       (r) =>
         r.title.toLowerCase().includes(q) ||
         (r.description?.toLowerCase().includes(q) ?? false) ||
-        r.tags.some((t) => t.toLowerCase().includes(q)),
+        r.tags.some((t) => t.toLowerCase().includes(q)) ||
+        (r.aiSummary?.toLowerCase().includes(q) ?? false),
     );
   }
 

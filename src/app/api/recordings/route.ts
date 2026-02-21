@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/api-auth";
-import { recordingsRepo } from "@/db/repositories";
+import { recordingsRepo, foldersRepo, tagsRepo } from "@/db/repositories";
 import type { RecordingStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   const sortDirParam = searchParams.get("sortDir") ?? "desc";
   const pageParam = searchParams.get("page") ?? "1";
   const pageSizeParam = searchParams.get("pageSize") ?? "10";
+  const folderParam = searchParams.get("folderId"); // null = not filtering, "unfiled" = no folder, otherwise = folder id
 
   // Validate params
   const status = includes(VALID_STATUSES, statusParam) ? statusParam : "all";
@@ -60,13 +61,24 @@ export async function GET(request: NextRequest) {
   };
   if (filterStatus !== undefined) opts.status = filterStatus;
   if (filterQuery !== undefined) opts.query = filterQuery;
+  if (folderParam === "unfiled") {
+    opts.folderId = null;
+  } else if (folderParam) {
+    opts.folderId = folderParam;
+  }
 
   const { items, total } = recordingsRepo.findByUserId(user.id, opts);
 
-  // Convert DB rows to domain shape (parse tags)
+  // Pre-fetch all user folders for efficient lookup
+  const userFolders = foldersRepo.findByUserId(user.id);
+  const folderMap = new Map(userFolders.map((f) => [f.id, f]));
+
+  // Convert DB rows to enriched list items (with folder + resolved tags)
   const recordings = items.map((row) => ({
     ...row,
     tags: recordingsRepo.parseTags(row.tags),
+    folder: row.folderId ? folderMap.get(row.folderId) ?? null : null,
+    resolvedTags: tagsRepo.findTagsForRecording(row.id),
   }));
 
   const totalPages = Math.ceil(total / pageSize);

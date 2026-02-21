@@ -612,3 +612,166 @@ describe("GET /api/recordings/[id] — new fields", () => {
     expect(body.notes).toBeNull();
   });
 });
+
+describe("GET /api/recordings — folderId filter", () => {
+  let folderId: string;
+  let recordingInFolder: string;
+  let recordingUnfiled: string;
+
+  beforeAll(async () => {
+    // Create a folder
+    const folderRes = await fetch(`${BASE_URL}/api/folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Filter Test Folder", icon: "folder" }),
+    });
+    const folder = (await folderRes.json()) as Folder;
+    folderId = folder.id;
+
+    // Create a recording in the folder
+    const rec1 = await createRecording({
+      title: "In Filter Folder",
+      fileName: "in-folder.mp3",
+      ossKey: "uploads/e2e/in-folder.mp3",
+    });
+    recordingInFolder = rec1.id;
+
+    // Assign folder
+    await fetch(`${BASE_URL}/api/recordings/${rec1.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId }),
+    });
+
+    // Create an unfiled recording
+    const rec2 = await createRecording({
+      title: "Unfiled Filter Recording",
+      fileName: "unfiled-filter.mp3",
+      ossKey: "uploads/e2e/unfiled-filter.mp3",
+    });
+    recordingUnfiled = rec2.id;
+  });
+
+  test("filters by specific folderId", async () => {
+    const res = await fetch(`${BASE_URL}/api/recordings?folderId=${folderId}`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as PaginatedResponse;
+    expect(body.items.some((r) => r.id === recordingInFolder)).toBe(true);
+    expect(body.items.every((r) => r.folderId === folderId)).toBe(true);
+  });
+
+  test("filters unfiled recordings with folderId=unfiled", async () => {
+    const res = await fetch(`${BASE_URL}/api/recordings?folderId=unfiled`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as PaginatedResponse;
+    expect(body.items.some((r) => r.id === recordingUnfiled)).toBe(true);
+    expect(body.items.every((r) => r.folderId === null)).toBe(true);
+  });
+
+  test("returns all recordings without folderId param", async () => {
+    const res = await fetch(`${BASE_URL}/api/recordings`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as PaginatedResponse;
+    // Should include both foldered and unfiled recordings
+    const ids = body.items.map((r) => r.id);
+    expect(ids).toContain(recordingInFolder);
+    expect(ids).toContain(recordingUnfiled);
+  });
+});
+
+describe("GET /api/recordings — enriched list items", () => {
+  test("list items include folder object when assigned", async () => {
+    // Use the recording from the folderId filter test (still assigned to folder)
+    const res = await fetch(`${BASE_URL}/api/recordings`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { items: RecordingDetail[] };
+    const withFolder = body.items.find((r) => r.folder !== null);
+    if (withFolder) {
+      expect(withFolder.folder).toHaveProperty("id");
+      expect(withFolder.folder).toHaveProperty("name");
+    }
+  });
+
+  test("list items include resolvedTags array", async () => {
+    const res = await fetch(`${BASE_URL}/api/recordings`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { items: RecordingDetail[] };
+    // Every item should have a resolvedTags array (even if empty)
+    for (const item of body.items) {
+      expect(Array.isArray(item.resolvedTags)).toBe(true);
+    }
+  });
+});
+
+describe("GET /api/search", () => {
+  test("returns empty results for empty query", async () => {
+    const res = await fetch(`${BASE_URL}/api/search`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { results: unknown[] };
+    expect(body.results).toEqual([]);
+  });
+
+  test("returns matching recordings by title", async () => {
+    const res = await fetch(`${BASE_URL}/api/search?q=Podcast`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as {
+      results: { id: string; title: string; status: string }[];
+    };
+    expect(body.results.length).toBeGreaterThanOrEqual(1);
+    expect(body.results.some((r) => r.title.includes("Podcast"))).toBe(true);
+  });
+
+  test("returns results with expected shape", async () => {
+    const res = await fetch(`${BASE_URL}/api/search?q=Standup`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as {
+      results: {
+        id: string;
+        title: string;
+        status: string;
+        tags: string[];
+        folder: Folder | null;
+        resolvedTags: Tag[];
+        duration: number | null;
+        createdAt: number;
+      }[];
+    };
+    expect(body.results.length).toBeGreaterThanOrEqual(1);
+    const result = body.results[0]!;
+    expect(result).toHaveProperty("id");
+    expect(result).toHaveProperty("title");
+    expect(result).toHaveProperty("status");
+    expect(result).toHaveProperty("tags");
+    expect(result).toHaveProperty("folder");
+    expect(result).toHaveProperty("resolvedTags");
+    expect(result).toHaveProperty("duration");
+    expect(result).toHaveProperty("createdAt");
+  });
+
+  test("returns no results for non-matching query", async () => {
+    const res = await fetch(`${BASE_URL}/api/search?q=zzz_totally_nonexistent`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { results: unknown[] };
+    expect(body.results).toEqual([]);
+  });
+
+  test("searches in recording descriptions", async () => {
+    const res = await fetch(`${BASE_URL}/api/search?q=meaning+of+life`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as {
+      results: { id: string; title: string }[];
+    };
+    expect(body.results.length).toBeGreaterThanOrEqual(1);
+    expect(body.results.some((r) => r.title.includes("Podcast"))).toBe(true);
+  });
+});

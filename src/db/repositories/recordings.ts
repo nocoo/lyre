@@ -44,6 +44,7 @@ export const recordingsRepo = {
     options?: {
       status?: RecordingStatus;
       query?: string;
+      folderId?: string | null; // null = unfiled, string = specific folder
       sortBy?: "createdAt" | "title" | "duration" | "fileSize";
       sortDir?: "asc" | "desc";
       page?: number;
@@ -52,6 +53,7 @@ export const recordingsRepo = {
   ): { items: DbRecording[]; total: number } {
     const status = options?.status;
     const query = options?.query?.toLowerCase();
+    const folderId = options?.folderId;
     const sortBy = options?.sortBy ?? "createdAt";
     const sortDir = options?.sortDir ?? "desc";
     const page = options?.page ?? 1;
@@ -69,7 +71,16 @@ export const recordingsRepo = {
       allRows = allRows.filter((r) => r.status === status);
     }
 
-    // Filter by query (title, description, tags)
+    // Filter by folder
+    if (folderId !== undefined) {
+      if (folderId === null) {
+        allRows = allRows.filter((r) => r.folderId === null);
+      } else {
+        allRows = allRows.filter((r) => r.folderId === folderId);
+      }
+    }
+
+    // Filter by query (title, description, tags, aiSummary)
     if (query) {
       allRows = allRows.filter((r) => {
         const titleMatch = r.title.toLowerCase().includes(query);
@@ -77,7 +88,8 @@ export const recordingsRepo = {
         const tagsMatch = parseTags(r.tags).some((t) =>
           t.toLowerCase().includes(query),
         );
-        return titleMatch || descMatch || tagsMatch;
+        const summaryMatch = r.aiSummary?.toLowerCase().includes(query) ?? false;
+        return titleMatch || descMatch || tagsMatch || summaryMatch;
       });
     }
 

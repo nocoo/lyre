@@ -4,15 +4,26 @@ import {
   formatDuration,
   formatRelativeTime,
   formatDate,
+  formatAudioFormat,
+  formatSampleRate,
   getStatusInfo,
   toRecordingCardVM,
+  toRecordingListItemCardVM,
   toRecordingsListVM,
+  toTagVM,
+  toTagVMFromName,
+  toFolderInfo,
   filterRecordings,
   sortRecordings,
   paginateRecordings,
 } from "@/lib/recordings-list-vm";
-import { MOCK_RECORDINGS } from "@/lib/mock-data";
-import type { Recording, PaginatedResponse } from "@/lib/types";
+import {
+  MOCK_RECORDINGS,
+  MOCK_RECORDING_LIST_ITEMS,
+  MOCK_TAGS,
+  MOCK_FOLDERS,
+} from "@/lib/mock-data";
+import type { RecordingListItem, PaginatedResponse } from "@/lib/types";
 
 // ── formatFileSize ──
 
@@ -209,8 +220,8 @@ describe("toRecordingCardVM", () => {
 // ── toRecordingsListVM ──
 
 describe("toRecordingsListVM", () => {
-  const response: PaginatedResponse<Recording> = {
-    items: MOCK_RECORDINGS.slice(0, 2),
+  const response: PaginatedResponse<RecordingListItem> = {
+    items: MOCK_RECORDING_LIST_ITEMS.slice(0, 2),
     total: 5,
     page: 1,
     pageSize: 2,
@@ -220,7 +231,7 @@ describe("toRecordingsListVM", () => {
   test("maps cards", () => {
     const vm = toRecordingsListVM(response);
     expect(vm.cards).toHaveLength(2);
-    expect(vm.cards[0]!.title).toBe(MOCK_RECORDINGS[0]!.title);
+    expect(vm.cards[0]!.title).toBe(MOCK_RECORDING_LIST_ITEMS[0]!.title);
   });
 
   test("maps pagination info", () => {
@@ -384,5 +395,233 @@ describe("paginateRecordings", () => {
     expect(result.total).toBe(0);
     expect(result.totalPages).toBe(1);
     expect(result.page).toBe(1);
+  });
+});
+
+// ── formatAudioFormat ──
+
+describe("formatAudioFormat", () => {
+  test("returns dash for null", () => {
+    expect(formatAudioFormat(null)).toBe("—");
+  });
+
+  test("returns dash for empty string", () => {
+    expect(formatAudioFormat("")).toBe("—");
+  });
+
+  test("uppercases mp3", () => {
+    expect(formatAudioFormat("mp3")).toBe("MP3");
+  });
+
+  test("uppercases wav", () => {
+    expect(formatAudioFormat("wav")).toBe("WAV");
+  });
+
+  test("uppercases mixed case", () => {
+    expect(formatAudioFormat("Flac")).toBe("FLAC");
+  });
+});
+
+// ── formatSampleRate ──
+
+describe("formatSampleRate", () => {
+  test("returns dash for null", () => {
+    expect(formatSampleRate(null)).toBe("—");
+  });
+
+  test("returns dash for 0", () => {
+    expect(formatSampleRate(0)).toBe("—");
+  });
+
+  test("returns dash for negative", () => {
+    expect(formatSampleRate(-100)).toBe("—");
+  });
+
+  test("formats Hz for small values", () => {
+    expect(formatSampleRate(500)).toBe("500 Hz");
+  });
+
+  test("formats kHz for 44100", () => {
+    expect(formatSampleRate(44100)).toBe("44.1 kHz");
+  });
+
+  test("formats kHz for 48000 (whole number)", () => {
+    expect(formatSampleRate(48000)).toBe("48 kHz");
+  });
+
+  test("formats kHz for 16000", () => {
+    expect(formatSampleRate(16000)).toBe("16 kHz");
+  });
+});
+
+// ── toTagVM ──
+
+describe("toTagVM", () => {
+  test("maps tag id and name", () => {
+    const tag = MOCK_TAGS[0]!;
+    const vm = toTagVM(tag);
+    expect(vm.id).toBe(tag.id);
+    expect(vm.name).toBe(tag.name);
+  });
+
+  test("assigns bg and text classes", () => {
+    const vm = toTagVM(MOCK_TAGS[0]!);
+    expect(vm.bgClass).toBeTruthy();
+    expect(vm.textClass).toBeTruthy();
+    expect(vm.bgClass).toContain("bg-");
+    expect(vm.textClass).toContain("text-");
+  });
+
+  test("same tag name always gets same color (stability)", () => {
+    const vm1 = toTagVM(MOCK_TAGS[0]!);
+    const vm2 = toTagVM(MOCK_TAGS[0]!);
+    expect(vm1.bgClass).toBe(vm2.bgClass);
+    expect(vm1.textClass).toBe(vm2.textClass);
+  });
+
+  test("different tag names can get different colors", () => {
+    const tags = MOCK_TAGS.map(toTagVM);
+    // With 9 tags and 10 colors, at least some should differ
+    const uniqueBgClasses = new Set(tags.map((t) => t.bgClass));
+    expect(uniqueBgClasses.size).toBeGreaterThan(1);
+  });
+});
+
+// ── toTagVMFromName ──
+
+describe("toTagVMFromName", () => {
+  test("creates a legacy tag VM with id prefix", () => {
+    const vm = toTagVMFromName("meeting", 0);
+    expect(vm.id).toBe("legacy-0");
+    expect(vm.name).toBe("meeting");
+  });
+
+  test("assigns color classes", () => {
+    const vm = toTagVMFromName("design", 1);
+    expect(vm.bgClass).toContain("bg-");
+    expect(vm.textClass).toContain("text-");
+  });
+
+  test("same name produces same color as toTagVM", () => {
+    const tag = MOCK_TAGS[0]!;
+    const vmFromTag = toTagVM(tag);
+    const vmFromName = toTagVMFromName(tag.name, 0);
+    expect(vmFromTag.bgClass).toBe(vmFromName.bgClass);
+    expect(vmFromTag.textClass).toBe(vmFromName.textClass);
+  });
+});
+
+// ── toFolderInfo ──
+
+describe("toFolderInfo", () => {
+  test("returns null for null input", () => {
+    expect(toFolderInfo(null)).toBeNull();
+  });
+
+  test("maps folder properties", () => {
+    const folder = MOCK_FOLDERS[0]!;
+    const info = toFolderInfo(folder);
+    expect(info).not.toBeNull();
+    expect(info!.id).toBe(folder.id);
+    expect(info!.name).toBe(folder.name);
+    expect(info!.icon).toBe(folder.icon);
+  });
+});
+
+// ── toRecordingListItemCardVM ──
+
+describe("toRecordingListItemCardVM", () => {
+  const item = MOCK_RECORDING_LIST_ITEMS[0]!; // rec-001: completed, has folder + tags + aiSummary
+
+  test("maps basic fields", () => {
+    const vm = toRecordingListItemCardVM(item);
+    expect(vm.id).toBe(item.id);
+    expect(vm.title).toBe(item.title);
+    expect(vm.description).toBe(item.description ?? "");
+  });
+
+  test("maps format and sampleRate", () => {
+    const vm = toRecordingListItemCardVM(item);
+    expect(vm.format).toBe("MP3");
+    expect(vm.sampleRate).toBe("48 kHz");
+  });
+
+  test("maps statusRaw", () => {
+    const vm = toRecordingListItemCardVM(item);
+    expect(vm.statusRaw).toBe("completed");
+  });
+
+  test("maps folder info", () => {
+    const vm = toRecordingListItemCardVM(item);
+    expect(vm.folder).not.toBeNull();
+    expect(vm.folder!.name).toBe("Meetings");
+  });
+
+  test("maps null folder", () => {
+    const unfiled = MOCK_RECORDING_LIST_ITEMS[2]!; // rec-003: no folder
+    const vm = toRecordingListItemCardVM(unfiled);
+    expect(vm.folder).toBeNull();
+  });
+
+  test("maps aiSummary", () => {
+    const vm = toRecordingListItemCardVM(item);
+    expect(vm.aiSummary).toContain("Quarterly review");
+  });
+
+  test("maps empty aiSummary when null", () => {
+    const noSummary = MOCK_RECORDING_LIST_ITEMS[2]!; // rec-003: no aiSummary
+    const vm = toRecordingListItemCardVM(noSummary);
+    expect(vm.aiSummary).toBe("");
+  });
+
+  test("prefers resolvedTags over legacy tags for colorTags", () => {
+    const vm = toRecordingListItemCardVM(item);
+    expect(vm.colorTags.length).toBeGreaterThan(0);
+    // resolved tags should not have "legacy-" prefix
+    expect(vm.colorTags.every((t) => !t.id.startsWith("legacy-"))).toBe(true);
+  });
+
+  test("falls back to legacy tags when resolvedTags is empty", () => {
+    const noResolved: RecordingListItem = {
+      ...item,
+      resolvedTags: [],
+    };
+    const vm = toRecordingListItemCardVM(noResolved);
+    // Should use legacy tags with "legacy-" prefix
+    expect(vm.colorTags.length).toBe(item.tags.length);
+    expect(vm.colorTags.every((t) => t.id.startsWith("legacy-"))).toBe(true);
+  });
+
+  test("maps raw duration and fileSize", () => {
+    const vm = toRecordingListItemCardVM(item);
+    expect(vm.durationRaw).toBe(item.duration);
+    expect(vm.fileSizeRaw).toBe(item.fileSize);
+  });
+
+  test("maps createdAtRelative", () => {
+    const vm = toRecordingListItemCardVM(item);
+    expect(vm.createdAtRelative).toBeTruthy();
+  });
+});
+
+// ── filterRecordings with aiSummary search ──
+
+describe("filterRecordings — aiSummary search", () => {
+  test("matches aiSummary content", () => {
+    const result = filterRecordings(MOCK_RECORDINGS, "database cluster migration", "all");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("rec-001");
+  });
+
+  test("matches aiSummary across statuses", () => {
+    const result = filterRecordings(MOCK_RECORDINGS, "dashboard redesign", "all");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("rec-002");
+  });
+
+  test("does not match when aiSummary is null", () => {
+    // rec-003 has no aiSummary; search for something not in title/desc/tags
+    const result = filterRecordings(MOCK_RECORDINGS, "nonexistent summary text", "all");
+    expect(result).toHaveLength(0);
   });
 });

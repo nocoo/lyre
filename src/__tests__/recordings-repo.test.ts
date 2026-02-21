@@ -245,6 +245,65 @@ describe("recordingsRepo", () => {
       expect(result.total).toBe(0);
       expect(result.items).toEqual([]);
     });
+
+    test("filters by folderId — specific folder", () => {
+      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Folder A" });
+      recordingsRepo.create(
+        makeRecording({ id: "r4", title: "In Folder", folderId: "f-1" }),
+      );
+      const result = recordingsRepo.findByUserId("user-1", { folderId: "f-1" });
+      expect(result.total).toBe(1);
+      expect(result.items[0]?.title).toBe("In Folder");
+    });
+
+    test("filters by folderId — unfiled (null)", () => {
+      foldersRepo.create({ id: "f-2", userId: "user-1", name: "Folder B" });
+      recordingsRepo.create(
+        makeRecording({ id: "r5", title: "Has Folder", folderId: "f-2" }),
+      );
+      // r1, r2, r3 have no folderId (default null)
+      const result = recordingsRepo.findByUserId("user-1", { folderId: null });
+      expect(result.total).toBe(3); // r1, r2, r3
+      expect(result.items.every((r) => r.folderId === null)).toBe(true);
+    });
+
+    test("no folderId filter returns all recordings", () => {
+      foldersRepo.create({ id: "f-3", userId: "user-1", name: "Folder C" });
+      recordingsRepo.create(
+        makeRecording({ id: "r6", title: "Foldered", folderId: "f-3" }),
+      );
+      const result = recordingsRepo.findByUserId("user-1");
+      expect(result.total).toBe(4); // r1, r2, r3, r6
+    });
+
+    test("filters by query in aiSummary", () => {
+      recordingsRepo.update("r1", { aiSummary: "Important meeting about revenue growth" });
+      const result = recordingsRepo.findByUserId("user-1", { query: "revenue" });
+      expect(result.total).toBe(1);
+      expect(result.items[0]?.id).toBe("r1");
+    });
+
+    test("query does not match null aiSummary", () => {
+      // r2 and r3 have no aiSummary
+      const result = recordingsRepo.findByUserId("user-1", { query: "zzz_no_match_anywhere" });
+      expect(result.total).toBe(0);
+    });
+
+    test("combines folderId and status filters", () => {
+      foldersRepo.create({ id: "f-4", userId: "user-1", name: "Folder D" });
+      recordingsRepo.create(
+        makeRecording({ id: "r7", title: "Completed In Folder", folderId: "f-4", status: "completed" }),
+      );
+      recordingsRepo.create(
+        makeRecording({ id: "r8", title: "Uploaded In Folder", folderId: "f-4", status: "uploaded" }),
+      );
+      const result = recordingsRepo.findByUserId("user-1", {
+        folderId: "f-4",
+        status: "completed",
+      });
+      expect(result.total).toBe(1);
+      expect(result.items[0]?.title).toBe("Completed In Folder");
+    });
   });
 
   describe("update", () => {
