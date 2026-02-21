@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Loader2,
   AlertCircle,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -118,6 +119,8 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [aiModel, setAiModel] = useState("");
 
   // Editable fields
+  const [editTitle, setEditTitle] = useState("");
+  const [titleSaving, setTitleSaving] = useState(false);
   const [notes, setNotes] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
   const [recordedAtDate, setRecordedAtDate] = useState("");
@@ -139,6 +142,7 @@ function RecordingDetailContent({ id }: { id: string }) {
         setDetail(data);
         // Sync editable fields
         setAiSummary(data.aiSummary ?? null);
+        setEditTitle(data.title);
         setNotes(data.notes ?? "");
         setRecordedAtDate(
           data.recordedAt ? toDateInputValue(data.recordedAt) : "",
@@ -400,6 +404,17 @@ function RecordingDetailContent({ id }: { id: string }) {
     [id],
   );
 
+  // ── Title save on blur ──
+  const handleTitleSave = useCallback(async () => {
+    const trimmed = editTitle.trim();
+    if (!trimmed || trimmed === detail?.title) return;
+    setTitleSaving(true);
+    await updateRecording({ title: trimmed });
+    // Refresh detail to update header
+    await loadDetail();
+    setTitleSaving(false);
+  }, [editTitle, detail?.title, updateRecording, loadDetail]);
+
   // ── Notes save on blur ──
   const handleNotesSave = useCallback(async () => {
     if (notes === (detail?.notes ?? "")) return;
@@ -624,6 +639,7 @@ function RecordingDetailContent({ id }: { id: string }) {
                 src={audioUrl}
                 title={vm.metadata.title}
                 onTimeUpdate={handleTimeUpdate}
+                variant="embedded"
               />
             )}
             {/* File metadata */}
@@ -642,6 +658,10 @@ function RecordingDetailContent({ id }: { id: string }) {
         </div>
         <div className="lg:col-span-1">
           <EditableProperties
+            title={editTitle}
+            onTitleChange={setEditTitle}
+            onTitleSave={handleTitleSave}
+            titleSaving={titleSaving}
             notes={notes}
             onNotesChange={setNotes}
             onNotesSave={handleNotesSave}
@@ -1058,6 +1078,10 @@ function AiInfoCard({
 // ── Editable Properties ──
 
 function EditableProperties({
+  title,
+  onTitleChange,
+  onTitleSave,
+  titleSaving,
   notes,
   onNotesChange,
   onNotesSave,
@@ -1079,6 +1103,10 @@ function EditableProperties({
   onFolderOpenChange,
   onFolderChange,
 }: {
+  title: string;
+  onTitleChange: (v: string) => void;
+  onTitleSave: () => void;
+  titleSaving: boolean;
   notes: string;
   onNotesChange: (v: string) => void;
   onNotesSave: () => void;
@@ -1105,6 +1133,24 @@ function EditableProperties({
   return (
     <div className="rounded-xl border border-border bg-card p-4 h-full space-y-4">
       <p className="text-xs font-medium text-muted-foreground">Properties</p>
+
+      {/* Title */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
+          Title
+          {titleSaving && (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          )}
+        </label>
+        <Input
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          onBlur={onTitleSave}
+          placeholder="Recording title"
+          className="w-full text-sm"
+        />
+      </div>
 
       {/* Recorded date */}
       <div className="space-y-1.5">
