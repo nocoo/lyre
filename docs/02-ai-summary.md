@@ -13,8 +13,8 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
 | Provider | Base URL | Default Model |
 | -------- | -------- | ------------- |
 | Anthropic | `https://api.anthropic.com/v1` | `claude-sonnet-4-20250514` |
-| GLM (Zhipu) | `https://open.bigmodel.cn/api/anthropic` | `glm-4` |
-| MiniMax | `https://api.minimaxi.com/anthropic` | `MiniMax-M1` |
+| GLM (Zhipu) | `https://open.bigmodel.cn/api/anthropic/v1` | `glm-4` |
+| MiniMax | `https://api.minimaxi.com/anthropic/v1` | `MiniMax-M1` |
 | AIHubMix | `https://aihubmix.com/v1` | `claude-sonnet-4-20250514` |
 
 ## Settings Keys (per-user, stored in `settings` table)

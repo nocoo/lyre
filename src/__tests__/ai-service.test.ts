@@ -147,11 +147,11 @@ describe("resolveAiConfig", () => {
 
   test("resolves different providers correctly", () => {
     const glm = resolveAiConfig({ provider: "glm", apiKey: "k", model: "" });
-    expect(glm.baseURL).toBe("https://open.bigmodel.cn/api/anthropic");
+    expect(glm.baseURL).toBe("https://open.bigmodel.cn/api/anthropic/v1");
     expect(glm.sdkType).toBe("anthropic");
 
     const mm = resolveAiConfig({ provider: "minimax", apiKey: "k", model: "" });
-    expect(mm.baseURL).toBe("https://api.minimaxi.com/anthropic");
+    expect(mm.baseURL).toBe("https://api.minimaxi.com/anthropic/v1");
     expect(mm.sdkType).toBe("anthropic");
 
     const hub = resolveAiConfig({ provider: "aihubmix", apiKey: "k", model: "" });

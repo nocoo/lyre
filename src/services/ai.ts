@@ -37,7 +37,7 @@ export const AI_PROVIDERS: Record<Exclude<AiProvider, "custom">, AiProviderInfo>
   minimax: {
     id: "minimax",
     label: "MiniMax",
-    baseURL: "https://api.minimaxi.com/anthropic",
+    baseURL: "https://api.minimaxi.com/anthropic/v1",
     sdkType: "anthropic",
     models: ["MiniMax-M2.5", "MiniMax-M2.1"],
     defaultModel: "MiniMax-M2.5",
@@ -45,7 +45,7 @@ export const AI_PROVIDERS: Record<Exclude<AiProvider, "custom">, AiProviderInfo>
   glm: {
     id: "glm",
     label: "GLM (Zhipu)",
-    baseURL: "https://open.bigmodel.cn/api/anthropic",
+    baseURL: "https://open.bigmodel.cn/api/anthropic/v1",
     sdkType: "anthropic",
     models: ["glm-5", "glm-4.5"],
     defaultModel: "glm-5",
