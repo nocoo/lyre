@@ -105,8 +105,8 @@ fn build_tray_menu(
 
     let sep3 = PredefinedMenuItem::separator(handle)?;
 
-    // Settings
-    let settings_item = MenuItem::with_id(handle, "settings", "Settings...", true, None::<&str>)?;
+    // Open Lyre
+    let open_item = MenuItem::with_id(handle, "open_lyre", "Open Lyre", true, None::<&str>)?;
 
     let sep4 = PredefinedMenuItem::separator(handle)?;
 
@@ -124,7 +124,7 @@ fn build_tray_menu(
     items.push(Box::new(output_item));
     items.push(Box::new(open_folder));
     items.push(Box::new(sep3));
-    items.push(Box::new(settings_item));
+    items.push(Box::new(open_item));
     items.push(Box::new(sep4));
     items.push(Box::new(quit));
 
@@ -228,7 +228,7 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
             drop(s);
             let _ = std::process::Command::new("open").arg(&dir).spawn();
         }
-        "settings" => {
+        "open_lyre" => {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
