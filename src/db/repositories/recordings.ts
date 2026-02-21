@@ -148,6 +148,7 @@ export const recordingsRepo = {
       fileSize: number | null;
       folderId: string | null;
       notes: string | null;
+      aiSummary: string | null;
       recordedAt: number | null;
     }>,
   ): DbRecording | undefined {
@@ -163,6 +164,7 @@ export const recordingsRepo = {
     if (data.fileSize !== undefined) updateData.fileSize = data.fileSize;
     if (data.folderId !== undefined) updateData.folderId = data.folderId;
     if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.aiSummary !== undefined) updateData.aiSummary = data.aiSummary;
     if (data.recordedAt !== undefined) updateData.recordedAt = data.recordedAt;
 
     return db
