@@ -1,44 +1,56 @@
-//! Keychain-backed configuration for Lyre.
+//! File-backed configuration for Lyre.
 //!
-//! Stores `server_url` and `token` as generic passwords in the macOS Keychain
-//! under the service name `com.lyre.recorder`.
+//! Stores `server_url` and `token` as a JSON file in the app's data directory
+//! (`~/Library/Application Support/com.lyre.app/config.json`).
 
-use security_framework::passwords::{delete_generic_password, set_generic_password};
+use std::fs;
+use std::path::PathBuf;
 
-/// macOS Keychain error code for "item not found" (ERR_SEC_ITEM_NOT_FOUND = -25300).
-const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
+const APP_DIR_NAME: &str = "com.lyre.app";
+const CONFIG_FILE: &str = "config.json";
 
-const SERVICE: &str = "com.lyre.recorder";
-const ACCOUNT_SERVER_URL: &str = "server_url";
-const ACCOUNT_TOKEN: &str = "token";
-
-/// Configuration retrieved from the Keychain.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// Configuration for the Lyre app.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct AppConfig {
     pub server_url: String,
     pub token: String,
 }
 
-/// Read config from the macOS Keychain.
-/// Returns empty strings for values that are not yet stored.
+/// Returns the path to the config file.
+fn config_path() -> Result<PathBuf, String> {
+    let data_dir = dirs::data_dir().ok_or("could not determine app data directory")?;
+    Ok(data_dir.join(APP_DIR_NAME).join(CONFIG_FILE))
+}
+
+/// Read config from the JSON file.
+/// Returns default (empty) config if the file does not exist.
 pub fn load_config() -> Result<AppConfig, String> {
-    let server_url = get_keychain_value(ACCOUNT_SERVER_URL)?;
-    let token = get_keychain_value(ACCOUNT_TOKEN)?;
-    Ok(AppConfig {
-        server_url: server_url.unwrap_or_default(),
-        token: token.unwrap_or_default(),
-    })
+    let path = config_path()?;
+    if !path.exists() {
+        return Ok(AppConfig::default());
+    }
+    let content = fs::read_to_string(&path).map_err(|e| format!("failed to read config: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("failed to parse config: {e}"))
 }
 
-/// Save config to the macOS Keychain.
-/// Uses upsert semantics (creates if absent, updates if present).
+/// Save config to the JSON file.
+/// Creates the directory if it doesn't exist.
 pub fn save_config(server_url: &str, token: &str) -> Result<(), String> {
-    set_keychain_value(ACCOUNT_SERVER_URL, server_url)?;
-    set_keychain_value(ACCOUNT_TOKEN, token)?;
-    Ok(())
+    let path = config_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create config directory: {e}"))?;
+    }
+    let config = AppConfig {
+        server_url: server_url.to_string(),
+        token: token.to_string(),
+    };
+    let content = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("failed to serialize config: {e}"))?;
+    fs::write(&path, content).map_err(|e| format!("failed to write config: {e}"))
 }
 
-/// Returns true if both server_url and token are non-empty in the Keychain.
+/// Returns true if both server_url and token are non-empty.
 pub fn has_config() -> bool {
     match load_config() {
         Ok(c) => !c.server_url.is_empty() && !c.token.is_empty(),
@@ -46,94 +58,62 @@ pub fn has_config() -> bool {
     }
 }
 
-/// Delete all stored config from the Keychain.
+/// Delete the config file.
 #[allow(dead_code)]
 pub fn clear_config() -> Result<(), String> {
-    delete_keychain_value(ACCOUNT_SERVER_URL)?;
-    delete_keychain_value(ACCOUNT_TOKEN)?;
+    let path = config_path()?;
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| format!("failed to delete config: {e}"))?;
+    }
     Ok(())
-}
-
-// --- Internal helpers ---
-
-fn get_keychain_value(account: &str) -> Result<Option<String>, String> {
-    // Use the deprecated-but-simple free function; PasswordOptions is !Send
-    // and we may be called from async context. The free function is thread-safe.
-    #[allow(deprecated)]
-    match security_framework::passwords::get_generic_password(SERVICE, account) {
-        Ok(bytes) => Ok(Some(String::from_utf8_lossy(&bytes).into_owned())),
-        Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(None),
-        Err(e) => Err(format!("keychain read error ({account}): {e}")),
-    }
-}
-
-fn set_keychain_value(account: &str, value: &str) -> Result<(), String> {
-    set_generic_password(SERVICE, account, value.as_bytes())
-        .map_err(|e| format!("keychain write error ({account}): {e}"))
-}
-
-fn delete_keychain_value(account: &str) -> Result<(), String> {
-    match delete_generic_password(SERVICE, account) {
-        Ok(()) => Ok(()),
-        Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()), // already gone
-        Err(e) => Err(format!("keychain delete error ({account}): {e}")),
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
-    // Keychain tests use a test-specific service name to avoid polluting
-    // real app credentials. We test the internal helpers directly.
-
-    const TEST_SERVICE: &str = "com.lyre.recorder.test";
-    const TEST_ACCOUNT: &str = "test_value";
-
-    fn set_test(value: &str) -> Result<(), String> {
-        set_generic_password(TEST_SERVICE, TEST_ACCOUNT, value.as_bytes())
-            .map_err(|e| format!("{e}"))
-    }
-
-    fn get_test() -> Result<Option<String>, String> {
-        #[allow(deprecated)]
-        match security_framework::passwords::get_generic_password(TEST_SERVICE, TEST_ACCOUNT) {
-            Ok(bytes) => Ok(Some(String::from_utf8_lossy(&bytes).into_owned())),
-            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(None),
-            Err(e) => Err(format!("{e}")),
-        }
-    }
-
-    fn delete_test() -> Result<(), String> {
-        match delete_generic_password(TEST_SERVICE, TEST_ACCOUNT) {
-            Ok(()) => Ok(()),
-            Err(e) if e.code() == ERR_SEC_ITEM_NOT_FOUND => Ok(()),
-            Err(e) => Err(format!("{e}")),
+    /// Set up a temp directory as the data dir for isolated tests.
+    fn with_temp_config<F: FnOnce()>(f: F) {
+        let tmp = tempfile::tempdir().unwrap();
+        let original = env::var("HOME").ok();
+        // dirs::data_dir() on macOS uses $HOME/Library/Application Support
+        env::set_var("HOME", tmp.path());
+        f();
+        // Restore
+        if let Some(home) = original {
+            env::set_var("HOME", home);
         }
     }
 
     #[test]
-    fn test_keychain_roundtrip() {
-        // Clean up first
-        let _ = delete_test();
+    fn test_config_roundtrip() {
+        with_temp_config(|| {
+            // Initially empty
+            let config = load_config().unwrap();
+            assert!(config.server_url.is_empty());
+            assert!(config.token.is_empty());
+            assert!(!has_config());
 
-        // Initially absent
-        assert_eq!(get_test().unwrap(), None);
+            // Save
+            save_config("https://lyre.example.com", "lyre_abc123").unwrap();
+            let config = load_config().unwrap();
+            assert_eq!(config.server_url, "https://lyre.example.com");
+            assert_eq!(config.token, "lyre_abc123");
+            assert!(has_config());
 
-        // Write
-        set_test("hello-lyre").unwrap();
-        assert_eq!(get_test().unwrap(), Some("hello-lyre".to_string()));
+            // Overwrite
+            save_config("https://lyre.dev.hexly.ai", "lyre_xyz").unwrap();
+            let config = load_config().unwrap();
+            assert_eq!(config.server_url, "https://lyre.dev.hexly.ai");
+            assert_eq!(config.token, "lyre_xyz");
 
-        // Upsert (overwrite)
-        set_test("updated-value").unwrap();
-        assert_eq!(get_test().unwrap(), Some("updated-value".to_string()));
-
-        // Delete
-        delete_test().unwrap();
-        assert_eq!(get_test().unwrap(), None);
-
-        // Double delete is OK
-        delete_test().unwrap();
+            // Clear
+            clear_config().unwrap();
+            let config = load_config().unwrap();
+            assert!(config.server_url.is_empty());
+            assert!(!has_config());
+        });
     }
 
     #[test]
