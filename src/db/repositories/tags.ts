@@ -67,7 +67,7 @@ export const tagsRepo = {
       .from(recordingTags)
       .where(eq(recordingTags.recordingId, recordingId))
       .all();
-    return rows.map((r) => r.tagId);
+    return rows.map((r: { tagId: string }) => r.tagId);
   },
 
   /** Get all tags for a recording (resolved) */
