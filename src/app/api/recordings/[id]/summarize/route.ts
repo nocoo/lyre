@@ -1,8 +1,11 @@
 /**
  * POST /api/recordings/[id]/summarize — Generate AI summary from transcription.
  *
- * Reads the transcription full text, calls the configured LLM provider,
- * and stores the result in recordings.ai_summary.
+ * Returns a streaming text response so the client can display the summary
+ * as it is being generated. On completion, saves the final summary to
+ * recordings.ai_summary in the database.
+ *
+ * Error responses (4xx) are returned as JSON before streaming starts.
  */
 
 import { NextResponse } from "next/server";
@@ -18,7 +21,7 @@ import {
   buildSummaryPrompt,
   type AiProvider,
 } from "@/services/ai";
-import { generateText } from "ai";
+import { streamText } from "ai";
 
 export const dynamic = "force-dynamic";
 
@@ -73,18 +76,23 @@ export async function POST(_request: Request, context: RouteContext) {
     const client = createAiClient(config);
     const prompt = buildSummaryPrompt(transcription.fullText);
 
-    const { text } = await generateText({
+    const result = streamText({
       model: client(config.model),
       prompt,
       maxOutputTokens: 2048,
+      onFinish({ text }) {
+        // Save the completed summary to the database
+        const summary = text.trim();
+        if (summary) {
+          recordingsRepo.update(id, { aiSummary: summary });
+        }
+      },
     });
 
-    const summary = text.trim();
+    // Ensure onFinish fires even if client disconnects
+    result.consumeStream();
 
-    // Save to database
-    recordingsRepo.update(id, { aiSummary: summary });
-
-    return NextResponse.json({ summary });
+    return result.toTextStreamResponse();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[summarize] Failed for recording ${id}:`, message);

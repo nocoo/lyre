@@ -319,23 +319,44 @@ function RecordingDetailContent({ id }: { id: string }) {
     }
   }, [id]);
 
-  // ── AI Summarize handler ──
+  // ── AI Summarize handler (streaming) ──
   const handleSummarize = useCallback(async () => {
     setSummarizing(true);
     setSummarizeError(null);
+    setAiSummary("");
     try {
       const res = await fetch(`/api/recordings/${id}/summarize`, {
         method: "POST",
       });
-      const data = (await res.json()) as
-        | { summary: string }
-        | { error: string };
+
+      // Non-streaming error responses come back as JSON
       if (!res.ok) {
-        setSummarizeError("error" in data ? data.error : "Unknown error");
+        const data = (await res.json()) as { error: string };
+        setSummarizeError(data.error ?? "Unknown error");
         return;
       }
-      if ("summary" in data) {
-        setAiSummary(data.summary);
+
+      // Stream the text response
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setSummarizeError("Streaming not supported by browser.");
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setAiSummary(accumulated);
+      }
+
+      // Final decode flush
+      accumulated += decoder.decode();
+      if (accumulated) {
+        setAiSummary(accumulated);
       }
     } catch {
       setSummarizeError("Network error — could not reach the server.");
@@ -908,8 +929,8 @@ function AiSummaryCard({
         )}
       </div>
 
-      {/* Loading state */}
-      {loading && (
+      {/* Loading indicator (no text yet) */}
+      {loading && !summary && (
         <div className="flex items-center gap-2 py-3 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span className="text-sm">Generating summary...</span>
@@ -927,11 +948,19 @@ function AiSummaryCard({
         </div>
       )}
 
-      {/* Summary content */}
-      {summary && !loading && (
-        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-          {summary}
-        </p>
+      {/* Summary content (shown during streaming and after completion) */}
+      {summary && (
+        <div>
+          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+            {summary}
+          </p>
+          {loading && (
+            <div className="flex items-center gap-1.5 mt-2 text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="text-xs">Generating...</span>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Empty state (no summary, not loading, no error) */}
