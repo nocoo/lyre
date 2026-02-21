@@ -38,6 +38,38 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * Normalize audio MIME sub-type to a canonical format name.
+ * e.g. "mpeg" → "mp3", "x-m4a" → "m4a", "mp4" → "m4a", "x-wav" → "wav".
+ */
+export function normalizeAudioFormat(mimeType: string): string {
+  const sub = mimeType.split("/")[1] ?? "unknown";
+  const map: Record<string, string> = {
+    mpeg: "mp3",
+    mp3: "mp3",
+    "x-wav": "wav",
+    wav: "wav",
+    "x-m4a": "m4a",
+    mp4: "m4a",
+    aac: "aac",
+    ogg: "ogg",
+    flac: "flac",
+    webm: "webm",
+  };
+  return map[sub] ?? sub;
+}
+
+/** Safely parse a JSON response, returning null if the body is empty or not JSON. */
+async function safeJson<T>(res: Response): Promise<T | null> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 /** Extract duration in seconds from an audio File using the Audio element. */
 function getAudioDuration(file: File): Promise<number | null> {
   return new Promise((resolve) => {
@@ -165,15 +197,19 @@ export function UploadDialog({
       });
 
       if (!presignRes.ok) {
-        const err = (await presignRes.json()) as { error?: string };
-        throw new Error(err.error ?? "Failed to get upload URL");
+        const err = await safeJson<{ error?: string }>(presignRes);
+        throw new Error(err?.error ?? `Failed to get upload URL (HTTP ${presignRes.status})`);
       }
 
-      const { uploadUrl, ossKey, recordingId } = (await presignRes.json()) as {
+      const presignData = await safeJson<{
         uploadUrl: string;
         ossKey: string;
         recordingId: string;
-      };
+      }>(presignRes);
+      if (!presignData?.uploadUrl || !presignData.ossKey || !presignData.recordingId) {
+        throw new Error("Invalid presign response from server");
+      }
+      const { uploadUrl, ossKey, recordingId } = presignData;
 
       // Step 2: Upload to OSS via XMLHttpRequest (for progress tracking)
       await new Promise<void>((resolve, reject) => {
@@ -198,9 +234,10 @@ export function UploadDialog({
           }
         });
 
-        xhr.addEventListener("error", () =>
-          reject(new Error("Network error during upload")),
-        );
+        xhr.addEventListener("error", () => {
+          // XHR error events carry no detail — likely CORS or network failure
+          reject(new Error("Network error during upload. This may be a CORS issue with the storage provider."));
+        });
         xhr.addEventListener("abort", () =>
           reject(new Error("Upload cancelled")),
         );
@@ -223,15 +260,15 @@ export function UploadDialog({
           fileName: file.name,
           fileSize: file.size,
           duration,
-          format: file.type.split("/")[1] ?? "unknown",
+          format: normalizeAudioFormat(file.type),
           ossKey,
           recordedAt: file.lastModified || null,
         }),
       });
 
       if (!createRes.ok) {
-        const err = (await createRes.json()) as { error?: string };
-        throw new Error(err.error ?? "Failed to create recording");
+        const err = await safeJson<{ error?: string }>(createRes);
+        throw new Error(err?.error ?? `Failed to create recording (HTTP ${createRes.status})`);
       }
 
       setState("done");

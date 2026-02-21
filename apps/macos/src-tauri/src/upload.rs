@@ -46,10 +46,12 @@ pub struct UploadResult {
     pub oss_key: String,
 }
 
-/// Upload a local audio file (MP3 or WAV) to the Lyre web app.
+/// Upload a local audio file to the Lyre web app.
 ///
 /// Reads config (server_url, token) from the config file, then performs
 /// the 3-step upload: presign → PUT to OSS → create recording record.
+///
+/// Supported formats: MP3, WAV, M4A, AAC, OGG, FLAC, WebM.
 pub async fn upload_recording(file_path: &str) -> Result<UploadResult, String> {
     let config = crate::config::load_config()?;
     if config.server_url.is_empty() || config.token.is_empty() {
@@ -242,7 +244,7 @@ async fn create_recording(
 }
 
 /// Detect audio format from file extension.
-/// Returns (content_type, format) e.g. ("audio/mpeg", "mp3") or ("audio/wav", "wav").
+/// Returns (content_type, format) e.g. ("audio/mpeg", "mp3") or ("audio/mp4", "m4a").
 fn detect_audio_format(path: &Path) -> Result<(String, String), String> {
     let ext = path
         .extension()
@@ -253,6 +255,11 @@ fn detect_audio_format(path: &Path) -> Result<(String, String), String> {
     match ext.as_str() {
         "mp3" => Ok(("audio/mpeg".to_string(), "mp3".to_string())),
         "wav" => Ok(("audio/wav".to_string(), "wav".to_string())),
+        "m4a" => Ok(("audio/mp4".to_string(), "m4a".to_string())),
+        "aac" => Ok(("audio/aac".to_string(), "aac".to_string())),
+        "ogg" | "oga" => Ok(("audio/ogg".to_string(), "ogg".to_string())),
+        "flac" => Ok(("audio/flac".to_string(), "flac".to_string())),
+        "webm" => Ok(("audio/webm".to_string(), "webm".to_string())),
         _ => Err(format!("unsupported audio format: .{ext}")),
     }
 }
@@ -356,9 +363,44 @@ mod tests {
 
     #[test]
     fn test_detect_audio_format_unsupported() {
-        let result = detect_audio_format(Path::new("test.ogg"));
+        let result = detect_audio_format(Path::new("test.xyz"));
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unsupported"));
+    }
+
+    #[test]
+    fn test_detect_audio_format_m4a() {
+        let (content_type, format) = detect_audio_format(Path::new("test.m4a")).unwrap();
+        assert_eq!(content_type, "audio/mp4");
+        assert_eq!(format, "m4a");
+    }
+
+    #[test]
+    fn test_detect_audio_format_aac() {
+        let (content_type, format) = detect_audio_format(Path::new("test.aac")).unwrap();
+        assert_eq!(content_type, "audio/aac");
+        assert_eq!(format, "aac");
+    }
+
+    #[test]
+    fn test_detect_audio_format_ogg() {
+        let (content_type, format) = detect_audio_format(Path::new("test.ogg")).unwrap();
+        assert_eq!(content_type, "audio/ogg");
+        assert_eq!(format, "ogg");
+    }
+
+    #[test]
+    fn test_detect_audio_format_flac() {
+        let (content_type, format) = detect_audio_format(Path::new("test.flac")).unwrap();
+        assert_eq!(content_type, "audio/flac");
+        assert_eq!(format, "flac");
+    }
+
+    #[test]
+    fn test_detect_audio_format_webm() {
+        let (content_type, format) = detect_audio_format(Path::new("test.webm")).unwrap();
+        assert_eq!(content_type, "audio/webm");
+        assert_eq!(format, "webm");
     }
 
     #[test]
