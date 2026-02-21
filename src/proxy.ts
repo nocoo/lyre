@@ -2,8 +2,8 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Skip auth in E2E test environment
-const SKIP_AUTH = process.env.E2E_SKIP_AUTH === "true";
+// Skip auth in E2E/Playwright test environment
+const SKIP_AUTH = process.env.PLAYWRIGHT === "1";
 
 // Build redirect URL respecting reverse proxy headers
 function buildRedirectUrl(req: NextRequest, pathname: string): URL {

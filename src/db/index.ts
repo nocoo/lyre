@@ -189,7 +189,7 @@ function getDb(): DbInstance {
 // ── Reset (for E2E tests) ──
 
 export function resetDb(): void {
-  if (!isTestEnv() && process.env.E2E_SKIP_AUTH !== "true") {
+  if (!isTestEnv() && process.env.PLAYWRIGHT !== "1") {
     throw new Error("resetDb() can only be called in test environments");
   }
 

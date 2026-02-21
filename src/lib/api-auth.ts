@@ -16,9 +16,9 @@ import type { DbUser } from "@/db/schema";
  * @returns The DB user, or null if not authenticated.
  */
 export async function getCurrentUser(): Promise<DbUser | null> {
-  // In E2E test mode, skip auth and use a test user
+  // In E2E/Playwright mode, skip auth and use a test user
   if (
-    process.env.E2E_SKIP_AUTH === "true" &&
+    process.env.PLAYWRIGHT === "1" &&
     process.env.NODE_ENV !== "production"
   ) {
     return usersRepo.upsertByEmail({
