@@ -31,6 +31,10 @@ async function main() {
       "src/__tests__/asr-service.test.ts",
       "src/__tests__/device-tokens-repo.test.ts",
       "src/__tests__/api-auth.test.ts",
+      "src/__tests__/folders-repo.test.ts",
+      "src/__tests__/tags-repo.test.ts",
+      "src/__tests__/ai-service.test.ts",
+      "src/__tests__/sidebar-nav.test.ts",
       "--coverage",
     ],
     {
