@@ -113,19 +113,29 @@ Some E2E tests make **real API calls** to an LLM provider. These require credent
 
 ## Version Management
 
-Version is managed in **one place**: `apps/web/package.json` → `version` field.
+Version is managed from the **root `package.json`** as the single source of truth, kept in sync across all sub-projects:
+
+| Location | File | Field |
+|---|---|---|
+| Root (source of truth) | `package.json` | `version` |
+| Web app | `apps/web/package.json` | `version` |
+| Web API fallback | `apps/web/src/app/api/live/route.ts` | hardcoded string |
+| macOS Rust crate | `apps/macos/src-tauri/Cargo.toml` | `version` |
+| macOS Tauri config | `apps/macos/src-tauri/tauri.conf.json` | `version` |
+| macOS frontend | `apps/macos/frontend/package.json` | `version` |
 
 - `src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION`
 - Sidebar displays the version badge (in `src/components/layout/sidebar.tsx`)
 - `/api/live` endpoint returns the version in its JSON response
+- macOS About page reads the version from `tauri.conf.json` via `getVersion()`
 
 ### How to bump version
 
-1. Update `version` in `apps/web/package.json`
-2. Update the fallback string in `src/app/api/live/route.ts` to match
-3. Create a git tag: `git tag v<version>`
-4. Push tag: `git push origin v<version>`
-5. Create GitHub release: `gh release create v<version> --generate-notes`
+1. Update `version` in **all 5 locations** listed above (root, web, web fallback, Cargo.toml, tauri.conf.json, macos frontend)
+2. Create a git tag: `git tag v<version>`
+3. Push tag: `git push origin v<version>`
+4. Build macOS app: `cargo tauri build` (from `apps/macos/src-tauri/`)
+5. Create GitHub release with macOS `.dmg`: `gh release create v<version> --generate-notes path/to/Lyre.dmg`
 
 ## Project Structure (apps/web/src/)
 

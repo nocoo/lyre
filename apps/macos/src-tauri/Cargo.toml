@@ -1,6 +1,6 @@
 [package]
 name = "lyre-recorder"
-version = "0.1.0"
+version = "1.3.0"
 description = "Lyre audio recorder — macOS menu bar app"
 authors = ["nocoo"]
 license = "MIT"

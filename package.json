@@ -1,5 +1,6 @@
 {
   "name": "lyre",
+  "version": "1.3.0",
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
