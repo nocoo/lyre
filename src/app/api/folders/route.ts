@@ -34,11 +34,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const trimmedIcon = body.icon?.trim();
   const folder = foldersRepo.create({
     id: crypto.randomUUID(),
     userId: user.id,
     name: body.name.trim(),
-    icon: body.icon?.trim() || undefined,
+    ...(trimmedIcon ? { icon: trimmedIcon } : {}),
   });
 
   return NextResponse.json(folder, { status: 201 });
