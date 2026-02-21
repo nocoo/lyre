@@ -775,3 +775,102 @@ describe("GET /api/search", () => {
     expect(body.results.some((r) => r.title.includes("Podcast"))).toBe(true);
   });
 });
+
+describe("DELETE /api/recordings/batch", () => {
+  test("deletes multiple recordings in a single request", async () => {
+    // Create throwaway recordings
+    const rec1 = await createRecording({
+      title: "Batch Delete 1",
+      fileName: "batch-del-1.mp3",
+      ossKey: "uploads/e2e/batch-del-1.mp3",
+    });
+    const rec2 = await createRecording({
+      title: "Batch Delete 2",
+      fileName: "batch-del-2.mp3",
+      ossKey: "uploads/e2e/batch-del-2.mp3",
+    });
+
+    const res = await fetch(`${BASE_URL}/api/recordings/batch`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [rec1.id, rec2.id] }),
+    });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { deleted: number };
+    expect(body.deleted).toBe(2);
+
+    // Verify both are gone
+    const get1 = await fetch(`${BASE_URL}/api/recordings/${rec1.id}`);
+    expect(get1.status).toBe(404);
+
+    const get2 = await fetch(`${BASE_URL}/api/recordings/${rec2.id}`);
+    expect(get2.status).toBe(404);
+  });
+
+  test("returns 400 for empty ids array", async () => {
+    const res = await fetch(`${BASE_URL}/api/recordings/batch`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [] }),
+    });
+    expect(res.status).toBe(400);
+
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBeTruthy();
+  });
+
+  test("returns 400 for missing ids field", async () => {
+    const res = await fetch(`${BASE_URL}/api/recordings/batch`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("returns 400 when ids exceed max batch size (100)", async () => {
+    const tooManyIds = Array.from({ length: 101 }, (_, i) => `fake-id-${i}`);
+    const res = await fetch(`${BASE_URL}/api/recordings/batch`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: tooManyIds }),
+    });
+    expect(res.status).toBe(400);
+
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("100");
+  });
+
+  test("silently skips non-existent ids (no error)", async () => {
+    const rec = await createRecording({
+      title: "Batch Partial",
+      fileName: "batch-partial.mp3",
+      ossKey: "uploads/e2e/batch-partial.mp3",
+    });
+
+    const res = await fetch(`${BASE_URL}/api/recordings/batch`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [rec.id, "nonexistent-id-xyz"] }),
+    });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { deleted: number };
+    // Only the real recording counts as deleted
+    expect(body.deleted).toBe(1);
+
+    // Verify the real one is gone
+    const getRes = await fetch(`${BASE_URL}/api/recordings/${rec.id}`);
+    expect(getRes.status).toBe(404);
+  });
+
+  test("returns 400 for non-array ids", async () => {
+    const res = await fetch(`${BASE_URL}/api/recordings/batch`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: "not-an-array" }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
