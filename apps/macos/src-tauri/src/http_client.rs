@@ -67,7 +67,7 @@ pub async fn test_connection(server_url: &str, token: &str) -> Result<(), String
 }
 
 /// Normalize a server URL: ensure no trailing slash, add https:// if missing.
-fn normalize_url(url: &str) -> String {
+pub fn normalize_url(url: &str) -> String {
     let url = url.trim().trim_end_matches('/');
     if !url.starts_with("http://") && !url.starts_with("https://") {
         format!("https://{url}")

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start --port 7025",
     "lint": "eslint",
-    "test": "bun test src/__tests__/utils.test.ts src/__tests__/proxy-matcher.test.ts src/__tests__/theme.test.ts src/__tests__/recordings-list-vm.test.ts src/__tests__/recording-detail-vm.test.ts src/__tests__/audio-player-vm.test.ts src/__tests__/users-repo.test.ts src/__tests__/recordings-repo.test.ts src/__tests__/jobs-repo.test.ts src/__tests__/transcriptions-repo.test.ts src/__tests__/settings-repo.test.ts src/__tests__/oss-service.test.ts src/__tests__/db-utils.test.ts src/__tests__/asr-service.test.ts src/__tests__/folders-repo.test.ts src/__tests__/tags-repo.test.ts src/__tests__/ai-service.test.ts src/__tests__/device-tokens-repo.test.ts src/__tests__/api-auth.test.ts",
+    "test": "bun test src/__tests__/utils.test.ts src/__tests__/proxy-matcher.test.ts src/__tests__/theme.test.ts src/__tests__/recordings-list-vm.test.ts src/__tests__/recording-detail-vm.test.ts src/__tests__/audio-player-vm.test.ts src/__tests__/users-repo.test.ts src/__tests__/recordings-repo.test.ts src/__tests__/jobs-repo.test.ts src/__tests__/transcriptions-repo.test.ts src/__tests__/settings-repo.test.ts src/__tests__/oss-service.test.ts src/__tests__/db-utils.test.ts src/__tests__/asr-service.test.ts src/__tests__/folders-repo.test.ts src/__tests__/tags-repo.test.ts src/__tests__/ai-service.test.ts src/__tests__/device-tokens-repo.test.ts src/__tests__/api-auth.test.ts src/__tests__/sidebar-nav.test.ts",
     "test:coverage": "bun run scripts/check-coverage.ts",
     "test:e2e": "bun run scripts/run-e2e.ts",
     "db:generate": "drizzle-kit generate",
