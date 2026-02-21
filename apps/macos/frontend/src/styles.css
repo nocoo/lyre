@@ -319,3 +319,23 @@ button:disabled {
   gap: 2px;
   flex-shrink: 0;
 }
+
+/* Upload states */
+.btn-icon.btn-success {
+  color: var(--success);
+}
+
+.btn-icon.btn-success:hover:not(:disabled) {
+  background: rgba(52, 199, 89, 0.1);
+  color: var(--success);
+}
+
+.upload-error {
+  font-size: 10px;
+  color: var(--danger);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}

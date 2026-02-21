@@ -10,12 +10,27 @@ interface RecordingInfo {
   created_at: string;
 }
 
+interface UploadResult {
+  recordingId: string;
+  ossKey: string;
+}
+
+type UploadStatus = "idle" | "uploading" | "success" | "error";
+
+interface UploadState {
+  status: UploadStatus;
+  error?: string;
+}
+
 export function RecordingsPage() {
   const [recordings, setRecordings] = useState<RecordingInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
+  const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>(
+    {},
+  );
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const loadRecordings = useCallback(async () => {
@@ -94,6 +109,38 @@ export function RecordingsPage() {
     }
   }, []);
 
+  const handleUpload = useCallback(async (rec: RecordingInfo) => {
+    setUploadStates((prev) => ({
+      ...prev,
+      [rec.path]: { status: "uploading" },
+    }));
+
+    try {
+      await invoke<UploadResult>("upload_recording", {
+        filePath: rec.path,
+      });
+      setUploadStates((prev) => ({
+        ...prev,
+        [rec.path]: { status: "success" },
+      }));
+      // Auto-clear success after 3 seconds
+      setTimeout(() => {
+        setUploadStates((prev) => {
+          const next = { ...prev };
+          if (next[rec.path]?.status === "success") {
+            next[rec.path] = { status: "idle" };
+          }
+          return next;
+        });
+      }, 3000);
+    } catch (err) {
+      setUploadStates((prev) => ({
+        ...prev,
+        [rec.path]: { status: "error", error: String(err) },
+      }));
+    }
+  }, []);
+
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
@@ -130,44 +177,70 @@ export function RecordingsPage() {
           </p>
         ) : (
           <div className="recordings-list">
-            {recordings.map((rec) => (
-              <div key={rec.path} className="recording-item">
-                <div className="recording-info">
-                  <span className="recording-name">{rec.name}</span>
-                  <span className="recording-meta">
-                    {formatSize(rec.size)}
-                    {rec.duration_secs != null &&
-                      ` · ${formatDuration(rec.duration_secs)}`}
-                    {" · "}
-                    {formatDate(rec.created_at)}
-                  </span>
+            {recordings.map((rec) => {
+              const upload = uploadStates[rec.path];
+              const isUploading = upload?.status === "uploading";
+              const isUploaded = upload?.status === "success";
+              const uploadError = upload?.status === "error";
+
+              return (
+                <div key={rec.path} className="recording-item">
+                  <div className="recording-info">
+                    <span className="recording-name">{rec.name}</span>
+                    <span className="recording-meta">
+                      {formatSize(rec.size)}
+                      {rec.duration_secs != null &&
+                        ` · ${formatDuration(rec.duration_secs)}`}
+                      {" · "}
+                      {formatDate(rec.created_at)}
+                    </span>
+                    {uploadError && (
+                      <span className="upload-error" title={upload.error}>
+                        Upload failed: {upload.error}
+                      </span>
+                    )}
+                  </div>
+                  <div className="recording-actions">
+                    <button
+                      className="btn-icon"
+                      onClick={() => handlePlay(rec)}
+                      title={playingPath === rec.path ? "Stop" : "Play"}
+                    >
+                      {playingPath === rec.path ? "⏹" : "▶"}
+                    </button>
+                    <button
+                      className={`btn-icon ${isUploaded ? "btn-success" : ""}`}
+                      onClick={() => handleUpload(rec)}
+                      disabled={isUploading}
+                      title={
+                        isUploading
+                          ? "Uploading..."
+                          : isUploaded
+                            ? "Uploaded"
+                            : "Upload to Lyre"
+                      }
+                    >
+                      {isUploading ? "⏳" : isUploaded ? "✓" : "⬆"}
+                    </button>
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleReveal(rec)}
+                      title="Show in Finder"
+                    >
+                      📂
+                    </button>
+                    <button
+                      className="btn-icon btn-danger"
+                      onClick={() => handleDelete(rec)}
+                      disabled={deletingPath === rec.path}
+                      title="Delete"
+                    >
+                      🗑
+                    </button>
+                  </div>
                 </div>
-                <div className="recording-actions">
-                  <button
-                    className="btn-icon"
-                    onClick={() => handlePlay(rec)}
-                    title={playingPath === rec.path ? "Stop" : "Play"}
-                  >
-                    {playingPath === rec.path ? "⏹" : "▶"}
-                  </button>
-                  <button
-                    className="btn-icon"
-                    onClick={() => handleReveal(rec)}
-                    title="Show in Finder"
-                  >
-                    📂
-                  </button>
-                  <button
-                    className="btn-icon btn-danger"
-                    onClick={() => handleDelete(rec)}
-                    disabled={deletingPath === rec.path}
-                    title="Delete"
-                  >
-                    🗑
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

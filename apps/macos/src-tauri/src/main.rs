@@ -4,6 +4,7 @@ mod http_client;
 mod recorder;
 mod recordings;
 mod tray;
+mod upload;
 
 use tauri::Manager;
 
@@ -53,6 +54,12 @@ fn reveal_recording(file_path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Tauri command: upload a local recording to the Lyre web app.
+#[tauri::command]
+async fn upload_recording(file_path: String) -> Result<upload::UploadResult, String> {
+    upload::upload_recording(&file_path).await
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -64,6 +71,7 @@ fn main() {
             list_recordings,
             delete_recording,
             reveal_recording,
+            upload_recording,
         ])
         .setup(|app| {
             tray::setup_tray(app)?;
