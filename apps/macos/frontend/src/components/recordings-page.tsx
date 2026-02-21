@@ -69,6 +69,13 @@ export function RecordingsPage() {
     };
   }, [loadRecordings]);
 
+  // Refresh when window gains focus (e.g. after being shown via tray)
+  useEffect(() => {
+    const handleFocus = () => loadRecordings();
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [loadRecordings]);
+
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
