@@ -108,8 +108,6 @@ fn build_tray_menu(
     // Open Lyre
     let open_item = MenuItem::with_id(handle, "open_lyre", "Open Lyre", true, None::<&str>)?;
 
-    let sep4 = PredefinedMenuItem::separator(handle)?;
-
     let quit = MenuItem::with_id(handle, "quit", "Quit Lyre Recorder", true, None::<&str>)?;
 
     // Build the items list dynamically since device count varies.
@@ -125,7 +123,6 @@ fn build_tray_menu(
     items.push(Box::new(open_folder));
     items.push(Box::new(sep3));
     items.push(Box::new(open_item));
-    items.push(Box::new(sep4));
     items.push(Box::new(quit));
 
     let item_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> =
