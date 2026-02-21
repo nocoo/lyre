@@ -3,7 +3,6 @@
 import { use, useRef, useState, useCallback, useEffect } from "react";
 import {
   ArrowLeft,
-  Bot,
   Calendar,
   Check,
   ChevronsUpDown,
@@ -616,6 +615,9 @@ function RecordingDetailContent({ id }: { id: string }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="rounded-xl border border-border bg-card p-4 h-full space-y-4">
+            <p className="text-xs font-medium text-muted-foreground">
+              Playback &amp; File Info
+            </p>
             {/* Audio player */}
             {audioUrl && (
               <AudioPlayer
@@ -887,7 +889,7 @@ function JobInfoCard({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 h-full">
-      <p className="mb-2 text-xs font-medium text-muted-foreground">
+      <p className="mb-3 text-xs font-medium text-muted-foreground">
         Job Details
       </p>
       <div className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -935,13 +937,10 @@ function AiSummaryCard({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 h-full">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <Bot className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-          <p className="text-xs font-medium text-muted-foreground">
-            AI Summary
-          </p>
-        </div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-medium text-muted-foreground">
+          AI Summary
+        </p>
 
         {/* Generate / Regenerate button */}
         {!loading && (
