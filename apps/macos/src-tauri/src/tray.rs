@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{App, AppHandle, Wry};
+use tauri::{App, AppHandle, Manager, Wry};
 
 use crate::audio::AudioDeviceManager;
 use crate::recorder::{Recorder, RecorderConfig, RecorderState};
@@ -105,6 +105,11 @@ fn build_tray_menu(
 
     let sep3 = PredefinedMenuItem::separator(handle)?;
 
+    // Settings
+    let settings_item = MenuItem::with_id(handle, "settings", "Settings...", true, None::<&str>)?;
+
+    let sep4 = PredefinedMenuItem::separator(handle)?;
+
     let quit = MenuItem::with_id(handle, "quit", "Quit Lyre Recorder", true, None::<&str>)?;
 
     // Build the items list dynamically since device count varies.
@@ -119,6 +124,8 @@ fn build_tray_menu(
     items.push(Box::new(output_item));
     items.push(Box::new(open_folder));
     items.push(Box::new(sep3));
+    items.push(Box::new(settings_item));
+    items.push(Box::new(sep4));
     items.push(Box::new(quit));
 
     let item_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> =
@@ -220,6 +227,12 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
             let dir = s.recorder.config.output_dir.clone();
             drop(s);
             let _ = std::process::Command::new("open").arg(&dir).spawn();
+        }
+        "settings" => {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
         }
         "quit" => {
             let mut s = state.lock().unwrap();

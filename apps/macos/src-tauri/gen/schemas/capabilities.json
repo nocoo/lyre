@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Capability for the Lyre Recorder tray app","local":true,"permissions":["core:default","shell:allow-open","dialog:default"]}}
+{"default":{"identifier":"default","description":"Capability for the Lyre Recorder app","local":true,"windows":["main"],"permissions":["core:default","shell:allow-open","dialog:default"]}}
