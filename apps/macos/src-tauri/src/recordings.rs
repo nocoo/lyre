@@ -1,7 +1,7 @@
 //! Local recording file management.
 //!
-//! Scans the output directory for `.wav` files and provides metadata
-//! for the frontend recordings list.
+//! Scans the output directory for audio files (.mp3, .wav) and provides
+//! metadata for the frontend recordings list.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,7 +16,7 @@ use crate::recorder::RecorderConfig;
 pub struct RecordingInfo {
     /// Full path to the file.
     pub path: String,
-    /// File name only (e.g. "recording-20260221-143052.wav").
+    /// File name only (e.g. "recording-20260221-143052.mp3").
     pub name: String,
     /// File size in bytes.
     pub size: u64,
@@ -26,7 +26,7 @@ pub struct RecordingInfo {
     pub created_at: String,
 }
 
-/// List all `.wav` files in the output directory, sorted newest first.
+/// List all recording files (.mp3, .wav) in the output directory, sorted newest first.
 pub fn list_recordings(output_dir: &Path) -> Result<Vec<RecordingInfo>, String> {
     if !output_dir.exists() {
         return Ok(Vec::new());
@@ -43,11 +43,11 @@ pub fn list_recordings(output_dir: &Path) -> Result<Vec<RecordingInfo>, String> 
         };
         let path = entry.path();
 
-        // Only include .wav files
-        let is_wav = path
+        // Only include audio files (.mp3, .wav)
+        let is_audio = path
             .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("wav"));
-        if !is_wav || !path.is_file() {
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("mp3") || ext.eq_ignore_ascii_case("wav"));
+        if !is_audio || !path.is_file() {
             continue;
         }
 
@@ -63,8 +63,8 @@ pub fn list_recordings(output_dir: &Path) -> Result<Vec<RecordingInfo>, String> 
 
         let size = metadata.len();
 
-        // Try to read WAV duration from header
-        let duration_secs = wav_duration(&path);
+        // Try to read duration from file header
+        let duration_secs = audio_duration(&path);
 
         // Use modification time as "created at" (more reliable across filesystems)
         let created_at = metadata
@@ -114,6 +114,17 @@ pub fn default_output_dir() -> PathBuf {
 
 // --- Internal helpers ---
 
+/// Read audio duration from file.
+/// Supports WAV (via hound header) and MP3 (estimated from file size).
+fn audio_duration(path: &Path) -> Option<f64> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    match ext.as_str() {
+        "wav" => wav_duration(path),
+        "mp3" => mp3_duration_estimate(path),
+        _ => None,
+    }
+}
+
 /// Read WAV duration from file header using hound.
 fn wav_duration(path: &Path) -> Option<f64> {
     let reader = hound::WavReader::open(path).ok()?;
@@ -123,6 +134,18 @@ fn wav_duration(path: &Path) -> Option<f64> {
         return None;
     }
     Some(num_samples as f64 / spec.sample_rate as f64)
+}
+
+/// Estimate MP3 duration from file size.
+/// Assumes CBR encoding. The recorder uses 128 kbps by default.
+fn mp3_duration_estimate(path: &Path) -> Option<f64> {
+    let size = fs::metadata(path).ok()?.len();
+    if size == 0 {
+        return None;
+    }
+    // 128 kbps = 16000 bytes/sec
+    let bitrate_bytes_per_sec = 16000.0_f64;
+    Some(size as f64 / bitrate_bytes_per_sec)
 }
 
 /// Convert SystemTime to ISO 8601 string.
@@ -155,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn test_list_recordings_ignores_non_wav() {
+    fn test_list_recordings_ignores_non_audio() {
         let tmp = tempfile::tempdir().unwrap();
         // Create a .txt file — should be ignored
         let txt_path = tmp.path().join("notes.txt");
@@ -163,10 +186,12 @@ mod tests {
         // Create a .wav file — should be included
         let wav_path = tmp.path().join("recording.wav");
         create_test_wav(&wav_path);
+        // Create a .mp3 file — should be included
+        let mp3_path = tmp.path().join("recording.mp3");
+        fs::write(&mp3_path, vec![0u8; 16000]).unwrap();
 
         let result = list_recordings(tmp.path()).unwrap();
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].name, "recording.wav");
+        assert_eq!(result.len(), 2);
     }
 
     #[test]
