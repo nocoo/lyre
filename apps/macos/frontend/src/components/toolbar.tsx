@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { Settings } from "lucide-react";
+import { Info, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type Page = "recordings" | "settings";
+type Page = "recordings" | "settings" | "about";
 
 interface ToolbarProps {
   activePage: Page;
@@ -35,6 +35,14 @@ export function Toolbar({ activePage, onNavigate }: ToolbarProps) {
           <h1 className="text-base font-semibold">Lyre</h1>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant={activePage === "about" ? "secondary" : "ghost"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onNavigate("about")}
+          >
+            <Info className="h-4 w-4" />
+          </Button>
           <Button
             variant={activePage === "settings" ? "secondary" : "ghost"}
             size="icon"

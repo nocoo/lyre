@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Toolbar } from "@/components/toolbar";
 import { SettingsPage } from "@/components/settings-page";
 import { RecordingsPage } from "@/components/recordings-page";
+import { AboutPage } from "@/components/about-page";
 import { Toaster } from "@/components/ui/sonner";
 
-type Page = "recordings" | "settings";
+type Page = "recordings" | "settings" | "about";
 
 export default function Home() {
   const [page, setPage] = useState<Page>("recordings");
@@ -15,6 +16,15 @@ export default function Home() {
     return (
       <>
         <SettingsPage onBack={() => setPage("recordings")} />
+        <Toaster position="bottom-center" duration={3000} />
+      </>
+    );
+  }
+
+  if (page === "about") {
+    return (
+      <>
+        <AboutPage onBack={() => setPage("recordings")} />
         <Toaster position="bottom-center" duration={3000} />
       </>
     );
