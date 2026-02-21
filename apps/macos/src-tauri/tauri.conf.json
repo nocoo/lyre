@@ -4,11 +4,25 @@
   "version": "0.1.0",
   "identifier": "com.lyre.recorder",
   "build": {
-    "frontendDist": "../frontend"
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../frontend/dist"
   },
   "app": {
     "withGlobalTauri": false,
-    "windows": [],
+    "windows": [
+      {
+        "label": "main",
+        "title": "Lyre Recorder",
+        "width": 420,
+        "height": 360,
+        "resizable": true,
+        "visible": false,
+        "decorations": true,
+        "center": true,
+        "minWidth": 360,
+        "minHeight": 300
+      }
+    ],
     "security": {
       "capabilities": ["default"]
     }
