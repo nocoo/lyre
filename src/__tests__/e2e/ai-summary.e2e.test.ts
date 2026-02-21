@@ -10,6 +10,8 @@ interface AiSettings {
   hasApiKey: boolean;
   model: string;
   autoSummarize: boolean;
+  baseURL: string;
+  sdkType: string;
 }
 
 interface Recording {
@@ -76,6 +78,8 @@ afterAll(async () => {
       apiKey: "",
       model: "",
       autoSummarize: false,
+      baseURL: "",
+      sdkType: "",
     }),
   });
   for (const id of createdIds) {
@@ -166,6 +170,8 @@ describe("AI settings API", () => {
         apiKey: "",
         model: "",
         autoSummarize: false,
+        baseURL: "",
+        sdkType: "",
       }),
     });
     expect(res.status).toBe(200);
@@ -174,6 +180,50 @@ describe("AI settings API", () => {
     expect(body.provider).toBe("");
     expect(body.hasApiKey).toBe(false);
     expect(body.autoSummarize).toBe(false);
+  });
+
+  test("PUT /api/settings/ai accepts custom provider with baseURL and sdkType", async () => {
+    const res = await fetch(`${BASE_URL}/api/settings/ai`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: "custom",
+        apiKey: "sk-custom-1234567890",
+        model: "my-model-v1",
+        baseURL: "https://my-api.example.com/v1",
+        sdkType: "openai",
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as AiSettings;
+    expect(body.provider).toBe("custom");
+    expect(body.hasApiKey).toBe(true);
+    expect(body.model).toBe("my-model-v1");
+    expect(body.baseURL).toBe("https://my-api.example.com/v1");
+    expect(body.sdkType).toBe("openai");
+  });
+
+  test("GET /api/settings/ai returns custom provider fields", async () => {
+    const res = await fetch(`${BASE_URL}/api/settings/ai`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as AiSettings;
+    expect(body.provider).toBe("custom");
+    expect(body.baseURL).toBe("https://my-api.example.com/v1");
+    expect(body.sdkType).toBe("openai");
+  });
+
+  test("PUT /api/settings/ai rejects invalid sdkType", async () => {
+    const res = await fetch(`${BASE_URL}/api/settings/ai`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sdkType: "invalid-sdk" }),
+    });
+    expect(res.status).toBe(400);
+
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("Invalid SDK type");
   });
 });
 
