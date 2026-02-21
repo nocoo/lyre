@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
   LayoutDashboard,
@@ -11,9 +11,7 @@ import {
   PanelLeft,
   LogOut,
   Search,
-  FolderOpen,
-  FolderClosed,
-  Inbox,
+  ChevronDown,
 } from "lucide-react";
 import { cn, getAvatarColor } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/version";
@@ -25,20 +23,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { GlobalSearch } from "@/components/global-search";
 import { useSidebar } from "./sidebar-context";
-import type { Folder } from "@/lib/types";
+import { FolderSidebar, FolderSidebarCollapsed } from "./folder-sidebar";
 
-const navItems = [
+const staticNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/recordings", label: "Recordings", icon: Mic },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { collapsed, toggle } = useSidebar();
   const { data: session } = useSession();
 
@@ -46,39 +45,8 @@ export function Sidebar() {
   const userImage = session?.user?.image;
   const userInitial = userName[0] ?? "?";
 
-  // ── Folder tree (context-aware: only on /recordings) ──
   const isRecordingsPage = pathname.startsWith("/recordings");
-  const [folders, setFolders] = useState<Folder[]>([]);
-
-  // Active folder from URL query param
-  const folderParam = searchParams.get("folder"); // null = all, "unfiled" = unfiled, string = folder id
-
-  useEffect(() => {
-    if (!isRecordingsPage) return;
-    const fetchFolders = async () => {
-      try {
-        const res = await fetch("/api/folders");
-        if (res.ok) {
-          const data = (await res.json()) as { items: Folder[] };
-          setFolders(data.items);
-        }
-      } catch {
-        // silently ignore — folders are optional UI
-      }
-    };
-    void fetchFolders();
-  }, [isRecordingsPage]);
-
-  const handleFolderSelect = (folderId: string | null) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (folderId === null) {
-      params.delete("folder");
-    } else {
-      params.set("folder", folderId);
-    }
-    const query = params.toString();
-    router.push(`/recordings${query ? `?${query}` : ""}`);
-  };
+  const [recordingsOpen, setRecordingsOpen] = useState(isRecordingsPage);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -89,7 +57,7 @@ export function Sidebar() {
         )}
       >
         {collapsed ? (
-          /* Collapsed (icon-only) view */
+          /* ── Collapsed (icon-only) view ── */
           <div className="flex h-screen w-[68px] flex-col items-center">
             {/* Logo */}
             <div className="flex h-14 w-full items-center justify-start pl-6 pr-3">
@@ -128,7 +96,6 @@ export function Sidebar() {
               <TooltipTrigger asChild>
                 <button
                   onClick={() => {
-                    // Dispatch a keyboard shortcut to open global search
                     document.dispatchEvent(
                       new KeyboardEvent("keydown", {
                         key: "k",
@@ -154,105 +121,69 @@ export function Sidebar() {
 
             {/* Navigation */}
             <nav className="flex flex-col items-center gap-1 pt-1">
-              {navItems.map((item) => {
-                const isActive =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(item.href);
+              {/* Dashboard */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    href="/"
+                    className={cn(
+                      "relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                      pathname === "/"
+                        ? "bg-accent text-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    )}
+                  >
+                    <LayoutDashboard className="h-4 w-4" strokeWidth={1.5} />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Dashboard
+                </TooltipContent>
+              </Tooltip>
 
-                return (
-                  <Tooltip key={item.href}>
-                    <TooltipTrigger asChild>
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          "relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-                          isActive
-                            ? "bg-accent text-foreground"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                        )}
-                      >
-                        <item.icon className="h-4 w-4" strokeWidth={1.5} />
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={8}>
-                      {item.label}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
+              {/* Recordings */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    href="/recordings"
+                    className={cn(
+                      "relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                      isRecordingsPage
+                        ? "bg-accent text-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    )}
+                  >
+                    <Mic className="h-4 w-4" strokeWidth={1.5} />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Recordings
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Settings */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    href="/settings"
+                    className={cn(
+                      "relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                      pathname.startsWith("/settings")
+                        ? "bg-accent text-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    )}
+                  >
+                    <Settings className="h-4 w-4" strokeWidth={1.5} />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Settings
+                </TooltipContent>
+              </Tooltip>
             </nav>
 
-            {/* Folder tree — collapsed (icons only, /recordings context) */}
-            {isRecordingsPage && (
-              <div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-border pt-2 mt-2">
-                {/* All recordings */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => handleFolderSelect(null)}
-                      className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-                        folderParam === null
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      <Mic className="h-4 w-4" strokeWidth={1.5} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    All Recordings
-                  </TooltipContent>
-                </Tooltip>
-
-                {/* Unfiled */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => handleFolderSelect("unfiled")}
-                      className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-                        folderParam === "unfiled"
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      <Inbox className="h-4 w-4" strokeWidth={1.5} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    Unfiled
-                  </TooltipContent>
-                </Tooltip>
-
-                {/* Dynamic folders */}
-                {folders.map((folder) => (
-                  <Tooltip key={folder.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => handleFolderSelect(folder.id)}
-                        className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-                          folderParam === folder.id
-                            ? "bg-accent text-foreground"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                        )}
-                      >
-                        {folderParam === folder.id ? (
-                          <FolderOpen className="h-4 w-4" strokeWidth={1.5} />
-                        ) : (
-                          <FolderClosed className="h-4 w-4" strokeWidth={1.5} />
-                        )}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={8}>
-                      {folder.name}
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
-              </div>
-            )}
+            {/* Folder tree — collapsed (icons only) */}
+            {isRecordingsPage && <FolderSidebarCollapsed />}
 
             {/* Spacer when no folder tree */}
             {!isRecordingsPage && <div className="flex-1" />}
@@ -287,7 +218,7 @@ export function Sidebar() {
             </div>
           </div>
         ) : (
-          /* Expanded view */
+          /* ── Expanded view ── */
           <div className="flex h-screen w-[260px] flex-col">
             {/* Header: logo + collapse toggle */}
             <div className="px-3 h-14 flex items-center">
@@ -347,9 +278,10 @@ export function Sidebar() {
             </div>
 
             {/* Navigation */}
-            <nav className="pt-1">
+            <nav className="flex flex-col pt-1">
+              {/* Dashboard */}
               <div className="flex flex-col gap-0.5 px-3">
-                {navItems.map((item) => {
+                {staticNavItems.map((item) => {
                   const isActive =
                     item.href === "/"
                       ? pathname === "/"
@@ -375,71 +307,56 @@ export function Sidebar() {
                   );
                 })}
               </div>
-            </nav>
 
-            {/* Folder tree — expanded (/recordings context) */}
-            {isRecordingsPage && (
-              <div className="flex-1 overflow-y-auto border-t border-border mt-2 pt-2">
-                <div className="px-3">
-                  <p className="text-xs font-medium text-muted-foreground px-3 mb-1.5">
-                    Folders
-                  </p>
-                  <div className="flex flex-col gap-0.5">
-                    {/* All recordings */}
+              {/* Recordings — collapsible group */}
+              <Collapsible open={recordingsOpen} onOpenChange={setRecordingsOpen}>
+                <div className="px-3 mt-0.5">
+                  <CollapsibleTrigger asChild>
                     <button
-                      onClick={() => handleFolderSelect(null)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                        folderParam === null
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
+                        isRecordingsPage
                           ? "bg-accent text-foreground"
                           : "text-muted-foreground hover:bg-accent hover:text-foreground",
                       )}
+                      onClick={(e) => {
+                        // If not on recordings page, navigate there first
+                        if (!isRecordingsPage) {
+                          e.preventDefault();
+                          window.location.href = "/recordings";
+                        }
+                      }}
                     >
                       <Mic className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-                      <span className="truncate">All Recordings</span>
-                    </button>
-
-                    {/* Unfiled */}
-                    <button
-                      onClick={() => handleFolderSelect("unfiled")}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                        folderParam === "unfiled"
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      <Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-                      <span className="truncate">Unfiled</span>
-                    </button>
-
-                    {/* Dynamic folders */}
-                    {folders.map((folder) => (
-                      <button
-                        key={folder.id}
-                        onClick={() => handleFolderSelect(folder.id)}
+                      <span className="flex-1 text-left">Recordings</span>
+                      <ChevronDown
                         className={cn(
-                          "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                          folderParam === folder.id
-                            ? "bg-accent text-foreground"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                          "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                          !recordingsOpen && "-rotate-90",
                         )}
-                      >
-                        {folderParam === folder.id ? (
-                          <FolderOpen className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-                        ) : (
-                          <FolderClosed className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-                        )}
-                        <span className="truncate">{folder.name}</span>
-                      </button>
-                    ))}
+                        strokeWidth={1.5}
+                      />
+                    </button>
+                  </CollapsibleTrigger>
+                </div>
+                <div
+                  className="grid overflow-hidden"
+                  style={{
+                    gridTemplateRows: recordingsOpen ? "1fr" : "0fr",
+                    transition: "grid-template-rows 200ms ease-out",
+                  }}
+                >
+                  <div className="min-h-0 overflow-hidden">
+                    <div className="pt-0.5">
+                      <FolderSidebar />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              </Collapsible>
+            </nav>
 
-            {/* Spacer when no folder tree */}
-            {!isRecordingsPage && <div className="flex-1" />}
+            {/* Spacer */}
+            <div className="flex-1" />
 
             {/* User info + sign out */}
             <div className="px-4 py-3">
