@@ -115,12 +115,12 @@ pub fn default_output_dir() -> PathBuf {
 // --- Internal helpers ---
 
 /// Read audio duration from file.
-/// Supports WAV (via hound header) and MP3 (estimated from file size).
+/// Supports WAV (via hound header) and MP3 (via frame header parsing).
 fn audio_duration(path: &Path) -> Option<f64> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     match ext.as_str() {
         "wav" => wav_duration(path),
-        "mp3" => mp3_duration_estimate(path),
+        "mp3" => mp3_duration(path),
         _ => None,
     }
 }
@@ -136,16 +136,15 @@ fn wav_duration(path: &Path) -> Option<f64> {
     Some(num_samples as f64 / spec.sample_rate as f64)
 }
 
-/// Estimate MP3 duration from file size.
-/// The recorder uses 192 kbps CBR = 24000 bytes/sec.
-fn mp3_duration_estimate(path: &Path) -> Option<f64> {
-    let size = fs::metadata(path).ok()?.len();
-    if size == 0 {
-        return None;
+/// Read MP3 duration by parsing frame headers.
+fn mp3_duration(path: &Path) -> Option<f64> {
+    let duration = mp3_duration::from_path(path).ok()?;
+    let secs = duration.as_secs_f64();
+    if secs <= 0.0 {
+        None
+    } else {
+        Some(secs)
     }
-    // 192 kbps = 24000 bytes/sec
-    let bitrate_bytes_per_sec = 24000.0_f64;
-    Some(size as f64 / bitrate_bytes_per_sec)
 }
 
 // --- Batch cleanup ---

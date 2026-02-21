@@ -79,7 +79,7 @@ pub async fn upload_recording(file_path: &str) -> Result<UploadResult, String> {
     let file_size = file_bytes.len() as u64;
 
     // Read audio metadata (duration, sample rate) — format-aware
-    let (duration, sample_rate) = audio_metadata(path, &format, file_size);
+    let (duration, sample_rate) = audio_metadata(path, &format);
 
     // Derive title from filename: "recording-20260221-143052.mp3" → "recording-20260221-143052"
     let title = path
@@ -265,11 +265,11 @@ fn detect_audio_format(path: &Path) -> Result<(String, String), String> {
 }
 
 /// Read audio metadata (duration in seconds, sample rate in Hz).
-/// For WAV files, reads from the header. For MP3 files, estimates from file size.
-fn audio_metadata(path: &Path, format: &str, file_size: u64) -> (Option<f64>, Option<u32>) {
+/// For WAV files, reads from the header. For MP3 files, parses frame headers.
+fn audio_metadata(path: &Path, format: &str) -> (Option<f64>, Option<u32>) {
     match format {
         "wav" => wav_metadata(path),
-        "mp3" => mp3_metadata_estimate(file_size),
+        "mp3" => mp3_metadata(path),
         _ => (None, None),
     }
 }
@@ -290,16 +290,20 @@ fn wav_metadata(path: &Path) -> (Option<f64>, Option<u32>) {
     }
 }
 
-/// Estimate MP3 metadata from file size.
-/// The recorder uses 192 kbps CBR = 24000 bytes/sec.
-/// Sample rate defaults to 44100 Hz (standard for the recorder).
-fn mp3_metadata_estimate(file_size: u64) -> (Option<f64>, Option<u32>) {
-    if file_size == 0 {
-        return (None, None);
+/// Read MP3 metadata (duration in seconds, sample rate in Hz) by parsing frame headers.
+fn mp3_metadata(path: &Path) -> (Option<f64>, Option<u32>) {
+    match mp3_duration::from_path(path) {
+        Ok(duration) => {
+            let secs = duration.as_secs_f64();
+            if secs <= 0.0 {
+                (None, None)
+            } else {
+                // Sample rate is not exposed by mp3-duration; default to None.
+                (Some(secs), None)
+            }
+        }
+        Err(_) => (None, None),
     }
-    // 192 kbps = 24000 bytes/sec
-    let duration = file_size as f64 / 24000.0;
-    (Some(duration), Some(44100))
 }
 
 #[cfg(test)]
@@ -403,17 +407,72 @@ mod tests {
         assert_eq!(format, "webm");
     }
 
-    #[test]
-    fn test_mp3_metadata_estimate() {
-        // 192 kbps = 24000 bytes/sec. 48000 bytes = 2 seconds.
-        let (duration, sample_rate) = mp3_metadata_estimate(48000);
-        assert_eq!(sample_rate, Some(44100));
-        assert!((duration.unwrap() - 2.0).abs() < 0.01);
+    /// Create a valid MP3 file with the given number of samples at 44100 Hz mono.
+    fn create_test_mp3(path: &Path, num_samples: usize) {
+        use std::io::Write;
+
+        let mut builder = mp3lame_encoder::Builder::new().unwrap();
+        builder.set_num_channels(1).unwrap();
+        builder.set_sample_rate(44100).unwrap();
+        builder
+            .set_brate(mp3lame_encoder::Bitrate::Kbps192)
+            .unwrap();
+        builder
+            .set_quality(mp3lame_encoder::Quality::Best)
+            .unwrap();
+        let mut encoder = builder.build().unwrap();
+
+        let samples = vec![0i16; num_samples];
+        let input = mp3lame_encoder::MonoPcm(&samples);
+        let mut mp3_buf = Vec::new();
+        mp3_buf.reserve(mp3lame_encoder::max_required_buffer_size(num_samples));
+        let encoded_size = encoder
+            .encode(input, mp3_buf.spare_capacity_mut())
+            .unwrap();
+        unsafe { mp3_buf.set_len(encoded_size) };
+
+        let mut flush_buf = Vec::new();
+        flush_buf.reserve(mp3lame_encoder::max_required_buffer_size(0));
+        let flush_size = encoder
+            .flush::<mp3lame_encoder::FlushNoGap>(flush_buf.spare_capacity_mut())
+            .unwrap();
+        unsafe { flush_buf.set_len(flush_size) };
+
+        let mut file = std::fs::File::create(path).unwrap();
+        file.write_all(&mp3_buf).unwrap();
+        file.write_all(&flush_buf).unwrap();
     }
 
     #[test]
-    fn test_mp3_metadata_estimate_zero() {
-        let (duration, sample_rate) = mp3_metadata_estimate(0);
+    fn test_mp3_metadata_valid_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("test.mp3");
+        create_test_mp3(&path, 44100); // 1 second of silence
+
+        let (duration, _sample_rate) = mp3_metadata(&path);
+        // Should be approximately 1 second (allow some MP3 padding tolerance)
+        assert!(duration.is_some(), "duration should be Some");
+        assert!(
+            (duration.unwrap() - 1.0).abs() < 0.1,
+            "expected ~1.0s, got {}",
+            duration.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_mp3_metadata_invalid_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("not-mp3.mp3");
+        std::fs::write(&path, "not mp3 data").unwrap();
+
+        let (duration, sample_rate) = mp3_metadata(&path);
+        assert!(duration.is_none());
+        assert!(sample_rate.is_none());
+    }
+
+    #[test]
+    fn test_mp3_metadata_missing_file() {
+        let (duration, sample_rate) = mp3_metadata(Path::new("/nonexistent.mp3"));
         assert!(duration.is_none());
         assert!(sample_rate.is_none());
     }
@@ -435,19 +494,25 @@ mod tests {
         }
         writer.finalize().unwrap();
 
-        let file_size = std::fs::metadata(&path).unwrap().len();
-        let (duration, sample_rate) = audio_metadata(&path, "wav", file_size);
+        let (duration, sample_rate) = audio_metadata(&path, "wav");
         assert_eq!(sample_rate, Some(44100));
         assert!((duration.unwrap() - 1.0).abs() < 0.01);
     }
 
     #[test]
     fn test_audio_metadata_mp3() {
-        // For MP3, duration is estimated from file size, path is not read
-        let (duration, sample_rate) = audio_metadata(Path::new("irrelevant.mp3"), "mp3", 24000);
-        assert_eq!(sample_rate, Some(44100));
-        // 24000 bytes / 24000 bytes_per_sec = 1.0 second
-        assert!((duration.unwrap() - 1.0).abs() < 0.01);
+        // Create a real MP3 file and verify audio_metadata dispatches correctly
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("test.mp3");
+        create_test_mp3(&path, 44100); // 1 second
+
+        let (duration, _sample_rate) = audio_metadata(&path, "mp3");
+        assert!(duration.is_some(), "mp3 duration should be Some");
+        assert!(
+            (duration.unwrap() - 1.0).abs() < 0.1,
+            "expected ~1.0s, got {}",
+            duration.unwrap()
+        );
     }
 
     #[test]
