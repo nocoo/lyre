@@ -21,13 +21,13 @@ fn save_config(server_url: String, token: String) -> Result<(), String> {
 }
 
 /// Tauri command: test connection to the Lyre web server.
+/// Accepts the current form values so users can test before saving.
 #[tauri::command]
-async fn test_connection() -> Result<(), String> {
-    let cfg = config::load_config()?;
-    if cfg.server_url.is_empty() || cfg.token.is_empty() {
+async fn test_connection(server_url: String, token: String) -> Result<(), String> {
+    if server_url.trim().is_empty() || token.trim().is_empty() {
         return Err("server URL and token must be configured first".to_string());
     }
-    http_client::test_connection(&cfg.server_url, &cfg.token).await
+    http_client::test_connection(&server_url, &token).await
 }
 
 /// Tauri command: list local recordings from the output directory.

@@ -30,8 +30,8 @@ export function saveConfig(serverUrl: string, token: string): Promise<void> {
   return invoke("save_config", { serverUrl, token });
 }
 
-export function testConnection(): Promise<void> {
-  return invoke("test_connection");
+export function testConnection(serverUrl: string, token: string): Promise<void> {
+  return invoke("test_connection", { serverUrl, token });
 }
 
 export function listRecordings(): Promise<RecordingInfo[]> {

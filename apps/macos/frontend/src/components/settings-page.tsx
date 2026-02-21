@@ -49,6 +49,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
     if (value !== "custom") {
       setServerUrl(value);
     }
+    setConnectionStatus("idle");
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -68,15 +69,14 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
   const handleTest = useCallback(async () => {
     setConnectionStatus("testing");
     try {
-      await testConnection();
+      await testConnection(serverUrl.trim(), token.trim());
       setConnectionStatus("connected");
       toast.success("Connected successfully");
     } catch (err) {
       setConnectionStatus("error");
       toast.error(String(err));
     }
-    setTimeout(() => setConnectionStatus("idle"), 4000);
-  }, []);
+  }, [serverUrl, token]);
 
   if (loading) {
     return (
@@ -86,7 +86,8 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
     );
   }
 
-  const canSubmit = serverUrl.trim().length > 0 && token.trim().length > 0;
+  const canTest = serverUrl.trim().length > 0 && token.trim().length > 0;
+  const canSave = canTest && connectionStatus === "connected";
 
   return (
     <div
@@ -161,7 +162,10 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                   id="server-url"
                   type="url"
                   value={serverUrl}
-                  onChange={(e) => setServerUrl(e.target.value)}
+                  onChange={(e) => {
+                    setServerUrl(e.target.value);
+                    setConnectionStatus("idle");
+                  }}
                   placeholder="https://lyre.example.com"
                   className="mt-1.5"
                 />
@@ -179,7 +183,10 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 id="token"
                 type="password"
                 value={token}
-                onChange={(e) => setToken(e.target.value)}
+                onChange={(e) => {
+                  setToken(e.target.value);
+                  setConnectionStatus("idle");
+                }}
                 placeholder="lyre_..."
               />
             </div>
@@ -190,7 +197,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                 size="sm"
                 className="gap-1.5"
                 onClick={handleTest}
-                disabled={!canSubmit || connectionStatus === "testing"}
+                disabled={!canTest || connectionStatus === "testing"}
               >
                 {connectionStatus === "testing" ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -218,7 +225,7 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
       <div className="border-t px-4 py-3">
         <Button
           onClick={handleSave}
-          disabled={saving || !canSubmit}
+          disabled={saving || !canSave}
           size="sm"
           className="w-full"
         >
