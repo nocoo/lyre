@@ -7,6 +7,7 @@ import {
   Calendar,
   Check,
   ChevronsUpDown,
+  Cpu,
   Download,
   FileText,
   Folder,
@@ -16,6 +17,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Settings,
   StickyNote,
   Sparkles,
   Tag,
@@ -113,6 +115,10 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [summarizing, setSummarizing] = useState(false);
   const [summarizeError, setSummarizeError] = useState<string | null>(null);
 
+  // AI settings (for info sidebar)
+  const [aiProvider, setAiProvider] = useState("");
+  const [aiModel, setAiModel] = useState("");
+
   // Editable fields
   const [notes, setNotes] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
@@ -165,10 +171,28 @@ function RecordingDetailContent({ id }: { id: string }) {
     }
   }, []);
 
+  // ── Load AI settings (provider + model for info card) ──
+  const loadAiSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings/ai");
+      if (res.ok) {
+        const data = (await res.json()) as { provider: string; model: string };
+        setAiProvider(data.provider);
+        setAiModel(data.model);
+      }
+    } catch {
+      // Non-critical, silently fail
+    }
+  }, []);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const [data] = await Promise.all([loadDetail(), loadTagsAndFolders()]);
+      const [data] = await Promise.all([
+        loadDetail(),
+        loadTagsAndFolders(),
+        loadAiSettings(),
+      ]);
       setLoading(false);
 
       // If the recording is currently transcribing with an active job, resume polling
@@ -181,7 +205,7 @@ function RecordingDetailContent({ id }: { id: string }) {
       }
     }
     void load();
-  }, [loadDetail, loadTagsAndFolders]);
+  }, [loadDetail, loadTagsAndFolders, loadAiSettings]);
 
   // ── Fetch presigned play URL ──
   useEffect(() => {
@@ -461,7 +485,7 @@ function RecordingDetailContent({ id }: { id: string }) {
   const vm = toRecordingDetailVM(detail);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Back link + header */}
       <div className="space-y-4">
         <Link
@@ -491,7 +515,6 @@ function RecordingDetailContent({ id }: { id: string }) {
 
           {/* Actions */}
           <div className="flex shrink-0 gap-2">
-            {/* Download */}
             <Button
               size="sm"
               variant="outline"
@@ -581,10 +604,28 @@ function RecordingDetailContent({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Metadata + Job info — side by side when job exists */}
-      {vm.job?.isCompleted ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-          <div className="lg:col-span-3">
+      {/* Transcribing / Error banners (full width) */}
+      {(activeJobId || vm.isTranscribing) && (
+        <TranscribingCard status={pollStatus} />
+      )}
+      {vm.job?.isFailed && !activeJobId && (
+        <JobErrorCard message={vm.job.errorMessage} />
+      )}
+
+      {/* ── Row 1: Player + Metadata (2/3) | Properties (1/3) ── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="rounded-xl border border-border bg-card p-4 h-full space-y-4">
+            {/* Audio player */}
+            {audioUrl && (
+              <AudioPlayer
+                ref={playerRef}
+                src={audioUrl}
+                title={vm.metadata.title}
+                onTimeUpdate={handleTimeUpdate}
+              />
+            )}
+            {/* File metadata */}
             <MetadataGrid
               fileName={vm.metadata.fileName}
               fileSize={vm.metadata.fileSize}
@@ -597,117 +638,96 @@ function RecordingDetailContent({ id }: { id: string }) {
               tags={vm.metadata.resolvedTags}
             />
           </div>
+        </div>
+        <div className="lg:col-span-1">
+          <EditableProperties
+            notes={notes}
+            onNotesChange={setNotes}
+            onNotesSave={handleNotesSave}
+            notesSaving={notesSaving}
+            recordedAtDate={recordedAtDate}
+            onRecordedAtChange={handleRecordedAtChange}
+            selectedTagIds={selectedTagIds}
+            allTags={allTags}
+            tagsOpen={tagsOpen}
+            onTagsOpenChange={setTagsOpen}
+            onToggleTag={handleToggleTag}
+            newTagName={newTagName}
+            onNewTagNameChange={setNewTagName}
+            onCreateTag={handleCreateTag}
+            creatingTag={creatingTag}
+            selectedFolderId={selectedFolderId}
+            allFolders={allFolders}
+            folderOpen={folderOpen}
+            onFolderOpenChange={setFolderOpen}
+            onFolderChange={handleFolderChange}
+          />
+        </div>
+      </div>
+
+      {/* ── Row 2: AI Summary (2/3) | AI Info (1/3) ── */}
+      {vm.hasTranscription && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <JobInfoCard
-              model={vm.job.model}
-              submitTime={vm.job.submitTime}
-              endTime={vm.job.endTime}
-              processingDuration={vm.job.processingDuration}
-              usageSeconds={vm.job.usageSeconds}
-              estimatedCost={vm.job.estimatedCost}
+            <AiSummaryCard
+              summary={aiSummary}
+              loading={summarizing}
+              error={summarizeError}
+              onGenerate={handleSummarize}
             />
+          </div>
+          <div className="lg:col-span-1">
+            <AiInfoCard provider={aiProvider} model={aiModel} />
           </div>
         </div>
-      ) : (
-        <MetadataGrid
-          fileName={vm.metadata.fileName}
-          fileSize={vm.metadata.fileSize}
-          duration={vm.metadata.duration}
-          format={vm.metadata.format}
-          sampleRate={vm.metadata.sampleRate}
-          createdAt={vm.metadata.createdAt}
-          recordedAt={vm.metadata.recordedAt}
-          folderName={vm.metadata.folderName}
-          tags={vm.metadata.resolvedTags}
-        />
       )}
 
-      {/* Editable properties */}
-      <EditableProperties
-        notes={notes}
-        onNotesChange={setNotes}
-        onNotesSave={handleNotesSave}
-        notesSaving={notesSaving}
-        recordedAtDate={recordedAtDate}
-        onRecordedAtChange={handleRecordedAtChange}
-        selectedTagIds={selectedTagIds}
-        allTags={allTags}
-        tagsOpen={tagsOpen}
-        onTagsOpenChange={setTagsOpen}
-        onToggleTag={handleToggleTag}
-        newTagName={newTagName}
-        onNewTagNameChange={setNewTagName}
-        onCreateTag={handleCreateTag}
-        creatingTag={creatingTag}
-        selectedFolderId={selectedFolderId}
-        allFolders={allFolders}
-        folderOpen={folderOpen}
-        onFolderOpenChange={setFolderOpen}
-        onFolderChange={handleFolderChange}
-      />
-
-      {/* Audio player */}
-      {audioUrl && (
-        <AudioPlayer
-          ref={playerRef}
-          src={audioUrl}
-          title={vm.metadata.title}
-          onTimeUpdate={handleTimeUpdate}
-        />
-      )}
-
-      {/* Transcribing state — show when actively polling or VM says transcribing */}
-      {(activeJobId || vm.isTranscribing) && (
-        <TranscribingCard status={pollStatus} />
-      )}
-
-      {/* Job error */}
-      {vm.job?.isFailed && !activeJobId && (
-        <JobErrorCard message={vm.job.errorMessage} />
-      )}
-
-      {/* AI Summary — shown when transcription exists */}
-      {vm.hasTranscription && (
-        <AiSummaryCard
-          summary={aiSummary}
-          loading={summarizing}
-          error={summarizeError}
-          onGenerate={handleSummarize}
-        />
-      )}
-
-      {/* Transcription */}
+      {/* ── Row 3: Transcription (2/3) | Job Details (1/3) ── */}
       {vm.hasTranscription && vm.transcription && (
-        <div className="space-y-3">
-          {/* View mode toggle */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant={viewMode === "sentences" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("sentences")}
-            >
-              Sentences
-            </Button>
-            <Button
-              variant={viewMode === "fulltext" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("fulltext")}
-              className="gap-1.5"
-            >
-              <FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
-              Full Text
-            </Button>
-          </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-3">
+            {/* View mode toggle */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === "sentences" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("sentences")}
+              >
+                Sentences
+              </Button>
+              <Button
+                variant={viewMode === "fulltext" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("fulltext")}
+                className="gap-1.5"
+              >
+                <FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
+                Full Text
+              </Button>
+            </div>
 
-          {viewMode === "sentences" ? (
-            <TranscriptViewer
-              transcription={vm.transcription}
-              recordingId={id}
-              currentTime={currentTime}
-              onSeek={handleSeek}
-            />
-          ) : (
-            <TranscriptFullText transcription={vm.transcription} />
+            {viewMode === "sentences" ? (
+              <TranscriptViewer
+                transcription={vm.transcription}
+                recordingId={id}
+                currentTime={currentTime}
+                onSeek={handleSeek}
+              />
+            ) : (
+              <TranscriptFullText transcription={vm.transcription} />
+            )}
+          </div>
+          {vm.job?.isCompleted && (
+            <div className="lg:col-span-1">
+              <JobInfoCard
+                model={vm.job.model}
+                submitTime={vm.job.submitTime}
+                endTime={vm.job.endTime}
+                processingDuration={vm.job.processingDuration}
+                usageSeconds={vm.job.usageSeconds}
+                estimatedCost={vm.job.estimatedCost}
+              />
+            </div>
           )}
         </div>
       )}
@@ -776,8 +796,8 @@ function MetadataGrid({
   ];
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3 md:grid-cols-4">
+    <div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
         {items.map((item) => (
           <div key={item.label}>
             <p className="text-xs font-medium text-muted-foreground">
@@ -914,7 +934,7 @@ function AiSummaryCard({
   onGenerate: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-xl border border-border bg-card p-4 h-full">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
           <Bot className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
@@ -989,6 +1009,44 @@ function AiSummaryCard({
   );
 }
 
+// ── AI Info Card (sidebar) ──
+
+function AiInfoCard({
+  provider,
+  model,
+}: {
+  provider: string;
+  model: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 h-full">
+      <p className="mb-3 text-xs font-medium text-muted-foreground">
+        AI Configuration
+      </p>
+      <div className="space-y-3">
+        <div>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Settings className="h-3.5 w-3.5" strokeWidth={1.5} />
+            Provider
+          </p>
+          <p className="mt-0.5 text-sm text-foreground">
+            {provider || "Not configured"}
+          </p>
+        </div>
+        <div>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Cpu className="h-3.5 w-3.5" strokeWidth={1.5} />
+            Model
+          </p>
+          <p className="mt-0.5 text-sm text-foreground font-mono">
+            {model || "Not configured"}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Editable Properties ──
 
 function EditableProperties({
@@ -1037,178 +1095,175 @@ function EditableProperties({
   const selectedFolder = allFolders.find((f) => f.id === selectedFolderId);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+    <div className="rounded-xl border border-border bg-card p-4 h-full space-y-4">
       <p className="text-xs font-medium text-muted-foreground">Properties</p>
 
-      {/* Date, Folder, Tags — inline row */}
-      <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
-        {/* Recorded date */}
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />
-            Recorded Date
-          </label>
-          <Input
-            type="date"
-            value={recordedAtDate}
-            onChange={(e) => onRecordedAtChange(e.target.value)}
-            className="w-44"
-          />
-        </div>
+      {/* Recorded date */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />
+          Recorded Date
+        </label>
+        <Input
+          type="date"
+          value={recordedAtDate}
+          onChange={(e) => onRecordedAtChange(e.target.value)}
+          className="w-full"
+        />
+      </div>
 
-        {/* Folder picker */}
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Folder className="h-3.5 w-3.5" strokeWidth={1.5} />
-            Folder
-          </label>
-          <Popover open={folderOpen} onOpenChange={onFolderOpenChange}>
+      {/* Folder picker */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Folder className="h-3.5 w-3.5" strokeWidth={1.5} />
+          Folder
+        </label>
+        <Popover open={folderOpen} onOpenChange={onFolderOpenChange}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-between"
+            >
+              {selectedFolder ? (
+                <span className="flex items-center gap-1.5 truncate">
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
+                  {selectedFolder.name}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">No folder</span>
+              )}
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-0" align="start">
+            <Command>
+              <CommandList>
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => onFolderChange(null)}
+                    className="gap-2"
+                  >
+                    <Check
+                      className={`h-3.5 w-3.5 ${selectedFolderId === null ? "opacity-100" : "opacity-0"}`}
+                    />
+                    <span className="text-muted-foreground">No folder</span>
+                  </CommandItem>
+                  {allFolders.map((folder) => (
+                    <CommandItem
+                      key={folder.id}
+                      onSelect={() => onFolderChange(folder.id)}
+                      className="gap-2"
+                    >
+                      <Check
+                        className={`h-3.5 w-3.5 ${selectedFolderId === folder.id ? "opacity-100" : "opacity-0"}`}
+                      />
+                      {folder.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Tags */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
+          Tags
+        </label>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {selectedTagIds.map((tagId) => {
+            const tag = allTags.find((t) => t.id === tagId);
+            if (!tag) return null;
+            return (
+              <Badge
+                key={tag.id}
+                variant="secondary"
+                className="gap-1 text-xs cursor-pointer"
+                onClick={() => onToggleTag(tag.id)}
+              >
+                {tag.name}
+                <X className="h-3 w-3" strokeWidth={1.5} />
+              </Badge>
+            );
+          })}
+          <Popover open={tagsOpen} onOpenChange={onTagsOpenChange}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="w-44 justify-between"
+                className="gap-1.5 h-7"
               >
-                {selectedFolder ? (
-                  <span className="flex items-center gap-1.5 truncate">
-                    <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
-                    {selectedFolder.name}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">No folder</span>
-                )}
-                <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
+                Add tag
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-48 p-0" align="start">
+            <PopoverContent className="w-56 p-0" align="start">
               <Command>
+                <CommandInput
+                  placeholder="Search tags..."
+                  value={newTagName}
+                  onValueChange={onNewTagNameChange}
+                />
                 <CommandList>
+                  <CommandEmpty>
+                    {newTagName.trim() ? (
+                      <button
+                        className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                        onClick={onCreateTag}
+                        disabled={creatingTag}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Create &ldquo;{newTagName.trim()}&rdquo;
+                      </button>
+                    ) : (
+                      "No tags found."
+                    )}
+                  </CommandEmpty>
                   <CommandGroup>
-                    <CommandItem
-                      onSelect={() => onFolderChange(null)}
-                      className="gap-2"
-                    >
-                      <Check
-                        className={`h-3.5 w-3.5 ${selectedFolderId === null ? "opacity-100" : "opacity-0"}`}
-                      />
-                      <span className="text-muted-foreground">No folder</span>
-                    </CommandItem>
-                    {allFolders.map((folder) => (
+                    {allTags.map((tag) => (
                       <CommandItem
-                        key={folder.id}
-                        onSelect={() => onFolderChange(folder.id)}
+                        key={tag.id}
+                        onSelect={() => onToggleTag(tag.id)}
                         className="gap-2"
                       >
                         <Check
-                          className={`h-3.5 w-3.5 ${selectedFolderId === folder.id ? "opacity-100" : "opacity-0"}`}
+                          className={`h-3.5 w-3.5 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
                         />
-                        {folder.name}
+                        {tag.name}
                       </CommandItem>
                     ))}
                   </CommandGroup>
+                  {newTagName.trim() &&
+                    !allTags.some(
+                      (t) =>
+                        t.name.toLowerCase() === newTagName.trim().toLowerCase(),
+                    ) && (
+                      <>
+                        <CommandSeparator />
+                        <CommandGroup>
+                          <CommandItem
+                            onSelect={onCreateTag}
+                            disabled={creatingTag}
+                            className="gap-2"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Create &ldquo;{newTagName.trim()}&rdquo;
+                          </CommandItem>
+                        </CommandGroup>
+                      </>
+                    )}
                 </CommandList>
               </Command>
             </PopoverContent>
           </Popover>
         </div>
-
-        {/* Tags combobox */}
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
-            Tags
-          </label>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {selectedTagIds.map((tagId) => {
-              const tag = allTags.find((t) => t.id === tagId);
-              if (!tag) return null;
-              return (
-                <Badge
-                  key={tag.id}
-                  variant="secondary"
-                  className="gap-1 text-xs cursor-pointer"
-                  onClick={() => onToggleTag(tag.id)}
-                >
-                  {tag.name}
-                  <X className="h-3 w-3" strokeWidth={1.5} />
-                </Badge>
-              );
-            })}
-            <Popover open={tagsOpen} onOpenChange={onTagsOpenChange}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 h-7"
-                >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  Add tag
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-0" align="start">
-                <Command>
-                  <CommandInput
-                    placeholder="Search tags..."
-                    value={newTagName}
-                    onValueChange={onNewTagNameChange}
-                  />
-                  <CommandList>
-                    <CommandEmpty>
-                      {newTagName.trim() ? (
-                        <button
-                          className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                          onClick={onCreateTag}
-                          disabled={creatingTag}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          Create &ldquo;{newTagName.trim()}&rdquo;
-                        </button>
-                      ) : (
-                        "No tags found."
-                      )}
-                    </CommandEmpty>
-                    <CommandGroup>
-                      {allTags.map((tag) => (
-                        <CommandItem
-                          key={tag.id}
-                          onSelect={() => onToggleTag(tag.id)}
-                          className="gap-2"
-                        >
-                          <Check
-                            className={`h-3.5 w-3.5 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
-                          />
-                          {tag.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                    {newTagName.trim() &&
-                      !allTags.some(
-                        (t) =>
-                          t.name.toLowerCase() === newTagName.trim().toLowerCase(),
-                      ) && (
-                        <>
-                          <CommandSeparator />
-                          <CommandGroup>
-                            <CommandItem
-                              onSelect={onCreateTag}
-                              disabled={creatingTag}
-                              className="gap-2"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              Create &ldquo;{newTagName.trim()}&rdquo;
-                            </CommandItem>
-                          </CommandGroup>
-                        </>
-                      )}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
       </div>
 
-      {/* Notes — full width below */}
+      {/* Notes */}
       <div className="space-y-1.5">
         <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <StickyNote className="h-3.5 w-3.5" strokeWidth={1.5} />
