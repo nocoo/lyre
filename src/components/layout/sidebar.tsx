@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
   LayoutDashboard,
@@ -10,6 +11,9 @@ import {
   PanelLeft,
   LogOut,
   Search,
+  FolderOpen,
+  FolderClosed,
+  Inbox,
 } from "lucide-react";
 import { cn, getAvatarColor } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/version";
@@ -23,6 +27,7 @@ import {
 } from "@/components/ui/tooltip";
 import { GlobalSearch } from "@/components/global-search";
 import { useSidebar } from "./sidebar-context";
+import type { Folder } from "@/lib/types";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -32,12 +37,48 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { collapsed, toggle } = useSidebar();
   const { data: session } = useSession();
 
   const userName = session?.user?.name ?? "User";
   const userImage = session?.user?.image;
   const userInitial = userName[0] ?? "?";
+
+  // ── Folder tree (context-aware: only on /recordings) ──
+  const isRecordingsPage = pathname.startsWith("/recordings");
+  const [folders, setFolders] = useState<Folder[]>([]);
+
+  // Active folder from URL query param
+  const folderParam = searchParams.get("folder"); // null = all, "unfiled" = unfiled, string = folder id
+
+  useEffect(() => {
+    if (!isRecordingsPage) return;
+    const fetchFolders = async () => {
+      try {
+        const res = await fetch("/api/folders");
+        if (res.ok) {
+          const data = (await res.json()) as { items: Folder[] };
+          setFolders(data.items);
+        }
+      } catch {
+        // silently ignore — folders are optional UI
+      }
+    };
+    void fetchFolders();
+  }, [isRecordingsPage]);
+
+  const handleFolderSelect = (folderId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (folderId === null) {
+      params.delete("folder");
+    } else {
+      params.set("folder", folderId);
+    }
+    const query = params.toString();
+    router.push(`/recordings${query ? `?${query}` : ""}`);
+  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -112,7 +153,7 @@ export function Sidebar() {
             </Tooltip>
 
             {/* Navigation */}
-            <nav className="flex-1 flex flex-col items-center gap-1 overflow-y-auto pt-1">
+            <nav className="flex flex-col items-center gap-1 pt-1">
               {navItems.map((item) => {
                 const isActive =
                   item.href === "/"
@@ -141,6 +182,80 @@ export function Sidebar() {
                 );
               })}
             </nav>
+
+            {/* Folder tree — collapsed (icons only, /recordings context) */}
+            {isRecordingsPage && (
+              <div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-border pt-2 mt-2">
+                {/* All recordings */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleFolderSelect(null)}
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                        folderParam === null
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <Mic className="h-4 w-4" strokeWidth={1.5} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    All Recordings
+                  </TooltipContent>
+                </Tooltip>
+
+                {/* Unfiled */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleFolderSelect("unfiled")}
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                        folderParam === "unfiled"
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <Inbox className="h-4 w-4" strokeWidth={1.5} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    Unfiled
+                  </TooltipContent>
+                </Tooltip>
+
+                {/* Dynamic folders */}
+                {folders.map((folder) => (
+                  <Tooltip key={folder.id}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => handleFolderSelect(folder.id)}
+                        className={cn(
+                          "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                          folderParam === folder.id
+                            ? "bg-accent text-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                        )}
+                      >
+                        {folderParam === folder.id ? (
+                          <FolderOpen className="h-4 w-4" strokeWidth={1.5} />
+                        ) : (
+                          <FolderClosed className="h-4 w-4" strokeWidth={1.5} />
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>
+                      {folder.name}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
+
+            {/* Spacer when no folder tree */}
+            {!isRecordingsPage && <div className="flex-1" />}
 
             {/* User avatar + sign out */}
             <div className="py-3 flex justify-center w-full">
@@ -232,7 +347,7 @@ export function Sidebar() {
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto pt-1">
+            <nav className="pt-1">
               <div className="flex flex-col gap-0.5 px-3">
                 {navItems.map((item) => {
                   const isActive =
@@ -261,6 +376,70 @@ export function Sidebar() {
                 })}
               </div>
             </nav>
+
+            {/* Folder tree — expanded (/recordings context) */}
+            {isRecordingsPage && (
+              <div className="flex-1 overflow-y-auto border-t border-border mt-2 pt-2">
+                <div className="px-3">
+                  <p className="text-xs font-medium text-muted-foreground px-3 mb-1.5">
+                    Folders
+                  </p>
+                  <div className="flex flex-col gap-0.5">
+                    {/* All recordings */}
+                    <button
+                      onClick={() => handleFolderSelect(null)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                        folderParam === null
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <Mic className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                      <span className="truncate">All Recordings</span>
+                    </button>
+
+                    {/* Unfiled */}
+                    <button
+                      onClick={() => handleFolderSelect("unfiled")}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                        folderParam === "unfiled"
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                      <span className="truncate">Unfiled</span>
+                    </button>
+
+                    {/* Dynamic folders */}
+                    {folders.map((folder) => (
+                      <button
+                        key={folder.id}
+                        onClick={() => handleFolderSelect(folder.id)}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                          folderParam === folder.id
+                            ? "bg-accent text-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                        )}
+                      >
+                        {folderParam === folder.id ? (
+                          <FolderOpen className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                        ) : (
+                          <FolderClosed className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                        )}
+                        <span className="truncate">{folder.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Spacer when no folder tree */}
+            {!isRecordingsPage && <div className="flex-1" />}
 
             {/* User info + sign out */}
             <div className="px-4 py-3">
