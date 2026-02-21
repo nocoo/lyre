@@ -37,6 +37,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Markdown } from "@/components/ui/markdown";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Popover,
@@ -580,18 +581,46 @@ function RecordingDetailContent({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Metadata grid */}
-      <MetadataGrid
-        fileName={vm.metadata.fileName}
-        fileSize={vm.metadata.fileSize}
-        duration={vm.metadata.duration}
-        format={vm.metadata.format}
-        sampleRate={vm.metadata.sampleRate}
-        createdAt={vm.metadata.createdAt}
-        recordedAt={vm.metadata.recordedAt}
-        folderName={vm.metadata.folderName}
-        tags={vm.metadata.resolvedTags}
-      />
+      {/* Metadata + Job info — side by side when job exists */}
+      {vm.job?.isCompleted ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+          <div className="lg:col-span-3">
+            <MetadataGrid
+              fileName={vm.metadata.fileName}
+              fileSize={vm.metadata.fileSize}
+              duration={vm.metadata.duration}
+              format={vm.metadata.format}
+              sampleRate={vm.metadata.sampleRate}
+              createdAt={vm.metadata.createdAt}
+              recordedAt={vm.metadata.recordedAt}
+              folderName={vm.metadata.folderName}
+              tags={vm.metadata.resolvedTags}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <JobInfoCard
+              model={vm.job.model}
+              submitTime={vm.job.submitTime}
+              endTime={vm.job.endTime}
+              processingDuration={vm.job.processingDuration}
+              usageSeconds={vm.job.usageSeconds}
+              estimatedCost={vm.job.estimatedCost}
+            />
+          </div>
+        </div>
+      ) : (
+        <MetadataGrid
+          fileName={vm.metadata.fileName}
+          fileSize={vm.metadata.fileSize}
+          duration={vm.metadata.duration}
+          format={vm.metadata.format}
+          sampleRate={vm.metadata.sampleRate}
+          createdAt={vm.metadata.createdAt}
+          recordedAt={vm.metadata.recordedAt}
+          folderName={vm.metadata.folderName}
+          tags={vm.metadata.resolvedTags}
+        />
+      )}
 
       {/* Editable properties */}
       <EditableProperties
@@ -635,18 +664,6 @@ function RecordingDetailContent({ id }: { id: string }) {
       {/* Job error */}
       {vm.job?.isFailed && !activeJobId && (
         <JobErrorCard message={vm.job.errorMessage} />
-      )}
-
-      {/* Job info (for completed) — above transcript for quick reference */}
-      {vm.job?.isCompleted && (
-        <JobInfoCard
-          model={vm.job.model}
-          submitTime={vm.job.submitTime}
-          endTime={vm.job.endTime}
-          processingDuration={vm.job.processingDuration}
-          usageSeconds={vm.job.usageSeconds}
-          estimatedCost={vm.job.estimatedCost}
-        />
       )}
 
       {/* AI Summary — shown when transcription exists */}
@@ -849,11 +866,11 @@ function JobInfoCard({
   estimatedCost: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-xl border border-border bg-card p-4 h-full">
       <p className="mb-2 text-xs font-medium text-muted-foreground">
         Job Details
       </p>
-      <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-2">
         <div>
           <p className="text-xs text-muted-foreground">Model</p>
           <p className="text-sm text-foreground font-mono">{model}</p>
@@ -867,16 +884,16 @@ function JobInfoCard({
           <p className="text-sm text-foreground">{estimatedCost}</p>
         </div>
         <div>
+          <p className="text-xs text-muted-foreground">Processing Time</p>
+          <p className="text-sm text-foreground">{processingDuration}</p>
+        </div>
+        <div>
           <p className="text-xs text-muted-foreground">Submitted</p>
           <p className="text-sm text-foreground">{submitTime}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Completed</p>
           <p className="text-sm text-foreground">{endTime}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Processing Time</p>
-          <p className="text-sm text-foreground">{processingDuration}</p>
         </div>
       </div>
     </div>
@@ -951,9 +968,7 @@ function AiSummaryCard({
       {/* Summary content (shown during streaming and after completion) */}
       {summary && (
         <div>
-          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-            {summary}
-          </p>
+          <Markdown>{summary}</Markdown>
           {loading && (
             <div className="flex items-center gap-1.5 mt-2 text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -1025,85 +1040,85 @@ function EditableProperties({
     <div className="rounded-xl border border-border bg-card p-4 space-y-4">
       <p className="text-xs font-medium text-muted-foreground">Properties</p>
 
-      {/* Recorded date */}
-      <div className="space-y-1.5">
-        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />
-          Recorded Date
-        </label>
-        <Input
-          type="date"
-          value={recordedAtDate}
-          onChange={(e) => onRecordedAtChange(e.target.value)}
-          className="w-48"
-        />
-      </div>
+      {/* Date, Folder, Tags — inline row */}
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+        {/* Recorded date */}
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />
+            Recorded Date
+          </label>
+          <Input
+            type="date"
+            value={recordedAtDate}
+            onChange={(e) => onRecordedAtChange(e.target.value)}
+            className="w-44"
+          />
+        </div>
 
-      {/* Folder picker */}
-      <div className="space-y-1.5">
-        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Folder className="h-3.5 w-3.5" strokeWidth={1.5} />
-          Folder
-        </label>
-        <Popover open={folderOpen} onOpenChange={onFolderOpenChange}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-48 justify-between"
-            >
-              {selectedFolder ? (
-                <span className="flex items-center gap-1.5 truncate">
-                  <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
-                  {selectedFolder.name}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">No folder</span>
-              )}
-              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-48 p-0" align="start">
-            <Command>
-              <CommandList>
-                <CommandGroup>
-                  <CommandItem
-                    onSelect={() => onFolderChange(null)}
-                    className="gap-2"
-                  >
-                    <Check
-                      className={`h-3.5 w-3.5 ${selectedFolderId === null ? "opacity-100" : "opacity-0"}`}
-                    />
-                    <span className="text-muted-foreground">No folder</span>
-                  </CommandItem>
-                  {allFolders.map((folder) => (
+        {/* Folder picker */}
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Folder className="h-3.5 w-3.5" strokeWidth={1.5} />
+            Folder
+          </label>
+          <Popover open={folderOpen} onOpenChange={onFolderOpenChange}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-44 justify-between"
+              >
+                {selectedFolder ? (
+                  <span className="flex items-center gap-1.5 truncate">
+                    <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
+                    {selectedFolder.name}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">No folder</span>
+                )}
+                <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-0" align="start">
+              <Command>
+                <CommandList>
+                  <CommandGroup>
                     <CommandItem
-                      key={folder.id}
-                      onSelect={() => onFolderChange(folder.id)}
+                      onSelect={() => onFolderChange(null)}
                       className="gap-2"
                     >
                       <Check
-                        className={`h-3.5 w-3.5 ${selectedFolderId === folder.id ? "opacity-100" : "opacity-0"}`}
+                        className={`h-3.5 w-3.5 ${selectedFolderId === null ? "opacity-100" : "opacity-0"}`}
                       />
-                      {folder.name}
+                      <span className="text-muted-foreground">No folder</span>
                     </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
+                    {allFolders.map((folder) => (
+                      <CommandItem
+                        key={folder.id}
+                        onSelect={() => onFolderChange(folder.id)}
+                        className="gap-2"
+                      >
+                        <Check
+                          className={`h-3.5 w-3.5 ${selectedFolderId === folder.id ? "opacity-100" : "opacity-0"}`}
+                        />
+                        {folder.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
 
-      {/* Tags combobox */}
-      <div className="space-y-1.5">
-        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
-          Tags
-        </label>
-        {/* Selected tags */}
-        {selectedTagIds.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+        {/* Tags combobox */}
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
+            Tags
+          </label>
+          <div className="flex flex-wrap items-center gap-1.5">
             {selectedTagIds.map((tagId) => {
               const tag = allTags.find((t) => t.id === tagId);
               if (!tag) return null;
@@ -1119,81 +1134,81 @@ function EditableProperties({
                 </Badge>
               );
             })}
-          </div>
-        )}
-        <Popover open={tagsOpen} onOpenChange={onTagsOpenChange}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
-              Add tag
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-56 p-0" align="start">
-            <Command>
-              <CommandInput
-                placeholder="Search tags..."
-                value={newTagName}
-                onValueChange={onNewTagNameChange}
-              />
-              <CommandList>
-                <CommandEmpty>
-                  {newTagName.trim() ? (
-                    <button
-                      className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                      onClick={onCreateTag}
-                      disabled={creatingTag}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Create &ldquo;{newTagName.trim()}&rdquo;
-                    </button>
-                  ) : (
-                    "No tags found."
-                  )}
-                </CommandEmpty>
-                <CommandGroup>
-                  {allTags.map((tag) => (
-                    <CommandItem
-                      key={tag.id}
-                      onSelect={() => onToggleTag(tag.id)}
-                      className="gap-2"
-                    >
-                      <Check
-                        className={`h-3.5 w-3.5 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
-                      />
-                      {tag.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-                {newTagName.trim() &&
-                  !allTags.some(
-                    (t) =>
-                      t.name.toLowerCase() === newTagName.trim().toLowerCase(),
-                  ) && (
-                    <>
-                      <CommandSeparator />
-                      <CommandGroup>
-                        <CommandItem
-                          onSelect={onCreateTag}
+            <Popover open={tagsOpen} onOpenChange={onTagsOpenChange}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 h-7"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  Add tag
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-0" align="start">
+                <Command>
+                  <CommandInput
+                    placeholder="Search tags..."
+                    value={newTagName}
+                    onValueChange={onNewTagNameChange}
+                  />
+                  <CommandList>
+                    <CommandEmpty>
+                      {newTagName.trim() ? (
+                        <button
+                          className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                          onClick={onCreateTag}
                           disabled={creatingTag}
-                          className="gap-2"
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Create &ldquo;{newTagName.trim()}&rdquo;
+                        </button>
+                      ) : (
+                        "No tags found."
+                      )}
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {allTags.map((tag) => (
+                        <CommandItem
+                          key={tag.id}
+                          onSelect={() => onToggleTag(tag.id)}
+                          className="gap-2"
+                        >
+                          <Check
+                            className={`h-3.5 w-3.5 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
+                          />
+                          {tag.name}
                         </CommandItem>
-                      </CommandGroup>
-                    </>
-                  )}
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+                      ))}
+                    </CommandGroup>
+                    {newTagName.trim() &&
+                      !allTags.some(
+                        (t) =>
+                          t.name.toLowerCase() === newTagName.trim().toLowerCase(),
+                      ) && (
+                        <>
+                          <CommandSeparator />
+                          <CommandGroup>
+                            <CommandItem
+                              onSelect={onCreateTag}
+                              disabled={creatingTag}
+                              className="gap-2"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Create &ldquo;{newTagName.trim()}&rdquo;
+                            </CommandItem>
+                          </CommandGroup>
+                        </>
+                      )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
       </div>
 
-      {/* Notes */}
+      {/* Notes — full width below */}
       <div className="space-y-1.5">
         <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <StickyNote className="h-3.5 w-3.5" strokeWidth={1.5} />
