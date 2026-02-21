@@ -310,3 +310,96 @@ describe("POST /api/recordings/[id]/summarize", () => {
     });
   });
 });
+
+// ── Full AI API integration (requires .env.e2e credentials) ──
+
+const AI_AUTH_TOKEN = process.env.AI_E2E_AUTH_TOKEN ?? "";
+const AI_BASE_URL = process.env.AI_E2E_BASE_URL ?? "";
+const AI_MODEL = process.env.AI_E2E_MODEL ?? "";
+const HAS_AI_CREDS = !!(AI_AUTH_TOKEN && AI_BASE_URL && AI_MODEL);
+
+describe("AI integration (real LLM)", () => {
+  test.skipIf(!HAS_AI_CREDS)(
+    "test connection succeeds with real credentials",
+    async () => {
+      // Configure AI with real credentials
+      const putRes = await fetch(`${BASE_URL}/api/settings/ai`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "custom",
+          apiKey: AI_AUTH_TOKEN,
+          model: AI_MODEL,
+          baseURL: AI_BASE_URL,
+          sdkType: "anthropic",
+        }),
+      });
+      expect(putRes.status).toBe(200);
+
+      // Test connection
+      const testRes = await fetch(`${BASE_URL}/api/settings/ai/test`, {
+        method: "POST",
+      });
+      expect(testRes.status).toBe(200);
+
+      const body = (await testRes.json()) as {
+        success: boolean;
+        response: string;
+      };
+      expect(body.success).toBe(true);
+      // The model should respond with something (we asked it to reply "OK")
+      expect(body.response.length).toBeGreaterThan(0);
+    },
+  );
+
+  test.skipIf(!HAS_AI_CREDS)(
+    "summarize returns streaming text from real LLM",
+    async () => {
+      // Ensure AI is configured with real credentials
+      await fetch(`${BASE_URL}/api/settings/ai`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "custom",
+          apiKey: AI_AUTH_TOKEN,
+          model: AI_MODEL,
+          baseURL: AI_BASE_URL,
+          sdkType: "anthropic",
+        }),
+      });
+
+      // Create a recording and transcribe it
+      const rec = await createRecording("AI Integration Summary Test");
+      createdIds.push(rec.id);
+
+      const transcribeRes = await fetch(
+        `${BASE_URL}/api/recordings/${rec.id}/transcribe`,
+        { method: "POST" },
+      );
+      expect(transcribeRes.status).toBe(201);
+      const job = (await transcribeRes.json()) as TranscriptionJob;
+      await pollUntilDone(job.id);
+
+      // Call summarize — should return streaming response
+      const res = await fetch(
+        `${BASE_URL}/api/recordings/${rec.id}/summarize`,
+        { method: "POST" },
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/plain");
+
+      // Read the full streamed text
+      const summaryText = await res.text();
+      expect(summaryText.length).toBeGreaterThan(0);
+
+      // Verify summary was saved to the recording
+      const recRes = await fetch(`${BASE_URL}/api/recordings/${rec.id}`);
+      expect(recRes.status).toBe(200);
+      const updatedRec = (await recRes.json()) as {
+        aiSummary: string | null;
+      };
+      expect(updatedRec.aiSummary).toBeTruthy();
+      expect(updatedRec.aiSummary!.length).toBeGreaterThan(0);
+    },
+  );
+});
