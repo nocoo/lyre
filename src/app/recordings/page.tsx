@@ -83,12 +83,12 @@ export default function RecordingsPage() {
         fetch("/api/tags"),
       ]);
       if (foldersRes.ok) {
-        const data = (await foldersRes.json()) as Folder[];
-        setFolders(data);
+        const data = (await foldersRes.json()) as { items: Folder[] };
+        setFolders(data.items);
       }
       if (tagsRes.ok) {
-        const data = (await tagsRes.json()) as Tag[];
-        setTags(data);
+        const data = (await tagsRes.json()) as { items: Tag[] };
+        setTags(data.items);
       }
     };
     void fetchMeta();
