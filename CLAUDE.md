@@ -15,7 +15,10 @@ lyre/
 │   │   ├── scripts/  ← Build/test helper scripts
 │   │   ├── database/ ← SQLite DB (gitignored)
 │   │   └── ...       ← Config files (tsconfig, eslint, next.config, etc.)
-│   └── macos/        ← Tauri app placeholder (.gitkeep)
+│   └── macos/        ← Tauri macOS menu bar app (Rust)
+│       ├── src-tauri/  ← Rust source, Cargo.toml, tauri.conf.json
+│       ├── frontend/   ← Minimal HTML placeholder (tray-only app)
+│       └── tests/      ← Integration/E2E tests
 ├── packages/         ← Shared packages placeholder (.gitkeep)
 ├── package.json      ← Root workspace config (proxies scripts to apps/web)
 ├── bun.lock
@@ -29,6 +32,8 @@ lyre/
 
 ## Tech Stack
 
+### Web (apps/web)
+
 - **Runtime**: Bun
 - **Framework**: Next.js 16 (App Router, standalone output)
 - **Language**: TypeScript 5 (strict)
@@ -40,19 +45,39 @@ lyre/
 - **ASR**: Aliyun DashScope (`qwen3-asr-flash-filetrans`)
 - **Path alias**: `@/*` → `./src/*` (relative to `apps/web/`)
 
+### macOS App (apps/macos)
+
+- **Framework**: Tauri v2 (menu bar / system tray app, no window)
+- **Language**: Rust (edition 2021)
+- **Audio**: `cpal` (CoreAudio backend) + `hound` (WAV encoding)
+- **Features**: Microphone enumeration, recording with tray icon indicator, WAV file output
+- **Testing**: `cargo test` (UT + integration), `cargo clippy` (lint)
+
 ## Key Commands
 
 All commands run from the **repository root**. Root `package.json` proxies them via `bun run --cwd apps/web`.
 
 ```bash
-bun dev                # Start dev server (port 7025)
-bun run build          # Production build
-bun run test           # Run unit tests
-bun run test:coverage  # Run tests with coverage check
-bun run test:e2e       # Run E2E tests (port 17025, independent DB)
-bun run lint           # Run ESLint
+bun dev                # Start web dev server (port 7025)
+bun run build          # Web production build
+bun run test           # Run web unit tests
+bun run test:coverage  # Run web tests with coverage check
+bun run test:e2e       # Run web E2E tests (port 17025, independent DB)
+bun run lint           # Run ESLint (web)
 bun run db:push        # Apply schema to database
 bun run db:studio      # Open Drizzle Studio
+```
+
+### macOS App Commands
+
+Run from `apps/macos/src-tauri/`:
+
+```bash
+cargo build            # Build macOS app (debug)
+cargo test             # Run UT + integration tests
+cargo clippy -- -D warnings  # Lint (zero warnings)
+cargo tauri dev        # Run app in dev mode
+cargo tauri build      # Build release .app bundle
 ```
 
 ## Git Hooks (Husky)
@@ -123,6 +148,33 @@ src/
 ├── lib/              # Types, utils, view models, version
 └── __tests__/        # Unit tests & E2E tests
 ```
+
+## Project Structure (apps/macos/src-tauri/)
+
+```
+src-tauri/
+├── src/
+│   ├── main.rs       # Tauri app entry point (setup tray, plugins)
+│   ├── lib.rs        # Library root (re-exports for integration tests)
+│   ├── audio.rs      # Audio device enumeration (cpal)
+│   ├── recorder.rs   # WAV recording engine (cpal + hound)
+│   └── tray.rs       # System tray menu & event handling
+├── icons/            # App & tray icons (generated from logo.png)
+├── capabilities/     # Tauri v2 security capabilities
+├── tests/
+│   └── e2e.rs        # Integration tests (real recording pipeline)
+├── Cargo.toml
+├── build.rs
+└── tauri.conf.json
+```
+
+### macOS App Architecture
+
+- **Tray-only app**: No window UI. All interaction via system tray menu.
+- **Menu structure**: Start/Stop Recording → Input Device submenu → Output folder → Quit
+- **Recording indicator**: Tray icon switches between template (idle) and red-dot (recording)
+- **Thread safety**: `cpal::Stream` is !Send on macOS. Wrapped in `unsafe impl Send/Sync` since Tauri menu events run on the main thread.
+- **E2E tests**: Skip gracefully when no audio input device is available (CI-safe).
 
 ## Retrospective
 
