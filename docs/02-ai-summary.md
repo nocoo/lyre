@@ -28,7 +28,7 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
 
 ## Implementation Phases
 
-### Phase 1: AI Service Module (`src/services/ai.ts`)
+### Phase 1: AI Service Module (`src/services/ai.ts`) ✅
 - `AiProvider` type (union of provider IDs)
 - `AiConfig` interface (provider, baseURL, apiKey, model)
 - `getProviderConfig(providerId)` → returns base URL + default model
@@ -36,19 +36,19 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
 - `generateSummary(client, model, transcript)` → plain text summary
 - Mock provider for testing (returns canned summary)
 
-### Phase 2: AI Settings Storage (API)
+### Phase 2: AI Settings Storage (API) ✅
 - `GET /api/settings/ai` → read AI config for current user
 - `PUT /api/settings/ai` → save AI config (upsert multiple keys)
 - `POST /api/settings/ai/test` → test connection (send a short prompt)
 
-### Phase 3: Summarize API
+### Phase 3: Summarize API ✅
 - `POST /api/recordings/[id]/summarize` → generate + store summary
   - Reads transcription full text
   - Loads user's AI config from settings
   - Calls LLM, saves result to `recordings.ai_summary`
   - Returns `{ summary }`
 
-### Phase 4: Settings UI — AI Configuration Section
+### Phase 4: Settings UI — AI Configuration Section ✅
 - New section in Settings page with:
   - Provider selector (dropdown)
   - API Key input (password field)
@@ -56,18 +56,21 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
   - Auto-summarize toggle (default off)
   - Save button + Test Connection button
 
-### Phase 5: Recording Detail — AI Summary Display
+### Phase 5: Recording Detail — AI Summary Display ✅
 - New card between job info and transcription
 - Shows summary text (or empty state with "Generate Summary" button)
 - "Regenerate" button when summary exists
 - Loading state during generation
+- Error state with message
 
-### Phase 6: Auto-summarize on Transcription Complete
+### Phase 6: Auto-summarize on Transcription Complete ✅
 - In job polling endpoint, after transcription succeeds:
   - Check user's `ai.autoSummarize` setting
-  - If enabled and AI is configured, trigger summary generation
+  - If enabled and AI is configured, trigger summary generation (fire-and-forget)
 
-### Phase 7: E2E Tests
+### Phase 7: E2E Tests ✅
+- AI settings CRUD (read defaults, save, partial update, clear, invalid provider)
+- Summarize error paths (404 unknown recording, 400 no AI config, 400 no transcription)
 
 ## Stack
 
