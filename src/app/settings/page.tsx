@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Database, Globe, Bell, Save } from "lucide-react";
 import { AppShell, ThemeToggle } from "@/components/layout";
+import { AiSettingsSection } from "@/components/ai-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,6 +75,9 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
+          {/* AI Configuration — full width */}
+          <AiSettingsSection />
+
           {/* Appearance */}
           <SettingSection
             icon={
