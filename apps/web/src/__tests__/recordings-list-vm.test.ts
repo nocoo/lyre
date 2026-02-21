@@ -16,7 +16,6 @@ import {
   filterRecordings,
   sortRecordings,
   paginateRecordings,
-  type BulkFilterCriteria,
   bulkFilterRecordings,
   BULK_FILTER_PRESETS,
 } from "@/lib/recordings-list-vm";
