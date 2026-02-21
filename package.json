@@ -13,6 +13,8 @@
     "test:e2e": "bun run --cwd apps/web test:e2e",
     "db:push": "bun run --cwd apps/web db:push",
     "db:studio": "bun run --cwd apps/web db:studio",
+    "dev:macos": "cd apps/macos/src-tauri && cargo tauri dev",
+    "build:macos": "cd apps/macos/src-tauri && cargo tauri build",
     "prepare": "husky"
   },
   "devDependencies": {
