@@ -145,6 +145,22 @@ export const recordingTags = sqliteTable(
 export type DbRecordingTag = typeof recordingTags.$inferSelect;
 export type NewDbRecordingTag = typeof recordingTags.$inferInsert;
 
+// ── Device Tokens ──
+
+export const deviceTokens = sqliteTable("device_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  lastUsedAt: integer("last_used_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export type DbDeviceToken = typeof deviceTokens.$inferSelect;
+export type NewDbDeviceToken = typeof deviceTokens.$inferInsert;
+
 // ── Settings ──
 
 export const settings = sqliteTable("settings", {
