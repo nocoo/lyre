@@ -161,7 +161,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const isEmbedded = variant === "embedded";
 
     return (
-      <div className={isEmbedded ? "" : "rounded-xl border border-border bg-card p-4"}>
+      <div className={isEmbedded ? "flex-1 min-h-0" : "rounded-xl border border-border bg-card p-4"}>
         {/* Hidden audio element */}
         <audio
           ref={audioRef}
@@ -173,9 +173,9 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
 
         {/* ── Embedded: hero-style player ── */}
         {isEmbedded ? (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4 h-full">
             {/* Title + waveform decoration */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-1 min-h-0">
               {/* Large play button */}
               <button
                 className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-foreground text-background shadow-md transition-transform hover:scale-105 active:scale-95"
@@ -189,14 +189,14 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
                 )}
               </button>
 
-              <div className="min-w-0 flex-1 space-y-1">
+              <div className="min-w-0 flex-1 flex flex-col gap-1">
                 {title && (
                   <p className="text-base font-semibold text-foreground truncate">
                     {title}
                   </p>
                 )}
                 {/* Decorative waveform bars */}
-                <div className="flex items-end gap-[3px] h-5" aria-hidden="true">
+                <div className="flex items-end gap-[3px] flex-1 min-h-5" aria-hidden="true">
                   {WAVEFORM_PATTERN.map((h, i) => (
                     <div
                       key={i}

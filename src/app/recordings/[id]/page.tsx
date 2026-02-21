@@ -16,12 +16,13 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
+  Save,
   Settings,
   StickyNote,
   Sparkles,
   Tag,
   Trash2,
-  RotateCcw,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -404,6 +405,23 @@ function RecordingDetailContent({ id }: { id: string }) {
     [id],
   );
 
+  // ── Save all properties ──
+  const handleSaveProperties = useCallback(async () => {
+    const updates: Record<string, unknown> = {};
+    const trimmedTitle = editTitle.trim();
+    if (trimmedTitle && trimmedTitle !== detail?.title) {
+      updates.title = trimmedTitle;
+    }
+    if (notes !== (detail?.notes ?? "")) {
+      updates.notes = notes || null;
+    }
+    if (Object.keys(updates).length === 0) return;
+    setTitleSaving(true);
+    await updateRecording(updates);
+    await loadDetail();
+    setTitleSaving(false);
+  }, [editTitle, notes, detail?.title, detail?.notes, updateRecording, loadDetail]);
+
   // ── Title save on blur ──
   const handleTitleSave = useCallback(async () => {
     const trimmed = editTitle.trim();
@@ -628,7 +646,7 @@ function RecordingDetailContent({ id }: { id: string }) {
       {/* ── Row 1: Player + Metadata (2/3) | Properties (1/3) ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="rounded-xl border border-border bg-card p-4 h-full space-y-4">
+          <div className="rounded-xl border border-border bg-card p-4 h-full flex flex-col gap-4">
             <p className="text-xs font-medium text-muted-foreground">
               Playback &amp; File Info
             </p>
@@ -666,6 +684,11 @@ function RecordingDetailContent({ id }: { id: string }) {
             onNotesChange={setNotes}
             onNotesSave={handleNotesSave}
             notesSaving={notesSaving}
+            onSaveAll={handleSaveProperties}
+            isDirty={
+              (editTitle.trim() !== "" && editTitle.trim() !== (detail?.title ?? "")) ||
+              notes !== (detail?.notes ?? "")
+            }
             recordedAtDate={recordedAtDate}
             onRecordedAtChange={handleRecordedAtChange}
             selectedTagIds={selectedTagIds}
@@ -1086,6 +1109,8 @@ function EditableProperties({
   onNotesChange,
   onNotesSave,
   notesSaving,
+  onSaveAll,
+  isDirty,
   recordedAtDate,
   onRecordedAtChange,
   selectedTagIds,
@@ -1111,6 +1136,8 @@ function EditableProperties({
   onNotesChange: (v: string) => void;
   onNotesSave: () => void;
   notesSaving: boolean;
+  onSaveAll: () => void;
+  isDirty: boolean;
   recordedAtDate: string;
   onRecordedAtChange: (v: string) => void;
   selectedTagIds: string[];
@@ -1334,6 +1361,21 @@ function EditableProperties({
           className="min-h-20 text-sm"
         />
       </div>
+
+      {/* Save button */}
+      <Button
+        size="sm"
+        className="w-full gap-1.5"
+        onClick={onSaveAll}
+        disabled={!isDirty || titleSaving || notesSaving}
+      >
+        {titleSaving || notesSaving ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Save className="h-3.5 w-3.5" strokeWidth={1.5} />
+        )}
+        {titleSaving || notesSaving ? "Saving..." : "Save"}
+      </Button>
     </div>
   );
 }
