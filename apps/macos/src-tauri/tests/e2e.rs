@@ -15,7 +15,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 // Import from the crate under test
-use lyre_recorder::{AudioDeviceManager, RecorderConfig, RecorderState};
+use lyre::{AudioDeviceManager, RecorderConfig, RecorderState};
 
 /// Check if any audio input device is available.
 fn has_audio_input() -> bool {
@@ -53,7 +53,7 @@ fn e2e_record_and_verify_mp3() {
     };
 
     let device_manager = AudioDeviceManager::new();
-    let mut recorder = lyre_recorder::Recorder::new(config);
+    let mut recorder = lyre::Recorder::new(config);
 
     // Start recording
     let recording_path = recorder
@@ -108,7 +108,7 @@ fn e2e_double_start_is_error() {
     };
 
     let device_manager = AudioDeviceManager::new();
-    let mut recorder = lyre_recorder::Recorder::new(config);
+    let mut recorder = lyre::Recorder::new(config);
 
     recorder
         .start(&device_manager)
@@ -128,7 +128,7 @@ fn e2e_stop_without_start_is_error() {
         output_dir: PathBuf::from("/tmp/lyre-test-unused"),
         selected_device_index: None,
     };
-    let mut recorder = lyre_recorder::Recorder::new(config);
+    let mut recorder = lyre::Recorder::new(config);
     let result = recorder.stop();
     assert!(result.is_err());
 }

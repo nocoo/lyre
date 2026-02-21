@@ -1,5 +1,5 @@
 [package]
-name = "lyre-recorder"
+name = "lyre"
 version = "1.3.0"
 description = "Lyre audio recorder — macOS menu bar app"
 authors = ["nocoo"]
@@ -33,9 +33,9 @@ default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
 [lib]
-name = "lyre_recorder"
+name = "lyre"
 path = "src/lib.rs"
 
 [[bin]]
-name = "lyre-recorder"
+name = "lyre"
 path = "src/main.rs"
