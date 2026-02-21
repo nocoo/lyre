@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 use tauri::image::Image;
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{App, AppHandle, Wry};
 
@@ -61,15 +61,22 @@ fn build_tray_menu(
 
     // Toggle recording
     let toggle_label = if is_recording {
-        "Stop Recording"
+        "⏹ Stop Recording"
     } else {
-        "Start Recording"
+        "⏺ Start Recording"
     };
     let toggle_item =
         MenuItem::with_id(handle, "toggle_recording", toggle_label, true, None::<&str>)?;
 
-    // Device submenu
-    let device_submenu = build_device_submenu(handle, state)?;
+    let sep1 = PredefinedMenuItem::separator(handle)?;
+
+    // Flat device list (avoids Tauri v2 submenu hover/tracking bug on macOS).
+    // Section header (disabled menu item as label).
+    let device_header =
+        MenuItem::with_id(handle, "device_header", "Input Device", false, None::<&str>)?;
+    let device_items = build_device_items(handle, state)?;
+
+    let sep2 = PredefinedMenuItem::separator(handle)?;
 
     // Output folder display
     let output_dir_display = state
@@ -96,31 +103,36 @@ fn build_tray_menu(
         None::<&str>,
     )?;
 
-    let sep1 = PredefinedMenuItem::separator(handle)?;
-    let sep2 = PredefinedMenuItem::separator(handle)?;
+    let sep3 = PredefinedMenuItem::separator(handle)?;
 
     let quit = MenuItem::with_id(handle, "quit", "Quit Lyre Recorder", true, None::<&str>)?;
 
-    let menu = Menu::with_items(
-        handle,
-        &[
-            &toggle_item,
-            &sep1,
-            &device_submenu,
-            &output_item,
-            &open_folder,
-            &sep2,
-            &quit,
-        ],
-    )?;
+    // Build the items list dynamically since device count varies.
+    let mut items: Vec<Box<dyn tauri::menu::IsMenuItem<Wry>>> = Vec::new();
+    items.push(Box::new(toggle_item));
+    items.push(Box::new(sep1));
+    items.push(Box::new(device_header));
+    for item in device_items {
+        items.push(Box::new(item));
+    }
+    items.push(Box::new(sep2));
+    items.push(Box::new(output_item));
+    items.push(Box::new(open_folder));
+    items.push(Box::new(sep3));
+    items.push(Box::new(quit));
 
+    let item_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> =
+        items.iter().map(|i| i.as_ref()).collect();
+
+    let menu = Menu::with_items(handle, &item_refs)?;
     Ok(menu)
 }
 
-fn build_device_submenu(
+/// Build flat list of device check-menu-items (no submenu).
+fn build_device_items(
     handle: &AppHandle,
     state: &SendableState,
-) -> Result<Submenu<Wry>, Box<dyn std::error::Error>> {
+) -> Result<Vec<CheckMenuItem<Wry>>, Box<dyn std::error::Error>> {
     let devices = state.device_manager.list_input_devices();
     let selected_idx = state.recorder.config.selected_device_index;
 
@@ -131,7 +143,7 @@ fn build_device_submenu(
     let auto_item = CheckMenuItem::with_id(
         handle,
         "device_auto",
-        "Auto (Default)",
+        "  Auto (Default)",
         true,
         auto_checked,
         None::<&str>,
@@ -140,9 +152,9 @@ fn build_device_submenu(
 
     for dev in &devices {
         let label = if dev.is_default {
-            format!("{} (Default)", dev.name)
+            format!("  {} (Default)", dev.name)
         } else {
-            dev.name.clone()
+            format!("  {}", dev.name)
         };
         let id = format!("device_{}", dev.index);
         let checked = selected_idx == Some(dev.index);
@@ -150,13 +162,7 @@ fn build_device_submenu(
         items.push(item);
     }
 
-    let item_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> = items
-        .iter()
-        .map(|i| i as &dyn tauri::menu::IsMenuItem<Wry>)
-        .collect();
-
-    let submenu = Submenu::with_items(handle, "Input Device", true, &item_refs)?;
-    Ok(submenu)
+    Ok(items)
 }
 
 fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>>) {
