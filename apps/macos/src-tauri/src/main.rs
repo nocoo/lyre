@@ -60,6 +60,26 @@ async fn upload_recording(file_path: String) -> Result<upload::UploadResult, Str
     upload::upload_recording(&file_path).await
 }
 
+/// Tauri command: preview which recordings match a cleanup filter.
+/// Returns the list of recordings that would be deleted without actually deleting them.
+#[tauri::command]
+fn preview_cleanup(
+    filter: recordings::CleanupFilter,
+) -> Result<Vec<recordings::RecordingInfo>, String> {
+    let output_dir = recordings::default_output_dir();
+    let all = recordings::list_recordings(&output_dir)?;
+    Ok(recordings::find_cleanable_recordings(&all, &filter))
+}
+
+/// Tauri command: batch delete recordings by file paths.
+#[tauri::command]
+fn batch_delete_recordings(
+    file_paths: Vec<String>,
+) -> Result<recordings::CleanupResult, String> {
+    let output_dir = recordings::default_output_dir();
+    Ok(recordings::batch_delete_recordings(&file_paths, &output_dir))
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -72,6 +92,8 @@ fn main() {
             delete_recording,
             reveal_recording,
             upload_recording,
+            preview_cleanup,
+            batch_delete_recordings,
         ])
         .setup(|app| {
             tray::setup_tray(app)?;

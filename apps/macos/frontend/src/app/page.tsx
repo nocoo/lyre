@@ -5,9 +5,10 @@ import { Toolbar } from "@/components/toolbar";
 import { SettingsPage } from "@/components/settings-page";
 import { RecordingsPage } from "@/components/recordings-page";
 import { AboutPage } from "@/components/about-page";
+import { CleanupPage } from "@/components/cleanup-page";
 import { Toaster } from "@/components/ui/sonner";
 
-type Page = "recordings" | "settings" | "about";
+type Page = "recordings" | "settings" | "about" | "cleanup";
 
 export default function Home() {
   const [page, setPage] = useState<Page>("recordings");
@@ -30,6 +31,15 @@ export default function Home() {
     );
   }
 
+  if (page === "cleanup") {
+    return (
+      <>
+        <CleanupPage onBack={() => setPage("recordings")} />
+        <Toaster position="bottom-center" duration={3000} />
+      </>
+    );
+  }
+
   return (
     <main
       className="flex h-screen flex-col pt-[74px]"
@@ -39,7 +49,7 @@ export default function Home() {
         activePage={page}
         onNavigate={setPage}
       />
-      <RecordingsPage />
+      <RecordingsPage onNavigateCleanup={() => setPage("cleanup")} />
       <Toaster position="bottom-center" duration={3000} />
     </main>
   );

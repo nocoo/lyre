@@ -14,6 +14,7 @@ import {
   Loader2,
   AlertCircle,
   Music,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ interface UploadState {
   error?: string;
 }
 
-export function RecordingsPage() {
+export function RecordingsPage({ onNavigateCleanup }: { onNavigateCleanup: () => void }) {
   const [recordings, setRecordings] = useState<RecordingInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingPath, setPlayingPath] = useState<string | null>(null);
@@ -202,14 +203,24 @@ export function RecordingsPage() {
         <span className="text-xs font-medium text-muted-foreground">
           {recordings.length} recording{recordings.length !== 1 ? "s" : ""}
         </span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={loadRecordings}
-          title="Refresh"
-        >
-          <RefreshCw className="h-3 w-3" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onNavigateCleanup}
+            title="Cleanup"
+          >
+            <Sparkles className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={loadRecordings}
+            title="Refresh"
+          >
+            <RefreshCw className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
 
       {/* Recordings list */}

@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::recorder::RecorderConfig;
 
@@ -148,6 +148,129 @@ fn mp3_duration_estimate(path: &Path) -> Option<f64> {
     Some(size as f64 / bitrate_bytes_per_sec)
 }
 
+// --- Batch cleanup ---
+
+/// Filter criteria for batch cleanup.
+/// All fields are optional — only enabled filters are applied.
+/// A recording matches if it satisfies ANY of the enabled filters (OR logic).
+#[derive(Debug, Clone, Deserialize)]
+pub struct CleanupFilter {
+    /// Remove recordings created before this ISO 8601 timestamp.
+    pub before_date: Option<String>,
+    /// Remove recordings shorter than this many seconds.
+    pub min_duration_secs: Option<f64>,
+    /// Remove recordings longer than this many seconds.
+    pub max_duration_secs: Option<f64>,
+    /// Remove recordings larger than this many bytes.
+    pub max_size_bytes: Option<u64>,
+}
+
+/// Result of a batch cleanup preview or execution.
+#[derive(Debug, Clone, Serialize)]
+pub struct CleanupResult {
+    /// Number of files deleted.
+    pub deleted_count: usize,
+    /// Total bytes freed.
+    pub freed_bytes: u64,
+    /// Files that failed to delete (path + error message).
+    pub errors: Vec<CleanupError>,
+}
+
+/// A single file that failed to delete during batch cleanup.
+#[derive(Debug, Clone, Serialize)]
+pub struct CleanupError {
+    pub path: String,
+    pub error: String,
+}
+
+/// Find recordings that match the cleanup filter criteria.
+/// Returns the subset of recordings that would be deleted.
+pub fn find_cleanable_recordings(
+    recordings: &[RecordingInfo],
+    filter: &CleanupFilter,
+) -> Vec<RecordingInfo> {
+    recordings
+        .iter()
+        .filter(|rec| matches_cleanup_filter(rec, filter))
+        .cloned()
+        .collect()
+}
+
+/// Delete multiple recording files in batch. Returns a summary of results.
+pub fn batch_delete_recordings(file_paths: &[String], output_dir: &Path) -> CleanupResult {
+    let mut deleted_count = 0;
+    let mut freed_bytes = 0u64;
+    let mut errors = Vec::new();
+
+    for file_path in file_paths {
+        // Get file size before deleting
+        let size = fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
+
+        match delete_recording(file_path, output_dir) {
+            Ok(()) => {
+                deleted_count += 1;
+                freed_bytes += size;
+            }
+            Err(e) => {
+                errors.push(CleanupError {
+                    path: file_path.clone(),
+                    error: e,
+                });
+            }
+        }
+    }
+
+    CleanupResult {
+        deleted_count,
+        freed_bytes,
+        errors,
+    }
+}
+
+/// Check if a recording matches any of the enabled cleanup filter criteria.
+fn matches_cleanup_filter(rec: &RecordingInfo, filter: &CleanupFilter) -> bool {
+    // At least one filter must be enabled
+    let any_enabled = filter.before_date.is_some()
+        || filter.min_duration_secs.is_some()
+        || filter.max_duration_secs.is_some()
+        || filter.max_size_bytes.is_some();
+
+    if !any_enabled {
+        return false;
+    }
+
+    // OR logic: match if ANY enabled filter is satisfied
+    if let Some(ref before) = filter.before_date {
+        if rec.created_at < *before {
+            return true;
+        }
+    }
+
+    if let Some(min_dur) = filter.min_duration_secs {
+        if let Some(dur) = rec.duration_secs {
+            if dur < min_dur {
+                return true;
+            }
+        }
+    }
+
+    if let Some(max_dur) = filter.max_duration_secs {
+        if let Some(dur) = rec.duration_secs {
+            if dur > max_dur {
+                return true;
+            }
+        }
+    }
+
+    if let Some(max_size) = filter.max_size_bytes {
+        if rec.size > max_size {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Convert SystemTime to ISO 8601 string.
 fn system_time_to_iso(time: SystemTime) -> String {
     let duration = time
@@ -263,6 +386,204 @@ mod tests {
     fn test_default_output_dir() {
         let dir = default_output_dir();
         assert!(dir.to_string_lossy().contains("Lyre Recordings"));
+    }
+
+    // --- Cleanup filter tests ---
+
+    fn make_recording(
+        name: &str,
+        size: u64,
+        duration: Option<f64>,
+        created_at: &str,
+    ) -> RecordingInfo {
+        RecordingInfo {
+            path: format!("/tmp/test/{name}"),
+            name: name.to_string(),
+            size,
+            duration_secs: duration,
+            created_at: created_at.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_cleanup_no_filters_matches_nothing() {
+        let recordings = vec![make_recording(
+            "a.mp3",
+            1000,
+            Some(10.0),
+            "2026-02-20T10:00:00+0800",
+        )];
+        let filter = CleanupFilter {
+            before_date: None,
+            min_duration_secs: None,
+            max_duration_secs: None,
+            max_size_bytes: None,
+        };
+        let result = find_cleanable_recordings(&recordings, &filter);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_cleanup_before_date() {
+        let recordings = vec![
+            make_recording("old.mp3", 1000, Some(10.0), "2025-01-01T00:00:00+0800"),
+            make_recording("new.mp3", 1000, Some(10.0), "2026-06-01T00:00:00+0800"),
+        ];
+        let filter = CleanupFilter {
+            before_date: Some("2026-01-01T00:00:00+0800".to_string()),
+            min_duration_secs: None,
+            max_duration_secs: None,
+            max_size_bytes: None,
+        };
+        let result = find_cleanable_recordings(&recordings, &filter);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "old.mp3");
+    }
+
+    #[test]
+    fn test_cleanup_short_duration() {
+        let recordings = vec![
+            make_recording("short.mp3", 500, Some(0.5), "2026-02-20T10:00:00+0800"),
+            make_recording("normal.mp3", 5000, Some(30.0), "2026-02-20T10:00:00+0800"),
+        ];
+        let filter = CleanupFilter {
+            before_date: None,
+            min_duration_secs: Some(5.0),
+            max_duration_secs: None,
+            max_size_bytes: None,
+        };
+        let result = find_cleanable_recordings(&recordings, &filter);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "short.mp3");
+    }
+
+    #[test]
+    fn test_cleanup_long_duration() {
+        let recordings = vec![
+            make_recording("normal.mp3", 5000, Some(30.0), "2026-02-20T10:00:00+0800"),
+            make_recording("long.mp3", 50000, Some(3600.0), "2026-02-20T10:00:00+0800"),
+        ];
+        let filter = CleanupFilter {
+            before_date: None,
+            min_duration_secs: None,
+            max_duration_secs: Some(1800.0),
+            max_size_bytes: None,
+        };
+        let result = find_cleanable_recordings(&recordings, &filter);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "long.mp3");
+    }
+
+    #[test]
+    fn test_cleanup_large_file() {
+        let recordings = vec![
+            make_recording(
+                "small.mp3",
+                1_000_000,
+                Some(30.0),
+                "2026-02-20T10:00:00+0800",
+            ),
+            make_recording(
+                "huge.mp3",
+                500_000_000,
+                Some(300.0),
+                "2026-02-20T10:00:00+0800",
+            ),
+        ];
+        let filter = CleanupFilter {
+            before_date: None,
+            min_duration_secs: None,
+            max_duration_secs: None,
+            max_size_bytes: Some(100_000_000),
+        };
+        let result = find_cleanable_recordings(&recordings, &filter);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "huge.mp3");
+    }
+
+    #[test]
+    fn test_cleanup_or_logic_multiple_filters() {
+        let recordings = vec![
+            make_recording("old.mp3", 1000, Some(30.0), "2025-01-01T00:00:00+0800"),
+            make_recording("short.mp3", 500, Some(0.5), "2026-06-01T00:00:00+0800"),
+            make_recording(
+                "huge.mp3",
+                500_000_000,
+                Some(60.0),
+                "2026-06-01T00:00:00+0800",
+            ),
+            make_recording("ok.mp3", 5000, Some(30.0), "2026-06-01T00:00:00+0800"),
+        ];
+        let filter = CleanupFilter {
+            before_date: Some("2026-01-01T00:00:00+0800".to_string()),
+            min_duration_secs: Some(5.0),
+            max_duration_secs: None,
+            max_size_bytes: Some(100_000_000),
+        };
+        let result = find_cleanable_recordings(&recordings, &filter);
+        assert_eq!(result.len(), 3);
+        let names: Vec<&str> = result.iter().map(|r| r.name.as_str()).collect();
+        assert!(names.contains(&"old.mp3"));
+        assert!(names.contains(&"short.mp3"));
+        assert!(names.contains(&"huge.mp3"));
+        assert!(!names.contains(&"ok.mp3"));
+    }
+
+    #[test]
+    fn test_cleanup_skips_none_duration() {
+        // Recording with no duration should not match duration filters
+        let recordings = vec![make_recording(
+            "no-dur.mp3",
+            1000,
+            None,
+            "2026-06-01T00:00:00+0800",
+        )];
+        let filter = CleanupFilter {
+            before_date: None,
+            min_duration_secs: Some(5.0),
+            max_duration_secs: None,
+            max_size_bytes: None,
+        };
+        let result = find_cleanable_recordings(&recordings, &filter);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_batch_delete_recordings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wav1 = tmp.path().join("a.wav");
+        let wav2 = tmp.path().join("b.wav");
+        create_test_wav(&wav1);
+        create_test_wav(&wav2);
+        assert!(wav1.exists());
+        assert!(wav2.exists());
+
+        let paths = vec![
+            wav1.to_string_lossy().into_owned(),
+            wav2.to_string_lossy().into_owned(),
+        ];
+        let result = batch_delete_recordings(&paths, tmp.path());
+        assert_eq!(result.deleted_count, 2);
+        assert!(result.freed_bytes > 0);
+        assert!(result.errors.is_empty());
+        assert!(!wav1.exists());
+        assert!(!wav2.exists());
+    }
+
+    #[test]
+    fn test_batch_delete_partial_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wav = tmp.path().join("exists.wav");
+        create_test_wav(&wav);
+
+        let paths = vec![
+            wav.to_string_lossy().into_owned(),
+            tmp.path().join("ghost.wav").to_string_lossy().into_owned(),
+        ];
+        let result = batch_delete_recordings(&paths, tmp.path());
+        assert_eq!(result.deleted_count, 1);
+        assert_eq!(result.errors.len(), 1);
+        assert!(!wav.exists());
     }
 
     /// Create a minimal valid WAV file for testing.

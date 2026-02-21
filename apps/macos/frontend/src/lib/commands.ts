@@ -20,6 +20,24 @@ export interface UploadResult {
   ossKey: string;
 }
 
+export interface CleanupFilter {
+  before_date?: string | null;
+  min_duration_secs?: number | null;
+  max_duration_secs?: number | null;
+  max_size_bytes?: number | null;
+}
+
+export interface CleanupResult {
+  deleted_count: number;
+  freed_bytes: number;
+  errors: CleanupError[];
+}
+
+export interface CleanupError {
+  path: string;
+  error: string;
+}
+
 // Tauri command wrappers
 
 export function getConfig(): Promise<Config> {
@@ -48,4 +66,12 @@ export function revealRecording(filePath: string): Promise<void> {
 
 export function uploadRecording(filePath: string): Promise<UploadResult> {
   return invoke<UploadResult>("upload_recording", { filePath });
+}
+
+export function previewCleanup(filter: CleanupFilter): Promise<RecordingInfo[]> {
+  return invoke<RecordingInfo[]>("preview_cleanup", { filter });
+}
+
+export function batchDeleteRecordings(filePaths: string[]): Promise<CleanupResult> {
+  return invoke<CleanupResult>("batch_delete_recordings", { filePaths });
 }
