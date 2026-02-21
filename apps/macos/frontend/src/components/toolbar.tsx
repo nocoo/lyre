@@ -30,7 +30,7 @@ export function Toolbar({ activePage, onNavigate }: ToolbarProps) {
             alt="Lyre"
             width={20}
             height={20}
-            className="dark:invert"
+            className=""
           />
           <h1 className="text-base font-semibold">Lyre</h1>
         </div>

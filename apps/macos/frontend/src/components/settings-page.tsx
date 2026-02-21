@@ -14,8 +14,19 @@ interface SettingsPageProps {
 
 type ConnectionStatus = "idle" | "testing" | "connected" | "error";
 
+const SERVER_PRESETS = [
+  { label: "Production", url: "https://lyre.hexly.ai" },
+  { label: "Development", url: "https://lyre.dev.hexly.ai" },
+] as const;
+
+function resolvePreset(url: string): string {
+  const preset = SERVER_PRESETS.find((p) => p.url === url);
+  return preset ? preset.url : "custom";
+}
+
 export function SettingsPage({ onBack }: SettingsPageProps) {
   const [serverUrl, setServerUrl] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<string>("custom");
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [connectionStatus, setConnectionStatus] =
@@ -26,10 +37,18 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
     getConfig()
       .then((config) => {
         setServerUrl(config.server_url);
+        setSelectedPreset(resolvePreset(config.server_url));
         setToken(config.token);
       })
       .catch(() => toast.error("Failed to load config"))
       .finally(() => setLoading(false));
+  }, []);
+
+  const handlePresetChange = useCallback((value: string) => {
+    setSelectedPreset(value);
+    if (value !== "custom") {
+      setServerUrl(value);
+    }
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -113,14 +132,45 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
             </p>
 
             <div className="space-y-1.5">
-              <Label htmlFor="server-url">Server URL</Label>
-              <Input
-                id="server-url"
-                type="url"
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="https://lyre.example.com"
-              />
+              <Label>Server URL</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {SERVER_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.url}
+                    variant={
+                      selectedPreset === preset.url ? "default" : "outline"
+                    }
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => handlePresetChange(preset.url)}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+                <Button
+                  variant={selectedPreset === "custom" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => handlePresetChange("custom")}
+                >
+                  Custom
+                </Button>
+              </div>
+              {selectedPreset === "custom" && (
+                <Input
+                  id="server-url"
+                  type="url"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  placeholder="https://lyre.example.com"
+                  className="mt-1.5"
+                />
+              )}
+              {selectedPreset !== "custom" && (
+                <p className="text-[11px] text-muted-foreground">
+                  {serverUrl}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
