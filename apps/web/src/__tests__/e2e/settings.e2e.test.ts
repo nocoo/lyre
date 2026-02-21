@@ -57,10 +57,10 @@ describe("settings API endpoints", () => {
       const res = await fetch(`${BASE_URL}/api/settings/ai`);
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toHaveProperty("baseUrl");
+      expect(body).toHaveProperty("baseURL");
       expect(body).toHaveProperty("model");
-      // authToken should be present (may be empty)
-      expect(body).toHaveProperty("authToken");
+      expect(body).toHaveProperty("provider");
+      expect(body).toHaveProperty("hasApiKey");
     });
   });
 
@@ -75,9 +75,9 @@ describe("settings API endpoints", () => {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseUrl: "https://test.example.com/v1",
+          baseURL: "https://test.example.com/v1",
           model: "test-model",
-          authToken: "test-token-123",
+          apiKey: "test-key-123",
         }),
       });
       expect(res.status).toBe(200);
@@ -85,25 +85,33 @@ describe("settings API endpoints", () => {
       // Verify update persisted
       const verifyRes = await fetch(`${BASE_URL}/api/settings/ai`);
       const verified = await verifyRes.json();
-      expect(verified.baseUrl).toBe("https://test.example.com/v1");
+      expect(verified.baseURL).toBe("https://test.example.com/v1");
       expect(verified.model).toBe("test-model");
-      expect(verified.authToken).toBe("test-token-123");
+      expect(verified.hasApiKey).toBe(true);
+      // apiKey is masked in GET response
+      expect(verified.apiKey).toContain("*");
+      expect(verified.apiKey).toMatch(/\*+3$/);
 
-      // Restore original
+      // Restore original (send empty apiKey to clear)
       await fetch(`${BASE_URL}/api/settings/ai`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(original),
+        body: JSON.stringify({
+          baseURL: original.baseURL,
+          model: original.model,
+          apiKey: "",
+        }),
       });
     });
   });
 
   describe("GET /api/settings/tokens", () => {
-    test("returns 200 with tokens array", async () => {
+    test("returns 200 with tokens in items array", async () => {
       const res = await fetch(`${BASE_URL}/api/settings/tokens`);
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(Array.isArray(body)).toBe(true);
+      expect(body).toHaveProperty("items");
+      expect(Array.isArray(body.items)).toBe(true);
     });
   });
 
@@ -112,31 +120,29 @@ describe("settings API endpoints", () => {
       const res = await fetch(`${BASE_URL}/api/settings/tokens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: "E2E Test Token" }),
+        body: JSON.stringify({ name: "E2E Test Token" }),
       });
       expect(res.status).toBe(201);
 
       const body = await res.json();
       expect(body).toHaveProperty("id");
       expect(body).toHaveProperty("token");
-      expect(body.label).toBe("E2E Test Token");
+      expect(body.name).toBe("E2E Test Token");
 
       // Cleanup: delete the created token
-      const deleteRes = await fetch(
-        `${BASE_URL}/api/settings/tokens/${body.id}`,
-        { method: "DELETE" },
-      );
-      expect(deleteRes.status).toBe(204);
+      await fetch(`${BASE_URL}/api/settings/tokens/${body.id}`, {
+        method: "DELETE",
+      });
     });
   });
 
   describe("DELETE /api/settings/tokens/[id]", () => {
-    test("deletes a token and returns 204", async () => {
+    test("deletes a token and returns 200", async () => {
       // Create a token to delete
       const createRes = await fetch(`${BASE_URL}/api/settings/tokens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: "Token To Delete" }),
+        body: JSON.stringify({ name: "Token To Delete" }),
       });
       const created = await createRes.json();
 
@@ -145,12 +151,15 @@ describe("settings API endpoints", () => {
         `${BASE_URL}/api/settings/tokens/${created.id}`,
         { method: "DELETE" },
       );
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.deleted).toBe(true);
 
       // Verify it's gone — listing should not include it
       const listRes = await fetch(`${BASE_URL}/api/settings/tokens`);
-      const tokens = await listRes.json();
-      const found = tokens.find(
+      const listing = await listRes.json();
+      const found = listing.items.find(
         (t: { id: string }) => t.id === created.id,
       );
       expect(found).toBeUndefined();
