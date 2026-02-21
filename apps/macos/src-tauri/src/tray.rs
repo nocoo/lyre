@@ -2,20 +2,18 @@ use std::sync::{Arc, Mutex};
 use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
-use tauri::{App, Wry};
+use tauri::{App, AppHandle, Wry};
 
 use crate::audio::AudioDeviceManager;
 use crate::recorder::{Recorder, RecorderConfig, RecorderState};
 
-// Tray icons embedded at compile time (22x22 PNG).
+// Tray icons embedded at compile time.
+// Idle icon: pure black foreground + alpha (macOS template image).
+// Recording icon: same shape with a red dot overlay (non-template, so red stays red).
 const TRAY_ICON_IDLE: &[u8] = include_bytes!("../icons/tray-icon.png");
 const TRAY_ICON_RECORDING: &[u8] = include_bytes!("../icons/tray-icon-recording.png");
 
 /// Shared state that is Send+Sync safe.
-/// The Recorder itself holds the cpal::Stream which is !Send, so we wrap it
-/// in a way that sends commands to the main thread. However, on macOS the
-/// tray event handler runs on the main thread anyway, so we can use a Mutex
-/// with unsafe Send/Sync wrapper for the !Send stream.
 struct SendableState {
     recorder: Recorder,
     device_manager: AudioDeviceManager,
@@ -23,8 +21,7 @@ struct SendableState {
 
 // Safety: On macOS, Tauri menu events are dispatched on the main thread.
 // The cpal::Stream inside Recorder is only accessed from menu event handlers,
-// which all run on the same (main) thread. We never actually send the state
-// across threads.
+// which all run on the same (main) thread.
 unsafe impl Send for SendableState {}
 unsafe impl Sync for SendableState {}
 
@@ -37,7 +34,7 @@ pub fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 
     let tray_menu = {
         let s = state.lock().unwrap();
-        build_tray_menu(app, &s)?
+        build_tray_menu(app.handle(), &s)?
     };
 
     let state_for_event = state.clone();
@@ -57,7 +54,7 @@ pub fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn build_tray_menu(
-    app: &App,
+    handle: &AppHandle,
     state: &SendableState,
 ) -> Result<Menu<Wry>, Box<dyn std::error::Error>> {
     let is_recording = state.recorder.state() == RecorderState::Recording;
@@ -68,10 +65,11 @@ fn build_tray_menu(
     } else {
         "Start Recording"
     };
-    let toggle_item = MenuItem::with_id(app, "toggle_recording", toggle_label, true, None::<&str>)?;
+    let toggle_item =
+        MenuItem::with_id(handle, "toggle_recording", toggle_label, true, None::<&str>)?;
 
     // Device submenu
-    let device_submenu = build_device_submenu(app, state)?;
+    let device_submenu = build_device_submenu(handle, state)?;
 
     // Output folder display
     let output_dir_display = state
@@ -82,7 +80,7 @@ fn build_tray_menu(
         .and_then(|n| n.to_str())
         .unwrap_or("Unknown");
     let output_item = MenuItem::with_id(
-        app,
+        handle,
         "set_output_dir",
         format!("Output: {output_dir_display}..."),
         !is_recording,
@@ -91,20 +89,20 @@ fn build_tray_menu(
 
     // Open output folder
     let open_folder = MenuItem::with_id(
-        app,
+        handle,
         "open_output_dir",
         "Open Output Folder",
         true,
         None::<&str>,
     )?;
 
-    let sep1 = PredefinedMenuItem::separator(app)?;
-    let sep2 = PredefinedMenuItem::separator(app)?;
+    let sep1 = PredefinedMenuItem::separator(handle)?;
+    let sep2 = PredefinedMenuItem::separator(handle)?;
 
-    let quit = MenuItem::with_id(app, "quit", "Quit Lyre Recorder", true, None::<&str>)?;
+    let quit = MenuItem::with_id(handle, "quit", "Quit Lyre Recorder", true, None::<&str>)?;
 
     let menu = Menu::with_items(
-        app,
+        handle,
         &[
             &toggle_item,
             &sep1,
@@ -120,7 +118,7 @@ fn build_tray_menu(
 }
 
 fn build_device_submenu(
-    app: &App,
+    handle: &AppHandle,
     state: &SendableState,
 ) -> Result<Submenu<Wry>, Box<dyn std::error::Error>> {
     let devices = state.device_manager.list_input_devices();
@@ -131,7 +129,7 @@ fn build_device_submenu(
     // "Auto (Default)" option
     let auto_checked = selected_idx.is_none();
     let auto_item = CheckMenuItem::with_id(
-        app,
+        handle,
         "device_auto",
         "Auto (Default)",
         true,
@@ -148,7 +146,7 @@ fn build_device_submenu(
         };
         let id = format!("device_{}", dev.index);
         let checked = selected_idx == Some(dev.index);
-        let item = CheckMenuItem::with_id(app, &id, &label, true, checked, None::<&str>)?;
+        let item = CheckMenuItem::with_id(handle, &id, &label, true, checked, None::<&str>)?;
         items.push(item);
     }
 
@@ -157,11 +155,11 @@ fn build_device_submenu(
         .map(|i| i as &dyn tauri::menu::IsMenuItem<Wry>)
         .collect();
 
-    let submenu = Submenu::with_items(app, "Input Device", true, &item_refs)?;
+    let submenu = Submenu::with_items(handle, "Input Device", true, &item_refs)?;
     Ok(submenu)
 }
 
-fn handle_menu_event(app: &tauri::AppHandle, id: &str, state: &Arc<Mutex<SendableState>>) {
+fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>>) {
     match id {
         "toggle_recording" => {
             let mut s = state.lock().unwrap();
@@ -193,10 +191,13 @@ fn handle_menu_event(app: &tauri::AppHandle, id: &str, state: &Arc<Mutex<Sendabl
                     }
                 },
             }
+            // Rebuild menu so "Start/Stop Recording" label updates
+            rebuild_tray_menu(app, &s);
         }
         "set_output_dir" => {
             use tauri_plugin_dialog::DialogExt;
             let state_clone = state.clone();
+            let app_handle = app.clone();
             app.dialog().file().pick_folder(move |folder| {
                 if let Some(path) = folder {
                     let mut s = state_clone.lock().unwrap();
@@ -204,6 +205,7 @@ fn handle_menu_event(app: &tauri::AppHandle, id: &str, state: &Arc<Mutex<Sendabl
                         s.recorder.set_output_dir(path_buf.to_path_buf());
                         println!("output dir set to: {path}");
                     }
+                    rebuild_tray_menu(&app_handle, &s);
                 }
             });
         }
@@ -238,12 +240,13 @@ fn handle_menu_event(app: &tauri::AppHandle, id: &str, state: &Arc<Mutex<Sendabl
                     println!("device set to: {name}");
                 }
             }
+            rebuild_tray_menu(app, &s);
         }
         _ => {}
     }
 }
 
-fn update_tray_icon(app: &tauri::AppHandle, recording: bool) {
+fn update_tray_icon(app: &AppHandle, recording: bool) {
     if let Some(tray) = app.tray_by_id("main-tray") {
         let icon_bytes = if recording {
             TRAY_ICON_RECORDING
@@ -252,8 +255,8 @@ fn update_tray_icon(app: &tauri::AppHandle, recording: bool) {
         };
         if let Ok(icon) = Image::from_bytes(icon_bytes) {
             let _ = tray.set_icon(Some(icon));
-            // Template icons are monochrome and adapt to dark/light menu bar.
-            // Recording icon has a colored red dot, so disable template mode.
+            // Idle: template mode (macOS adapts to light/dark menu bar).
+            // Recording: non-template so the red dot retains its color.
             let _ = tray.set_icon_as_template(!recording);
         }
         let tooltip = if recording {
@@ -262,5 +265,19 @@ fn update_tray_icon(app: &tauri::AppHandle, recording: bool) {
             "Lyre Recorder"
         };
         let _ = tray.set_tooltip(Some(tooltip));
+    }
+}
+
+/// Rebuild the tray menu to reflect current state (recording label, device selection, etc.)
+fn rebuild_tray_menu(app: &AppHandle, state: &SendableState) {
+    let menu = match build_tray_menu(app, state) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("failed to rebuild tray menu: {e}");
+            return;
+        }
+    };
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let _ = tray.set_menu(Some(menu));
     }
 }

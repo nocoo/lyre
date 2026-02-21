@@ -8,11 +8,6 @@
   },
   "app": {
     "withGlobalTauri": false,
-    "trayIcon": {
-      "id": "main-tray",
-      "iconPath": "icons/tray-icon.png",
-      "iconAsTemplate": true
-    },
     "windows": [],
     "security": {
       "capabilities": ["default"]
