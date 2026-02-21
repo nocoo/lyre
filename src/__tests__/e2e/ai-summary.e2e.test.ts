@@ -239,6 +239,20 @@ describe("POST /api/recordings/[id]/summarize", () => {
   });
 
   test("returns 400 when AI is not configured", async () => {
+    // Ensure AI config is cleared (previous tests may have set custom provider)
+    await fetch(`${BASE_URL}/api/settings/ai`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: "",
+        apiKey: "",
+        model: "",
+        autoSummarize: false,
+        baseURL: "",
+        sdkType: "",
+      }),
+    });
+
     // Create a recording and transcribe it so it has a transcription
     const rec = await createRecording("Summarize Unconfigured Test");
     createdIds.push(rec.id);
