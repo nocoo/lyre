@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -11,7 +11,7 @@ import {
   PanelLeft,
   LogOut,
   Search,
-  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn, getAvatarColor } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/version";
@@ -31,10 +31,53 @@ import { GlobalSearch } from "@/components/global-search";
 import { useSidebar } from "./sidebar-context";
 import { FolderSidebar, FolderSidebarCollapsed } from "./folder-sidebar";
 
-const staticNavItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+// ── Nav group section (collapsible label + children) ──
+
+function NavGroupSection({
+  label,
+  defaultOpen = true,
+  children,
+}: {
+  label: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="px-3 mt-2">
+        <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2.5">
+          <span className="text-sm font-normal text-muted-foreground">
+            {label}
+          </span>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center">
+            <ChevronUp
+              className={cn(
+                "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                !open && "rotate-180",
+              )}
+              strokeWidth={1.5}
+            />
+          </span>
+        </CollapsibleTrigger>
+      </div>
+      <div
+        className="grid overflow-hidden"
+        style={{
+          gridTemplateRows: open ? "1fr" : "0fr",
+          transition: "grid-template-rows 200ms ease-out",
+        }}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-col gap-0.5 px-3">{children}</div>
+        </div>
+      </div>
+    </Collapsible>
+  );
+}
+
+// ── Main sidebar ──
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -46,7 +89,6 @@ export function Sidebar() {
   const userInitial = userName[0] ?? "?";
 
   const isRecordingsPage = pathname.startsWith("/recordings");
-  const [recordingsOpen, setRecordingsOpen] = useState(isRecordingsPage);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -119,7 +161,7 @@ export function Sidebar() {
               </TooltipContent>
             </Tooltip>
 
-            {/* Navigation */}
+            {/* Navigation icons */}
             <nav className="flex flex-col items-center gap-1 pt-1">
               {/* Dashboard */}
               <Tooltip>
@@ -160,8 +202,16 @@ export function Sidebar() {
                   Recordings
                 </TooltipContent>
               </Tooltip>
+            </nav>
 
-              {/* Settings */}
+            {/* Folder tree — collapsed (icons only) */}
+            {isRecordingsPage && <FolderSidebarCollapsed />}
+
+            {/* Spacer when no folder tree */}
+            {!isRecordingsPage && <div className="flex-1" />}
+
+            {/* Settings (pinned bottom) */}
+            <div className="flex flex-col items-center gap-1 pb-1">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Link
@@ -180,13 +230,7 @@ export function Sidebar() {
                   Settings
                 </TooltipContent>
               </Tooltip>
-            </nav>
-
-            {/* Folder tree — collapsed (icons only) */}
-            {isRecordingsPage && <FolderSidebarCollapsed />}
-
-            {/* Spacer when no folder tree */}
-            {!isRecordingsPage && <div className="flex-1" />}
+            </div>
 
             {/* User avatar + sign out */}
             <div className="py-3 flex justify-center w-full">
@@ -277,86 +321,54 @@ export function Sidebar() {
               </button>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex flex-col pt-1">
-              {/* Dashboard */}
-              <div className="flex flex-col gap-0.5 px-3">
-                {staticNavItems.map((item) => {
-                  const isActive =
-                    item.href === "/"
-                      ? pathname === "/"
-                      : pathname.startsWith(item.href);
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-                        isActive
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      <item.icon
-                        className="h-4 w-4 shrink-0"
-                        strokeWidth={1.5}
-                      />
-                      <span className="flex-1 text-left">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-
-              {/* Recordings — collapsible group */}
-              <Collapsible open={recordingsOpen} onOpenChange={setRecordingsOpen}>
-                <div className="px-3 mt-0.5">
-                  <CollapsibleTrigger asChild>
-                    <button
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-                        isRecordingsPage
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                      onClick={(e) => {
-                        // If not on recordings page, navigate there first
-                        if (!isRecordingsPage) {
-                          e.preventDefault();
-                          window.location.href = "/recordings";
-                        }
-                      }}
-                    >
-                      <Mic className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-                      <span className="flex-1 text-left">Recordings</span>
-                      <ChevronDown
-                        className={cn(
-                          "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                          !recordingsOpen && "-rotate-90",
-                        )}
-                        strokeWidth={1.5}
-                      />
-                    </button>
-                  </CollapsibleTrigger>
-                </div>
-                <div
-                  className="grid overflow-hidden"
-                  style={{
-                    gridTemplateRows: recordingsOpen ? "1fr" : "0fr",
-                    transition: "grid-template-rows 200ms ease-out",
-                  }}
+            {/* Navigation groups */}
+            <nav className="flex-1 overflow-y-auto pt-1">
+              {/* General group */}
+              <NavGroupSection label="General">
+                <Link
+                  href="/"
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
+                    pathname === "/"
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )}
                 >
-                  <div className="min-h-0 overflow-hidden">
-                    <div className="pt-0.5">
-                      <FolderSidebar />
-                    </div>
-                  </div>
-                </div>
-              </Collapsible>
+                  <LayoutDashboard
+                    className="h-4 w-4 shrink-0"
+                    strokeWidth={1.5}
+                  />
+                  <span className="flex-1 text-left">Dashboard</span>
+                </Link>
+              </NavGroupSection>
+
+              {/* Recordings group */}
+              <NavGroupSection
+                label="Recordings"
+                defaultOpen={isRecordingsPage}
+              >
+                <FolderSidebar />
+              </NavGroupSection>
             </nav>
 
-            {/* Spacer */}
-            <div className="flex-1" />
+            {/* Settings (pinned bottom, outside groups) */}
+            <div className="px-3 pb-1">
+              <Link
+                href="/settings"
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
+                  pathname.startsWith("/settings")
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <Settings
+                  className="h-4 w-4 shrink-0"
+                  strokeWidth={1.5}
+                />
+                <span className="flex-1 text-left">Settings</span>
+              </Link>
+            </div>
 
             {/* User info + sign out */}
             <div className="px-4 py-3">

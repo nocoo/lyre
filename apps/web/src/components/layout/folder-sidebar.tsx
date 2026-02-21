@@ -136,13 +136,13 @@ function FolderItem({
       <button
         onClick={onSelect}
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+          "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
           isActive
             ? "bg-accent text-foreground"
             : "text-muted-foreground hover:bg-accent hover:text-foreground",
         )}
       >
-        {renderFolderIcon(isActive ? "folder-open" : folder.icon, "h-3.5 w-3.5 shrink-0")}
+        {renderFolderIcon(isActive ? "folder-open" : folder.icon)}
         <span className="flex-1 truncate text-left">{folder.name}</span>
       </button>
       <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -422,56 +422,54 @@ export function FolderSidebar() {
 
   return (
     <>
-      <div className="flex flex-col gap-0.5 pl-6 pr-3">
-        {/* All recordings */}
-        <button
-          onClick={() => handleFolderSelect(null)}
-          className={cn(
-            "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
-            folderParam === null
-              ? "bg-accent text-foreground"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground",
-          )}
-        >
-          <Mic className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
-          <span className="truncate">All Recordings</span>
-        </button>
+      {/* All recordings */}
+      <button
+        onClick={() => handleFolderSelect(null)}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
+          folderParam === null
+            ? "bg-accent text-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        )}
+      >
+        <Mic className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+        <span className="truncate">All Recordings</span>
+      </button>
 
-        {/* Unfiled */}
-        <button
-          onClick={() => handleFolderSelect("unfiled")}
-          className={cn(
-            "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
-            folderParam === "unfiled"
-              ? "bg-accent text-foreground"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground",
-          )}
-        >
-          <Inbox className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
-          <span className="truncate">Unfiled</span>
-        </button>
+      {/* Unfiled */}
+      <button
+        onClick={() => handleFolderSelect("unfiled")}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
+          folderParam === "unfiled"
+            ? "bg-accent text-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        )}
+      >
+        <Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+        <span className="truncate">Unfiled</span>
+      </button>
 
-        {/* Dynamic folders */}
-        {folders.map((folder) => (
-          <FolderItem
-            key={folder.id}
-            folder={folder}
-            isActive={folderParam === folder.id}
-            onSelect={() => handleFolderSelect(folder.id)}
-            onRename={handleRename}
-            onDelete={handleDeleteRequest}
-          />
-        ))}
+      {/* Dynamic folders */}
+      {folders.map((folder) => (
+        <FolderItem
+          key={folder.id}
+          folder={folder}
+          isActive={folderParam === folder.id}
+          onSelect={() => handleFolderSelect(folder.id)}
+          onRename={handleRename}
+          onDelete={handleDeleteRequest}
+        />
+      ))}
 
-        {/* New folder button */}
-        <button
-          onClick={handleCreate}
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-        >
-          <FolderPlus className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} />
-          <span className="truncate">New Folder</span>
-        </button>
-      </div>
+      {/* New folder button */}
+      <button
+        onClick={handleCreate}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      >
+        <FolderPlus className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+        <span className="truncate">New Folder</span>
+      </button>
 
       {/* Dialogs */}
       <FolderDialog
