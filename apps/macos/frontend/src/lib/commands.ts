@@ -75,3 +75,19 @@ export function previewCleanup(filter: CleanupFilter): Promise<RecordingInfo[]> 
 export function batchDeleteRecordings(filePaths: string[]): Promise<CleanupResult> {
   return invoke<CleanupResult>("batch_delete_recordings", { filePaths });
 }
+
+export function getOutputDir(): Promise<string> {
+  return invoke<string>("get_output_dir");
+}
+
+export function setOutputDir(path: string): Promise<void> {
+  return invoke("set_output_dir", { path });
+}
+
+export function pickOutputDir(): Promise<string | null> {
+  return invoke<string | null>("pick_output_dir");
+}
+
+export function openOutputDir(): Promise<void> {
+  return invoke("open_output_dir");
+}

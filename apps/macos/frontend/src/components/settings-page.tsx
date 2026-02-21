@@ -1,12 +1,29 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Check, Wifi, WifiOff, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Wifi,
+  WifiOff,
+  Loader2,
+  FolderOpen,
+  FolderInput,
+  RotateCcw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getConfig, saveConfig, testConnection } from "@/lib/commands";
+import {
+  getConfig,
+  saveConfig,
+  testConnection,
+  getOutputDir,
+  pickOutputDir,
+  setOutputDir,
+  openOutputDir,
+} from "@/lib/commands";
 
 interface SettingsPageProps {
   onBack: () => void;
@@ -32,13 +49,15 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("idle");
   const [loading, setLoading] = useState(true);
+  const [outputDir, setOutputDirState] = useState("");
 
   useEffect(() => {
-    getConfig()
-      .then((config) => {
+    Promise.all([getConfig(), getOutputDir()])
+      .then(([config, dir]) => {
         setServerUrl(config.server_url);
         setSelectedPreset(resolvePreset(config.server_url));
         setToken(config.token);
+        setOutputDirState(dir);
       })
       .catch(() => toast.error("Failed to load config"))
       .finally(() => setLoading(false));
@@ -77,6 +96,37 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
       toast.error(String(err));
     }
   }, [serverUrl, token]);
+
+  const handlePickOutputDir = useCallback(async () => {
+    try {
+      const selected = await pickOutputDir();
+      if (selected) {
+        setOutputDirState(selected);
+        toast.success("Output folder updated");
+      }
+    } catch (err) {
+      toast.error(String(err));
+    }
+  }, []);
+
+  const handleResetOutputDir = useCallback(async () => {
+    try {
+      await setOutputDir("");
+      const dir = await getOutputDir();
+      setOutputDirState(dir);
+      toast.success("Reset to default folder");
+    } catch (err) {
+      toast.error(String(err));
+    }
+  }, []);
+
+  const handleOpenOutputDir = useCallback(async () => {
+    try {
+      await openOutputDir();
+    } catch (err) {
+      toast.error(String(err));
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -215,6 +265,54 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
                     : connectionStatus === "error"
                       ? "Failed"
                       : "Test Connection"}
+              </Button>
+            </div>
+          </section>
+
+          {/* Output Directory section */}
+          <section className="space-y-3">
+            <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Output
+            </h2>
+            <p className="text-[11px] text-muted-foreground">
+              Recordings are saved to this folder. Change it to use a custom
+              location.
+            </p>
+
+            <div className="space-y-1.5">
+              <Label>Folder</Label>
+              <p className="break-all rounded-md border bg-muted/50 px-2.5 py-1.5 text-xs text-foreground">
+                {outputDir}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={handlePickOutputDir}
+              >
+                <FolderInput className="h-3 w-3" />
+                Change
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={handleOpenOutputDir}
+              >
+                <FolderOpen className="h-3 w-3" />
+                Open in Finder
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={handleResetOutputDir}
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset
               </Button>
             </div>
           </section>

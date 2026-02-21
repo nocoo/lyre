@@ -14,6 +14,9 @@ const CONFIG_FILE: &str = "config.json";
 pub struct AppConfig {
     pub server_url: String,
     pub token: String,
+    /// Custom output directory for recordings. None = use default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_dir: Option<String>,
 }
 
 /// Returns the path to the config file.
@@ -36,16 +39,38 @@ pub fn load_config() -> Result<AppConfig, String> {
 /// Save config to the JSON file.
 /// Creates the directory if it doesn't exist.
 pub fn save_config(server_url: &str, token: &str) -> Result<(), String> {
+    let mut config = load_config().unwrap_or_default();
+    config.server_url = server_url.to_string();
+    config.token = token.to_string();
+    write_config(&config)
+}
+
+/// Save the output directory to config. Pass None to reset to default.
+pub fn save_output_dir(output_dir: Option<&str>) -> Result<(), String> {
+    let mut config = load_config().unwrap_or_default();
+    config.output_dir = output_dir.map(|s| s.to_string());
+    write_config(&config)
+}
+
+/// Get the configured output directory, falling back to the default.
+pub fn get_output_dir() -> std::path::PathBuf {
+    match load_config() {
+        Ok(c) => match c.output_dir {
+            Some(dir) if !dir.is_empty() => std::path::PathBuf::from(dir),
+            _ => crate::recordings::default_output_dir(),
+        },
+        Err(_) => crate::recordings::default_output_dir(),
+    }
+}
+
+/// Write the full config to disk.
+fn write_config(config: &AppConfig) -> Result<(), String> {
     let path = config_path()?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create config directory: {e}"))?;
     }
-    let config = AppConfig {
-        server_url: server_url.to_string(),
-        token: token.to_string(),
-    };
-    let content = serde_json::to_string_pretty(&config)
+    let content = serde_json::to_string_pretty(config)
         .map_err(|e| format!("failed to serialize config: {e}"))?;
     fs::write(&path, content).map_err(|e| format!("failed to write config: {e}"))
 }
@@ -93,20 +118,36 @@ mod tests {
             let config = load_config().unwrap();
             assert!(config.server_url.is_empty());
             assert!(config.token.is_empty());
+            assert!(config.output_dir.is_none());
             assert!(!has_config());
 
-            // Save
+            // Save server config
             save_config("https://lyre.example.com", "lyre_abc123").unwrap();
             let config = load_config().unwrap();
             assert_eq!(config.server_url, "https://lyre.example.com");
             assert_eq!(config.token, "lyre_abc123");
+            assert!(config.output_dir.is_none());
             assert!(has_config());
 
-            // Overwrite
+            // Set custom output dir — should not clobber server config
+            save_output_dir(Some("/tmp/my-recordings")).unwrap();
+            let config = load_config().unwrap();
+            assert_eq!(config.server_url, "https://lyre.example.com");
+            assert_eq!(config.output_dir, Some("/tmp/my-recordings".to_string()));
+            let dir = get_output_dir();
+            assert_eq!(dir, std::path::PathBuf::from("/tmp/my-recordings"));
+
+            // Overwrite server config — output_dir should survive
             save_config("https://lyre.dev.hexly.ai", "lyre_xyz").unwrap();
             let config = load_config().unwrap();
             assert_eq!(config.server_url, "https://lyre.dev.hexly.ai");
             assert_eq!(config.token, "lyre_xyz");
+            assert_eq!(config.output_dir, Some("/tmp/my-recordings".to_string()));
+
+            // Reset output dir to default
+            save_output_dir(None).unwrap();
+            let dir = get_output_dir();
+            assert!(dir.to_string_lossy().contains("Lyre Recordings"));
 
             // Clear
             clear_config().unwrap();
@@ -121,13 +162,25 @@ mod tests {
         let config = AppConfig {
             server_url: "https://lyre.example.com".to_string(),
             token: "lyre_abc123".to_string(),
+            output_dir: Some("/custom/path".to_string()),
         };
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("server_url"));
         assert!(json.contains("token"));
+        assert!(json.contains("output_dir"));
 
         let parsed: AppConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.server_url, config.server_url);
         assert_eq!(parsed.token, config.token);
+        assert_eq!(parsed.output_dir, config.output_dir);
+    }
+
+    #[test]
+    fn test_app_config_backward_compat() {
+        // Old config files without output_dir should still parse
+        let json = r#"{"server_url":"https://lyre.example.com","token":"tok"}"#;
+        let parsed: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.server_url, "https://lyre.example.com");
+        assert!(parsed.output_dir.is_none());
     }
 }

@@ -27,8 +27,12 @@ unsafe impl Sync for SendableState {}
 
 /// Set up the system tray with menus. Called once during app setup.
 pub fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config = RecorderConfig::default();
+    // Use persisted output_dir from config if available.
+    config.output_dir = crate::config::get_output_dir();
+
     let state = Arc::new(Mutex::new(SendableState {
-        recorder: Recorder::new(RecorderConfig::default()),
+        recorder: Recorder::new(config),
         device_manager: AudioDeviceManager::new(),
     }));
 
@@ -78,33 +82,6 @@ fn build_tray_menu(
 
     let sep2 = PredefinedMenuItem::separator(handle)?;
 
-    // Output folder display
-    let output_dir_display = state
-        .recorder
-        .config
-        .output_dir
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("Unknown");
-    let output_item = MenuItem::with_id(
-        handle,
-        "set_output_dir",
-        format!("Output: {output_dir_display}..."),
-        !is_recording,
-        None::<&str>,
-    )?;
-
-    // Open output folder
-    let open_folder = MenuItem::with_id(
-        handle,
-        "open_output_dir",
-        "Open Output Folder",
-        true,
-        None::<&str>,
-    )?;
-
-    let sep3 = PredefinedMenuItem::separator(handle)?;
-
     // Open Lyre
     let open_item = MenuItem::with_id(handle, "open_lyre", "Open Lyre", true, None::<&str>)?;
 
@@ -119,9 +96,6 @@ fn build_tray_menu(
         items.push(Box::new(item));
     }
     items.push(Box::new(sep2));
-    items.push(Box::new(output_item));
-    items.push(Box::new(open_folder));
-    items.push(Box::new(sep3));
     items.push(Box::new(open_item));
     items.push(Box::new(quit));
 
@@ -176,6 +150,8 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
             let current_state = s.recorder.state();
             match current_state {
                 RecorderState::Idle => {
+                    // Sync output dir from config before starting (user may have changed it in Settings).
+                    s.recorder.set_output_dir(crate::config::get_output_dir());
                     // Borrow device_manager via raw pointer to avoid
                     // simultaneous mutable + immutable borrow of `s`.
                     let dm_ptr = &s.device_manager as *const AudioDeviceManager;
@@ -204,27 +180,6 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
             }
             // Rebuild menu so "Start/Stop Recording" label updates
             rebuild_tray_menu(app, &s);
-        }
-        "set_output_dir" => {
-            use tauri_plugin_dialog::DialogExt;
-            let state_clone = state.clone();
-            let app_handle = app.clone();
-            app.dialog().file().pick_folder(move |folder| {
-                if let Some(path) = folder {
-                    let mut s = state_clone.lock().unwrap();
-                    if let Some(path_buf) = path.as_path() {
-                        s.recorder.set_output_dir(path_buf.to_path_buf());
-                        println!("output dir set to: {path}");
-                    }
-                    rebuild_tray_menu(&app_handle, &s);
-                }
-            });
-        }
-        "open_output_dir" => {
-            let s = state.lock().unwrap();
-            let dir = s.recorder.config.output_dir.clone();
-            drop(s);
-            let _ = std::process::Command::new("open").arg(&dir).spawn();
         }
         "open_lyre" => {
             if let Some(window) = app.get_webview_window("main") {
