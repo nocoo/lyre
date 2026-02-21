@@ -26,9 +26,10 @@ ENV HOSTNAME=0.0.0.0
 # Create data directory for SQLite volume mount
 RUN mkdir -p /data
 
-# Copy built assets and dependencies
+# Copy standalone output (preserves monorepo directory structure)
 COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./.next/static
-COPY --from=builder /app/apps/web/public ./public
+# Copy static assets into the app directory (Next.js expects them relative to server.js)
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
-CMD ["bun", "server.js"]
+CMD ["bun", "apps/web/server.js"]
