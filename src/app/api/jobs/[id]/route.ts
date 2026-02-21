@@ -26,10 +26,18 @@ import {
   jobsRepo,
   recordingsRepo,
   transcriptionsRepo,
+  settingsRepo,
 } from "@/db/repositories";
 import { getAsrProvider } from "@/services/asr-provider";
 import { parseTranscriptionResult } from "@/services/asr";
 import { presignPut, makeResultKey } from "@/services/oss";
+import {
+  resolveAiConfig,
+  createAiClient,
+  buildSummaryPrompt,
+  type AiProvider,
+} from "@/services/ai";
+import { generateText } from "ai";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +120,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
         // Update recording status to "completed"
         recordingsRepo.update(job.recordingId, { status: "completed" });
+
+        // Auto-summarize if enabled (best-effort, non-blocking)
+        autoSummarize(recording.userId, job.recordingId, parsed.fullText).catch(
+          (err) => {
+            console.warn("[auto-summarize] Failed:", err);
+          },
+        );
       } catch (err) {
         console.error("Failed to process transcription result:", err);
         updateData.status = "FAILED";
@@ -170,4 +185,44 @@ async function archiveRawResult(
       `OSS upload failed: ${response.status} ${response.statusText}`,
     );
   }
+}
+
+/**
+ * Auto-summarize a recording after transcription completes.
+ * Only runs if the user has ai.autoSummarize enabled and AI is configured.
+ */
+async function autoSummarize(
+  userId: string,
+  recordingId: string,
+  fullText: string,
+): Promise<void> {
+  // Check if auto-summarize is enabled
+  const all = settingsRepo.findByUserId(userId);
+  const map = new Map(all.map((s) => [s.key, s.value]));
+
+  if (map.get("ai.autoSummarize") !== "true") return;
+
+  const provider = map.get("ai.provider") ?? "";
+  const apiKey = map.get("ai.apiKey") ?? "";
+  const model = map.get("ai.model") ?? "";
+
+  if (!provider || !apiKey) return;
+
+  const config = resolveAiConfig({
+    provider: provider as AiProvider,
+    apiKey,
+    model,
+  });
+
+  const client = createAiClient(config);
+  const prompt = buildSummaryPrompt(fullText);
+
+  const { text } = await generateText({
+    model: client(config.model),
+    prompt,
+    maxOutputTokens: 2048,
+  });
+
+  recordingsRepo.update(recordingId, { aiSummary: text.trim() });
+  console.log(`[auto-summarize] Summary generated for recording ${recordingId}`);
 }
