@@ -8,7 +8,6 @@ import {
   ChevronsUpDown,
   Cpu,
   Download,
-  FileText,
   Folder,
   FolderOpen,
   Loader2,
@@ -687,37 +686,47 @@ function RecordingDetailContent({ id }: { id: string }) {
       {/* ── Row 3: Transcription (2/3) | Job Details (1/3) ── */}
       {vm.hasTranscription && vm.transcription && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-3">
-            {/* View mode toggle */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant={viewMode === "sentences" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("sentences")}
-              >
-                Sentences
-              </Button>
-              <Button
-                variant={viewMode === "fulltext" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("fulltext")}
-                className="gap-1.5"
-              >
-                <FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
-                Full Text
-              </Button>
-            </div>
+          <div className="lg:col-span-2">
+            <div className="rounded-xl border border-border bg-card p-4 h-full">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Transcript
+                </p>
+                <div className="flex items-center rounded-md border border-border p-0.5">
+                  <button
+                    className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                      viewMode === "sentences"
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => setViewMode("sentences")}
+                  >
+                    Sentences
+                  </button>
+                  <button
+                    className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                      viewMode === "fulltext"
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => setViewMode("fulltext")}
+                  >
+                    Full Text
+                  </button>
+                </div>
+              </div>
 
-            {viewMode === "sentences" ? (
-              <TranscriptViewer
-                transcription={vm.transcription}
-                recordingId={id}
-                currentTime={currentTime}
-                onSeek={handleSeek}
-              />
-            ) : (
-              <TranscriptFullText transcription={vm.transcription} />
-            )}
+              {viewMode === "sentences" ? (
+                <TranscriptViewer
+                  transcription={vm.transcription}
+                  recordingId={id}
+                  currentTime={currentTime}
+                  onSeek={handleSeek}
+                />
+              ) : (
+                <TranscriptFullText transcription={vm.transcription} />
+              )}
+            </div>
           </div>
           {vm.job?.isCompleted && (
             <div className="lg:col-span-1">
