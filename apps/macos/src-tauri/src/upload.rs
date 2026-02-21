@@ -269,8 +269,8 @@ mod tests {
             sample_format: hound::SampleFormat::Int,
         };
         let mut writer = hound::WavWriter::create(&path, spec).unwrap();
-        for i in 0..44100_i16 {
-            writer.write_sample(i).unwrap();
+        for i in 0..44100_u32 {
+            writer.write_sample(i as i16).unwrap();
         }
         writer.finalize().unwrap();
 
