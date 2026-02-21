@@ -46,9 +46,9 @@ pub struct UploadResult {
     pub oss_key: String,
 }
 
-/// Upload a local WAV file to the Lyre web app.
+/// Upload a local audio file (MP3 or WAV) to the Lyre web app.
 ///
-/// Reads config (server_url, token) from the Keychain, then performs
+/// Reads config (server_url, token) from the config file, then performs
 /// the 3-step upload: presign → PUT to OSS → create recording record.
 pub async fn upload_recording(file_path: &str) -> Result<UploadResult, String> {
     let config = crate::config::load_config()?;
@@ -67,31 +67,33 @@ pub async fn upload_recording(file_path: &str) -> Result<UploadResult, String> {
         .to_string_lossy()
         .into_owned();
 
+    // Detect audio format from extension
+    let (content_type, format) = detect_audio_format(path)?;
+
     // Read file metadata
     let file_bytes = tokio::fs::read(path)
         .await
         .map_err(|e| format!("failed to read file: {e}"))?;
     let file_size = file_bytes.len() as u64;
 
-    // Read WAV metadata (duration, sample rate)
-    let (duration, sample_rate) = wav_metadata(path);
+    // Read audio metadata (duration, sample rate) — format-aware
+    let (duration, sample_rate) = audio_metadata(path, &format, file_size);
 
-    // Derive title from filename: "recording-20260221-143052.wav" → "recording-20260221-143052"
+    // Derive title from filename: "recording-20260221-143052.mp3" → "recording-20260221-143052"
     let title = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| file_name.clone());
 
-    let content_type = "audio/wav";
     let base_url = normalize_url(&config.server_url);
 
     let client = build_client(&config.token)?;
 
     // Step 1: Presign
-    let presign = presign(&client, &base_url, &file_name, content_type).await?;
+    let presign = presign(&client, &base_url, &file_name, &content_type).await?;
 
     // Step 2: Upload to OSS
-    upload_to_oss(&client, &presign.upload_url, &file_bytes, content_type).await?;
+    upload_to_oss(&client, &presign.upload_url, &file_bytes, &content_type).await?;
 
     // Step 3: Create recording record
     create_recording(
@@ -104,6 +106,7 @@ pub async fn upload_recording(file_path: &str) -> Result<UploadResult, String> {
         file_size,
         duration,
         sample_rate,
+        &format,
     )
     .await?;
 
@@ -204,6 +207,7 @@ async fn create_recording(
     file_size: u64,
     duration: Option<f64>,
     sample_rate: Option<u32>,
+    format: &str,
 ) -> Result<(), String> {
     let url = format!("{base_url}/api/recordings");
 
@@ -214,7 +218,7 @@ async fn create_recording(
         oss_key: oss_key.to_string(),
         file_size: Some(file_size),
         duration,
-        format: "wav".to_string(),
+        format: format.to_string(),
         sample_rate,
     };
 
@@ -237,6 +241,32 @@ async fn create_recording(
     Ok(())
 }
 
+/// Detect audio format from file extension.
+/// Returns (content_type, format) e.g. ("audio/mpeg", "mp3") or ("audio/wav", "wav").
+fn detect_audio_format(path: &Path) -> Result<(String, String), String> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        "mp3" => Ok(("audio/mpeg".to_string(), "mp3".to_string())),
+        "wav" => Ok(("audio/wav".to_string(), "wav".to_string())),
+        _ => Err(format!("unsupported audio format: .{ext}")),
+    }
+}
+
+/// Read audio metadata (duration in seconds, sample rate in Hz).
+/// For WAV files, reads from the header. For MP3 files, estimates from file size.
+fn audio_metadata(path: &Path, format: &str, file_size: u64) -> (Option<f64>, Option<u32>) {
+    match format {
+        "wav" => wav_metadata(path),
+        "mp3" => mp3_metadata_estimate(file_size),
+        _ => (None, None),
+    }
+}
+
 /// Read WAV metadata (duration in seconds, sample rate in Hz).
 fn wav_metadata(path: &Path) -> (Option<f64>, Option<u32>) {
     match hound::WavReader::open(path) {
@@ -251,6 +281,18 @@ fn wav_metadata(path: &Path) -> (Option<f64>, Option<u32>) {
         }
         Err(_) => (None, None),
     }
+}
+
+/// Estimate MP3 metadata from file size.
+/// The recorder uses 192 kbps CBR = 24000 bytes/sec.
+/// Sample rate defaults to 44100 Hz (standard for the recorder).
+fn mp3_metadata_estimate(file_size: u64) -> (Option<f64>, Option<u32>) {
+    if file_size == 0 {
+        return (None, None);
+    }
+    // 192 kbps = 24000 bytes/sec
+    let duration = file_size as f64 / 24000.0;
+    (Some(duration), Some(44100))
 }
 
 #[cfg(test)]
@@ -299,6 +341,74 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_audio_format_mp3() {
+        let (content_type, format) = detect_audio_format(Path::new("test.mp3")).unwrap();
+        assert_eq!(content_type, "audio/mpeg");
+        assert_eq!(format, "mp3");
+    }
+
+    #[test]
+    fn test_detect_audio_format_wav() {
+        let (content_type, format) = detect_audio_format(Path::new("test.wav")).unwrap();
+        assert_eq!(content_type, "audio/wav");
+        assert_eq!(format, "wav");
+    }
+
+    #[test]
+    fn test_detect_audio_format_unsupported() {
+        let result = detect_audio_format(Path::new("test.ogg"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unsupported"));
+    }
+
+    #[test]
+    fn test_mp3_metadata_estimate() {
+        // 192 kbps = 24000 bytes/sec. 48000 bytes = 2 seconds.
+        let (duration, sample_rate) = mp3_metadata_estimate(48000);
+        assert_eq!(sample_rate, Some(44100));
+        assert!((duration.unwrap() - 2.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_mp3_metadata_estimate_zero() {
+        let (duration, sample_rate) = mp3_metadata_estimate(0);
+        assert!(duration.is_none());
+        assert!(sample_rate.is_none());
+    }
+
+    #[test]
+    fn test_audio_metadata_wav() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("test.wav");
+
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 44100,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(&path, spec).unwrap();
+        for i in 0..44100_u32 {
+            writer.write_sample(i as i16).unwrap();
+        }
+        writer.finalize().unwrap();
+
+        let file_size = std::fs::metadata(&path).unwrap().len();
+        let (duration, sample_rate) = audio_metadata(&path, "wav", file_size);
+        assert_eq!(sample_rate, Some(44100));
+        assert!((duration.unwrap() - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_audio_metadata_mp3() {
+        // For MP3, duration is estimated from file size, path is not read
+        let (duration, sample_rate) = audio_metadata(Path::new("irrelevant.mp3"), "mp3", 24000);
+        assert_eq!(sample_rate, Some(44100));
+        // 24000 bytes / 24000 bytes_per_sec = 1.0 second
+        assert!((duration.unwrap() - 1.0).abs() < 0.01);
+    }
+
+    #[test]
     fn test_create_recording_request_serialization() {
         let req = CreateRecordingRequest {
             id: "abc-123".to_string(),
@@ -316,6 +426,23 @@ mod tests {
         assert!(json.contains("\"ossKey\""));
         assert!(json.contains("\"fileSize\":1024"));
         assert!(json.contains("\"sampleRate\":44100"));
+    }
+
+    #[test]
+    fn test_create_recording_request_mp3_format() {
+        let req = CreateRecordingRequest {
+            id: "mp3-123".to_string(),
+            title: "Test MP3".to_string(),
+            file_name: "test.mp3".to_string(),
+            oss_key: "uploads/user1/mp3-123/test.mp3".to_string(),
+            file_size: Some(48000),
+            duration: Some(2.0),
+            format: "mp3".to_string(),
+            sample_rate: Some(44100),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("\"format\":\"mp3\""));
+        assert!(json.contains("\"fileName\":\"test.mp3\""));
     }
 
     #[test]

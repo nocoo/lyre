@@ -137,14 +137,14 @@ fn wav_duration(path: &Path) -> Option<f64> {
 }
 
 /// Estimate MP3 duration from file size.
-/// Assumes CBR encoding. The recorder uses 128 kbps by default.
+/// The recorder uses 192 kbps CBR = 24000 bytes/sec.
 fn mp3_duration_estimate(path: &Path) -> Option<f64> {
     let size = fs::metadata(path).ok()?.len();
     if size == 0 {
         return None;
     }
-    // 128 kbps = 16000 bytes/sec
-    let bitrate_bytes_per_sec = 16000.0_f64;
+    // 192 kbps = 24000 bytes/sec
+    let bitrate_bytes_per_sec = 24000.0_f64;
     Some(size as f64 / bitrate_bytes_per_sec)
 }
 
