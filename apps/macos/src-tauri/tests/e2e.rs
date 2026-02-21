@@ -4,7 +4,7 @@
 //! - Enumerate devices
 //! - Start recording with a real (or default) device
 //! - Record a short duration
-//! - Stop and verify the output WAV file exists and is valid
+//! - Stop and verify the output MP3 file exists and is valid
 //!
 //! Tests that require an audio input device are skipped in CI
 //! (where no audio hardware exists) using a helper check.
@@ -38,7 +38,7 @@ fn e2e_device_enumeration() {
 }
 
 #[test]
-fn e2e_record_and_verify_wav() {
+fn e2e_record_and_verify_mp3() {
     if !has_audio_input() {
         println!("SKIP: no audio input device available");
         return;
@@ -63,7 +63,7 @@ fn e2e_record_and_verify_wav() {
     assert!(recording_path.starts_with(&output_dir));
     assert!(recording_path
         .extension()
-        .map(|e| e == "wav")
+        .map(|e| e == "mp3")
         .unwrap_or(false));
 
     // Record for 500ms
@@ -74,23 +74,24 @@ fn e2e_record_and_verify_wav() {
     assert_eq!(recorder.state(), RecorderState::Idle);
     assert_eq!(saved_path, recording_path);
 
-    // Verify WAV file exists and is non-empty
-    let metadata = std::fs::metadata(&saved_path).expect("WAV file not found");
+    // Verify MP3 file exists and is non-empty
+    let metadata = std::fs::metadata(&saved_path).expect("MP3 file not found");
     assert!(
-        metadata.len() > 44,
-        "WAV file too small ({}B), expected at least a header",
+        metadata.len() > 100,
+        "MP3 file too small ({}B), expected encoded audio data",
         metadata.len()
     );
 
-    // Verify WAV header is valid using hound
-    let reader = hound::WavReader::open(&saved_path).expect("invalid WAV file");
-    let spec = reader.spec();
-    println!(
-        "  WAV: {}ch, {}Hz, {}bit {:?}",
-        spec.channels, spec.sample_rate, spec.bits_per_sample, spec.sample_format
+    // Verify the file starts with valid MP3 frame sync or ID3 tag
+    let header = std::fs::read(&saved_path).expect("failed to read MP3 file");
+    let valid_mp3 = (header.len() >= 2 && header[0] == 0xFF && (header[1] & 0xE0) == 0xE0)
+        || (header.len() >= 3 && &header[..3] == b"ID3");
+    assert!(
+        valid_mp3,
+        "file does not start with MP3 frame sync or ID3 tag (first bytes: {:02X?})",
+        &header[..header.len().min(4)]
     );
-    assert!(spec.channels > 0);
-    assert!(spec.sample_rate > 0);
+    println!("  MP3 file size: {} bytes", metadata.len());
 }
 
 #[test]

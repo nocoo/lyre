@@ -1,8 +1,8 @@
 use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::{SampleFormat, Stream, SupportedStreamConfig};
-use hound::{WavSpec, WavWriter};
-use std::fs;
-use std::io::BufWriter;
+use mp3lame_encoder::{Builder, Encoder, FlushNoGap, InterleavedPcm};
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -37,7 +37,13 @@ impl Default for RecorderConfig {
     }
 }
 
-/// Core recorder that captures audio from an input device to a WAV file.
+/// Shared MP3 writer state passed into the audio stream callback.
+struct Mp3Writer {
+    encoder: Encoder,
+    file: BufWriter<File>,
+}
+
+/// Core recorder that captures audio from an input device to an MP3 file.
 ///
 /// NOTE: `cpal::Stream` is !Send on macOS, so this struct must stay on the
 /// thread that created it (typically the main thread). Do not put it in
@@ -49,6 +55,8 @@ pub struct Recorder {
     active_stream: Option<Stream>,
     /// Path of the file currently being recorded.
     current_file: Option<PathBuf>,
+    /// Shared MP3 writer for flushing on stop.
+    mp3_writer: Option<Arc<Mutex<Option<Mp3Writer>>>>,
 }
 
 impl Recorder {
@@ -58,6 +66,7 @@ impl Recorder {
             state: RecorderState::Idle,
             active_stream: None,
             current_file: None,
+            mp3_writer: None,
         }
     }
 
@@ -92,11 +101,9 @@ impl Recorder {
         let filename = generate_filename();
         let output_path = self.config.output_dir.join(&filename);
 
-        // Build WAV writer
-        let spec = wav_spec_from_config(&supported_config);
-        let writer = WavWriter::create(&output_path, spec)
-            .map_err(|e| RecordError::IoError(e.to_string()))?;
-        let writer = Arc::new(Mutex::new(Some(writer)));
+        // Build MP3 encoder
+        let mp3_writer = build_mp3_writer(&output_path, &supported_config)?;
+        let writer = Arc::new(Mutex::new(Some(mp3_writer)));
 
         // Build input stream
         let writer_clone = writer.clone();
@@ -104,25 +111,26 @@ impl Recorder {
             eprintln!("audio stream error: {err}");
         };
 
+        let channels = supported_config.channels();
         let sample_format = supported_config.sample_format();
         let config = supported_config.into();
 
         let stream = match sample_format {
             SampleFormat::F32 => device.build_input_stream(
                 &config,
-                move |data: &[f32], _| write_samples_f32(&writer_clone, data),
+                move |data: &[f32], _| encode_samples_f32(&writer_clone, data, channels),
                 err_fn,
                 None,
             ),
             SampleFormat::I16 => device.build_input_stream(
                 &config,
-                move |data: &[i16], _| write_samples_i16(&writer_clone, data),
+                move |data: &[i16], _| encode_samples_i16(&writer_clone, data, channels),
                 err_fn,
                 None,
             ),
             SampleFormat::U16 => device.build_input_stream(
                 &config,
-                move |data: &[u16], _| write_samples_u16(&writer_clone, data),
+                move |data: &[u16], _| encode_samples_u16(&writer_clone, data, channels),
                 err_fn,
                 None,
             ),
@@ -136,6 +144,7 @@ impl Recorder {
 
         self.active_stream = Some(stream);
         self.current_file = Some(output_path.clone());
+        self.mp3_writer = Some(writer);
         self.state = RecorderState::Recording;
 
         Ok(output_path)
@@ -147,8 +156,27 @@ impl Recorder {
             return Err(RecordError::NotRecording);
         }
 
-        // Drop the stream to flush and close
+        // Drop the stream first to stop audio callbacks
         self.active_stream.take();
+
+        // Flush the MP3 encoder and close the file
+        if let Some(writer_arc) = self.mp3_writer.take() {
+            if let Ok(mut guard) = writer_arc.lock() {
+                if let Some(mut w) = guard.take() {
+                    let mut flush_buf =
+                        Vec::with_capacity(mp3lame_encoder::max_required_buffer_size(0));
+                    if let Ok(flush_size) = w
+                        .encoder
+                        .flush::<FlushNoGap>(flush_buf.spare_capacity_mut())
+                    {
+                        unsafe { flush_buf.set_len(flush_size) };
+                        let _ = w.file.write_all(&flush_buf);
+                    }
+                    let _ = w.file.flush();
+                }
+            }
+        }
+
         self.state = RecorderState::Idle;
 
         self.current_file
@@ -178,6 +206,7 @@ pub enum RecordError {
     StreamError(String),
     IoError(String),
     UnsupportedFormat(String),
+    EncoderError(String),
 }
 
 impl std::fmt::Display for RecordError {
@@ -191,6 +220,7 @@ impl std::fmt::Display for RecordError {
             Self::StreamError(e) => write!(f, "stream error: {e}"),
             Self::IoError(e) => write!(f, "I/O error: {e}"),
             Self::UnsupportedFormat(e) => write!(f, "unsupported sample format: {e}"),
+            Self::EncoderError(e) => write!(f, "encoder error: {e}"),
         }
     }
 }
@@ -201,55 +231,97 @@ impl std::error::Error for RecordError {}
 
 pub fn generate_filename() -> String {
     let now = chrono::Local::now();
-    format!("recording-{}.wav", now.format("%Y%m%d-%H%M%S"))
+    format!("recording-{}.mp3", now.format("%Y%m%d-%H%M%S"))
 }
 
-fn wav_spec_from_config(config: &SupportedStreamConfig) -> WavSpec {
-    let sample_format = match config.sample_format() {
-        SampleFormat::F32 => hound::SampleFormat::Float,
-        _ => hound::SampleFormat::Int,
-    };
-    let bits_per_sample = match config.sample_format() {
-        SampleFormat::F32 => 32,
-        SampleFormat::I16 | SampleFormat::U16 => 16,
-        _ => 16,
-    };
-    WavSpec {
-        channels: config.channels(),
-        sample_rate: config.sample_rate().0,
-        bits_per_sample,
-        sample_format,
-    }
+fn build_mp3_writer(
+    path: &PathBuf,
+    config: &SupportedStreamConfig,
+) -> Result<Mp3Writer, RecordError> {
+    let channels = config.channels();
+    let sample_rate = config.sample_rate().0;
+
+    let mut builder = Builder::new()
+        .ok_or_else(|| RecordError::EncoderError("failed to create LAME builder".into()))?;
+    builder
+        .set_num_channels(channels as u8)
+        .map_err(|e| RecordError::EncoderError(format!("{e:?}")))?;
+    builder
+        .set_sample_rate(sample_rate)
+        .map_err(|e| RecordError::EncoderError(format!("{e:?}")))?;
+    builder
+        .set_brate(mp3lame_encoder::Bitrate::Kbps192)
+        .map_err(|e| RecordError::EncoderError(format!("{e:?}")))?;
+    builder
+        .set_quality(mp3lame_encoder::Quality::Best)
+        .map_err(|e| RecordError::EncoderError(format!("{e:?}")))?;
+
+    let encoder = builder
+        .build()
+        .map_err(|e| RecordError::EncoderError(format!("{e:?}")))?;
+
+    let file = File::create(path).map_err(|e| RecordError::IoError(e.to_string()))?;
+    let file = BufWriter::new(file);
+
+    Ok(Mp3Writer { encoder, file })
 }
 
-fn write_samples_f32(writer: &Arc<Mutex<Option<WavWriter<BufWriter<fs::File>>>>>, data: &[f32]) {
+/// Encode interleaved f32 PCM samples to MP3 and write to file.
+fn encode_samples_f32(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[f32], channels: u16) {
     if let Ok(mut guard) = writer.lock() {
         if let Some(ref mut w) = *guard {
-            for &sample in data {
-                let _ = w.write_sample(sample);
-            }
+            // Convert f32 [-1.0, 1.0] to i16 for LAME
+            let samples_i16: Vec<i16> = data
+                .iter()
+                .map(|&s| {
+                    let clamped = s.clamp(-1.0, 1.0);
+                    (clamped * i16::MAX as f32) as i16
+                })
+                .collect();
+            encode_and_write(w, &samples_i16, channels);
         }
     }
 }
 
-fn write_samples_i16(writer: &Arc<Mutex<Option<WavWriter<BufWriter<fs::File>>>>>, data: &[i16]) {
+/// Encode interleaved i16 PCM samples to MP3 and write to file.
+fn encode_samples_i16(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[i16], channels: u16) {
     if let Ok(mut guard) = writer.lock() {
         if let Some(ref mut w) = *guard {
-            for &sample in data {
-                let _ = w.write_sample(sample);
-            }
+            encode_and_write(w, data, channels);
         }
     }
 }
 
-fn write_samples_u16(writer: &Arc<Mutex<Option<WavWriter<BufWriter<fs::File>>>>>, data: &[u16]) {
+/// Encode interleaved u16 PCM samples to MP3 and write to file.
+fn encode_samples_u16(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[u16], channels: u16) {
     if let Ok(mut guard) = writer.lock() {
         if let Some(ref mut w) = *guard {
-            for &sample in data {
-                // Convert u16 to i16 for WAV
-                let sample_i16 = (sample as i32 - 32768) as i16;
-                let _ = w.write_sample(sample_i16);
-            }
+            let samples_i16: Vec<i16> = data.iter().map(|&s| (s as i32 - 32768) as i16).collect();
+            encode_and_write(w, &samples_i16, channels);
+        }
+    }
+}
+
+/// Encode a chunk of interleaved i16 samples and write MP3 bytes to file.
+fn encode_and_write(w: &mut Mp3Writer, samples: &[i16], channels: u16) {
+    // Ensure sample count is a multiple of channel count
+    let num_samples = samples.len() - (samples.len() % channels as usize);
+    if num_samples == 0 {
+        return;
+    }
+    let input = InterleavedPcm(&samples[..num_samples]);
+
+    let num_frames = num_samples / channels as usize;
+    let mut mp3_buf = Vec::new();
+    mp3_buf.reserve(mp3lame_encoder::max_required_buffer_size(num_frames));
+
+    match w.encoder.encode(input, mp3_buf.spare_capacity_mut()) {
+        Ok(encoded_size) => {
+            unsafe { mp3_buf.set_len(encoded_size) };
+            let _ = w.file.write_all(&mp3_buf);
+        }
+        Err(e) => {
+            eprintln!("mp3 encode error: {e:?}");
         }
     }
 }
@@ -307,8 +379,8 @@ mod tests {
     fn test_generate_filename() {
         let filename = generate_filename();
         assert!(filename.starts_with("recording-"));
-        assert!(filename.ends_with(".wav"));
-        assert!(filename.len() > 20); // recording-YYYYMMDD-HHMMSS.wav
+        assert!(filename.ends_with(".mp3"));
+        assert!(filename.len() > 20); // recording-YYYYMMDD-HHMMSS.mp3
     }
 
     #[test]
@@ -325,6 +397,10 @@ mod tests {
         assert_eq!(
             RecordError::NoDefaultDevice.to_string(),
             "no default input device"
+        );
+        assert_eq!(
+            RecordError::EncoderError("test".into()).to_string(),
+            "encoder error: test"
         );
     }
 
