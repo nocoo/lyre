@@ -1,6 +1,7 @@
 "use client";
 
-import { Mic, Settings } from "lucide-react";
+import Image from "next/image";
+import { Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Page = "recordings" | "settings";
@@ -24,7 +25,13 @@ export function Toolbar({ activePage, onNavigate }: ToolbarProps) {
         className="flex items-center justify-between px-4 pb-3"
       >
         <div className="flex items-center gap-2.5">
-          <Mic className="h-5 w-5 text-primary" />
+          <Image
+            src="/logo-24.png"
+            alt="Lyre"
+            width={20}
+            height={20}
+            className="dark:invert"
+          />
           <h1 className="text-base font-semibold">Lyre</h1>
         </div>
         <div className="flex items-center gap-1">

@@ -1,4 +1,4 @@
-//! Keychain-backed configuration for the Lyre Recorder.
+//! Keychain-backed configuration for Lyre.
 //!
 //! Stores `server_url` and `token` as generic passwords in the macOS Keychain
 //! under the service name `com.lyre.recorder`.

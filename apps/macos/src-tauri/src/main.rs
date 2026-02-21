@@ -99,5 +99,5 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("failed to run Lyre Recorder");
+        .expect("failed to run Lyre");
 }

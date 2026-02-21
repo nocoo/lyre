@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the Lyre Recorder app",
+  "description": "Capability for the Lyre app",
   "windows": ["main"],
   "permissions": [
     "core:default",

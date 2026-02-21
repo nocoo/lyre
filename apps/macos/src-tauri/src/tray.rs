@@ -44,7 +44,7 @@ pub fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .icon_as_template(true)
         .menu(&tray_menu)
         .show_menu_on_left_click(true)
-        .tooltip("Lyre Recorder")
+        .tooltip("Lyre")
         .on_menu_event(move |app, event| {
             handle_menu_event(app, &event.id().0, &state_for_event);
         })
@@ -108,7 +108,7 @@ fn build_tray_menu(
     // Open Lyre
     let open_item = MenuItem::with_id(handle, "open_lyre", "Open Lyre", true, None::<&str>)?;
 
-    let quit = MenuItem::with_id(handle, "quit", "Quit Lyre Recorder", true, None::<&str>)?;
+    let quit = MenuItem::with_id(handle, "quit", "Quit Lyre", true, None::<&str>)?;
 
     // Build the items list dynamically since device count varies.
     let mut items: Vec<Box<dyn tauri::menu::IsMenuItem<Wry>>> = Vec::new();
@@ -276,9 +276,9 @@ fn update_tray_icon(app: &AppHandle, recording: bool) {
             let _ = tray.set_icon_as_template(!recording);
         }
         let tooltip = if recording {
-            "Lyre Recorder (Recording...)"
+            "Lyre (Recording...)"
         } else {
-            "Lyre Recorder"
+            "Lyre"
         };
         let _ = tray.set_tooltip(Some(tooltip));
     }
