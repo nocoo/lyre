@@ -88,9 +88,9 @@ describe("settings API endpoints", () => {
       expect(verified.baseURL).toBe("https://test.example.com/v1");
       expect(verified.model).toBe("test-model");
       expect(verified.hasApiKey).toBe(true);
-      // apiKey is masked in GET response
+      // apiKey is masked in GET response (last 4 chars visible)
       expect(verified.apiKey).toContain("*");
-      expect(verified.apiKey).toMatch(/\*+3$/);
+      expect(verified.apiKey).toMatch(/\*+.{4}$/);
 
       // Restore original (send empty apiKey to clear)
       await fetch(`${BASE_URL}/api/settings/ai`, {
