@@ -8,6 +8,12 @@ import {
   List,
   LayoutGrid,
   ArrowUpDown,
+  Settings2,
+  X,
+  Trash2,
+  CheckSquare,
+  Square,
+  Loader2,
 } from "lucide-react";
 import { useSetBreadcrumbs } from "@/components/layout";
 import { RecordingListItem } from "@/components/recording-list-item";
@@ -16,7 +22,19 @@ import { UploadDialog } from "@/components/upload-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   toRecordingsListVM,
+  bulkFilterRecordings,
+  BULK_FILTER_PRESETS,
   type SortField,
   type SortDirection,
 } from "@/lib/recordings-list-vm";
@@ -70,6 +88,12 @@ function RecordingsPageInner() {
   const [showFilters, setShowFilters] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+
+  // Manage mode state
+  const [manageMode, setManageMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Folder filter comes from URL query param (managed by sidebar)
   const folderParam = searchParams.get("folder"); // null = all, "unfiled" = unfiled, string = folder id
@@ -125,7 +149,79 @@ function RecordingsPageInner() {
 
   const listVM = toRecordingsListVM(recordings);
 
-  // ── Handlers ──
+  // ── Manage mode handlers ──
+  const enterManageMode = () => {
+    setManageMode(true);
+    setSelectedIds(new Set());
+  };
+
+  const exitManageMode = () => {
+    setManageMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectAll = () => {
+    setSelectedIds(new Set(listVM.cards.map((c) => c.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const applyPresetFilter = (presetId: string) => {
+    const preset = BULK_FILTER_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+
+    // Build filterable cards from the raw recording data
+    const filterableCards = recordings.items.map((item) => ({
+      id: item.id,
+      createdAtMs: item.createdAt,
+      durationRaw: item.duration,
+      fileSizeRaw: item.fileSize,
+    }));
+
+    const matchedIds = bulkFilterRecordings(filterableCards, preset.criteria);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of matchedIds) {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/recordings/batch", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      if (res.ok) {
+        setSelectedIds(new Set());
+        setShowDeleteDialog(false);
+        void fetchRecordings();
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // ── Other handlers ──
   const handleSortToggle = (field: SortField) => {
     if (sortField === field) {
       setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
@@ -139,6 +235,11 @@ function RecordingsPageInner() {
   const handleUploadComplete = useCallback(() => {
     void fetchRecordings();
   }, [fetchRecordings]);
+
+  // Selected recording titles for confirmation dialog
+  const selectedTitles = listVM.cards
+    .filter((c) => selectedIds.has(c.id))
+    .map((c) => c.title);
 
   return (
     <>
@@ -191,17 +292,100 @@ function RecordingsPageInner() {
               )}
             </Button>
 
+            {/* Manage toggle */}
+            {manageMode ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                onClick={exitManageMode}
+              >
+                <X className="h-4 w-4" strokeWidth={1.5} />
+                Done
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={enterManageMode}
+                disabled={listVM.isEmpty}
+              >
+                <Settings2 className="h-4 w-4" strokeWidth={1.5} />
+                Manage
+              </Button>
+            )}
+
             {/* Upload */}
-            <Button
-              size="sm"
-              className="gap-2"
-              onClick={() => setShowUpload(true)}
-            >
-              <Mic className="h-4 w-4" strokeWidth={1.5} />
-              Upload
-            </Button>
+            {!manageMode && (
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowUpload(true)}
+              >
+                <Mic className="h-4 w-4" strokeWidth={1.5} />
+                Upload
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Manage mode toolbar */}
+        {manageMode && (
+          <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+            {/* Selection controls */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={selectedIds.size === listVM.cards.length ? deselectAll : selectAll}
+              >
+                {selectedIds.size === listVM.cards.length ? (
+                  <Square className="h-3.5 w-3.5" strokeWidth={1.5} />
+                ) : (
+                  <CheckSquare className="h-3.5 w-3.5" strokeWidth={1.5} />
+                )}
+                {selectedIds.size === listVM.cards.length ? "Deselect all" : "Select all"}
+              </Button>
+
+              <div className="h-4 w-px bg-border" />
+
+              {/* Preset filters */}
+              <span className="text-xs text-muted-foreground">Quick select:</span>
+              {BULK_FILTER_PRESETS.map((preset) => (
+                <Badge
+                  key={preset.id}
+                  variant="secondary"
+                  className="cursor-pointer"
+                  title={preset.description}
+                  onClick={() => applyPresetFilter(preset.id)}
+                >
+                  {preset.label}
+                </Badge>
+              ))}
+            </div>
+
+            {/* Selection count + delete action */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {selectedIds.size === 0
+                  ? "Click recordings to select them, or use quick-select presets above"
+                  : `${selectedIds.size} recording${selectedIds.size !== 1 ? "s" : ""} selected`}
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="gap-1.5"
+                disabled={selectedIds.size === 0}
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="h-4 w-4" strokeWidth={1.5} />
+                Delete selected
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Filters panel */}
         {showFilters && (
@@ -299,13 +483,25 @@ function RecordingsPageInner() {
         ) : viewMode === "list" ? (
           <div className="space-y-2">
             {listVM.cards.map((card) => (
-              <RecordingListItem key={card.id} recording={card} />
+              <RecordingListItem
+                key={card.id}
+                recording={card}
+                selectable={manageMode}
+                selected={selectedIds.has(card.id)}
+                onToggleSelect={toggleSelect}
+              />
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {listVM.cards.map((card) => (
-              <RecordingTileCard key={card.id} recording={card} />
+              <RecordingTileCard
+                key={card.id}
+                recording={card}
+                selectable={manageMode}
+                selected={selectedIds.has(card.id)}
+                onToggleSelect={toggleSelect}
+              />
             ))}
           </div>
         )}
@@ -342,6 +538,47 @@ function RecordingsPageInner() {
         onOpenChange={setShowUpload}
         onUploadComplete={handleUploadComplete}
       />
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedIds.size} recording{selectedIds.size !== 1 ? "s" : ""}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The following recording{selectedIds.size !== 1 ? "s" : ""} and
+              all associated transcriptions will be permanently deleted:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/50 p-2">
+            <ul className="space-y-1">
+              {selectedTitles.map((title, i) => (
+                <li key={i} className="text-sm text-foreground truncate">
+                  {title}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleBatchDelete}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

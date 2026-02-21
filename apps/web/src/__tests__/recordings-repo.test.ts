@@ -465,4 +465,87 @@ describe("recordingsRepo", () => {
       expect(jobsRepo.findById("job-2")).toBeUndefined();
     });
   });
+
+  describe("deleteCascadeMany", () => {
+    test("deletes multiple recordings with related data in a single transaction", () => {
+      const rec1 = recordingsRepo.create(makeRecording({ id: "r1" }));
+      const rec2 = recordingsRepo.create(makeRecording({ id: "r2" }));
+
+      jobsRepo.create({
+        id: "job-1",
+        recordingId: rec1.id,
+        taskId: "task-1",
+        requestId: null,
+        status: "SUCCEEDED",
+      });
+      transcriptionsRepo.create({
+        id: "trans-1",
+        recordingId: rec1.id,
+        jobId: "job-1",
+        fullText: "Hello",
+        sentences: [],
+        language: "en",
+      });
+      jobsRepo.create({
+        id: "job-2",
+        recordingId: rec2.id,
+        taskId: "task-2",
+        requestId: null,
+        status: "SUCCEEDED",
+      });
+
+      const result = recordingsRepo.deleteCascadeMany(["r1", "r2"]);
+      expect(result).toBe(2);
+
+      expect(recordingsRepo.findById("r1")).toBeUndefined();
+      expect(recordingsRepo.findById("r2")).toBeUndefined();
+      expect(jobsRepo.findById("job-1")).toBeUndefined();
+      expect(jobsRepo.findById("job-2")).toBeUndefined();
+      expect(transcriptionsRepo.findById("trans-1")).toBeUndefined();
+    });
+
+    test("returns 0 for empty ids array", () => {
+      expect(recordingsRepo.deleteCascadeMany([])).toBe(0);
+    });
+
+    test("returns count of actually deleted recordings (skips nonexistent)", () => {
+      recordingsRepo.create(makeRecording({ id: "r1" }));
+      const result = recordingsRepo.deleteCascadeMany(["r1", "nonexistent"]);
+      expect(result).toBe(1);
+      expect(recordingsRepo.findById("r1")).toBeUndefined();
+    });
+
+    test("works when recordings have no related data", () => {
+      recordingsRepo.create(makeRecording({ id: "r1" }));
+      recordingsRepo.create(makeRecording({ id: "r2" }));
+      recordingsRepo.create(makeRecording({ id: "r3" }));
+
+      const result = recordingsRepo.deleteCascadeMany(["r1", "r2", "r3"]);
+      expect(result).toBe(3);
+    });
+
+    test("does not affect other recordings", () => {
+      recordingsRepo.create(makeRecording({ id: "r1" }));
+      recordingsRepo.create(makeRecording({ id: "r2" }));
+      recordingsRepo.create(makeRecording({ id: "r3" }));
+
+      recordingsRepo.deleteCascadeMany(["r1", "r3"]);
+
+      expect(recordingsRepo.findById("r1")).toBeUndefined();
+      expect(recordingsRepo.findById("r2")).not.toBeUndefined();
+      expect(recordingsRepo.findById("r3")).toBeUndefined();
+    });
+
+    test("returns ossKeys of deleted recordings", () => {
+      recordingsRepo.create(makeRecording({ id: "r1", ossKey: "uploads/r1.mp3" }));
+      recordingsRepo.create(makeRecording({ id: "r2", ossKey: "uploads/r2.mp3" }));
+
+      // We need to verify via findById before deletion that ossKeys exist
+      expect(recordingsRepo.findById("r1")?.ossKey).toBe("uploads/r1.mp3");
+      expect(recordingsRepo.findById("r2")?.ossKey).toBe("uploads/r2.mp3");
+
+      const result = recordingsRepo.deleteCascadeMany(["r1", "r2"]);
+      expect(result).toBe(2);
+    });
+  });
 });

@@ -218,6 +218,35 @@ export const recordingsRepo = {
     });
   },
 
+  /**
+   * Delete multiple recordings and all related data in a single transaction.
+   * Returns the number of recordings actually deleted.
+   */
+  deleteCascadeMany(ids: string[]): number {
+    if (ids.length === 0) return 0;
+
+    return db.transaction((tx: typeof db) => {
+      let deleted = 0;
+      for (const id of ids) {
+        tx.delete(transcriptions)
+          .where(eq(transcriptions.recordingId, id))
+          .run();
+        tx.delete(transcriptionJobs)
+          .where(eq(transcriptionJobs.recordingId, id))
+          .run();
+        tx.delete(recordingTags)
+          .where(eq(recordingTags.recordingId, id))
+          .run();
+        const result = tx
+          .delete(recordings)
+          .where(eq(recordings.id, id))
+          .run() as unknown as { changes: number };
+        deleted += result.changes;
+      }
+      return deleted;
+    });
+  },
+
   /** Helper: parse tags from a DB row */
   parseTags,
 
