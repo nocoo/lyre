@@ -3,6 +3,7 @@
 import { use, useRef, useState, useCallback, useEffect } from "react";
 import {
   ArrowLeft,
+  Bot,
   Calendar,
   Check,
   ChevronsUpDown,
@@ -14,7 +15,9 @@ import {
   AlertCircle,
   Play,
   Plus,
+  RefreshCw,
   StickyNote,
+  Sparkles,
   Tag,
   Trash2,
   RotateCcw,
@@ -104,6 +107,11 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [pollStatus, setPollStatus] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
+  // AI summary
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summarizeError, setSummarizeError] = useState<string | null>(null);
+
   // Editable fields
   const [notes, setNotes] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
@@ -125,6 +133,7 @@ function RecordingDetailContent({ id }: { id: string }) {
         const data = (await res.json()) as RecordingDetail;
         setDetail(data);
         // Sync editable fields
+        setAiSummary(data.aiSummary ?? null);
         setNotes(data.notes ?? "");
         setRecordedAtDate(
           data.recordedAt ? toDateInputValue(data.recordedAt) : "",
@@ -307,6 +316,31 @@ function RecordingDetailContent({ id }: { id: string }) {
       }
     } finally {
       setDownloading(false);
+    }
+  }, [id]);
+
+  // ── AI Summarize handler ──
+  const handleSummarize = useCallback(async () => {
+    setSummarizing(true);
+    setSummarizeError(null);
+    try {
+      const res = await fetch(`/api/recordings/${id}/summarize`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as
+        | { summary: string }
+        | { error: string };
+      if (!res.ok) {
+        setSummarizeError("error" in data ? data.error : "Unknown error");
+        return;
+      }
+      if ("summary" in data) {
+        setAiSummary(data.summary);
+      }
+    } catch {
+      setSummarizeError("Network error — could not reach the server.");
+    } finally {
+      setSummarizing(false);
     }
   }, [id]);
 
@@ -594,6 +628,16 @@ function RecordingDetailContent({ id }: { id: string }) {
         />
       )}
 
+      {/* AI Summary — shown when transcription exists */}
+      {vm.hasTranscription && (
+        <AiSummaryCard
+          summary={aiSummary}
+          loading={summarizing}
+          error={summarizeError}
+          onGenerate={handleSummarize}
+        />
+      )}
+
       {/* Transcription */}
       {vm.hasTranscription && vm.transcription && (
         <div className="space-y-3">
@@ -814,6 +858,89 @@ function JobInfoCard({
           <p className="text-sm text-foreground">{processingDuration}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── AI Summary Card ──
+
+function AiSummaryCard({
+  summary,
+  loading,
+  error,
+  onGenerate,
+}: {
+  summary: string | null;
+  loading: boolean;
+  error: string | null;
+  onGenerate: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Bot className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+          <p className="text-xs font-medium text-muted-foreground">
+            AI Summary
+          </p>
+        </div>
+
+        {/* Generate / Regenerate button */}
+        {!loading && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 h-7 text-xs"
+            onClick={onGenerate}
+          >
+            {summary ? (
+              <>
+                <RefreshCw className="h-3 w-3" strokeWidth={1.5} />
+                Regenerate
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3 w-3" strokeWidth={1.5} />
+                Generate Summary
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {/* Loading state */}
+      {loading && (
+        <div className="flex items-center gap-2 py-3 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Generating summary...</span>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && !loading && (
+        <div className="flex items-start gap-2 py-2">
+          <AlertCircle
+            className="h-4 w-4 shrink-0 text-destructive mt-0.5"
+            strokeWidth={1.5}
+          />
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      )}
+
+      {/* Summary content */}
+      {summary && !loading && (
+        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+          {summary}
+        </p>
+      )}
+
+      {/* Empty state (no summary, not loading, no error) */}
+      {!summary && !loading && !error && (
+        <p className="text-sm text-muted-foreground py-2">
+          No summary yet. Click &ldquo;Generate Summary&rdquo; to create one
+          from the transcription.
+        </p>
+      )}
     </div>
   );
 }
