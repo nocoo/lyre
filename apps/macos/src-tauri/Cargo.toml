@@ -22,7 +22,7 @@ mp3lame-encoder = "0.2"
 chrono = "0.4"
 dirs = "6"
 security-framework = "3"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "native-tls"], default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [dev-dependencies]
