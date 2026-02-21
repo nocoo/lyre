@@ -11,7 +11,7 @@ rust-version = "1.70"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
@@ -27,6 +27,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 [dev-dependencies]
 tempfile = "3"
 hound = "3.5"
+filetime = "0.2"
 
 [features]
 default = ["custom-protocol"]

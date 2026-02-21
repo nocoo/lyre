@@ -135,7 +135,7 @@ export function DeviceTokensSection() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 lg:col-span-2">
+    <div className="rounded-xl border border-border bg-card p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">

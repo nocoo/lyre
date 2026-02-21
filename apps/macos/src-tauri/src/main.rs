@@ -2,6 +2,7 @@ mod audio;
 mod config;
 mod http_client;
 mod recorder;
+mod recordings;
 mod tray;
 
 use tauri::Manager;
@@ -19,7 +20,6 @@ fn save_config(server_url: String, token: String) -> Result<(), String> {
 }
 
 /// Tauri command: test connection to the Lyre web server.
-/// Runs async via Tauri's built-in tokio runtime.
 #[tauri::command]
 async fn test_connection() -> Result<(), String> {
     let cfg = config::load_config()?;
@@ -27,6 +27,30 @@ async fn test_connection() -> Result<(), String> {
         return Err("server URL and token must be configured first".to_string());
     }
     http_client::test_connection(&cfg.server_url, &cfg.token).await
+}
+
+/// Tauri command: list local recordings from the output directory.
+#[tauri::command]
+fn list_recordings() -> Result<Vec<recordings::RecordingInfo>, String> {
+    let output_dir = recordings::default_output_dir();
+    recordings::list_recordings(&output_dir)
+}
+
+/// Tauri command: delete a local recording file.
+#[tauri::command]
+fn delete_recording(file_path: String) -> Result<(), String> {
+    let output_dir = recordings::default_output_dir();
+    recordings::delete_recording(&file_path, &output_dir)
+}
+
+/// Tauri command: reveal a recording in Finder.
+#[tauri::command]
+fn reveal_recording(file_path: String) -> Result<(), String> {
+    std::process::Command::new("open")
+        .args(["-R", &file_path])
+        .spawn()
+        .map_err(|e| format!("failed to reveal in Finder: {e}"))?;
+    Ok(())
 }
 
 fn main() {
@@ -37,6 +61,9 @@ fn main() {
             get_config,
             save_config,
             test_connection,
+            list_recordings,
+            delete_recording,
+            reveal_recording,
         ])
         .setup(|app| {
             tray::setup_tray(app)?;

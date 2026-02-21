@@ -2,7 +2,9 @@ pub mod audio;
 pub mod config;
 pub mod http_client;
 pub mod recorder;
+pub mod recordings;
 
 pub use audio::AudioDeviceManager;
-pub use config::{load_config, save_config as save_config_to_keychain, has_config, AppConfig};
+pub use config::{has_config, load_config, save_config as save_config_to_keychain, AppConfig};
 pub use recorder::{Recorder, RecorderConfig, RecorderState};
+pub use recordings::{list_recordings, delete_recording, RecordingInfo};

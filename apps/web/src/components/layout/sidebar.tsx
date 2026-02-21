@@ -8,6 +8,8 @@ import {
   LayoutDashboard,
   Mic,
   Settings,
+  Bot,
+  Key,
   PanelLeft,
   LogOut,
   Search,
@@ -77,6 +79,14 @@ function NavGroupSection({
   );
 }
 
+// ── Settings sub-items ──
+
+const settingsItems = [
+  { href: "/settings", label: "General", icon: Settings, exact: true },
+  { href: "/settings/ai", label: "AI Settings", icon: Bot, exact: false },
+  { href: "/settings/tokens", label: "Device Tokens", icon: Key, exact: false },
+];
+
 // ── Main sidebar ──
 
 export function Sidebar() {
@@ -89,6 +99,7 @@ export function Sidebar() {
   const userInitial = userName[0] ?? "?";
 
   const isRecordingsPage = pathname.startsWith("/recordings");
+  const isSettingsPage = pathname.startsWith("/settings");
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -162,7 +173,7 @@ export function Sidebar() {
             </Tooltip>
 
             {/* Navigation icons */}
-            <nav className="flex flex-col items-center gap-1 pt-1">
+            <nav className="flex flex-1 flex-col items-center gap-1 pt-1">
               {/* Dashboard */}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -202,35 +213,37 @@ export function Sidebar() {
                   Recordings
                 </TooltipContent>
               </Tooltip>
+
+              {/* Folder tree — collapsed (icons only) */}
+              {isRecordingsPage && <FolderSidebarCollapsed />}
+
+              {/* Settings icons */}
+              {settingsItems.map((item) => {
+                const isActive = item.exact
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
+                return (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger asChild>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                          isActive
+                            ? "bg-accent text-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                        )}
+                      >
+                        <item.icon className="h-4 w-4" strokeWidth={1.5} />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>
+                      {item.label}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
             </nav>
-
-            {/* Folder tree — collapsed (icons only) */}
-            {isRecordingsPage && <FolderSidebarCollapsed />}
-
-            {/* Spacer when no folder tree */}
-            {!isRecordingsPage && <div className="flex-1" />}
-
-            {/* Settings (pinned bottom) */}
-            <div className="flex flex-col items-center gap-1 pb-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link
-                    href="/settings"
-                    className={cn(
-                      "relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-                      pathname.startsWith("/settings")
-                        ? "bg-accent text-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                    )}
-                  >
-                    <Settings className="h-4 w-4" strokeWidth={1.5} />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  Settings
-                </TooltipContent>
-              </Tooltip>
-            </div>
 
             {/* User avatar + sign out */}
             <div className="py-3 flex justify-center w-full">
@@ -343,32 +356,37 @@ export function Sidebar() {
               </NavGroupSection>
 
               {/* Recordings group */}
-              <NavGroupSection
-                label="Recordings"
-                defaultOpen={isRecordingsPage}
-              >
+              <NavGroupSection label="Recordings">
                 <FolderSidebar />
               </NavGroupSection>
-            </nav>
 
-            {/* Settings (pinned bottom, outside groups) */}
-            <div className="px-3 pb-1">
-              <Link
-                href="/settings"
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-                  pathname.startsWith("/settings")
-                    ? "bg-accent text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                <Settings
-                  className="h-4 w-4 shrink-0"
-                  strokeWidth={1.5}
-                />
-                <span className="flex-1 text-left">Settings</span>
-              </Link>
-            </div>
+              {/* Settings group */}
+              <NavGroupSection label="Settings" defaultOpen={isSettingsPage}>
+                {settingsItems.map((item) => {
+                  const isActive = item.exact
+                    ? pathname === item.href
+                    : pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
+                        isActive
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <item.icon
+                        className="h-4 w-4 shrink-0"
+                        strokeWidth={1.5}
+                      />
+                      <span className="flex-1 text-left">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </NavGroupSection>
+            </nav>
 
             {/* User info + sign out */}
             <div className="px-4 py-3">

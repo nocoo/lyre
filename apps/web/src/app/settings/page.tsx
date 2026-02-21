@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Database, Globe, Bell, Save } from "lucide-react";
+import { Database, Globe, Bell } from "lucide-react";
 import { AppShell, ThemeToggle } from "@/components/layout";
-import { AiSettingsSection } from "@/components/ai-settings";
-import { DeviceTokensSection } from "@/components/device-tokens";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -61,27 +58,21 @@ function SettingRow({
   );
 }
 
-export default function SettingsPage() {
+export default function SettingsGeneralPage() {
   const [defaultLanguage, setDefaultLanguage] = useState("auto");
   const [notifyOnComplete, setNotifyOnComplete] = useState(true);
 
   return (
-    <AppShell breadcrumbs={[{ label: "Settings" }]}>
+    <AppShell breadcrumbs={[{ label: "Settings", href: "/settings" }, { label: "General" }]}>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold">Settings</h1>
+          <h1 className="text-2xl font-semibold">General</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage your preferences and configuration.
+            Appearance, transcription defaults, and storage configuration.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* AI Configuration — full width */}
-          <AiSettingsSection />
-
-          {/* Device Tokens — full width */}
-          <DeviceTokensSection />
-
           {/* Appearance */}
           <SettingSection
             icon={
@@ -189,14 +180,6 @@ export default function SettingsPage() {
               </div>
             </div>
           </SettingSection>
-        </div>
-
-        {/* Save */}
-        <div className="flex justify-end">
-          <Button className="gap-2">
-            <Save className="h-4 w-4" strokeWidth={1.5} />
-            Save changes
-          </Button>
         </div>
       </div>
     </AppShell>
