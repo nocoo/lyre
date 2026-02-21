@@ -2,20 +2,47 @@
 
 Audio recording management and transcription platform with word-level karaoke playback.
 
+## Monorepo Structure
+
+Bun native workspaces monorepo. All web app code lives in `apps/web/`.
+
+```
+lyre/
+├── apps/
+│   ├── web/          ← Next.js app (@lyre/web)
+│   │   ├── src/      ← Source code
+│   │   ├── public/   ← Static assets
+│   │   ├── scripts/  ← Build/test helper scripts
+│   │   ├── database/ ← SQLite DB (gitignored)
+│   │   └── ...       ← Config files (tsconfig, eslint, next.config, etc.)
+│   └── macos/        ← Tauri app placeholder (.gitkeep)
+├── packages/         ← Shared packages placeholder (.gitkeep)
+├── package.json      ← Root workspace config (proxies scripts to apps/web)
+├── bun.lock
+├── .husky/           ← Git hooks
+├── Dockerfile        ← Multi-stage build (monorepo-aware)
+├── CLAUDE.md
+├── README.md
+├── CHANGELOG.md
+└── LICENSE
+```
+
 ## Tech Stack
 
 - **Runtime**: Bun
 - **Framework**: Next.js 16 (App Router, standalone output)
 - **Language**: TypeScript 5 (strict)
-- **Database**: SQLite via Drizzle ORM (`database/lyre.db`, override with `LYRE_DB`)
+- **Database**: SQLite via Drizzle ORM (`apps/web/database/lyre.db`, override with `LYRE_DB`)
 - **UI**: shadcn/ui + Radix UI + Tailwind CSS v4 (utility classes only, no CSS modules)
 - **Icons**: `lucide-react` (the only icon library — do not introduce others)
 - **Auth**: NextAuth v5 + Google OAuth with email allowlist
 - **Storage**: Aliyun OSS (zero-SDK, custom V1 signature)
 - **ASR**: Aliyun DashScope (`qwen3-asr-flash-filetrans`)
-- **Path alias**: `@/*` → `./src/*`
+- **Path alias**: `@/*` → `./src/*` (relative to `apps/web/`)
 
 ## Key Commands
+
+All commands run from the **repository root**. Root `package.json` proxies them via `bun run --cwd apps/web`.
 
 ```bash
 bun dev                # Start dev server (port 7025)
@@ -41,13 +68,13 @@ All code must pass UT + lint before commit. Coverage + E2E are enforced before p
 - **Auth bypass**: `PLAYWRIGHT=1` env var skips login/auth in E2E. Set automatically by the runner script.
 - **Database**: Each E2E run uses an independent SQLite DB (auto-created, isolated from dev data)
 - **ASR mock**: The runner unsets `DASHSCOPE_API_KEY` to force mock ASR mode
-- **Runner**: `scripts/run-e2e.ts` — spawns a Next.js dev server, waits for health, runs tests, then tears down
+- **Runner**: `apps/web/scripts/run-e2e.ts` — spawns a Next.js dev server, waits for health, runs tests, then tears down
 
 ### Real LLM Integration Tests
 
 Some E2E tests make **real API calls** to an LLM provider. These require credentials stored in `.env.e2e` (gitignored, never committed).
 
-- **Template**: `.env.e2e.example` is checked in — copy it to `.env.e2e` and fill in real values
+- **Template**: `apps/web/.env.e2e.example` is checked in — copy it to `apps/web/.env.e2e` and fill in real values
 - **Required vars**: `AI_E2E_AUTH_TOKEN`, `AI_E2E_BASE_URL`, `AI_E2E_MODEL`
 - **Graceful skip**: Tests use `test.skipIf(!HAS_AI_CREDS)` — they skip cleanly when `.env.e2e` is absent or incomplete
 - **CI/local**: Works in both — CI can inject secrets via env vars; locally just populate `.env.e2e`
@@ -57,10 +84,11 @@ Some E2E tests make **real API calls** to an LLM provider. These require credent
 - **Scrollable container**: The app's main scrollable element lives in `src/components/layout/app-shell.tsx` — a `<div>` with `overflow-y-auto` inside the floating island content area. Scroll-to-top FAB is attached here.
 - **Sonner toast**: `<Toaster />` component exists at `src/components/ui/sonner.tsx` but is NOT mounted in root layout. Must add to `src/app/layout.tsx` if toast notifications are needed.
 - **ASR mock**: Set `DASHSCOPE_API_KEY` to empty or omit it entirely to use the mock ASR provider. E2E tests unset this key to force mock mode.
+- **Suspense boundaries**: Components using `useSearchParams()` must be wrapped in `<Suspense>`. Currently applied in `app-shell.tsx` (for Sidebar) and `recordings/page.tsx` (for the page content).
 
 ## Version Management
 
-Version is managed in **one place**: `package.json` → `version` field.
+Version is managed in **one place**: `apps/web/package.json` → `version` field.
 
 - `src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION`
 - Sidebar displays the version badge (in `src/components/layout/sidebar.tsx`)
@@ -68,13 +96,13 @@ Version is managed in **one place**: `package.json` → `version` field.
 
 ### How to bump version
 
-1. Update `version` in `package.json`
+1. Update `version` in `apps/web/package.json`
 2. Update the fallback string in `src/app/api/live/route.ts` to match
 3. Create a git tag: `git tag v<version>`
 4. Push tag: `git push origin v<version>`
 5. Create GitHub release: `gh release create v<version> --generate-notes`
 
-## Project Structure
+## Project Structure (apps/web/src/)
 
 ```
 src/
@@ -98,4 +126,4 @@ src/
 
 ## Retrospective
 
-_(Record lessons learned from mistakes here)_
+- **useSearchParams() needs Suspense**: In Next.js 16, any component using `useSearchParams()` must be wrapped in a `<Suspense>` boundary, otherwise the production build fails during static page generation. This applies to both page components and shared components like Sidebar.

@@ -1,6 +1,5 @@
 # dependencies
-/node_modules
-/.pnp
+node_modules/
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -9,14 +8,15 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+.next-e2e/
+out/
 
 # production
-/build
+build/
 
 # misc
 .DS_Store
@@ -38,10 +38,11 @@ yarn-error.log*
 next-env.d.ts
 
 # database
-database/*.db
-database/*.db-journal
-database/*.db-wal
-database/*.db-shm
+**/database/*.db
+**/database/*.db-journal
+**/database/*.db-wal
+**/database/*.db-shm
 
-# e2e
-.next-e2e
+# python
+.ruff_cache/
+__pycache__/

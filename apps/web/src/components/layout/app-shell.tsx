@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, Rocket } from "lucide-react";
 import { Sidebar } from "./sidebar";
@@ -63,7 +63,11 @@ function AppShellInner({ children, breadcrumbs = [] }: AppShellProps) {
   return (
     <div className="flex min-h-screen w-full bg-background">
       {/* Desktop sidebar */}
-      {!isMobile && <Sidebar />}
+      {!isMobile && (
+        <Suspense>
+          <Sidebar />
+        </Suspense>
+      )}
 
       {/* Mobile overlay */}
       {isMobile && mobileOpen && (
@@ -73,7 +77,9 @@ function AppShellInner({ children, breadcrumbs = [] }: AppShellProps) {
             onClick={() => setMobileOpen(false)}
           />
           <div className="fixed inset-y-0 left-0 z-50 w-[260px]">
-            <Sidebar />
+            <Suspense>
+              <Sidebar />
+            </Suspense>
           </div>
         </>
       )}

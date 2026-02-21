@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   SlidersHorizontal,
@@ -50,6 +50,14 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
 const PAGE_SIZE = 20;
 
 export default function RecordingsPage() {
+  return (
+    <Suspense>
+      <RecordingsPageInner />
+    </Suspense>
+  );
+}
+
+function RecordingsPageInner() {
   // ── State ──
   const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<RecordingStatus | "all">("all");
