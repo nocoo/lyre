@@ -194,6 +194,43 @@ describe("POST /api/recordings", () => {
     // Cleanup
     await fetch(`${BASE_URL}/api/recordings/${body.id}`, { method: "DELETE" });
   });
+
+  test("creates a recording with folderId", async () => {
+    // Create a folder first
+    const folderRes = await fetch(`${BASE_URL}/api/folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Upload Target Folder" }),
+    });
+    expect(folderRes.status).toBe(201);
+    const folder = (await folderRes.json()) as Folder;
+
+    // Create recording in that folder
+    const res = await fetch(`${BASE_URL}/api/recordings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Recording In Folder",
+        fileName: "in-folder.mp3",
+        ossKey: "uploads/e2e/in-folder.mp3",
+        folderId: folder.id,
+      }),
+    });
+    expect(res.status).toBe(201);
+
+    const body = (await res.json()) as Recording;
+    expect(body.folderId).toBe(folder.id);
+
+    // Verify via GET detail
+    const detailRes = await fetch(`${BASE_URL}/api/recordings/${body.id}`);
+    const detail = (await detailRes.json()) as RecordingDetail;
+    expect(detail.folderId).toBe(folder.id);
+    expect(detail.folder?.id).toBe(folder.id);
+
+    // Cleanup
+    await fetch(`${BASE_URL}/api/recordings/${body.id}`, { method: "DELETE" });
+    await fetch(`${BASE_URL}/api/folders/${folder.id}`, { method: "DELETE" });
+  });
 });
 
 describe("GET /api/recordings", () => {

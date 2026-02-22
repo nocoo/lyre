@@ -537,6 +537,7 @@ function RecordingsPageInner() {
         open={showUpload}
         onOpenChange={setShowUpload}
         onUploadComplete={handleUploadComplete}
+        folderId={folderParam && folderParam !== "unfiled" ? folderParam : null}
       />
 
       {/* Delete confirmation dialog */}

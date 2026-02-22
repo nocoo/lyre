@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
     ossKey?: string;
     tags?: string[];
     recordedAt?: number;
+    folderId?: string | null;
   };
 
   if (!body.title || !body.fileName || !body.ossKey) {
@@ -122,24 +123,35 @@ export async function POST(request: NextRequest) {
   // Use client-provided id (from presign) or generate a new one
   const id = body.id ?? crypto.randomUUID();
 
-  const recording = recordingsRepo.create({
-    id,
-    userId: user.id,
-    title: body.title,
-    description: body.description ?? null,
-    fileName: body.fileName,
-    fileSize: body.fileSize ?? null,
-    duration: body.duration ?? null,
-    format: body.format ?? null,
-    sampleRate: body.sampleRate ?? null,
-    ossKey: body.ossKey,
-    tags: body.tags ?? [],
-    status: "uploaded",
-    recordedAt: body.recordedAt ?? null,
-  });
+  try {
+    const recording = recordingsRepo.create({
+      id,
+      userId: user.id,
+      title: body.title,
+      description: body.description ?? null,
+      fileName: body.fileName,
+      fileSize: body.fileSize ?? null,
+      duration: body.duration ?? null,
+      format: body.format ?? null,
+      sampleRate: body.sampleRate ?? null,
+      ossKey: body.ossKey,
+      tags: body.tags ?? [],
+      status: "uploaded",
+      recordedAt: body.recordedAt ?? null,
+      folderId: body.folderId ?? null,
+    });
 
-  return NextResponse.json(
-    { ...recording, tags: recordingsRepo.parseTags(recording.tags) },
-    { status: 201 },
-  );
+    return NextResponse.json(
+      { ...recording, tags: recordingsRepo.parseTags(recording.tags) },
+      { status: 201 },
+    );
+  } catch (error) {
+    console.error("Failed to create recording:", error);
+    const message =
+      error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json(
+      { error: `Failed to create recording: ${message}` },
+      { status: 500 },
+    );
+  }
 }

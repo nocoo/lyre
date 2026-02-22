@@ -28,6 +28,8 @@ interface UploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUploadComplete?: (recordingId: string) => void;
+  /** When set, newly uploaded recordings are placed into this folder. */
+  folderId?: string | null;
 }
 
 // ── Helpers ──
@@ -109,6 +111,7 @@ export function UploadDialog({
   open,
   onOpenChange,
   onUploadComplete,
+  folderId,
 }: UploadDialogProps) {
   const [state, setState] = useState<UploadState>("idle");
   const [file, setFile] = useState<File | null>(null);
@@ -263,6 +266,7 @@ export function UploadDialog({
           format: normalizeAudioFormat(file.type),
           ossKey,
           recordedAt: file.lastModified || null,
+          folderId: folderId ?? null,
         }),
       });
 
@@ -286,7 +290,7 @@ export function UploadDialog({
       setErrorMessage(err instanceof Error ? err.message : "Upload failed");
       setState("error");
     }
-  }, [file, title, description, onUploadComplete, handleOpenChange, reset]);
+  }, [file, title, description, folderId, onUploadComplete, handleOpenChange, reset]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
