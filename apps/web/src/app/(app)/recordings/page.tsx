@@ -243,7 +243,7 @@ function RecordingsPageInner() {
 
   return (
     <>
-      <div className="space-y-4">
+      <div className={cn("space-y-4", listVM.isEmpty && !loading && "flex min-h-full flex-col")}>
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Recordings</h1>
@@ -471,7 +471,7 @@ function RecordingsPageInner() {
 
         {/* Recording list/grid */}
         {listVM.isEmpty && !loading ? (
-          <div className="flex min-h-full flex-col items-center justify-center text-muted-foreground">
+          <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
             <Mic className="h-12 w-12 mb-3" strokeWidth={1} />
             <p className="text-sm">No recordings found</p>
             <p className="text-xs mt-1">
