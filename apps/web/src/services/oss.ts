@@ -170,6 +170,176 @@ export function presignGet(
   return url.toString();
 }
 
+// ── List objects ──
+
+export interface OssObject {
+  key: string;
+  size: number;
+  lastModified: string;
+}
+
+/**
+ * List all objects under a given prefix (server-side, handles pagination).
+ *
+ * Uses the Aliyun OSS GET Bucket (ListObjects) API with V1 Authorization header.
+ * Automatically paginates through all results using the marker parameter.
+ *
+ * @param prefix - Object key prefix (e.g. "uploads/" or "results/")
+ * @param config - Optional OSS config override
+ * @returns Array of all matching objects
+ */
+export async function listObjects(
+  prefix: string,
+  config?: OssConfig,
+): Promise<OssObject[]> {
+  const cfg = config ?? getConfig();
+  const all: OssObject[] = [];
+  let marker = "";
+  let hasMore = true;
+
+  while (hasMore) {
+    const date = new Date().toUTCString();
+    const resource = `/${cfg.bucket}/`;
+
+    const stringToSign = ["GET", "", "", date, resource].join("\n");
+    const signature = createHmac("sha1", cfg.accessKeySecret)
+      .update(stringToSign, "utf8")
+      .digest("base64");
+
+    const url = new URL(
+      `https://${cfg.bucket}.${cfg.region}.aliyuncs.com/`,
+    );
+    url.searchParams.set("prefix", prefix);
+    url.searchParams.set("max-keys", "1000");
+    if (marker) url.searchParams.set("marker", marker);
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Date: date,
+        Authorization: `OSS ${cfg.accessKeyId}:${signature}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`OSS listObjects failed: ${response.status} ${response.statusText}`);
+    }
+
+    const xml = await response.text();
+
+    // Parse <Contents> entries from XML
+    const contentsRegex =
+      /<Contents>\s*<Key>([^<]+)<\/Key>\s*<LastModified>([^<]+)<\/LastModified>[\s\S]*?<Size>(\d+)<\/Size>[\s\S]*?<\/Contents>/g;
+    let match: RegExpExecArray | null;
+    while ((match = contentsRegex.exec(xml)) !== null) {
+      all.push({
+        key: match[1],
+        size: parseInt(match[3], 10),
+        lastModified: match[2],
+      });
+    }
+
+    // Check if truncated
+    const truncatedMatch = /<IsTruncated>(true|false)<\/IsTruncated>/.exec(xml);
+    const isTruncated = truncatedMatch?.[1] === "true";
+    if (isTruncated) {
+      const nextMarkerMatch = /<NextMarker>([^<]+)<\/NextMarker>/.exec(xml);
+      marker = nextMarkerMatch?.[1] ?? "";
+      hasMore = !!marker;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return all;
+}
+
+/**
+ * Delete multiple objects from OSS in a single batch request (server-side).
+ *
+ * Uses the Aliyun OSS Delete Multiple Objects API.
+ * Processes up to 1000 keys per batch request (OSS limit).
+ *
+ * @param keys - Array of object keys to delete
+ * @param config - Optional OSS config override
+ * @returns Number of objects successfully deleted
+ */
+export async function deleteObjects(
+  keys: string[],
+  config?: OssConfig,
+): Promise<number> {
+  if (keys.length === 0) return 0;
+  const cfg = config ?? getConfig();
+  let totalDeleted = 0;
+
+  // Process in batches of 1000 (OSS limit)
+  for (let i = 0; i < keys.length; i += 1000) {
+    const batch = keys.slice(i, i + 1000);
+
+    const objectElements = batch
+      .map((k) => `<Object><Key>${escapeXml(k)}</Key></Object>`)
+      .join("");
+    const body = `<?xml version="1.0" encoding="UTF-8"?><Delete><Quiet>false</Quiet>${objectElements}</Delete>`;
+
+    const bodyBuffer = Buffer.from(body, "utf8");
+    const md5 = await computeMd5(bodyBuffer);
+
+    const date = new Date().toUTCString();
+    const resource = `/${cfg.bucket}/?delete`;
+    const contentType = "application/xml";
+
+    const stringToSign = [
+      "POST",
+      md5,
+      contentType,
+      date,
+      resource,
+    ].join("\n");
+    const signature = createHmac("sha1", cfg.accessKeySecret)
+      .update(stringToSign, "utf8")
+      .digest("base64");
+
+    const url = `https://${cfg.bucket}.${cfg.region}.aliyuncs.com/?delete`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Date: date,
+        "Content-Type": contentType,
+        "Content-MD5": md5,
+        "Content-Length": bodyBuffer.length.toString(),
+        Authorization: `OSS ${cfg.accessKeyId}:${signature}`,
+      },
+      body: bodyBuffer,
+    });
+
+    if (response.ok) {
+      const xml = await response.text();
+      // Count <Deleted> entries
+      const deletedMatches = xml.match(/<Deleted>/g);
+      totalDeleted += deletedMatches?.length ?? batch.length;
+    }
+  }
+
+  return totalDeleted;
+}
+
+/** Escape special XML characters */
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/** Compute base64-encoded MD5 hash */
+async function computeMd5(data: Buffer): Promise<string> {
+  // Use Node.js crypto (not HMAC — plain hash)
+  const { createHash } = await import("crypto");
+  return createHash("md5").update(data).digest("base64");
+}
+
 /**
  * Delete an object from OSS (server-side).
  *
@@ -211,5 +381,7 @@ export const ossService = {
   presignPut,
   presignGet,
   deleteObject,
+  deleteObjects,
+  listObjects,
   signV1,
 };

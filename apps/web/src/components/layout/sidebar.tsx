@@ -10,6 +10,7 @@ import {
   Settings,
   Bot,
   Key,
+  HardDrive,
   PanelLeft,
   LogOut,
   Search,
@@ -85,6 +86,7 @@ const settingsItems = [
   { href: "/settings", label: "General", icon: Settings, exact: true },
   { href: "/settings/ai", label: "AI Settings", icon: Bot, exact: false },
   { href: "/settings/tokens", label: "Device Tokens", icon: Key, exact: false },
+  { href: "/settings/storage", label: "Storage", icon: HardDrive, exact: false },
 ];
 
 // ── Main sidebar ──

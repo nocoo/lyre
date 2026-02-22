@@ -6,6 +6,8 @@ import {
   presignPut,
   presignGet,
   deleteObject,
+  listObjects,
+  deleteObjects,
   type OssConfig,
 } from "@/services/oss";
 
@@ -314,5 +316,215 @@ describe("getConfig (env var validation)", () => {
   test("succeeds when all env vars are set", () => {
     const url = presignPut("key.mp3", "audio/mpeg");
     expect(url).toContain("https://test-bucket.oss-cn-beijing.aliyuncs.com/");
+  });
+});
+
+// ── listObjects ──
+
+describe("listObjects", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("parses XML response with multiple objects", async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <ListBucketResult>
+        <IsTruncated>false</IsTruncated>
+        <Contents>
+          <Key>uploads/user1/rec1/audio.wav</Key>
+          <LastModified>2026-01-15T10:30:00.000Z</LastModified>
+          <Size>1048576</Size>
+          <StorageClass>Standard</StorageClass>
+        </Contents>
+        <Contents>
+          <Key>uploads/user1/rec2/audio.mp3</Key>
+          <LastModified>2026-01-16T08:00:00.000Z</LastModified>
+          <Size>524288</Size>
+          <StorageClass>Standard</StorageClass>
+        </Contents>
+      </ListBucketResult>`;
+
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(xml, { status: 200 })),
+    );
+
+    const objects = await listObjects("uploads/", TEST_CONFIG);
+    expect(objects).toHaveLength(2);
+    expect(objects[0].key).toBe("uploads/user1/rec1/audio.wav");
+    expect(objects[0].size).toBe(1048576);
+    expect(objects[0].lastModified).toBe("2026-01-15T10:30:00.000Z");
+    expect(objects[1].key).toBe("uploads/user1/rec2/audio.mp3");
+    expect(objects[1].size).toBe(524288);
+  });
+
+  test("returns empty array for empty bucket", async () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <ListBucketResult>
+        <IsTruncated>false</IsTruncated>
+      </ListBucketResult>`;
+
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(xml, { status: 200 })),
+    );
+
+    const objects = await listObjects("uploads/", TEST_CONFIG);
+    expect(objects).toHaveLength(0);
+  });
+
+  test("handles pagination with IsTruncated=true", async () => {
+    let callCount = 0;
+    const page1 = `<?xml version="1.0" encoding="UTF-8"?>
+      <ListBucketResult>
+        <IsTruncated>true</IsTruncated>
+        <NextMarker>uploads/user1/rec2/audio.mp3</NextMarker>
+        <Contents>
+          <Key>uploads/user1/rec1/audio.wav</Key>
+          <LastModified>2026-01-15T10:30:00.000Z</LastModified>
+          <Size>100</Size>
+          <StorageClass>Standard</StorageClass>
+        </Contents>
+      </ListBucketResult>`;
+
+    const page2 = `<?xml version="1.0" encoding="UTF-8"?>
+      <ListBucketResult>
+        <IsTruncated>false</IsTruncated>
+        <Contents>
+          <Key>uploads/user1/rec2/audio.mp3</Key>
+          <LastModified>2026-01-16T08:00:00.000Z</LastModified>
+          <Size>200</Size>
+          <StorageClass>Standard</StorageClass>
+        </Contents>
+      </ListBucketResult>`;
+
+    globalThis.fetch = mock(() => {
+      callCount++;
+      const body = callCount === 1 ? page1 : page2;
+      return Promise.resolve(new Response(body, { status: 200 }));
+    });
+
+    const objects = await listObjects("uploads/", TEST_CONFIG);
+    expect(objects).toHaveLength(2);
+    expect(callCount).toBe(2);
+    expect(objects[0].size).toBe(100);
+    expect(objects[1].size).toBe(200);
+  });
+
+  test("sends correct Authorization header", async () => {
+    let capturedInit: RequestInit | undefined;
+    const xml = `<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>`;
+    globalThis.fetch = mock((_url: string, init?: RequestInit) => {
+      capturedInit = init;
+      return Promise.resolve(new Response(xml, { status: 200 }));
+    });
+
+    await listObjects("uploads/", TEST_CONFIG);
+
+    expect(capturedInit?.method).toBe("GET");
+    const headers = capturedInit?.headers as Record<string, string>;
+    expect(headers.Authorization).toMatch(/^OSS test-key-id:.+$/);
+  });
+
+  test("sends prefix query parameter", async () => {
+    let capturedUrl = "";
+    const xml = `<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>`;
+    globalThis.fetch = mock((url: string) => {
+      capturedUrl = url;
+      return Promise.resolve(new Response(xml, { status: 200 }));
+    });
+
+    await listObjects("results/", TEST_CONFIG);
+
+    const url = new URL(capturedUrl);
+    expect(url.searchParams.get("prefix")).toBe("results/");
+    expect(url.searchParams.get("max-keys")).toBe("1000");
+  });
+
+  test("throws on non-OK response", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response("Forbidden", { status: 403, statusText: "Forbidden" })),
+    );
+
+    expect(listObjects("uploads/", TEST_CONFIG)).rejects.toThrow(
+      "OSS listObjects failed: 403 Forbidden",
+    );
+  });
+});
+
+// ── deleteObjects ──
+
+describe("deleteObjects", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("returns 0 for empty keys array", async () => {
+    const result = await deleteObjects([], TEST_CONFIG);
+    expect(result).toBe(0);
+  });
+
+  test("sends POST with XML body containing object keys", async () => {
+    let capturedUrl = "";
+    let capturedBody = "";
+    let capturedInit: RequestInit | undefined;
+
+    const responseXml = `<?xml version="1.0" encoding="UTF-8"?>
+      <DeleteResult>
+        <Deleted><Key>uploads/u/r1/a.wav</Key></Deleted>
+        <Deleted><Key>uploads/u/r2/b.wav</Key></Deleted>
+      </DeleteResult>`;
+
+    globalThis.fetch = mock(async (url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedInit = init;
+      if (init?.body) {
+        const buf = init.body as Buffer;
+        capturedBody = buf.toString("utf8");
+      }
+      return new Response(responseXml, { status: 200 });
+    });
+
+    const result = await deleteObjects(
+      ["uploads/u/r1/a.wav", "uploads/u/r2/b.wav"],
+      TEST_CONFIG,
+    );
+
+    expect(result).toBe(2);
+    expect(capturedUrl).toContain("?delete");
+    expect(capturedInit?.method).toBe("POST");
+    expect(capturedBody).toContain("<Key>uploads/u/r1/a.wav</Key>");
+    expect(capturedBody).toContain("<Key>uploads/u/r2/b.wav</Key>");
+    const headers = capturedInit?.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("application/xml");
+    expect(headers["Content-MD5"]).toBeTruthy();
+    expect(headers.Authorization).toMatch(/^OSS test-key-id:.+$/);
+  });
+
+  test("escapes XML special characters in keys", async () => {
+    let capturedBody = "";
+    const responseXml = `<DeleteResult><Deleted><Key>k</Key></Deleted></DeleteResult>`;
+
+    globalThis.fetch = mock(async (_url: string, init?: RequestInit) => {
+      if (init?.body) {
+        capturedBody = (init.body as Buffer).toString("utf8");
+      }
+      return new Response(responseXml, { status: 200 });
+    });
+
+    await deleteObjects(["test&<>file.wav"], TEST_CONFIG);
+
+    expect(capturedBody).toContain("test&amp;&lt;&gt;file.wav");
+  });
+
+  test("handles failed batch gracefully", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response("Error", { status: 500 })),
+    );
+
+    const result = await deleteObjects(["key1", "key2"], TEST_CONFIG);
+    expect(result).toBe(0);
   });
 });
