@@ -642,14 +642,6 @@ function RecordingDetailContent({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Transcribing / Error banners (full width) */}
-      {(activeJobId || vm.isTranscribing) && (
-        <TranscribingCard status={pollStatus} />
-      )}
-      {vm.job?.isFailed && !activeJobId && (
-        <JobErrorCard message={vm.job.errorMessage} />
-      )}
-
       {/* ── Row 1: Player + Metadata (2/3) | Properties (1/3) ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -715,6 +707,14 @@ function RecordingDetailContent({ id }: { id: string }) {
           />
         </div>
       </div>
+
+      {/* Transcribing / Error banners (full width) */}
+      {(activeJobId || vm.isTranscribing) && (
+        <TranscribingCard status={pollStatus} />
+      )}
+      {vm.job?.isFailed && !activeJobId && (
+        <JobErrorCard message={vm.job.errorMessage} />
+      )}
 
       {/* ── Row 2: AI Summary (2/3) | AI Info (1/3) ── */}
       {vm.hasTranscription && (
