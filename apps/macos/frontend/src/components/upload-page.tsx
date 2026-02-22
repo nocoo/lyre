@@ -59,6 +59,7 @@ export function UploadPage({ recording, onBack, onUploaded }: UploadPageProps) {
   // Track if we're still mounted (for cleanup)
   const mountedRef = useRef(true);
   const uploadingRef = useRef(false);
+  const completedRef = useRef(false);
 
   // Load folders and tags from server
   useEffect(() => {
@@ -91,15 +92,20 @@ export function UploadPage({ recording, onBack, onUploaded }: UploadPageProps) {
 
   // Listen for upload progress events
   useEffect(() => {
+    let cancelled = false;
     let unlisten: UnlistenFn | null = null;
+
     listen<UploadProgress>("upload-progress", (event) => {
-      if (!mountedRef.current) return;
+      if (cancelled || !mountedRef.current) return;
       const p = event.payload;
       setProgress(p);
 
       if (p.phase === "completed") {
-        setPageState("completed");
-        toast.success("Upload complete");
+        if (!completedRef.current) {
+          completedRef.current = true;
+          setPageState("completed");
+          toast.success("Upload complete");
+        }
       } else if (p.phase === "cancelled") {
         setPageState("form");
         setProgress(null);
@@ -108,10 +114,15 @@ export function UploadPage({ recording, onBack, onUploaded }: UploadPageProps) {
         setErrorMessage(p.error ?? "Unknown error");
       }
     }).then((fn) => {
-      unlisten = fn;
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
     });
 
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, []);
@@ -136,6 +147,7 @@ export function UploadPage({ recording, onBack, onUploaded }: UploadPageProps) {
     setPageState("uploading");
     setErrorMessage(null);
     uploadingRef.current = true;
+    completedRef.current = false;
 
     try {
       await uploadRecordingWithProgress({
