@@ -107,7 +107,7 @@ Some E2E tests make **real API calls** to an LLM provider. These require credent
 ## Architecture Notes
 
 - **Scrollable container**: The app's main scrollable element lives in `src/components/layout/app-shell.tsx` — a `<div>` with `overflow-y-auto` inside the floating island content area. Scroll-to-top FAB is attached here.
-- **Sonner toast**: `<Toaster />` component exists at `src/components/ui/sonner.tsx` but is NOT mounted in root layout. Must add to `src/app/layout.tsx` if toast notifications are needed.
+- **Sonner toast**: `<Toaster />` is mounted in `src/app/layout.tsx` (uses `theme="system"`, no `next-themes` dependency). Import `toast` from `sonner` to show notifications.
 - **ASR mock**: Set `DASHSCOPE_API_KEY` to empty or omit it entirely to use the mock ASR provider. E2E tests unset this key to force mock mode.
 - **Suspense boundaries**: Components using `useSearchParams()` must be wrapped in `<Suspense>`. Currently applied in `app-shell.tsx` (for Sidebar) and `recordings/page.tsx` (for the page content).
 
@@ -131,7 +131,7 @@ Version is managed from the **root `package.json`** as the single source of trut
 
 ### How to bump version
 
-1. Update `version` in **all 5 locations** listed above (root, web, web fallback, Cargo.toml, tauri.conf.json, macos frontend)
+1. Update `version` in **all 6 locations** listed above (root, web, web fallback, Cargo.toml, tauri.conf.json, macos frontend)
 2. Create a git tag: `git tag v<version>`
 3. Push tag: `git push origin v<version>`
 4. Build macOS app: `cargo tauri build` (from `apps/macos/src-tauri/`)
