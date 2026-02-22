@@ -1,6 +1,6 @@
 {
   "name": "@lyre/macos-frontend",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack --port 1420",
