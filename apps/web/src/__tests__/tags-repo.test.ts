@@ -112,6 +112,19 @@ describe("tagsRepo", () => {
     });
   });
 
+  describe("update", () => {
+    test("renames a tag", () => {
+      tagsRepo.create({ id: "t-1", userId: "user-1", name: "old" });
+      const updated = tagsRepo.update("t-1", { name: "new" });
+      expect(updated?.name).toBe("new");
+      expect(tagsRepo.findById("t-1")?.name).toBe("new");
+    });
+
+    test("returns undefined for non-existent tag", () => {
+      expect(tagsRepo.update("nope", { name: "whatever" })).toBeUndefined();
+    });
+  });
+
   describe("recording tag associations", () => {
     beforeEach(() => {
       recordingsRepo.create(makeRecording("rec-1"));

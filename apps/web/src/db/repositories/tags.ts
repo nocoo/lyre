@@ -58,6 +58,17 @@ export const tagsRepo = {
     return result.changes > 0;
   },
 
+  /** Rename a tag */
+  update(id: string, data: { name: string }): DbTag | undefined {
+    const rows = db
+      .update(tags)
+      .set({ name: data.name })
+      .where(eq(tags.id, id))
+      .returning()
+      .all();
+    return rows[0];
+  },
+
   // ── Recording ↔ Tag join operations ──
 
   /** Get all tag IDs for a recording */
