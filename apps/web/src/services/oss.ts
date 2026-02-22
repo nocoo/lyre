@@ -233,9 +233,9 @@ export async function listObjects(
     let match: RegExpExecArray | null;
     while ((match = contentsRegex.exec(xml)) !== null) {
       all.push({
-        key: match[1],
-        size: parseInt(match[3], 10),
-        lastModified: match[2],
+        key: match[1]!,
+        size: parseInt(match[3]!, 10),
+        lastModified: match[2]!,
       });
     }
 

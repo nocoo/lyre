@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         skipped.push(key);
         continue;
       }
-      const recordingId = parts[2];
+      const recordingId = parts[2]!;
       const recording = recordingsRepo.findById(recordingId);
       if (recording) {
         // Has a DB record — skip (not an orphan)
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
         skipped.push(key);
         continue;
       }
-      const jobId = parts[1];
+      const jobId = parts[1]!;
       const job = jobsRepo.findById(jobId);
       if (job) {
         skipped.push(key);

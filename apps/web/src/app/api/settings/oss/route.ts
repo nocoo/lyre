@@ -127,7 +127,7 @@ export async function GET() {
     const parts = obj.key.split("/");
     // uploads/{userId}/{recordingId}/{file}
     if (parts.length < 4) continue;
-    const userId = parts[1];
+    const userId = parts[1]!;
     const list = uploadsByUser.get(userId) ?? [];
     list.push(obj);
     uploadsByUser.set(userId, list);
@@ -140,7 +140,7 @@ export async function GET() {
   const unlinkedResults: TaskFolder[] = [];
 
   for (const [prefix, objects] of resultsByJobId) {
-    const jobId = prefix.split("/")[1];
+    const jobId = prefix.split("/")[1]!;
     const folder: TaskFolder = {
       id: jobId,
       files: objects.map((o) => ({
@@ -196,7 +196,7 @@ export async function GET() {
     let uploadOrphanSize = 0;
 
     for (const [prefix, objects] of uploadFolderMap) {
-      const recordingId = prefix.split("/")[2];
+      const recordingId = prefix.split("/")[2]!;
       const hasRecord = recordingIdSet.has(recordingId);
       const folderSize = objects.reduce((s, o) => s + o.size, 0);
 
