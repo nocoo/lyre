@@ -218,7 +218,7 @@ export function AiSettingsSection() {
           <select
             value={settings.provider}
             onChange={(e) => handleProviderChange(e.target.value)}
-            className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 pr-8 text-sm"
           >
             <option value="">Select a provider...</option>
             {ALL_PROVIDER_IDS.map((id) => {
@@ -247,7 +247,7 @@ export function AiSettingsSection() {
                     : CUSTOM_MODEL_VALUE
                 }
                 onChange={(e) => handleModelSelect(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 pr-8 text-sm"
               >
                 {presetModels.map((m) => (
                   <option key={m} value={m}>
@@ -340,7 +340,7 @@ export function AiSettingsSection() {
                   sdkType: e.target.value as SdkType | "",
                 }))
               }
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 pr-8 text-sm"
             >
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
