@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo-80.png" alt="Lyre Logo" width="80" height="80">
+  <img src="apps/web/public/logo-80.png" alt="Lyre Logo" width="80" height="80">
 </p>
 
 <h1 align="center">Lyre</h1>
