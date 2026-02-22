@@ -46,45 +46,18 @@ bun install
 ### 2️⃣ Configure Environment Variables
 
 ```bash
-# Copy the example config
-cp .env.example .env.local
+cp apps/web/.env.example apps/web/.env.local
 ```
 
-Edit `.env.local` with your values:
+You'll need API keys from **Google Cloud** (OAuth) and **Aliyun** (OSS + ASR).
 
-```bash
-# Google OAuth (from Google Cloud Console)
-# https://console.cloud.google.com/apis/credentials
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
-
-# NextAuth secret (generate: openssl rand -base64 32)
-AUTH_SECRET=your-generated-secret-here
-
-# Allowed login emails (comma-separated)
-ALLOWED_EMAILS=your-email@gmail.com
-
-# Aliyun OSS for audio storage
-OSS_ACCESS_KEY_ID=your-oss-access-key-id
-OSS_ACCESS_KEY_SECRET=your-oss-access-key-secret
-# OSS_BUCKET=lyre  # Optional: auto-resolved by NODE_ENV (prod=lyre, dev=lyre-dev)
-OSS_REGION=oss-cn-beijing
-OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com
-
-# Aliyun DashScope for ASR (omit to use mock provider)
-DASHSCOPE_API_KEY=your-dashscope-api-key
-```
-
-> 💡 **Tip**: Set Google OAuth callback URL to `http://localhost:7025/api/auth/callback/google`
+> 📖 **[Deployment Guide](docs/deployment.md)** — Step-by-step instructions for obtaining all API keys, configuring each service, and deploying to production.
 
 ### 3️⃣ Initialize Database
 
 ```bash
-# Create database and apply schema
 bun run db:push
 ```
-
-The database file is created at `database/lyre.db` (gitignored).
 
 ### 4️⃣ Start Development Server
 
@@ -185,6 +158,8 @@ docker run -p 7025:7025 \
 ```
 
 > ⚠️ **Important**: Mount a persistent volume at `/data` for SQLite database durability.
+>
+> See **[Deployment Guide](docs/deployment.md)** for full Docker and Railway deployment instructions.
 
 ## 📄 License
 
