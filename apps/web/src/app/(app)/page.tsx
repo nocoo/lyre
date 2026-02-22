@@ -683,7 +683,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex min-h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -691,7 +691,7 @@ export default function DashboardPage() {
 
   if (error || !data) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-2">
+      <div className="flex min-h-full flex-col items-center justify-center gap-2">
         <p className="text-sm text-destructive">
           Failed to load dashboard data
         </p>

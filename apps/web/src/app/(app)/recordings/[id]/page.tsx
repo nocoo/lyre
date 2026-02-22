@@ -583,7 +583,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex min-h-full items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -873,7 +873,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 
 function NotFound() {
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+    <div className="flex min-h-full flex-col items-center justify-center text-muted-foreground">
       <p className="text-lg font-medium">Recording not found</p>
       <p className="mt-1 text-sm">
         The recording you&apos;re looking for doesn&apos;t exist.
