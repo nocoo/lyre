@@ -69,6 +69,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
+import { getTagColor } from "@/lib/badge-colors";
+import { cn } from "@/lib/utils";
 import type {
   RecordingDetail,
   TranscriptionJob,
@@ -875,11 +877,21 @@ function MetadataGrid({
       </div>
       {tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
-          {tags.map((tag) => (
-            <Badge key={tag.id} variant="secondary" className="text-xs">
-              {tag.name}
-            </Badge>
-          ))}
+          {tags.map((tag) => {
+            const color = getTagColor(tag.name);
+            return (
+              <span
+                key={tag.id}
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                  color.bg,
+                  color.text,
+                )}
+              >
+                {tag.name}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1275,16 +1287,28 @@ function EditableProperties({
           {selectedTagIds.map((tagId) => {
             const tag = allTags.find((t) => t.id === tagId);
             if (!tag) return null;
+            const color = getTagColor(tag.name);
             return (
-              <Badge
+              <span
                 key={tag.id}
-                variant="secondary"
-                className="gap-1 text-xs cursor-pointer"
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer",
+                  color.bg,
+                  color.text,
+                )}
+                role="button"
+                tabIndex={0}
                 onClick={() => onToggleTag(tag.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onToggleTag(tag.id);
+                  }
+                }}
               >
                 {tag.name}
                 <X className="h-3 w-3" strokeWidth={1.5} />
-              </Badge>
+              </span>
             );
           })}
           <Popover open={tagsOpen} onOpenChange={onTagsOpenChange}>
@@ -1321,18 +1345,27 @@ function EditableProperties({
                     )}
                   </CommandEmpty>
                   <CommandGroup>
-                    {allTags.map((tag) => (
-                      <CommandItem
-                        key={tag.id}
-                        onSelect={() => onToggleTag(tag.id)}
-                        className="gap-2"
-                      >
-                        <Check
-                          className={`h-3.5 w-3.5 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
-                        />
-                        {tag.name}
-                      </CommandItem>
-                    ))}
+                    {allTags.map((tag) => {
+                      const color = getTagColor(tag.name);
+                      return (
+                        <CommandItem
+                          key={tag.id}
+                          onSelect={() => onToggleTag(tag.id)}
+                          className="gap-2"
+                        >
+                          <Check
+                            className={`h-3.5 w-3.5 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
+                          />
+                          <span
+                            className={cn(
+                              "h-2.5 w-2.5 rounded-full shrink-0",
+                              color.bg,
+                            )}
+                          />
+                          {tag.name}
+                        </CommandItem>
+                      );
+                    })}
                   </CommandGroup>
                   {newTagName.trim() &&
                     !allTags.some(

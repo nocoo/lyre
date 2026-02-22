@@ -107,22 +107,7 @@ export function getStatusInfo(status: RecordingStatus): StatusInfo {
 
 // ── Tag color helpers ──
 
-/**
- * Stable color palette for tags.
- * Each tag name is hashed to a consistent color from this palette.
- */
-const TAG_COLORS = [
-  { bg: "bg-blue-100 dark:bg-blue-900/40", text: "text-blue-700 dark:text-blue-300" },
-  { bg: "bg-green-100 dark:bg-green-900/40", text: "text-green-700 dark:text-green-300" },
-  { bg: "bg-purple-100 dark:bg-purple-900/40", text: "text-purple-700 dark:text-purple-300" },
-  { bg: "bg-orange-100 dark:bg-orange-900/40", text: "text-orange-700 dark:text-orange-300" },
-  { bg: "bg-pink-100 dark:bg-pink-900/40", text: "text-pink-700 dark:text-pink-300" },
-  { bg: "bg-teal-100 dark:bg-teal-900/40", text: "text-teal-700 dark:text-teal-300" },
-  { bg: "bg-indigo-100 dark:bg-indigo-900/40", text: "text-indigo-700 dark:text-indigo-300" },
-  { bg: "bg-amber-100 dark:bg-amber-900/40", text: "text-amber-700 dark:text-amber-300" },
-  { bg: "bg-cyan-100 dark:bg-cyan-900/40", text: "text-cyan-700 dark:text-cyan-300" },
-  { bg: "bg-rose-100 dark:bg-rose-900/40", text: "text-rose-700 dark:text-rose-300" },
-] as const;
+import { getTagColor } from "@/lib/badge-colors";
 
 export interface TagVM {
   id: string;
@@ -131,19 +116,9 @@ export interface TagVM {
   textClass: string;
 }
 
-/** Hash a string to a stable index */
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-}
-
 /** Convert a tag to a colorized view model */
 export function toTagVM(tag: Tag): TagVM {
-  const colorIndex = hashString(tag.name) % TAG_COLORS.length;
-  const color = TAG_COLORS[colorIndex]!;
+  const color = getTagColor(tag.name);
   return {
     id: tag.id,
     name: tag.name,
@@ -154,8 +129,7 @@ export function toTagVM(tag: Tag): TagVM {
 
 /** Convert legacy tag names to colorized view models (without resolved Tag objects) */
 export function toTagVMFromName(name: string, index: number): TagVM {
-  const colorIndex = hashString(name) % TAG_COLORS.length;
-  const color = TAG_COLORS[colorIndex]!;
+  const color = getTagColor(name);
   return {
     id: `legacy-${index}`,
     name,
