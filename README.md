@@ -16,6 +16,10 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
 </p>
 
+<p align="center">
+  <img src="https://s.zhe.to/dcd0e6e42358/20260222/968a964f-c888-4e27-955e-8f52e3df0f80.jpg" alt="Lyre Preview" width="720">
+</p>
+
 ---
 
 ## ✨ Features
@@ -63,7 +67,7 @@ ALLOWED_EMAILS=your-email@gmail.com
 # Aliyun OSS for audio storage
 OSS_ACCESS_KEY_ID=your-oss-access-key-id
 OSS_ACCESS_KEY_SECRET=your-oss-access-key-secret
-OSS_BUCKET=lyre
+# OSS_BUCKET=lyre  # Optional: auto-resolved by NODE_ENV (prod=lyre, dev=lyre-dev)
 OSS_REGION=oss-cn-beijing
 OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com
 
