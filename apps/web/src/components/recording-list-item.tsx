@@ -62,10 +62,10 @@ export function RecordingListItem({
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-sm font-medium text-foreground truncate">
-            {recording.title}
-          </h3>
+        <h3 className="text-sm font-medium text-foreground truncate">
+          {recording.title}
+        </h3>
+        <div className="mt-1 flex items-center gap-1.5">
           <Badge variant={recording.status.variant} className="shrink-0 text-[10px]">
             {recording.status.label}
           </Badge>
