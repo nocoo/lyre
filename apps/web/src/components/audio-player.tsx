@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CassettePlayer } from "@/components/cassette-player";
 import {
   toAudioPlayerVM,
   cyclePlaybackSpeed,
@@ -42,6 +43,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [speed, setSpeed] = useState<PlaybackSpeed>(1);
+    const [volume, setVolume] = useState(1);
+    const [isMuted, setIsMuted] = useState(false);
 
     const vm = toAudioPlayerVM(currentTime, duration, speed);
 
@@ -151,6 +154,24 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
       [duration],
     );
 
+    // Volume controls
+    const handleVolumeChange = useCallback((v: number) => {
+      setVolume(v);
+      setIsMuted(v === 0);
+      if (audioRef.current) {
+        audioRef.current.volume = v;
+        audioRef.current.muted = v === 0;
+      }
+    }, []);
+
+    const handleToggleMute = useCallback(() => {
+      const next = !isMuted;
+      setIsMuted(next);
+      if (audioRef.current) {
+        audioRef.current.muted = next;
+      }
+    }, [isMuted]);
+
     // Sync playback rate when speed changes
     useEffect(() => {
       if (audioRef.current) {
@@ -171,110 +192,23 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
           onEnded={handleEnded}
         />
 
-        {/* ── Embedded: hero-style player ── */}
+        {/* ── Embedded: cassette-style player ── */}
         {isEmbedded ? (
-          <div className="flex flex-col gap-4 h-full">
-            {/* Title + waveform decoration */}
-            <div className="flex items-center gap-4 flex-1 min-h-0">
-              {/* Large play button */}
-              <button
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-foreground text-background shadow-md transition-transform hover:scale-105 active:scale-95"
-                onClick={togglePlay}
-                aria-label={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? (
-                  <Pause className="h-6 w-6" strokeWidth={2} />
-                ) : (
-                  <Play className="h-6 w-6 ml-0.5" strokeWidth={2} />
-                )}
-              </button>
-
-              <div className="min-w-0 flex-1 flex flex-col gap-1">
-                {title && (
-                  <p className="text-base font-semibold text-foreground truncate">
-                    {title}
-                  </p>
-                )}
-                {/* Decorative waveform bars */}
-                <div className="flex items-end gap-[3px] flex-1 min-h-5" aria-hidden="true">
-                  {WAVEFORM_PATTERN.map((h, i) => (
-                    <div
-                      key={i}
-                      className={`w-[3px] rounded-full transition-colors duration-300 ${
-                        vm.progress > (i / WAVEFORM_PATTERN.length) * 100
-                          ? "bg-foreground"
-                          : "bg-secondary"
-                      }`}
-                      style={{ height: `${h}%` }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Progress bar (wider, taller for embedded) */}
-            <div
-              ref={progressBarRef}
-              className="group relative h-2 cursor-pointer rounded-full bg-secondary"
-              onClick={handleProgressClick}
-              role="slider"
-              aria-label="Audio progress"
-              aria-valuenow={Math.round(vm.progress)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              tabIndex={0}
-            >
-              <div
-                className="absolute inset-y-0 left-0 rounded-full bg-foreground"
-                style={{ width: `${vm.progress}%` }}
-              />
-              <div
-                className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
-                style={{ left: `${vm.progress}%` }}
-              />
-            </div>
-
-            {/* Controls row */}
-            <div className="flex items-center gap-2">
-              <span className="min-w-[4ch] text-xs tabular-nums text-muted-foreground">
-                {vm.currentTimeDisplay}
-              </span>
-              <div className="flex flex-1 items-center justify-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={skipBack}
-                  aria-label="Skip back 10 seconds"
-                >
-                  <SkipBack className="h-4 w-4" strokeWidth={1.5} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={skipForward}
-                  aria-label="Skip forward 10 seconds"
-                >
-                  <SkipForward className="h-4 w-4" strokeWidth={1.5} />
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-6 min-w-[3rem] px-2 text-xs tabular-nums"
-                  onClick={handleSpeedCycle}
-                  aria-label={`Playback speed ${vm.speedDisplay}`}
-                >
-                  {vm.speedDisplay}
-                </Button>
-                <span className="min-w-[4ch] text-right text-xs tabular-nums text-muted-foreground">
-                  {vm.durationDisplay}
-                </span>
-              </div>
-            </div>
-          </div>
+          <CassettePlayer
+            title={title}
+            isPlaying={isPlaying}
+            vm={vm}
+            volume={volume}
+            isMuted={isMuted}
+            onTogglePlay={togglePlay}
+            onSkipBack={skipBack}
+            onSkipForward={skipForward}
+            onSpeedCycle={handleSpeedCycle}
+            onProgressClick={handleProgressClick}
+            onVolumeChange={handleVolumeChange}
+            onToggleMute={handleToggleMute}
+            progressBarRef={progressBarRef}
+          />
         ) : (
           /* ── Standalone: original compact layout ── */
           <>
@@ -361,10 +295,3 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     );
   },
 );
-
-// Decorative waveform bar heights (percentage of container)
-const WAVEFORM_PATTERN = [
-  30, 55, 40, 80, 60, 45, 90, 50, 35, 75, 55, 40, 85, 65, 45, 70, 50, 60,
-  95, 55, 40, 80, 45, 65, 50, 35, 75, 60, 85, 45, 55, 70, 40, 90, 50, 60,
-  35, 75, 55, 80, 45, 65, 50, 40, 85, 55, 70, 45,
-];
