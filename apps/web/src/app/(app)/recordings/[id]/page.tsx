@@ -486,6 +486,7 @@ function RecordingDetailContent({ id }: { id: string }) {
     await updateRecording(updates);
     await loadDetail();
     setTitleSaving(false);
+    toast.success("Properties saved");
   }, [editTitle, notes, detail?.title, detail?.notes, updateRecording, loadDetail]);
 
   // ── Title save on blur ──
@@ -575,6 +576,7 @@ function RecordingDetailContent({ id }: { id: string }) {
       setRecordedAtDate(dateStr);
       const ms = dateStr ? new Date(dateStr).getTime() : null;
       await updateRecording({ recordedAt: ms });
+      toast.success("Date saved");
     },
     [updateRecording],
   );
