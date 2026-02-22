@@ -10,7 +10,7 @@ node_modules
 **/database/*.db-wal
 **/database/*.db-shm
 coverage
-apps/web/docs
+docs
 apps/web/scripts
 apps/web/example
 apps/web/src/__tests__

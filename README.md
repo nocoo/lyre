@@ -51,7 +51,7 @@ cp apps/web/.env.example apps/web/.env.local
 
 You'll need API keys from **Google Cloud** (OAuth) and **Aliyun** (OSS + ASR).
 
-> 📖 **[Deployment Guide](docs/deployment.md)** — Step-by-step instructions for obtaining all API keys, configuring each service, and deploying to production.
+> 📖 **[Deployment Guide](docs/03-deployment.md)** — Step-by-step instructions for obtaining all API keys, configuring each service, and deploying to production.
 
 ### 3️⃣ Initialize Database
 
@@ -159,7 +159,7 @@ docker run -p 7025:7025 \
 
 > ⚠️ **Important**: Mount a persistent volume at `/data` for SQLite database durability.
 >
-> See **[Deployment Guide](docs/deployment.md)** for full Docker and Railway deployment instructions.
+> See **[Deployment Guide](docs/03-deployment.md)** for full Docker and Railway deployment instructions.
 
 ## 📄 License
 
