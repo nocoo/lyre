@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   Cpu,
   Download,
+  FileText,
   Folder,
   FolderOpen,
   Loader2,
@@ -646,7 +647,8 @@ function RecordingDetailContent({ id }: { id: string }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="rounded-xl border border-border bg-card p-4 h-full flex flex-col gap-4">
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Play className="h-3.5 w-3.5" strokeWidth={1.5} />
               Playback &amp; File Info
             </p>
             {/* Audio player */}
@@ -739,7 +741,8 @@ function RecordingDetailContent({ id }: { id: string }) {
           <div className="lg:col-span-2">
             <div className="rounded-xl border border-border bg-card p-4 h-full">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-medium text-muted-foreground">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
                   Transcript
                 </p>
                 <div className="flex items-center rounded-md border border-border p-0.5">
@@ -948,7 +951,8 @@ function JobInfoCard({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 h-full">
-      <p className="mb-3 text-xs font-medium text-muted-foreground">
+      <p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-muted-foreground">
+        <Cpu className="h-3.5 w-3.5" strokeWidth={1.5} />
         Job Details
       </p>
       <div className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -997,7 +1001,8 @@ function AiSummaryCard({
   return (
     <div className="rounded-xl border border-border bg-card p-4 h-full">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
           AI Summary
         </p>
 
@@ -1078,7 +1083,8 @@ function AiInfoCard({
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 h-full">
-      <p className="mb-3 text-xs font-medium text-muted-foreground">
+      <p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-muted-foreground">
+        <Settings className="h-3.5 w-3.5" strokeWidth={1.5} />
         AI Configuration
       </p>
       <div className="space-y-3">
@@ -1166,7 +1172,10 @@ function EditableProperties({
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 h-full space-y-4">
-      <p className="text-xs font-medium text-muted-foreground">Properties</p>
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
+        Properties
+      </p>
 
       {/* Title */}
       <div className="space-y-1.5">
