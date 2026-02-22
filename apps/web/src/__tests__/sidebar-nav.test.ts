@@ -194,4 +194,34 @@ describe("sidebar navigation", () => {
       expect(isSettingsPage("/recordings")).toBe(false);
     });
   });
+
+  describe("folder sidebar 'All Recordings' highlight", () => {
+    // Mirrors the logic in folder-sidebar.tsx
+    function isAllRecordingsActive(
+      pathname: string,
+      folderParam: string | null,
+    ): boolean {
+      return pathname.startsWith("/recordings") && folderParam === null;
+    }
+
+    test("active on /recordings with no folder param", () => {
+      expect(isAllRecordingsActive("/recordings", null)).toBe(true);
+    });
+
+    test("inactive on /recordings when folder param is set", () => {
+      expect(isAllRecordingsActive("/recordings", "some-folder")).toBe(false);
+    });
+
+    test("inactive on dashboard even when folder param is null", () => {
+      expect(isAllRecordingsActive("/", null)).toBe(false);
+    });
+
+    test("inactive on settings page", () => {
+      expect(isAllRecordingsActive("/settings", null)).toBe(false);
+    });
+
+    test("active on recording detail page with no folder param", () => {
+      expect(isAllRecordingsActive("/recordings/123", null)).toBe(true);
+    });
+  });
 });

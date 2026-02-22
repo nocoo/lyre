@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Mic,
   Inbox,
@@ -318,8 +318,10 @@ function DeleteFolderDialog({
 
 export function FolderSidebar() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const folderParam = searchParams.get("folder");
+  const isRecordingsPage = pathname.startsWith("/recordings");
 
   const [folders, setFolders] = useState<Folder[]>([]);
 
@@ -427,7 +429,7 @@ export function FolderSidebar() {
         onClick={() => handleFolderSelect(null)}
         className={cn(
           "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-          folderParam === null
+          isRecordingsPage && folderParam === null
             ? "bg-accent text-foreground"
             : "text-muted-foreground hover:bg-accent hover:text-foreground",
         )}
@@ -492,8 +494,10 @@ export function FolderSidebar() {
 
 export function FolderSidebarCollapsed() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const folderParam = searchParams.get("folder");
+  const isRecordingsPage = pathname.startsWith("/recordings");
 
   const [folders, setFolders] = useState<Folder[]>([]);
 
@@ -533,7 +537,7 @@ export function FolderSidebarCollapsed() {
             onClick={() => handleFolderSelect(null)}
             className={cn(
               "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-              folderParam === null
+              isRecordingsPage && folderParam === null
                 ? "bg-accent text-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
