@@ -113,10 +113,38 @@ fn reveal_recording(file_path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Tauri command: upload a local recording to the Lyre web app.
+/// Tauri command: upload a local recording to the Lyre web app (legacy, no progress).
 #[tauri::command]
 async fn upload_recording(file_path: String) -> Result<upload::UploadResult, String> {
     upload::upload_recording(&file_path).await
+}
+
+/// Tauri command: upload a recording with progress tracking and custom metadata.
+/// Emits `upload-progress` events to the frontend throughout the upload.
+#[tauri::command]
+async fn upload_recording_with_progress(
+    app: tauri::AppHandle,
+    options: upload::UploadOptions,
+) -> Result<upload::UploadResult, String> {
+    upload::upload_recording_with_progress(app, options).await
+}
+
+/// Tauri command: cancel the active upload.
+#[tauri::command]
+fn cancel_upload() {
+    upload::cancel_upload();
+}
+
+/// Tauri command: fetch folders from the Lyre web server.
+#[tauri::command]
+async fn fetch_folders() -> Result<Vec<upload::ServerFolder>, String> {
+    upload::fetch_folders().await
+}
+
+/// Tauri command: fetch tags from the Lyre web server.
+#[tauri::command]
+async fn fetch_tags() -> Result<Vec<upload::ServerTag>, String> {
+    upload::fetch_tags().await
 }
 
 /// Tauri command: preview which recordings match a cleanup filter.
@@ -155,6 +183,10 @@ fn main() {
             delete_recording,
             reveal_recording,
             upload_recording,
+            upload_recording_with_progress,
+            cancel_upload,
+            fetch_folders,
+            fetch_tags,
             preview_cleanup,
             batch_delete_recordings,
         ])

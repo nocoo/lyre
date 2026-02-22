@@ -10,9 +10,6 @@ import {
   FolderOpen,
   Trash2,
   RefreshCw,
-  Check,
-  Loader2,
-  AlertCircle,
   Music,
   Sparkles,
 } from "lucide-react";
@@ -24,25 +21,19 @@ import {
   listRecordings,
   deleteRecording,
   revealRecording,
-  uploadRecording,
 } from "@/lib/commands";
 import type { RecordingInfo } from "@/lib/commands";
 
-type UploadStatus = "idle" | "uploading" | "success" | "error";
-
-interface UploadState {
-  status: UploadStatus;
-  error?: string;
+interface RecordingsPageProps {
+  onNavigateCleanup: () => void;
+  onNavigateUpload: (recording: RecordingInfo) => void;
 }
 
-export function RecordingsPage({ onNavigateCleanup }: { onNavigateCleanup: () => void }) {
+export function RecordingsPage({ onNavigateCleanup, onNavigateUpload }: RecordingsPageProps) {
   const [recordings, setRecordings] = useState<RecordingInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingPath, setPlayingPath] = useState<string | null>(null);
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
-  const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>(
-    {}
-  );
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const loadRecordings = useCallback(async () => {
@@ -145,37 +136,6 @@ export function RecordingsPage({ onNavigateCleanup }: { onNavigateCleanup: () =>
     }
   }, []);
 
-  const handleUpload = useCallback(async (rec: RecordingInfo) => {
-    setUploadStates((prev) => ({
-      ...prev,
-      [rec.path]: { status: "uploading" },
-    }));
-
-    try {
-      await uploadRecording(rec.path);
-      setUploadStates((prev) => ({
-        ...prev,
-        [rec.path]: { status: "success" },
-      }));
-      toast.success(`Uploaded ${rec.name}`);
-      setTimeout(() => {
-        setUploadStates((prev) => {
-          const next = { ...prev };
-          if (next[rec.path]?.status === "success") {
-            next[rec.path] = { status: "idle" };
-          }
-          return next;
-        });
-      }, 3000);
-    } catch (err) {
-      setUploadStates((prev) => ({
-        ...prev,
-        [rec.path]: { status: "error", error: String(err) },
-      }));
-      toast.error(`Upload failed: ${err}`);
-    }
-  }, []);
-
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -227,12 +187,8 @@ export function RecordingsPage({ onNavigateCleanup }: { onNavigateCleanup: () =>
       <ScrollArea className="flex-1">
         <div className="divide-y divide-border">
           {recordings.map((rec) => {
-            const upload = uploadStates[rec.path];
             const isPlaying = playingPath === rec.path;
             const isDeleting = deletingPath === rec.path;
-            const isUploading = upload?.status === "uploading";
-            const isUploaded = upload?.status === "success";
-            const hasUploadError = upload?.status === "error";
 
             return (
               <div
@@ -276,12 +232,6 @@ export function RecordingsPage({ onNavigateCleanup }: { onNavigateCleanup: () =>
                     {" · "}
                     {formatDate(rec.created_at)}
                   </p>
-                  {hasUploadError && (
-                    <p className="flex items-center gap-1 text-[10px] text-destructive">
-                      <AlertCircle className="h-2.5 w-2.5" />
-                      <span className="truncate">{upload.error}</span>
-                    </p>
-                  )}
                 </div>
 
                 {/* Action buttons — visible on hover */}
@@ -289,23 +239,10 @@ export function RecordingsPage({ onNavigateCleanup }: { onNavigateCleanup: () =>
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    onClick={() => handleUpload(rec)}
-                    disabled={isUploading}
-                    title={
-                      isUploading
-                        ? "Uploading..."
-                        : isUploaded
-                          ? "Uploaded"
-                          : "Upload to Lyre"
-                    }
+                    onClick={() => onNavigateUpload(rec)}
+                    title="Upload to Lyre"
                   >
-                    {isUploading ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : isUploaded ? (
-                      <Check className="h-3 w-3 text-green-600" />
-                    ) : (
-                      <Upload className="h-3 w-3" />
-                    )}
+                    <Upload className="h-3 w-3" />
                   </Button>
                   <Button
                     variant="ghost"

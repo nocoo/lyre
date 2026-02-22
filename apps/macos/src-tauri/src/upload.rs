@@ -1,14 +1,17 @@
 //! Upload recordings to the Lyre web app.
 //!
-//! Implements the 3-step upload flow:
-//! 1. POST /api/upload/presign → get presigned OSS URL + recording ID
-//! 2. PUT file bytes to OSS URL with matching content-type
-//! 3. POST /api/recordings → create DB record
+//! Implements the 3-step upload flow with progress tracking and cancellation:
+//! 1. POST /api/upload/presign -> get presigned OSS URL + recording ID
+//! 2. PUT file bytes to OSS URL with byte-level progress events
+//! 3. POST /api/recordings -> create DB record with custom metadata
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 
 use crate::http_client::normalize_url;
 
@@ -36,6 +39,10 @@ struct CreateRecordingRequest {
     format: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     sample_rate: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    folder_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tag_ids: Option<Vec<String>>,
 }
 
 /// Result of a successful upload.
@@ -46,13 +53,172 @@ pub struct UploadResult {
     pub oss_key: String,
 }
 
-/// Upload a local audio file to the Lyre web app.
+/// Upload progress event emitted to the frontend.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadProgress {
+    /// Current phase: "presigning", "uploading", "creating", "completed", "cancelled", "error"
+    pub phase: String,
+    /// Bytes uploaded so far (only meaningful during "uploading" phase)
+    pub bytes_sent: u64,
+    /// Total file size in bytes
+    pub bytes_total: u64,
+    /// Error message if phase is "error"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Options for upload, passed from the frontend form.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadOptions {
+    pub file_path: String,
+    /// Custom title (overrides filename-derived default).
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Folder ID to assign the recording to.
+    #[serde(default)]
+    pub folder_id: Option<String>,
+    /// Tag IDs to assign to the recording.
+    #[serde(default)]
+    pub tag_ids: Option<Vec<String>>,
+}
+
+/// A folder from the server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerFolder {
+    pub id: String,
+    pub name: String,
+    pub icon: String,
+}
+
+/// A tag from the server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerTag {
+    pub id: String,
+    pub name: String,
+}
+
+/// Shared cancellation flag for the active upload.
+/// Uses AtomicBool so it can be checked from both the upload task and the frontend.
+static CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
+
+/// Request cancellation of the current upload.
+pub fn cancel_upload() {
+    CANCEL_FLAG.store(true, Ordering::SeqCst);
+}
+
+/// Check if cancellation has been requested.
+fn is_cancelled() -> bool {
+    CANCEL_FLAG.load(Ordering::SeqCst)
+}
+
+/// Reset the cancellation flag (called at the start of each upload).
+fn reset_cancel() {
+    CANCEL_FLAG.store(false, Ordering::SeqCst);
+}
+
+/// Emit an upload progress event to the frontend.
+fn emit_progress(app: &tauri::AppHandle, progress: &UploadProgress) {
+    let _ = app.emit("upload-progress", progress);
+}
+
+/// Fetch folders from the Lyre web server.
+pub async fn fetch_folders() -> Result<Vec<ServerFolder>, String> {
+    let config = crate::config::load_config()?;
+    if config.server_url.is_empty() || config.token.is_empty() {
+        return Err("server URL and token must be configured first".to_string());
+    }
+
+    let base_url = normalize_url(&config.server_url);
+    let client = build_client(&config.token)?;
+    let url = format!("{base_url}/api/folders");
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("failed to fetch folders: {e}"))?;
+
+    let status = response.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        return Err("authentication failed -- check your device token".to_string());
+    }
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("failed to fetch folders (HTTP {status}): {text}"));
+    }
+
+    #[derive(Deserialize)]
+    struct FoldersResponse {
+        items: Vec<ServerFolder>,
+    }
+
+    let body: FoldersResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("invalid folders response: {e}"))?;
+
+    Ok(body.items)
+}
+
+/// Fetch tags from the Lyre web server.
+pub async fn fetch_tags() -> Result<Vec<ServerTag>, String> {
+    let config = crate::config::load_config()?;
+    if config.server_url.is_empty() || config.token.is_empty() {
+        return Err("server URL and token must be configured first".to_string());
+    }
+
+    let base_url = normalize_url(&config.server_url);
+    let client = build_client(&config.token)?;
+    let url = format!("{base_url}/api/tags");
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("failed to fetch tags: {e}"))?;
+
+    let status = response.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        return Err("authentication failed -- check your device token".to_string());
+    }
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("failed to fetch tags (HTTP {status}): {text}"));
+    }
+
+    #[derive(Deserialize)]
+    struct TagsResponse {
+        items: Vec<ServerTag>,
+    }
+
+    let body: TagsResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("invalid tags response: {e}"))?;
+
+    Ok(body.items)
+}
+
+/// Upload a local audio file to the Lyre web app with progress and cancellation support.
 ///
 /// Reads config (server_url, token) from the config file, then performs
-/// the 3-step upload: presign → PUT to OSS → create recording record.
+/// the 3-step upload: presign -> PUT to OSS -> create recording record.
+///
+/// Emits `upload-progress` events to the frontend throughout the process.
+/// Checks the cancellation flag between each step and during the byte upload.
 ///
 /// Supported formats: MP3, WAV, M4A, AAC, OGG, FLAC, WebM.
-pub async fn upload_recording(file_path: &str) -> Result<UploadResult, String> {
+pub async fn upload_recording_with_progress(
+    app: tauri::AppHandle,
+    options: UploadOptions,
+) -> Result<UploadResult, String> {
+    reset_cancel();
+
+    let file_path = &options.file_path;
     let config = crate::config::load_config()?;
     if config.server_url.is_empty() || config.token.is_empty() {
         return Err("server URL and token must be configured first".to_string());
@@ -72,49 +238,180 @@ pub async fn upload_recording(file_path: &str) -> Result<UploadResult, String> {
     // Detect audio format from extension
     let (content_type, format) = detect_audio_format(path)?;
 
-    // Read file metadata
+    // Read file bytes
     let file_bytes = tokio::fs::read(path)
         .await
         .map_err(|e| format!("failed to read file: {e}"))?;
     let file_size = file_bytes.len() as u64;
 
-    // Read audio metadata (duration, sample rate) — format-aware
+    // Read audio metadata (duration, sample rate)
     let (duration, sample_rate) = audio_metadata(path, &format);
 
-    // Derive title from filename: "recording-20260221-143052.mp3" → "recording-20260221-143052"
+    // Title: use custom title from options, or derive from filename
+    let title = options
+        .title
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| {
+            path.file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| file_name.clone())
+        });
+
+    let base_url = normalize_url(&config.server_url);
+    let client = build_client(&config.token)?;
+
+    // --- Step 1: Presign ---
+    if is_cancelled() {
+        emit_progress(&app, &UploadProgress {
+            phase: "cancelled".to_string(),
+            bytes_sent: 0,
+            bytes_total: file_size,
+            error: None,
+        });
+        return Err("upload cancelled".to_string());
+    }
+
+    emit_progress(&app, &UploadProgress {
+        phase: "presigning".to_string(),
+        bytes_sent: 0,
+        bytes_total: file_size,
+        error: None,
+    });
+
+    let presign_result = presign(&client, &base_url, &file_name, &content_type).await?;
+
+    // --- Step 2: Upload to OSS with progress ---
+    if is_cancelled() {
+        emit_progress(&app, &UploadProgress {
+            phase: "cancelled".to_string(),
+            bytes_sent: 0,
+            bytes_total: file_size,
+            error: None,
+        });
+        return Err("upload cancelled".to_string());
+    }
+
+    emit_progress(&app, &UploadProgress {
+        phase: "uploading".to_string(),
+        bytes_sent: 0,
+        bytes_total: file_size,
+        error: None,
+    });
+
+    upload_to_oss_with_progress(
+        &app,
+        &presign_result.upload_url,
+        file_bytes,
+        &content_type,
+        file_size,
+    )
+    .await?;
+
+    // --- Step 3: Create recording record ---
+    if is_cancelled() {
+        emit_progress(&app, &UploadProgress {
+            phase: "cancelled".to_string(),
+            bytes_sent: file_size,
+            bytes_total: file_size,
+            error: None,
+        });
+        return Err("upload cancelled".to_string());
+    }
+
+    emit_progress(&app, &UploadProgress {
+        phase: "creating".to_string(),
+        bytes_sent: file_size,
+        bytes_total: file_size,
+        error: None,
+    });
+
+    create_recording(
+        &client,
+        &base_url,
+        &presign_result.recording_id,
+        &title,
+        &file_name,
+        &presign_result.oss_key,
+        file_size,
+        duration,
+        sample_rate,
+        &format,
+        options.folder_id,
+        options.tag_ids,
+    )
+    .await?;
+
+    emit_progress(&app, &UploadProgress {
+        phase: "completed".to_string(),
+        bytes_sent: file_size,
+        bytes_total: file_size,
+        error: None,
+    });
+
+    Ok(UploadResult {
+        recording_id: presign_result.recording_id,
+        oss_key: presign_result.oss_key,
+    })
+}
+
+/// Legacy upload function without progress tracking (kept for backward compat and tests).
+pub async fn upload_recording(file_path: &str) -> Result<UploadResult, String> {
+    let config = crate::config::load_config()?;
+    if config.server_url.is_empty() || config.token.is_empty() {
+        return Err("server URL and token must be configured first".to_string());
+    }
+
+    let path = Path::new(file_path);
+    if !path.exists() {
+        return Err(format!("file not found: {file_path}"));
+    }
+
+    let file_name = path
+        .file_name()
+        .ok_or("invalid file path")?
+        .to_string_lossy()
+        .into_owned();
+
+    let (content_type, format) = detect_audio_format(path)?;
+
+    let file_bytes = tokio::fs::read(path)
+        .await
+        .map_err(|e| format!("failed to read file: {e}"))?;
+    let file_size = file_bytes.len() as u64;
+
+    let (duration, sample_rate) = audio_metadata(path, &format);
+
     let title = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| file_name.clone());
 
     let base_url = normalize_url(&config.server_url);
-
     let client = build_client(&config.token)?;
 
-    // Step 1: Presign
-    let presign = presign(&client, &base_url, &file_name, &content_type).await?;
+    let presign_result = presign(&client, &base_url, &file_name, &content_type).await?;
 
-    // Step 2: Upload to OSS
-    upload_to_oss(&client, &presign.upload_url, &file_bytes, &content_type).await?;
+    upload_to_oss(&presign_result.upload_url, &file_bytes, &content_type).await?;
 
-    // Step 3: Create recording record
     create_recording(
         &client,
         &base_url,
-        &presign.recording_id,
+        &presign_result.recording_id,
         &title,
         &file_name,
-        &presign.oss_key,
+        &presign_result.oss_key,
         file_size,
         duration,
         sample_rate,
         &format,
+        None,
+        None,
     )
     .await?;
 
     Ok(UploadResult {
-        recording_id: presign.recording_id,
-        oss_key: presign.oss_key,
+        recording_id: presign_result.recording_id,
+        oss_key: presign_result.oss_key,
     })
 }
 
@@ -156,7 +453,7 @@ async fn presign(
 
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED {
-        return Err("authentication failed — check your device token".to_string());
+        return Err("authentication failed -- check your device token".to_string());
     }
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
@@ -169,15 +466,90 @@ async fn presign(
         .map_err(|e| format!("invalid presign response: {e}"))
 }
 
+/// Upload to OSS with byte-level progress tracking and cancellation support.
+async fn upload_to_oss_with_progress(
+    app: &tauri::AppHandle,
+    upload_url: &str,
+    file_bytes: Vec<u8>,
+    content_type: &str,
+    file_size: u64,
+) -> Result<(), String> {
+    use futures_util::StreamExt;
+
+    // Use a fresh client without Authorization header for OSS
+    let oss_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(600)) // 10 min for large uploads
+        .build()
+        .map_err(|e| format!("failed to build OSS client: {e}"))?;
+
+    // Chunk size for progress reporting (64 KB)
+    const CHUNK_SIZE: usize = 64 * 1024;
+
+    let bytes_sent = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let bytes_sent_clone = bytes_sent.clone();
+    let app_clone = app.clone();
+
+    // Create a stream of chunks from the file bytes
+    let chunks: Vec<Result<bytes::Bytes, std::io::Error>> = file_bytes
+        .chunks(CHUNK_SIZE)
+        .map(|chunk| Ok(bytes::Bytes::copy_from_slice(chunk)))
+        .collect();
+
+    let stream = futures_util::stream::iter(chunks).map(move |chunk_result: Result<bytes::Bytes, std::io::Error>| {
+        if let Ok(chunk) = &chunk_result {
+            let sent = bytes_sent_clone.fetch_add(chunk.len() as u64, Ordering::SeqCst)
+                + chunk.len() as u64;
+            emit_progress(
+                &app_clone,
+                &UploadProgress {
+                    phase: "uploading".to_string(),
+                    bytes_sent: sent,
+                    bytes_total: file_size,
+                    error: None,
+                },
+            );
+        }
+        chunk_result
+    });
+
+    let body = reqwest::Body::wrap_stream(stream);
+
+    let response = oss_client
+        .put(upload_url)
+        .header(CONTENT_TYPE, content_type)
+        .header(CONTENT_LENGTH, file_size)
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| {
+            if is_cancelled() {
+                "upload cancelled".to_string()
+            } else {
+                format!("OSS upload failed: {e}")
+            }
+        })?;
+
+    if is_cancelled() {
+        return Err("upload cancelled".to_string());
+    }
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("OSS upload failed (HTTP {status}): {text}"));
+    }
+
+    Ok(())
+}
+
+/// Legacy OSS upload without progress (for backward compat).
 async fn upload_to_oss(
-    _auth_client: &reqwest::Client,
     upload_url: &str,
     file_bytes: &[u8],
     content_type: &str,
 ) -> Result<(), String> {
-    // Use a fresh client without Authorization header for OSS
     let oss_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(600)) // 10 min for large uploads
+        .timeout(std::time::Duration::from_secs(600))
         .build()
         .map_err(|e| format!("failed to build OSS client: {e}"))?;
 
@@ -210,6 +582,8 @@ async fn create_recording(
     duration: Option<f64>,
     sample_rate: Option<u32>,
     format: &str,
+    folder_id: Option<String>,
+    tag_ids: Option<Vec<String>>,
 ) -> Result<(), String> {
     let url = format!("{base_url}/api/recordings");
 
@@ -222,6 +596,8 @@ async fn create_recording(
         duration,
         format: format.to_string(),
         sample_rate,
+        folder_id,
+        tag_ids,
     };
 
     let response = client
@@ -233,7 +609,7 @@ async fn create_recording(
 
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED {
-        return Err("authentication failed — check your device token".to_string());
+        return Err("authentication failed -- check your device token".to_string());
     }
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
@@ -501,7 +877,6 @@ mod tests {
 
     #[test]
     fn test_audio_metadata_mp3() {
-        // Create a real MP3 file and verify audio_metadata dispatches correctly
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("test.mp3");
         create_test_mp3(&path, 44100); // 1 second
@@ -526,6 +901,8 @@ mod tests {
             duration: Some(3.5),
             format: "wav".to_string(),
             sample_rate: Some(44100),
+            folder_id: None,
+            tag_ids: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains("\"id\":\"abc-123\""));
@@ -533,6 +910,28 @@ mod tests {
         assert!(json.contains("\"ossKey\""));
         assert!(json.contains("\"fileSize\":1024"));
         assert!(json.contains("\"sampleRate\":44100"));
+        // folder_id and tag_ids should be absent when None
+        assert!(!json.contains("folderId"));
+        assert!(!json.contains("tagIds"));
+    }
+
+    #[test]
+    fn test_create_recording_request_with_folder_and_tags() {
+        let req = CreateRecordingRequest {
+            id: "abc-123".to_string(),
+            title: "Test Recording".to_string(),
+            file_name: "test.wav".to_string(),
+            oss_key: "uploads/user1/abc-123/test.wav".to_string(),
+            file_size: Some(1024),
+            duration: Some(3.5),
+            format: "wav".to_string(),
+            sample_rate: Some(44100),
+            folder_id: Some("folder-1".to_string()),
+            tag_ids: Some(vec!["tag-1".to_string(), "tag-2".to_string()]),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("\"folderId\":\"folder-1\""));
+        assert!(json.contains("\"tagIds\":[\"tag-1\",\"tag-2\"]"));
     }
 
     #[test]
@@ -546,6 +945,8 @@ mod tests {
             duration: Some(2.0),
             format: "mp3".to_string(),
             sample_rate: Some(44100),
+            folder_id: None,
+            tag_ids: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains("\"format\":\"mp3\""));
@@ -563,10 +964,91 @@ mod tests {
             duration: None,
             format: "wav".to_string(),
             sample_rate: None,
+            folder_id: None,
+            tag_ids: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(!json.contains("fileSize"));
         assert!(!json.contains("duration"));
         assert!(!json.contains("sampleRate"));
+        assert!(!json.contains("folderId"));
+        assert!(!json.contains("tagIds"));
+    }
+
+    #[test]
+    fn test_upload_options_deserialization() {
+        let json = r#"{"filePath":"/tmp/test.mp3","title":"My Recording","folderId":"f1","tagIds":["t1","t2"]}"#;
+        let opts: UploadOptions = serde_json::from_str(json).unwrap();
+        assert_eq!(opts.file_path, "/tmp/test.mp3");
+        assert_eq!(opts.title, Some("My Recording".to_string()));
+        assert_eq!(opts.folder_id, Some("f1".to_string()));
+        assert_eq!(
+            opts.tag_ids,
+            Some(vec!["t1".to_string(), "t2".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_upload_options_minimal() {
+        let json = r#"{"filePath":"/tmp/test.mp3"}"#;
+        let opts: UploadOptions = serde_json::from_str(json).unwrap();
+        assert_eq!(opts.file_path, "/tmp/test.mp3");
+        assert!(opts.title.is_none());
+        assert!(opts.folder_id.is_none());
+        assert!(opts.tag_ids.is_none());
+    }
+
+    #[test]
+    fn test_upload_progress_serialization() {
+        let progress = UploadProgress {
+            phase: "uploading".to_string(),
+            bytes_sent: 1024,
+            bytes_total: 4096,
+            error: None,
+        };
+        let json = serde_json::to_string(&progress).unwrap();
+        assert!(json.contains("\"phase\":\"uploading\""));
+        assert!(json.contains("\"bytesSent\":1024"));
+        assert!(json.contains("\"bytesTotal\":4096"));
+        assert!(!json.contains("error"));
+    }
+
+    #[test]
+    fn test_upload_progress_with_error() {
+        let progress = UploadProgress {
+            phase: "error".to_string(),
+            bytes_sent: 0,
+            bytes_total: 4096,
+            error: Some("connection failed".to_string()),
+        };
+        let json = serde_json::to_string(&progress).unwrap();
+        assert!(json.contains("\"error\":\"connection failed\""));
+    }
+
+    #[test]
+    fn test_cancel_flag() {
+        reset_cancel();
+        assert!(!is_cancelled());
+        cancel_upload();
+        assert!(is_cancelled());
+        reset_cancel();
+        assert!(!is_cancelled());
+    }
+
+    #[test]
+    fn test_server_folder_deserialization() {
+        let json = r#"{"id":"f1","name":"Meetings","icon":"briefcase"}"#;
+        let folder: ServerFolder = serde_json::from_str(json).unwrap();
+        assert_eq!(folder.id, "f1");
+        assert_eq!(folder.name, "Meetings");
+        assert_eq!(folder.icon, "briefcase");
+    }
+
+    #[test]
+    fn test_server_tag_deserialization() {
+        let json = r#"{"id":"t1","name":"Important"}"#;
+        let tag: ServerTag = serde_json::from_str(json).unwrap();
+        assert_eq!(tag.id, "t1");
+        assert_eq!(tag.name, "Important");
     }
 }

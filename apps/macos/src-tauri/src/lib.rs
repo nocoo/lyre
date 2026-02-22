@@ -12,4 +12,4 @@ pub use recordings::{
     batch_delete_recordings, default_output_dir, delete_recording, find_cleanable_recordings,
     list_recordings, CleanupFilter, CleanupResult, RecordingInfo,
 };
-pub use upload::{upload_recording, UploadResult};
+pub use upload::{cancel_upload, upload_recording, ServerFolder, ServerTag, UploadOptions, UploadProgress, UploadResult};

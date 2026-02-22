@@ -20,6 +20,31 @@ export interface UploadResult {
   ossKey: string;
 }
 
+export interface UploadOptions {
+  filePath: string;
+  title?: string;
+  folderId?: string;
+  tagIds?: string[];
+}
+
+export interface UploadProgress {
+  phase: "presigning" | "uploading" | "creating" | "completed" | "cancelled" | "error";
+  bytesSent: number;
+  bytesTotal: number;
+  error?: string;
+}
+
+export interface ServerFolder {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+export interface ServerTag {
+  id: string;
+  name: string;
+}
+
 export interface CleanupFilter {
   before_date?: string | null;
   min_duration_secs?: number | null;
@@ -66,6 +91,22 @@ export function revealRecording(filePath: string): Promise<void> {
 
 export function uploadRecording(filePath: string): Promise<UploadResult> {
   return invoke<UploadResult>("upload_recording", { filePath });
+}
+
+export function uploadRecordingWithProgress(options: UploadOptions): Promise<UploadResult> {
+  return invoke<UploadResult>("upload_recording_with_progress", { options });
+}
+
+export function cancelUpload(): Promise<void> {
+  return invoke("cancel_upload");
+}
+
+export function fetchFolders(): Promise<ServerFolder[]> {
+  return invoke<ServerFolder[]>("fetch_folders");
+}
+
+export function fetchTags(): Promise<ServerTag[]> {
+  return invoke<ServerTag[]>("fetch_tags");
 }
 
 export function previewCleanup(filter: CleanupFilter): Promise<RecordingInfo[]> {
