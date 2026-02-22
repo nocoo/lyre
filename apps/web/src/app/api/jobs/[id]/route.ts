@@ -168,6 +168,9 @@ async function archiveRawResult(
   jobId: string,
   rawResult: unknown,
 ): Promise<void> {
+  // Skip OSS archive in E2E tests to avoid creating orphan result files
+  if (process.env.SKIP_OSS_ARCHIVE === "1") return;
+
   const key = makeResultKey(jobId, "transcription.json");
   const body = JSON.stringify(rawResult);
   const contentType = "application/json";

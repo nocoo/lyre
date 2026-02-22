@@ -115,6 +115,8 @@ async function main() {
       PLAYWRIGHT: "1",
       // Force mock ASR provider in E2E (unset real API key)
       DASHSCOPE_API_KEY: "",
+      // Skip archiving raw ASR results to OSS in E2E
+      SKIP_OSS_ARCHIVE: "1",
     },
     stdout: "pipe",
     stderr: "pipe",
