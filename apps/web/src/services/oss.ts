@@ -18,16 +18,35 @@ export interface OssConfig {
   endpoint: string;
 }
 
+/** Production bucket name. */
+export const BUCKET_PROD = "lyre";
+
+/** Development bucket name (used for all non-production environments). */
+export const BUCKET_DEV = "lyre-dev";
+
+/**
+ * Resolve the OSS bucket name.
+ *
+ * Priority: OSS_BUCKET env var (explicit override) → NODE_ENV-based default.
+ * - production → "lyre"
+ * - everything else (development, test, undefined) → "lyre-dev"
+ */
+export function resolveBucket(): string {
+  const explicit = process.env.OSS_BUCKET;
+  if (explicit) return explicit;
+  return process.env.NODE_ENV === "production" ? BUCKET_PROD : BUCKET_DEV;
+}
+
 function getConfig(): OssConfig {
   const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
   const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET;
-  const bucket = process.env.OSS_BUCKET;
+  const bucket = resolveBucket();
   const region = process.env.OSS_REGION;
   const endpoint = process.env.OSS_ENDPOINT;
 
-  if (!accessKeyId || !accessKeySecret || !bucket || !region || !endpoint) {
+  if (!accessKeyId || !accessKeySecret || !region || !endpoint) {
     throw new Error(
-      "Missing OSS config. Required env vars: OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_BUCKET, OSS_REGION, OSS_ENDPOINT",
+      "Missing OSS config. Required env vars: OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_REGION, OSS_ENDPOINT",
     );
   }
 
@@ -384,4 +403,5 @@ export const ossService = {
   deleteObjects,
   listObjects,
   signV1,
+  resolveBucket,
 };

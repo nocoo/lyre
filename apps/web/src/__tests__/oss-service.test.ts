@@ -8,6 +8,9 @@ import {
   deleteObject,
   listObjects,
   deleteObjects,
+  resolveBucket,
+  BUCKET_PROD,
+  BUCKET_DEV,
   type OssConfig,
 } from "@/services/oss";
 
@@ -260,6 +263,7 @@ describe("getConfig (env var validation)", () => {
     "OSS_BUCKET",
     "OSS_REGION",
     "OSS_ENDPOINT",
+    "NODE_ENV",
   ] as const;
 
   // Save and restore env for each test
@@ -298,11 +302,6 @@ describe("getConfig (env var validation)", () => {
     expect(() => presignPut("key.mp3", "audio/mpeg")).toThrow("Missing OSS config");
   });
 
-  test("throws when OSS_BUCKET is missing", () => {
-    delete process.env.OSS_BUCKET;
-    expect(() => presignPut("key.mp3", "audio/mpeg")).toThrow("Missing OSS config");
-  });
-
   test("throws when OSS_REGION is missing", () => {
     delete process.env.OSS_REGION;
     expect(() => presignPut("key.mp3", "audio/mpeg")).toThrow("Missing OSS config");
@@ -316,6 +315,20 @@ describe("getConfig (env var validation)", () => {
   test("succeeds when all env vars are set", () => {
     const url = presignPut("key.mp3", "audio/mpeg");
     expect(url).toContain("https://test-bucket.oss-cn-beijing.aliyuncs.com/");
+  });
+
+  test("auto-resolves bucket when OSS_BUCKET is not set (dev)", () => {
+    delete process.env.OSS_BUCKET;
+    delete process.env.NODE_ENV;
+    const url = presignPut("key.mp3", "audio/mpeg");
+    expect(url).toContain(`https://${BUCKET_DEV}.oss-cn-beijing.aliyuncs.com/`);
+  });
+
+  test("auto-resolves bucket when OSS_BUCKET is not set (production)", () => {
+    delete process.env.OSS_BUCKET;
+    process.env.NODE_ENV = "production";
+    const url = presignPut("key.mp3", "audio/mpeg");
+    expect(url).toContain(`https://${BUCKET_PROD}.oss-cn-beijing.aliyuncs.com/`);
   });
 });
 
@@ -526,5 +539,73 @@ describe("deleteObjects", () => {
 
     const result = await deleteObjects(["key1", "key2"], TEST_CONFIG);
     expect(result).toBe(0);
+  });
+});
+
+// ── resolveBucket ──
+
+describe("resolveBucket", () => {
+  let savedBucket: string | undefined;
+  let savedNodeEnv: string | undefined;
+
+  beforeEach(() => {
+    savedBucket = process.env.OSS_BUCKET;
+    savedNodeEnv = process.env.NODE_ENV;
+  });
+
+  afterEach(() => {
+    if (savedBucket === undefined) {
+      delete process.env.OSS_BUCKET;
+    } else {
+      process.env.OSS_BUCKET = savedBucket;
+    }
+    if (savedNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = savedNodeEnv;
+    }
+  });
+
+  test("returns OSS_BUCKET when explicitly set", () => {
+    process.env.OSS_BUCKET = "custom-bucket";
+    expect(resolveBucket()).toBe("custom-bucket");
+  });
+
+  test("explicit OSS_BUCKET overrides NODE_ENV", () => {
+    process.env.OSS_BUCKET = "override";
+    process.env.NODE_ENV = "production";
+    expect(resolveBucket()).toBe("override");
+  });
+
+  test("returns prod bucket when NODE_ENV=production and no OSS_BUCKET", () => {
+    delete process.env.OSS_BUCKET;
+    process.env.NODE_ENV = "production";
+    expect(resolveBucket()).toBe(BUCKET_PROD);
+  });
+
+  test("returns dev bucket when NODE_ENV=development and no OSS_BUCKET", () => {
+    delete process.env.OSS_BUCKET;
+    process.env.NODE_ENV = "development";
+    expect(resolveBucket()).toBe(BUCKET_DEV);
+  });
+
+  test("returns dev bucket when NODE_ENV=test and no OSS_BUCKET", () => {
+    delete process.env.OSS_BUCKET;
+    process.env.NODE_ENV = "test";
+    expect(resolveBucket()).toBe(BUCKET_DEV);
+  });
+
+  test("returns dev bucket when NODE_ENV is undefined and no OSS_BUCKET", () => {
+    delete process.env.OSS_BUCKET;
+    delete process.env.NODE_ENV;
+    expect(resolveBucket()).toBe(BUCKET_DEV);
+  });
+
+  test("BUCKET_PROD equals 'lyre'", () => {
+    expect(BUCKET_PROD).toBe("lyre");
+  });
+
+  test("BUCKET_DEV equals 'lyre-dev'", () => {
+    expect(BUCKET_DEV).toBe("lyre-dev");
   });
 });
