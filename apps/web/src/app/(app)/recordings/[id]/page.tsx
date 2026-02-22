@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useRef, useState, useCallback, useEffect } from "react";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Calendar,
@@ -427,6 +428,7 @@ function RecordingDetailContent({ id }: { id: string }) {
     // Refresh detail to update header
     await loadDetail();
     setTitleSaving(false);
+    toast.success("Title saved");
   }, [editTitle, detail?.title, updateRecording, loadDetail]);
 
   // ── Notes save on blur ──
@@ -435,19 +437,23 @@ function RecordingDetailContent({ id }: { id: string }) {
     setNotesSaving(true);
     await updateRecording({ notes: notes || null });
     setNotesSaving(false);
+    toast.success("Notes saved");
   }, [notes, detail?.notes, updateRecording]);
 
   // ── Tag toggle ──
   const handleToggleTag = useCallback(
     async (tagId: string) => {
-      const next = selectedTagIds.includes(tagId)
+      const isRemoving = selectedTagIds.includes(tagId);
+      const next = isRemoving
         ? selectedTagIds.filter((t) => t !== tagId)
         : [...selectedTagIds, tagId];
       setSelectedTagIds(next);
       await updateRecording({ tagIds: next });
       await loadDetail();
+      const tagName = allTags.find((t) => t.id === tagId)?.name ?? "Tag";
+      toast.success(isRemoving ? `Removed "${tagName}"` : `Added "${tagName}"`);
     },
-    [selectedTagIds, updateRecording, loadDetail],
+    [selectedTagIds, allTags, updateRecording, loadDetail],
   );
 
   // ── Create new tag and assign ──
@@ -471,6 +477,7 @@ function RecordingDetailContent({ id }: { id: string }) {
         setSelectedTagIds(next);
         await updateRecording({ tagIds: next });
         await loadDetail();
+        toast.success(`Created and added "${tag.name}"`);
       }
     } finally {
       setNewTagName("");
@@ -485,8 +492,12 @@ function RecordingDetailContent({ id }: { id: string }) {
       setFolderOpen(false);
       await updateRecording({ folderId });
       await loadDetail();
+      const folderName = folderId
+        ? allFolders.find((f) => f.id === folderId)?.name ?? "folder"
+        : null;
+      toast.success(folderName ? `Moved to "${folderName}"` : "Removed from folder");
     },
-    [updateRecording, loadDetail],
+    [allFolders, updateRecording, loadDetail],
   );
 
   // ── RecordedAt change ──
