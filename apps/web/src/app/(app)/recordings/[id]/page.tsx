@@ -115,9 +115,10 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [summarizing, setSummarizing] = useState(false);
   const [summarizeError, setSummarizeError] = useState<string | null>(null);
 
-  // AI settings (for info sidebar)
+  // AI settings (for info sidebar + auto-summarize)
   const [aiProvider, setAiProvider] = useState("");
   const [aiModel, setAiModel] = useState("");
+  const [autoSummarize, setAutoSummarize] = useState(false);
 
   // Editable fields
   const [editTitle, setEditTitle] = useState("");
@@ -174,14 +175,19 @@ function RecordingDetailContent({ id }: { id: string }) {
     }
   }, []);
 
-  // ── Load AI settings (provider + model for info card) ──
+  // ── Load AI settings (provider + model for info card, autoSummarize flag) ──
   const loadAiSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/settings/ai");
       if (res.ok) {
-        const data = (await res.json()) as { provider: string; model: string };
+        const data = (await res.json()) as {
+          provider: string;
+          model: string;
+          autoSummarize: boolean;
+        };
         setAiProvider(data.provider);
         setAiModel(data.model);
+        setAutoSummarize(data.autoSummarize);
       }
     } catch {
       // Non-critical, silently fail
@@ -243,7 +249,16 @@ function RecordingDetailContent({ id }: { id: string }) {
           // Stop polling
           setActiveJobId(null);
           // Refresh the full detail to get transcription data
-          await loadDetail();
+          const data = await loadDetail();
+
+          // If auto-summarize is enabled and summary isn't ready yet, poll for it
+          if (
+            job.status === "SUCCEEDED" &&
+            autoSummarize &&
+            !data?.aiSummary
+          ) {
+            setSummarizing(true);
+          }
         }
       } catch {
         // Retry on next interval
@@ -281,7 +296,58 @@ function RecordingDetailContent({ id }: { id: string }) {
       stopPolling();
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [activeJobId, loadDetail]);
+  }, [activeJobId, loadDetail, autoSummarize]);
+
+  // ── Poll for auto-generated summary ──
+  // When summarizing=true but there's no active streaming (auto-summarize case),
+  // poll the recording detail until aiSummary appears.
+  useEffect(() => {
+    // Only poll when summarizing flag is set by auto-summarize trigger
+    // (manual streaming sets summarizing too, but also sets aiSummary to "")
+    if (!summarizing || aiSummary !== null) return;
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 60; // ~3 minutes at 3s intervals
+
+    const pollSummary = async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/recordings/${id}`);
+        if (res.ok) {
+          const data = (await res.json()) as RecordingDetail;
+          if (data.aiSummary) {
+            setAiSummary(data.aiSummary);
+            setSummarizing(false);
+            if (timer) {
+              clearInterval(timer);
+              timer = null;
+            }
+            return;
+          }
+        }
+      } catch {
+        // Retry on next interval
+      }
+
+      if (attempts >= MAX_ATTEMPTS) {
+        setSummarizing(false);
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      }
+    };
+
+    timer = setInterval(() => void pollSummary(), POLL_INTERVAL_MS);
+
+    return () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+  }, [summarizing, aiSummary, id]);
 
   // ── Handlers ──
   const handleTranscribe = useCallback(async () => {
