@@ -19,12 +19,14 @@ import {
   Eye,
   EyeOff,
   Save,
+  Plug,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSetBreadcrumbs } from "@/components/layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getTagColor } from "@/lib/badge-colors";
 
@@ -605,6 +607,9 @@ function BackySection() {
   const [apiKeyChanged, setApiKeyChanged] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testStatus, setTestStatus] = useState<"idle" | "success" | "error">("idle");
+  const [testError, setTestError] = useState("");
 
   const loadSettings = useCallback(async () => {
     try {
@@ -658,6 +663,29 @@ function BackySection() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleTest = async () => {
+    if (apiKeyChanged) await handleSave();
+    setTesting(true);
+    setTestStatus("idle");
+    setTestError("");
+    try {
+      const res = await fetch("/api/settings/backy/test", { method: "POST" });
+      const data = (await res.json()) as { success: boolean; error?: string };
+      if (data.success) {
+        setTestStatus("success");
+      } else {
+        setTestStatus("error");
+        setTestError(data.error || "Connection failed");
+      }
+    } catch {
+      setTestStatus("error");
+      setTestError("Network error");
+    } finally {
+      setTesting(false);
+    }
+    setTimeout(() => setTestStatus("idle"), 4000);
   };
 
   const handlePush = async () => {
@@ -764,6 +792,32 @@ function BackySection() {
             )}
             {saved ? "Saved" : "Save"}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleTest}
+            disabled={testing || !configured}
+          >
+            {testing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plug className="h-3.5 w-3.5" strokeWidth={1.5} />
+            )}
+            Test Connection
+          </Button>
+          {testStatus === "success" && (
+            <Badge variant="success" className="text-xs">
+              <Check className="mr-1 h-3 w-3" />
+              Connected
+            </Badge>
+          )}
+          {testStatus === "error" && (
+            <Badge variant="destructive" className="text-xs">
+              <X className="mr-1 h-3 w-3" />
+              {testError}
+            </Badge>
+          )}
           <Button
             variant="outline"
             size="sm"
