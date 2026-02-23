@@ -4,12 +4,13 @@ import { describe, expect, test } from "bun:test";
  * E2E tests for backup and Backy remote backup endpoints.
  *
  * Covers:
- * - GET  /api/settings/backup      (export)
- * - POST /api/settings/backup      (import)
- * - GET  /api/settings/backy       (read config)
- * - PUT  /api/settings/backy       (save config)
- * - POST /api/settings/backy/test  (test connection — expects 400 when unconfigured)
- * - POST /api/settings/backup/push (push — expects 400 when unconfigured)
+ * - GET  /api/settings/backup         (export)
+ * - POST /api/settings/backup         (import)
+ * - GET  /api/settings/backy          (read config)
+ * - PUT  /api/settings/backy          (save config)
+ * - POST /api/settings/backy/test     (test connection — expects 400 when unconfigured)
+ * - POST /api/settings/backup/push    (push — expects 400 when unconfigured)
+ * - GET  /api/settings/backy/history  (remote backup history — expects 400 when unconfigured)
  */
 
 const BASE_URL = `http://localhost:${process.env.E2E_PORT || "17025"}`;
@@ -168,6 +169,23 @@ describe("backy settings API", () => {
 
       const body = await res.json();
       expect(body.success).toBe(false);
+      expect(body.error).toContain("configured");
+    });
+  });
+
+  describe("GET /api/settings/backy/history", () => {
+    test("returns 400 when backy is not configured", async () => {
+      // Ensure no config is set
+      await fetch(`${BASE_URL}/api/settings/backy`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ webhookUrl: "", apiKey: "" }),
+      });
+
+      const res = await fetch(`${BASE_URL}/api/settings/backy/history`);
+      expect(res.status).toBe(400);
+
+      const body = await res.json();
       expect(body.error).toContain("configured");
     });
   });

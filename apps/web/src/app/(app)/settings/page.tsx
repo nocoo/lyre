@@ -20,6 +20,8 @@ import {
   EyeOff,
   Save,
   Plug,
+  RefreshCw,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSetBreadcrumbs } from "@/components/layout";
@@ -585,6 +587,22 @@ interface BackyPushResponse {
   durationMs?: number;
 }
 
+interface BackyBackupEntry {
+  id: string;
+  tag: string;
+  environment: string;
+  file_size: number;
+  is_single_json: number;
+  created_at: string;
+}
+
+interface BackyHistoryData {
+  project_name: string;
+  environment: string | null;
+  total_backups: number;
+  recent_backups: BackyBackupEntry[];
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline gap-2 text-xs">
@@ -592,6 +610,26 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
       <span className="text-foreground font-mono break-all">{value}</span>
     </div>
   );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatTimeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = now - then;
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
 }
 
 function BackySection() {
@@ -612,6 +650,33 @@ function BackySection() {
   const [testError, setTestError] = useState("");
   const [environment, setEnvironment] = useState<"prod" | "dev">("dev");
 
+  // History state
+  const [history, setHistory] = useState<BackyHistoryData | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const res = await fetch("/api/settings/backy/history");
+      if (res.ok) {
+        const data = (await res.json()) as BackyHistoryData;
+        setHistory(data);
+      } else if (res.status === 400) {
+        // Not configured — not an error, just no data
+        setHistory(null);
+      } else {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setHistoryError(body.error ?? `HTTP ${res.status}`);
+      }
+    } catch {
+      setHistoryError("Failed to fetch history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   const loadSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/settings/backy");
@@ -627,13 +692,19 @@ function BackySection() {
         setHasApiKey(data.hasApiKey);
         setApiKeyChanged(false);
         setEnvironment(data.environment);
+        return data.hasApiKey && !!data.webhookUrl;
       }
     } finally {
       setLoading(false);
     }
+    return false;
   }, []);
 
-  useEffect(() => { loadSettings(); }, [loadSettings]);
+  useEffect(() => {
+    loadSettings().then((configured) => {
+      if (configured) loadHistory();
+    });
+  }, [loadSettings, loadHistory]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -700,6 +771,8 @@ function BackySection() {
       setResult(data);
       if (data.success) {
         toast.success("Backup pushed to Backy");
+        // Refresh history after successful push
+        loadHistory();
       } else {
         toast.error(data.error || "Push failed");
       }
@@ -746,179 +819,268 @@ function BackySection() {
         </div>
       </div>
 
-      {/* Config form */}
-      <div className="space-y-3 mb-4">
-        <div>
-          <Label className="text-sm" htmlFor="backy-url">
-            Webhook URL
-          </Label>
-          <Input
-            id="backy-url"
-            value={webhookUrl}
-            onChange={(e) => setWebhookUrl(e.target.value)}
-            placeholder="https://backy.example.com/api/webhook/..."
-            className="mt-1"
-          />
+      {/* Two-column layout: left = config + actions, right = history */}
+      <div className="flex gap-5">
+        {/* Left column: config + actions */}
+        <div className="flex-1 min-w-0">
+          {/* Config form */}
+          <div className="space-y-3 mb-4">
+            <div>
+              <Label className="text-sm" htmlFor="backy-url">
+                Webhook URL
+              </Label>
+              <Input
+                id="backy-url"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://backy.example.com/api/webhook/..."
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-sm" htmlFor="backy-key">
+                API Key
+              </Label>
+              <div className="relative mt-1">
+                <Input
+                  id="backy-key"
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(e) => { setApiKey(e.target.value); setApiKeyChanged(true); }}
+                  placeholder={hasApiKey ? "••••••••••••" : "Enter your API key"}
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showApiKey ? (
+                    <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  )}
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : saved ? (
+                  <Check className="h-3.5 w-3.5" strokeWidth={1.5} />
+                ) : (
+                  <Save className="h-3.5 w-3.5" strokeWidth={1.5} />
+                )}
+                {saved ? "Saved" : "Save"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handleTest}
+                disabled={testing || !configured}
+              >
+                {testing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Plug className="h-3.5 w-3.5" strokeWidth={1.5} />
+                )}
+                Test Connection
+              </Button>
+              {testStatus === "success" && (
+                <Badge variant="success" className="text-xs">
+                  <Check className="mr-1 h-3 w-3" />
+                  Connected
+                </Badge>
+              )}
+              {testStatus === "error" && (
+                <Badge variant="destructive" className="text-xs">
+                  <X className="mr-1 h-3 w-3" />
+                  {testError}
+                </Badge>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handlePush}
+                disabled={pushing || !configured}
+              >
+                {pushing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CloudUpload className="h-3.5 w-3.5" strokeWidth={1.5} />
+                )}
+                Push to Backy
+              </Button>
+            </div>
+          </div>
+
+          {/* Push result details */}
+          {result && (
+            <div className="space-y-3 border-t border-border pt-4">
+              {/* Status banner */}
+              <div
+                className={cn(
+                  "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
+                  result.success
+                    ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                    : "bg-destructive/10 text-destructive",
+                )}
+              >
+                {result.success ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                ) : (
+                  <XCircle className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+                )}
+                <span className="font-medium">
+                  {result.success ? "Backup pushed successfully" : result.error || "Push failed"}
+                </span>
+                {result.durationMs != null && (
+                  <span className="ml-auto text-xs opacity-70">{result.durationMs}ms</span>
+                )}
+              </div>
+
+              {/* Request details */}
+              {result.request && (
+                <div className="space-y-1.5">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Request
+                  </h3>
+                  <div className="rounded-lg bg-secondary/50 p-3 space-y-1">
+                    <DetailRow label="URL" value={result.request.url} />
+                    <DetailRow label="Method" value={result.request.method} />
+                    <DetailRow label="Environment" value={result.request.environment} />
+                    <DetailRow label="Tag" value={result.request.tag} />
+                    <DetailRow label="File" value={result.request.fileName} />
+                    <DetailRow
+                      label="Size"
+                      value={`${(result.request.fileSizeBytes / 1024).toFixed(1)} KB`}
+                    />
+                  </div>
+                  <div className="rounded-lg bg-secondary/50 p-3 space-y-1">
+                    <h4 className="text-xs font-medium text-muted-foreground mb-1">Backup Contents</h4>
+                    <div className="grid grid-cols-3 gap-x-4 gap-y-1">
+                      {Object.entries(result.request.backupStats).map(([key, count]) => (
+                        <DetailRow key={key} label={key} value={String(count)} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Response details */}
+              {result.response && (
+                <div className="space-y-1.5">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Response
+                  </h3>
+                  <div className="rounded-lg bg-secondary/50 p-3 space-y-1">
+                    <DetailRow label="Status" value={result.response.status} />
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">Body</span>
+                      <pre className="mt-1 rounded bg-background p-2 text-xs font-mono text-foreground overflow-x-auto max-h-40 overflow-y-auto">
+                        {typeof result.response.body === "string"
+                          ? result.response.body
+                          : JSON.stringify(result.response.body, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <div>
-          <Label className="text-sm" htmlFor="backy-key">
-            API Key
-          </Label>
-          <div className="relative mt-1">
-            <Input
-              id="backy-key"
-              type={showApiKey ? "text" : "password"}
-              value={apiKey}
-              onChange={(e) => { setApiKey(e.target.value); setApiKeyChanged(true); }}
-              placeholder={hasApiKey ? "••••••••••••" : "Enter your API key"}
-              className="pr-9"
-            />
+
+        {/* Right column: remote backup history */}
+        <div className="w-64 shrink-0 border-l border-border pl-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5">
+              <History className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Remote
+              </h3>
+            </div>
             <button
               type="button"
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={loadHistory}
+              disabled={historyLoading || !configured}
+              className="text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Refresh"
             >
-              {showApiKey ? (
-                <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} />
-              ) : (
-                <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />
-              )}
+              <RefreshCw className={cn("h-3.5 w-3.5", historyLoading && "animate-spin")} strokeWidth={1.5} />
             </button>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : saved ? (
-              <Check className="h-3.5 w-3.5" strokeWidth={1.5} />
-            ) : (
-              <Save className="h-3.5 w-3.5" strokeWidth={1.5} />
-            )}
-            {saved ? "Saved" : "Save"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handleTest}
-            disabled={testing || !configured}
-          >
-            {testing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Plug className="h-3.5 w-3.5" strokeWidth={1.5} />
-            )}
-            Test Connection
-          </Button>
-          {testStatus === "success" && (
-            <Badge variant="success" className="text-xs">
-              <Check className="mr-1 h-3 w-3" />
-              Connected
-            </Badge>
-          )}
-          {testStatus === "error" && (
-            <Badge variant="destructive" className="text-xs">
-              <X className="mr-1 h-3 w-3" />
-              {testError}
-            </Badge>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handlePush}
-            disabled={pushing || !configured}
-          >
-            {pushing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <CloudUpload className="h-3.5 w-3.5" strokeWidth={1.5} />
-            )}
-            Push to Backy
-          </Button>
-        </div>
-      </div>
 
-      {result && (
-        <div className="space-y-3 border-t border-border pt-4">
-          {/* Status banner */}
-          <div
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
-              result.success
-                ? "bg-green-500/10 text-green-700 dark:text-green-400"
-                : "bg-destructive/10 text-destructive",
-            )}
-          >
-            {result.success ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-            ) : (
-              <XCircle className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-            )}
-            <span className="font-medium">
-              {result.success ? "Backup pushed successfully" : result.error || "Push failed"}
-            </span>
-            {result.durationMs != null && (
-              <span className="ml-auto text-xs opacity-70">{result.durationMs}ms</span>
-            )}
-          </div>
+          {!configured && (
+            <p className="text-xs text-muted-foreground py-4 text-center">
+              Configure webhook to view history
+            </p>
+          )}
 
-          {/* Request details */}
-          {result.request && (
-            <div className="space-y-1.5">
-              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Request
-              </h3>
-              <div className="rounded-lg bg-secondary/50 p-3 space-y-1">
-                <DetailRow label="URL" value={result.request.url} />
-                <DetailRow label="Method" value={result.request.method} />
-                <DetailRow label="Environment" value={result.request.environment} />
-                <DetailRow label="Tag" value={result.request.tag} />
-                <DetailRow label="File" value={result.request.fileName} />
-                <DetailRow
-                  label="Size"
-                  value={`${(result.request.fileSizeBytes / 1024).toFixed(1)} KB`}
-                />
+          {configured && historyLoading && !history && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {configured && historyError && (
+            <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {historyError}
+            </div>
+          )}
+
+          {configured && history && (
+            <>
+              <div className="mb-3">
+                <span className="text-2xl font-semibold text-foreground">{history.total_backups}</span>
+                <span className="text-xs text-muted-foreground ml-1.5">
+                  {history.total_backups === 1 ? "backup" : "backups"} total
+                </span>
               </div>
-              <div className="rounded-lg bg-secondary/50 p-3 space-y-1">
-                <h4 className="text-xs font-medium text-muted-foreground mb-1">Backup Contents</h4>
-                <div className="grid grid-cols-3 gap-x-4 gap-y-1">
-                  {Object.entries(result.request.backupStats).map(([key, count]) => (
-                    <DetailRow key={key} label={key} value={String(count)} />
+              {history.recent_backups.length > 0 ? (
+                <div className="space-y-2">
+                  {history.recent_backups.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-lg bg-secondary/50 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Badge
+                          variant={entry.environment === "prod" ? "destructive" : "secondary"}
+                          className="text-[10px] px-1 py-0"
+                        >
+                          {entry.environment}
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground ml-auto">
+                          {formatTimeAgo(entry.created_at)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-foreground font-mono truncate" title={entry.tag}>
+                        {entry.tag}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {formatFileSize(entry.file_size)}
+                      </p>
+                    </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Response details */}
-          {result.response && (
-            <div className="space-y-1.5">
-              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Response
-              </h3>
-              <div className="rounded-lg bg-secondary/50 p-3 space-y-1">
-                <DetailRow label="Status" value={result.response.status} />
-                <div className="text-xs">
-                  <span className="text-muted-foreground">Body</span>
-                  <pre className="mt-1 rounded bg-background p-2 text-xs font-mono text-foreground overflow-x-auto max-h-40 overflow-y-auto">
-                    {typeof result.response.body === "string"
-                      ? result.response.body
-                      : JSON.stringify(result.response.body, null, 2)}
-                  </pre>
-                </div>
-              </div>
-            </div>
+              ) : (
+                <p className="text-xs text-muted-foreground py-2 text-center">
+                  No backups yet
+                </p>
+              )}
+            </>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
