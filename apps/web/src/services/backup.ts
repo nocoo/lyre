@@ -264,11 +264,22 @@ export function exportBackup(user: DbUser): BackupData {
  * The data is re-keyed to the current user's ID,
  * regardless of which user originally exported it.
  */
+export interface ImportCounts {
+  folders: number;
+  tags: number;
+  recordings: number;
+  transcriptionJobs: number;
+  transcriptions: number;
+  recordingTags: number;
+  deviceTokens: number;
+  settings: number;
+}
+
 export function importBackup(
   userId: string,
   backup: BackupData,
-): Record<string, number> {
-  const counts: Record<string, number> = {
+): ImportCounts {
+  const counts: ImportCounts = {
     folders: 0,
     tags: 0,
     recordings: 0,
