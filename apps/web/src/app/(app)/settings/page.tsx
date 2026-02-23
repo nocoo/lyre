@@ -610,6 +610,7 @@ function BackySection() {
   const [testing, setTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<"idle" | "success" | "error">("idle");
   const [testError, setTestError] = useState("");
+  const [environment, setEnvironment] = useState<"prod" | "dev">("dev");
 
   const loadSettings = useCallback(async () => {
     try {
@@ -619,11 +620,13 @@ function BackySection() {
           webhookUrl: string;
           apiKey: string;
           hasApiKey: boolean;
+          environment: "prod" | "dev";
         };
         setWebhookUrl(data.webhookUrl);
         setApiKey(data.apiKey);
         setHasApiKey(data.hasApiKey);
         setApiKeyChanged(false);
+        setEnvironment(data.environment);
       }
     } finally {
       setLoading(false);
@@ -728,7 +731,15 @@ function BackySection() {
           <CloudUpload className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
         </div>
         <div className="flex-1">
-          <h2 className="text-sm font-medium text-foreground">Remote Backup</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-medium text-foreground">Remote Backup</h2>
+            <Badge
+              variant={environment === "prod" ? "destructive" : "secondary"}
+              className="text-[10px] px-1.5 py-0"
+            >
+              {environment}
+            </Badge>
+          </div>
           <p className="text-xs text-muted-foreground">
             Push a full backup to Backy for off-site storage.
           </p>

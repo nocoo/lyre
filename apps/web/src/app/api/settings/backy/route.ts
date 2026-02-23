@@ -23,11 +23,16 @@ export type BackySettingsResponse = {
   webhookUrl: string;
   apiKey: string;
   hasApiKey: boolean;
+  environment: "prod" | "dev";
 };
 
 function maskApiKey(key: string): string {
   if (!key) return "";
   return `${"*".repeat(Math.max(0, key.length - 4))}${key.slice(-4)}`;
+}
+
+function getEnvironment(): "prod" | "dev" {
+  return process.env.NODE_ENV === "production" ? "prod" : "dev";
 }
 
 export async function GET() {
@@ -41,6 +46,7 @@ export async function GET() {
     webhookUrl: settings.webhookUrl,
     apiKey: maskApiKey(settings.apiKey),
     hasApiKey: !!settings.apiKey,
+    environment: getEnvironment(),
   });
 }
 

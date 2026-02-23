@@ -2,7 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.2.0] - 2026-02-21
+## [v1.5.1] - 2026-02-23
+
+### Added
+
+- Remote backup integration with Backy: push full JSON backups to an off-site webhook
+- Backy configuration UI in Settings: webhook URL and API key inputs with save, test connection, and push actions
+- Test Connection button sends HEAD request to verify Backy webhook reachability
+- Environment badge (dev/prod) displayed in the Remote Backup section header
+- Full data backup export and import (JSON) with all user data (recordings, transcriptions, folders, tags, jobs, settings)
+- Detailed request/response view after Backy push for debugging (URL, method, tag, file size, backup stats, HTTP status, response body)
+
+### Changed
+
+- Backy credentials (webhook URL, API key) stored in database settings instead of hardcoded constants
+- Backy push tag includes dynamic stats: version, date, recording/transcription/folder/tag counts
+- Dev server script injects `NODE_EXTRA_CA_CERTS` for mkcert TLS trust
+
+### Fixed
+
+- Graceful fetch failure handling in Backy push (catches DNS, TLS, connection errors)
+- Node.js FormData compatibility using Blob append instead of File constructor
+- Strict TypeScript: concrete `ImportCounts` interface for backup import response
+
+## [v1.5.0] - 2026-02-22
 
 ### Added
 
@@ -28,7 +51,7 @@ All notable changes to this project will be documented in this file.
 
 - Dockerfile paths updated for monorepo standalone output
 
-## [1.1.0] - 2026-02-21
+## [v1.1.0] - 2026-02-21
 
 ### Added
 
@@ -61,7 +84,7 @@ All notable changes to this project will be documented in this file.
 - Append `/v1` to GLM and MiniMax Anthropic-compatible base URLs
 - Clear AI config before unconfigured summarize E2E test
 
-## [1.0.0] - 2026-02-20
+## [v1.0.0] - 2026-02-20
 
 ### Added
 
