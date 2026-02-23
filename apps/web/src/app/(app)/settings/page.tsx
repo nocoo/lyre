@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { useSetBreadcrumbs } from "@/components/layout";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getTagColor } from "@/lib/badge-colors";
@@ -708,44 +709,42 @@ function BackySection() {
 
       {/* Config form */}
       <div className="space-y-3 mb-4">
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="backy-url">
+        <div>
+          <Label className="text-sm" htmlFor="backy-url">
             Webhook URL
-          </label>
+          </Label>
           <Input
             id="backy-url"
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
             placeholder="https://backy.example.com/api/webhook/..."
-            className="h-8 text-sm font-mono"
+            className="mt-1"
           />
         </div>
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="backy-key">
+        <div>
+          <Label className="text-sm" htmlFor="backy-key">
             API Key
-          </label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Input
-                id="backy-key"
-                type={showApiKey ? "text" : "password"}
-                value={apiKey}
-                onChange={(e) => { setApiKey(e.target.value); setApiKeyChanged(true); }}
-                placeholder={hasApiKey ? "••••••••••••" : "Enter API key"}
-                className="h-8 text-sm font-mono pr-9"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showApiKey ? (
-                  <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} />
-                ) : (
-                  <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />
-                )}
-              </button>
-            </div>
+          </Label>
+          <div className="relative mt-1">
+            <Input
+              id="backy-key"
+              type={showApiKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(e) => { setApiKey(e.target.value); setApiKeyChanged(true); }}
+              placeholder={hasApiKey ? "••••••••••••" : "Enter your API key"}
+              className="pr-9"
+            />
+            <button
+              type="button"
+              onClick={() => setShowApiKey(!showApiKey)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showApiKey ? (
+                <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} />
+              ) : (
+                <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />
+              )}
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-2">
