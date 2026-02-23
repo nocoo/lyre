@@ -18,32 +18,24 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const result = await pushBackupToBacky(user);
+  const result = await pushBackupToBacky(user);
 
-    // Always return full details regardless of success/failure
-    const payload = {
-      success: result.ok,
-      request: result.request,
-      response: {
-        status: result.status,
-        body: result.body,
-      },
-      durationMs: result.durationMs,
-    };
+  // Always return full details regardless of success/failure
+  const payload = {
+    success: result.ok,
+    error: result.ok ? undefined : "Backy push failed",
+    request: result.request,
+    response: {
+      status: result.status,
+      body: result.body,
+    },
+    durationMs: result.durationMs,
+  };
 
-    if (!result.ok) {
-      return NextResponse.json(
-        { ...payload, error: "Backy rejected the backup" },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json(payload);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json(
-      { success: false, error: `Push failed: ${message}` },
-      { status: 500 },
-    );
+  if (!result.ok) {
+    // status 0 = fetch itself failed (network error)
+    const httpStatus = result.status === 0 ? 502 : 502;
+    return NextResponse.json(payload, { status: httpStatus });
   }
+  return NextResponse.json(payload);
 }

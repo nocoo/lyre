@@ -590,20 +590,49 @@ export async function pushBackupToBacky(
 
   const filename = `lyre-backup-${date}.json`;
   const blob = new Blob([json], { type: "application/json" });
-  const file = new File([blob], filename, { type: "application/json" });
 
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", blob, filename);
   form.append("environment", environment);
   form.append("tag", tag);
 
-  const res = await fetch(BACKY_WEBHOOK_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${BACKY_AUTH_TOKEN}`,
+  const requestMeta = {
+    url: BACKY_WEBHOOK_URL,
+    method: "POST" as const,
+    environment,
+    tag,
+    fileName: filename,
+    fileSizeBytes: json.length,
+    backupStats: {
+      recordings: backup.recordings.length,
+      transcriptions: backup.transcriptions.length,
+      folders: backup.folders.length,
+      tags: backup.tags.length,
+      jobs: backup.transcriptionJobs.length,
+      settings: backup.settings.length,
     },
-    body: form,
-  });
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(BACKY_WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${BACKY_AUTH_TOKEN}`,
+      },
+      body: form,
+    });
+  } catch (err) {
+    // Network-level failure (DNS, TLS, connection refused, etc.)
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      status: 0,
+      body: { fetchError: message },
+      request: requestMeta,
+      durationMs: Date.now() - start,
+    };
+  }
 
   let body: unknown;
   const text = await res.text().catch(() => "");
@@ -617,22 +646,7 @@ export async function pushBackupToBacky(
     ok: res.ok,
     status: res.status,
     body,
-    request: {
-      url: BACKY_WEBHOOK_URL,
-      method: "POST",
-      environment,
-      tag,
-      fileName: filename,
-      fileSizeBytes: json.length,
-      backupStats: {
-        recordings: backup.recordings.length,
-        transcriptions: backup.transcriptions.length,
-        folders: backup.folders.length,
-        tags: backup.tags.length,
-        jobs: backup.transcriptionJobs.length,
-        settings: backup.settings.length,
-      },
-    },
+    request: requestMeta,
     durationMs: Date.now() - start,
   };
 }
