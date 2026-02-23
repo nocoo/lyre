@@ -3,7 +3,7 @@
   "version": "1.5.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 7025",
+    "dev": "NODE_EXTRA_CA_CERTS=\"$HOME/Library/Application Support/mkcert/rootCA.pem\" next dev --port 7025",
     "build": "next build",
     "start": "next start --port 7025",
     "lint": "eslint",
