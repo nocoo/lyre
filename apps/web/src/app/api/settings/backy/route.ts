@@ -6,34 +6,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/api-auth";
 import { settingsRepo } from "@/db/repositories";
+import {
+  readBackySettings,
+  maskApiKey,
+  getEnvironment,
+} from "@/services/backy";
 
 export const dynamic = "force-dynamic";
-
-/** Read Backy settings for a user and return a typed object. */
-export function readBackySettings(userId: string) {
-  const all = settingsRepo.findByUserId(userId);
-  const map = new Map(all.map((s) => [s.key, s.value]));
-  return {
-    webhookUrl: map.get("backy.webhookUrl") ?? "",
-    apiKey: map.get("backy.apiKey") ?? "",
-  };
-}
-
-export type BackySettingsResponse = {
-  webhookUrl: string;
-  apiKey: string;
-  hasApiKey: boolean;
-  environment: "prod" | "dev";
-};
-
-function maskApiKey(key: string): string {
-  if (!key) return "";
-  return `${"*".repeat(Math.max(0, key.length - 4))}${key.slice(-4)}`;
-}
-
-function getEnvironment(): "prod" | "dev" {
-  return process.env.NODE_ENV === "production" ? "prod" : "dev";
-}
 
 export async function GET() {
   const user = await getCurrentUser();

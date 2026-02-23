@@ -6,7 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/api-auth";
-import { readBackySettings } from "@/app/api/settings/backy/route";
+import { readBackySettings } from "@/services/backy";
 
 export const dynamic = "force-dynamic";
 

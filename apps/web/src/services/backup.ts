@@ -28,6 +28,8 @@ import {
 import type { DbUser } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { APP_VERSION } from "@/lib/version";
+import type { BackyCredentials } from "@/services/backy";
+import { getEnvironment } from "@/services/backy";
 
 // ── Backup format ──
 
@@ -535,10 +537,7 @@ export function importBackup(
 
 // ── Push to Backy ──
 
-export interface BackyCredentials {
-  webhookUrl: string;
-  apiKey: string;
-}
+export type { BackyCredentials } from "@/services/backy";
 
 export interface BackyPushResult {
   ok: boolean;
@@ -577,8 +576,7 @@ export async function pushBackupToBacky(
   const backup = exportBackup(user);
   const json = JSON.stringify(backup, null, 2);
 
-  const environment =
-    process.env.NODE_ENV === "production" ? "prod" : "dev";
+  const environment = getEnvironment();
 
   const date = new Date().toISOString().slice(0, 10);
   const stats = [
