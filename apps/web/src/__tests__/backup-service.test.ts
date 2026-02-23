@@ -1222,6 +1222,19 @@ describe("pushBackupToBacky", () => {
     expect(result.ok).toBe(true);
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ id: "backup-123" });
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+
+    // Verify request metadata
+    expect(result.request.url).toContain("backy.dev.hexly.ai/api/webhook/");
+    expect(result.request.method).toBe("POST");
+    expect(result.request.environment).toBe("dev");
+    expect(result.request.tag).toMatch(/^v\d+\.\d+\.\d+-\d{4}-\d{2}-\d{2}-\d+rec-\d+tr-\d+fld-\d+tag$/);
+    expect(result.request.fileName).toMatch(/^lyre-backup-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(result.request.fileSizeBytes).toBeGreaterThan(0);
+    expect(result.request.backupStats.recordings).toBe(2);
+    expect(result.request.backupStats.transcriptions).toBe(1);
+    expect(result.request.backupStats.folders).toBe(1);
+    expect(result.request.backupStats.tags).toBe(2);
 
     // Verify URL
     expect(capturedUrl).toContain("backy.dev.hexly.ai/api/webhook/");
@@ -1267,6 +1280,9 @@ describe("pushBackupToBacky", () => {
     expect(result.ok).toBe(false);
     expect(result.status).toBe(429);
     expect(result.body).toEqual({ error: "rate limited" });
+    expect(result.request.environment).toBe("dev");
+    expect(result.request.backupStats.recordings).toBe(0);
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   test("handles non-JSON response from Backy", async () => {
@@ -1285,25 +1301,31 @@ describe("pushBackupToBacky", () => {
     expect(result.status).toBe(500);
     // Falls back to text body
     expect(result.body).toBe("Internal Server Error");
+    expect(result.request).toBeDefined();
   });
 
   test("tag includes correct stats from backup data", async () => {
     const user = seedUser();
     // No data seeded — empty backup
-    let capturedBody: FormData | undefined;
 
-    globalThis.fetch = mock(async (_url: string | URL | Request, init?: RequestInit) => {
-      capturedBody = init?.body as FormData;
+    globalThis.fetch = mock(async () => {
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     }) as typeof fetch;
 
-    await pushBackupToBacky(user);
+    const result = await pushBackupToBacky(user);
 
-    const tag = capturedBody?.get("tag") as string;
     // Empty data: 0rec-0tr-0fld-0tag
-    expect(tag).toContain("0rec-0tr-0fld-0tag");
+    expect(result.request.tag).toContain("0rec-0tr-0fld-0tag");
+    expect(result.request.backupStats).toEqual({
+      recordings: 0,
+      transcriptions: 0,
+      folders: 0,
+      tags: 0,
+      jobs: 0,
+      settings: 0,
+    });
   });
 });

@@ -544,6 +544,23 @@ export interface BackyPushResult {
   ok: boolean;
   status: number;
   body: unknown;
+  request: {
+    url: string;
+    method: string;
+    environment: string;
+    tag: string;
+    fileName: string;
+    fileSizeBytes: number;
+    backupStats: {
+      recordings: number;
+      transcriptions: number;
+      folders: number;
+      tags: number;
+      jobs: number;
+      settings: number;
+    };
+  };
+  durationMs: number;
 }
 
 /**
@@ -555,6 +572,7 @@ export interface BackyPushResult {
 export async function pushBackupToBacky(
   user: DbUser,
 ): Promise<BackyPushResult> {
+  const start = Date.now();
   const backup = exportBackup(user);
   const json = JSON.stringify(backup, null, 2);
 
@@ -595,5 +613,26 @@ export async function pushBackupToBacky(
     body = text || null;
   }
 
-  return { ok: res.ok, status: res.status, body };
+  return {
+    ok: res.ok,
+    status: res.status,
+    body,
+    request: {
+      url: BACKY_WEBHOOK_URL,
+      method: "POST",
+      environment,
+      tag,
+      fileName: filename,
+      fileSizeBytes: json.length,
+      backupStats: {
+        recordings: backup.recordings.length,
+        transcriptions: backup.transcriptions.length,
+        folders: backup.folders.length,
+        tags: backup.tags.length,
+        jobs: backup.transcriptionJobs.length,
+        settings: backup.settings.length,
+      },
+    },
+    durationMs: Date.now() - start,
+  };
 }
