@@ -819,12 +819,8 @@ function BackySection() {
         </div>
       </div>
 
-      {/* Two-column layout: left = config + actions, right = history */}
-      <div className="flex gap-5">
-        {/* Left column: config + actions */}
-        <div className="flex-1 min-w-0">
-          {/* Config form */}
-          <div className="space-y-3 mb-4">
+      {/* Config + actions */}
+      <div className="space-y-3 mb-4">
             <div>
               <Label className="text-sm" htmlFor="backy-url">
                 Webhook URL
@@ -997,21 +993,26 @@ function BackySection() {
               )}
             </div>
           )}
-        </div>
 
-        {/* Right column: remote backup history */}
-        <div className="w-64 shrink-0 border-l border-border pl-5">
+      {/* Remote backup history */}
+      {configured && (
+        <div className="border-t border-border pt-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1.5">
               <History className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Remote
+                Remote History
               </h3>
+              {history && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-1">
+                  {history.total_backups} {history.total_backups === 1 ? "backup" : "backups"}
+                </Badge>
+              )}
             </div>
             <button
               type="button"
               onClick={loadHistory}
-              disabled={historyLoading || !configured}
+              disabled={historyLoading}
               className="text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
               title="Refresh"
             >
@@ -1019,68 +1020,62 @@ function BackySection() {
             </button>
           </div>
 
-          {!configured && (
-            <p className="text-xs text-muted-foreground py-4 text-center">
-              Configure webhook to view history
-            </p>
-          )}
-
-          {configured && historyLoading && !history && (
+          {historyLoading && !history && (
             <div className="flex justify-center py-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           )}
 
-          {configured && historyError && (
-            <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {historyError && (
+            <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive mb-2">
               {historyError}
             </div>
           )}
 
-          {configured && history && (
-            <>
-              <div className="mb-3">
-                <span className="text-2xl font-semibold text-foreground">{history.total_backups}</span>
-                <span className="text-xs text-muted-foreground ml-1.5">
-                  {history.total_backups === 1 ? "backup" : "backups"} total
-                </span>
-              </div>
-              {history.recent_backups.length > 0 ? (
-                <div className="space-y-2">
-                  {history.recent_backups.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="rounded-lg bg-secondary/50 px-3 py-2"
+          {history && history.recent_backups.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {history.recent_backups.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="rounded-lg bg-secondary/50 px-3 py-2"
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Badge
+                      variant={entry.environment === "prod" ? "destructive" : "secondary"}
+                      className="text-[10px] px-1 py-0"
                     >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Badge
-                          variant={entry.environment === "prod" ? "destructive" : "secondary"}
-                          className="text-[10px] px-1 py-0"
-                        >
-                          {entry.environment}
-                        </Badge>
-                        <span className="text-[10px] text-muted-foreground ml-auto">
-                          {formatTimeAgo(entry.created_at)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-foreground font-mono truncate" title={entry.tag}>
-                        {entry.tag}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {formatFileSize(entry.file_size)}
-                      </p>
-                    </div>
-                  ))}
+                      {entry.environment}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground ml-auto">
+                      {formatTimeAgo(entry.created_at)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-foreground font-mono truncate" title={entry.tag}>
+                    {entry.tag}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {formatFileSize(entry.file_size)}
+                  </p>
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground py-2 text-center">
-                  No backups yet
-                </p>
-              )}
-            </>
+              ))}
+            </div>
+          )}
+
+          {history && history.recent_backups.length === 0 && (
+            <p className="text-xs text-muted-foreground py-2 text-center">
+              No backups yet
+            </p>
           )}
         </div>
-      </div>
+      )}
+
+      {!configured && (
+        <div className="border-t border-border pt-4">
+          <p className="text-xs text-muted-foreground py-2 text-center">
+            Configure webhook to view remote backup history
+          </p>
+        </div>
+      )}
     </div>
   );
 }
