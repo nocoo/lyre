@@ -4,6 +4,6 @@ export function GET() {
   return NextResponse.json({
     status: "ok",
     timestamp: Date.now(),
-    version: process.env.npm_package_version ?? "1.5.1",
+    version: process.env.npm_package_version ?? "1.5.2",
   });
 }

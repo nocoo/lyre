@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.5.2] - 2026-02-23
+
+### Added
+
+- Remote backup history panel in Settings: displays total backup count and recent entries from Backy
+- `GET /api/settings/backy/history` endpoint proxies to Backy webhook for backup history retrieval
+- `fetchBackyHistory()` service function with full error handling (HTTP errors, network failures)
+- Auto-refresh: history loads on page mount when configured, and refreshes after successful push
+- Manual refresh button for remote backup history
+- Backy integration docs (`docs/04-backy.md`): webhook API reference, architecture, and integration guide
+
+### Changed
+
+- BackySection layout: remote history panel moved below config/actions (stacked layout)
+- History entries displayed as responsive grid cards with environment badge, tag, file size, and relative timestamp
+
 ## [v1.5.1] - 2026-02-23
 
 ### Added
