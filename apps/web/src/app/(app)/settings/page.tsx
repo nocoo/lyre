@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FolderOpen,
   Tag,
@@ -10,6 +10,9 @@ import {
   Check,
   X,
   Loader2,
+  Download,
+  Upload,
+  Database,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSetBreadcrumbs } from "@/components/layout";
@@ -413,6 +416,136 @@ function OrganizationSection() {
   );
 }
 
+// ── Data backup section ──
+
+function BackupSection() {
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/settings/backup");
+      if (!res.ok) {
+        toast.error("Failed to export data");
+        return;
+      }
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `lyre-backup-${date}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Backup exported successfully");
+    } catch {
+      toast.error("Failed to export data");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        toast.error("Invalid JSON file");
+        return;
+      }
+
+      const res = await fetch("/api/settings/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+
+      if (res.ok) {
+        const result = (await res.json()) as { imported: Record<string, number> };
+        const total = Object.values(result.imported).reduce((a, b) => a + b, 0);
+        toast.success(`Imported ${total} records successfully`);
+      } else {
+        const err = (await res.json()) as { error: string };
+        toast.error(err.error || "Import failed");
+      }
+    } catch {
+      toast.error("Failed to import data");
+    } finally {
+      setImporting(false);
+      // Reset file input so re-selecting same file works
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
+          <Database className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+        </div>
+        <div>
+          <h2 className="text-sm font-medium text-foreground">Data Backup</h2>
+          <p className="text-xs text-muted-foreground">
+            Export or import all your data as a JSON file.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={handleExport}
+          disabled={exporting || importing}
+        >
+          {exporting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" strokeWidth={1.5} />
+          )}
+          Export Backup
+        </Button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleImport(file);
+          }}
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={exporting || importing}
+        >
+          {importing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
+          )}
+          Import Backup
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ──
 
 export default function SettingsGeneralPage() {
@@ -423,11 +556,12 @@ export default function SettingsGeneralPage() {
       <div>
         <h1 className="text-2xl font-semibold">General</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage folders and tags for organizing recordings.
+          Manage folders, tags, and data backups.
         </p>
       </div>
 
       <OrganizationSection />
+      <BackupSection />
     </div>
   );
 }
