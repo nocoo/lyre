@@ -5,7 +5,7 @@
  * cross-user re-keying, validation edge cases, and empty backups.
  */
 
-import { describe, expect, test, beforeEach } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach, mock } from "bun:test";
 import { resetDb } from "@/db/index";
 import { usersRepo } from "@/db/repositories/users";
 import { foldersRepo } from "@/db/repositories/folders";
@@ -19,6 +19,7 @@ import {
   exportBackup,
   importBackup,
   validateBackup,
+  pushBackupToBacky,
   type BackupData,
 } from "@/services/backup";
 
@@ -1184,5 +1185,125 @@ describe("backup service", () => {
       const failedJob = jobsRepo.findById("job-b");
       expect(failedJob!.errorMessage).toBe("Timeout");
     });
+  });
+});
+
+// ── Push to Backy ──
+
+describe("pushBackupToBacky", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    resetDb();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("sends multipart POST with correct fields and auth header", async () => {
+    const user = seedUser();
+    seedFullData(user.id);
+
+    let capturedUrl: string | undefined;
+    let capturedInit: RequestInit | undefined;
+
+    globalThis.fetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      capturedUrl = typeof url === "string" ? url : url.toString();
+      capturedInit = init;
+      return new Response(JSON.stringify({ id: "backup-123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    const result = await pushBackupToBacky(user);
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ id: "backup-123" });
+
+    // Verify URL
+    expect(capturedUrl).toContain("backy.dev.hexly.ai/api/webhook/");
+
+    // Verify auth header
+    expect(capturedInit?.method).toBe("POST");
+    const headers = capturedInit?.headers as Record<string, string>;
+    expect(headers.Authorization).toMatch(/^Bearer /);
+
+    // Verify form data fields
+    const body = capturedInit?.body as FormData;
+    expect(body).toBeInstanceOf(FormData);
+    expect(body.get("environment")).toBe("dev"); // NODE_ENV=test → "dev"
+
+    const tag = body.get("tag") as string;
+    expect(tag).toMatch(/^v\d+\.\d+\.\d+-\d{4}-\d{2}-\d{2}-\d+rec-\d+tr-\d+fld-\d+tag$/);
+
+    const file = body.get("file") as File;
+    expect(file).toBeInstanceOf(File);
+    expect(file.name).toMatch(/^lyre-backup-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(file.type).toContain("application/json");
+
+    // Verify backup content is valid
+    const text = await file.text();
+    const parsed = JSON.parse(text) as BackupData;
+    expect(parsed.version).toBe(1);
+    expect(parsed.user.email).toBe("alice@test.com");
+    expect(parsed.recordings.length).toBe(2);
+  });
+
+  test("returns error details when Backy rejects", async () => {
+    const user = seedUser();
+
+    globalThis.fetch = mock(async () => {
+      return new Response(JSON.stringify({ error: "rate limited" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    const result = await pushBackupToBacky(user);
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(429);
+    expect(result.body).toEqual({ error: "rate limited" });
+  });
+
+  test("handles non-JSON response from Backy", async () => {
+    const user = seedUser();
+
+    globalThis.fetch = mock(async () => {
+      return new Response("Internal Server Error", {
+        status: 500,
+        headers: { "Content-Type": "text/plain" },
+      });
+    }) as typeof fetch;
+
+    const result = await pushBackupToBacky(user);
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(500);
+    // Falls back to text body
+    expect(result.body).toBe("Internal Server Error");
+  });
+
+  test("tag includes correct stats from backup data", async () => {
+    const user = seedUser();
+    // No data seeded — empty backup
+    let capturedBody: FormData | undefined;
+
+    globalThis.fetch = mock(async (_url: string | URL | Request, init?: RequestInit) => {
+      capturedBody = init?.body as FormData;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    await pushBackupToBacky(user);
+
+    const tag = capturedBody?.get("tag") as string;
+    // Empty data: 0rec-0tr-0fld-0tag
+    expect(tag).toContain("0rec-0tr-0fld-0tag");
   });
 });

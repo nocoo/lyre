@@ -13,6 +13,7 @@ import {
   Download,
   Upload,
   Database,
+  CloudUpload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSetBreadcrumbs } from "@/components/layout";
@@ -421,6 +422,7 @@ function OrganizationSection() {
 function BackupSection() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
@@ -487,6 +489,25 @@ function BackupSection() {
     }
   };
 
+  const handlePush = async () => {
+    setPushing(true);
+    try {
+      const res = await fetch("/api/settings/backup/push", { method: "POST" });
+      if (res.ok) {
+        toast.success("Backup pushed to Backy successfully");
+      } else {
+        const err = (await res.json()) as { error: string };
+        toast.error(err.error || "Push failed");
+      }
+    } catch {
+      toast.error("Failed to push backup");
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const busy = exporting || importing || pushing;
+
   return (
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="mb-4 flex items-center gap-3">
@@ -507,7 +528,7 @@ function BackupSection() {
           size="sm"
           className="gap-2"
           onClick={handleExport}
-          disabled={exporting || importing}
+          disabled={busy}
         >
           {exporting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -532,7 +553,7 @@ function BackupSection() {
           size="sm"
           className="gap-2"
           onClick={() => fileInputRef.current?.click()}
-          disabled={exporting || importing}
+          disabled={busy}
         >
           {importing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -540,6 +561,21 @@ function BackupSection() {
             <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
           )}
           Import Backup
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={handlePush}
+          disabled={busy}
+        >
+          {pushing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <CloudUpload className="h-3.5 w-3.5" strokeWidth={1.5} />
+          )}
+          Push to Backy
         </Button>
       </div>
     </div>

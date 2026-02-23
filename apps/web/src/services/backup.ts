@@ -27,6 +27,7 @@ import {
 } from "@/db/schema";
 import type { DbUser } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { APP_VERSION } from "@/lib/version";
 
 // ── Backup format ──
 
@@ -530,4 +531,69 @@ export function importBackup(
   });
 
   return counts;
+}
+
+// ── Push to Backy ──
+
+const BACKY_WEBHOOK_URL =
+  "https://backy.dev.hexly.ai/api/webhook/7Kx6PuUyMrP2f9XObUCZx";
+const BACKY_AUTH_TOKEN =
+  "Zbs85v0RKWn2qO8s8eY0MM2QIB20g2m35tcrbl8ePiqWuECC";
+
+export interface BackyPushResult {
+  ok: boolean;
+  status: number;
+  body: unknown;
+}
+
+/**
+ * Export user data and push it to the Backy backup service.
+ *
+ * Generates a JSON backup, builds a descriptive tag with version/date/stats,
+ * and POSTs it as a multipart/form-data upload to the Backy webhook.
+ */
+export async function pushBackupToBacky(
+  user: DbUser,
+): Promise<BackyPushResult> {
+  const backup = exportBackup(user);
+  const json = JSON.stringify(backup, null, 2);
+
+  const environment =
+    process.env.NODE_ENV === "production" ? "prod" : "dev";
+
+  const date = new Date().toISOString().slice(0, 10);
+  const stats = [
+    `${backup.recordings.length}rec`,
+    `${backup.transcriptions.length}tr`,
+    `${backup.folders.length}fld`,
+    `${backup.tags.length}tag`,
+  ].join("-");
+  const tag = `v${APP_VERSION}-${date}-${stats}`;
+
+  const filename = `lyre-backup-${date}.json`;
+  const blob = new Blob([json], { type: "application/json" });
+  const file = new File([blob], filename, { type: "application/json" });
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("environment", environment);
+  form.append("tag", tag);
+
+  const res = await fetch(BACKY_WEBHOOK_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${BACKY_AUTH_TOKEN}`,
+    },
+    body: form,
+  });
+
+  let body: unknown;
+  const text = await res.text().catch(() => "");
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = text || null;
+  }
+
+  return { ok: res.ok, status: res.status, body };
 }
