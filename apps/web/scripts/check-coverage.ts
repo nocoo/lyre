@@ -35,6 +35,8 @@ async function main() {
       "src/__tests__/tags-repo.test.ts",
       "src/__tests__/ai-service.test.ts",
       "src/__tests__/sidebar-nav.test.ts",
+      "src/__tests__/backup-service.test.ts",
+      "src/__tests__/backy-service.test.ts",
       "--coverage",
     ],
     {

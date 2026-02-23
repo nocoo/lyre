@@ -1332,4 +1332,37 @@ describe("pushBackupToBacky", () => {
       settings: 0,
     });
   });
+
+  test("handles network-level fetch failure (DNS, TLS, connection refused)", async () => {
+    const user = seedUser();
+
+    globalThis.fetch = mock(async () => {
+      throw new Error("getaddrinfo ENOTFOUND backy.example.com");
+    }) as typeof fetch;
+
+    const result = await pushBackupToBacky(user, testCredentials);
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(0);
+    expect(result.body).toEqual({
+      fetchError: "getaddrinfo ENOTFOUND backy.example.com",
+    });
+    expect(result.request.url).toBe(testCredentials.webhookUrl);
+    expect(result.request.method).toBe("POST");
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test("handles non-Error throw from fetch", async () => {
+    const user = seedUser();
+
+    globalThis.fetch = mock(async () => {
+      throw "connection timeout";
+    }) as typeof fetch;
+
+    const result = await pushBackupToBacky(user, testCredentials);
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(0);
+    expect(result.body).toEqual({ fetchError: "connection timeout" });
+  });
 });
