@@ -535,10 +535,10 @@ export function importBackup(
 
 // ── Push to Backy ──
 
-const BACKY_WEBHOOK_URL =
-  "https://backy.dev.hexly.ai/api/webhook/7Kx6PuUyMrP2f9XObUCZx";
-const BACKY_AUTH_TOKEN =
-  "Zbs85v0RKWn2qO8s8eY0MM2QIB20g2m35tcrbl8ePiqWuECC";
+export interface BackyCredentials {
+  webhookUrl: string;
+  apiKey: string;
+}
 
 export interface BackyPushResult {
   ok: boolean;
@@ -571,6 +571,7 @@ export interface BackyPushResult {
  */
 export async function pushBackupToBacky(
   user: DbUser,
+  credentials: BackyCredentials,
 ): Promise<BackyPushResult> {
   const start = Date.now();
   const backup = exportBackup(user);
@@ -597,7 +598,7 @@ export async function pushBackupToBacky(
   form.append("tag", tag);
 
   const requestMeta = {
-    url: BACKY_WEBHOOK_URL,
+    url: credentials.webhookUrl,
     method: "POST" as const,
     environment,
     tag,
@@ -615,10 +616,10 @@ export async function pushBackupToBacky(
 
   let res: Response;
   try {
-    res = await fetch(BACKY_WEBHOOK_URL, {
+    res = await fetch(credentials.webhookUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${BACKY_AUTH_TOKEN}`,
+        Authorization: `Bearer ${credentials.apiKey}`,
       },
       body: form,
     });

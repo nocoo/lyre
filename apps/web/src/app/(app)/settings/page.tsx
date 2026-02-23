@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   FolderOpen,
   Tag,
@@ -16,6 +16,9 @@ import {
   CloudUpload,
   CheckCircle2,
   XCircle,
+  Eye,
+  EyeOff,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSetBreadcrumbs } from "@/components/layout";
@@ -589,8 +592,72 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 function BackySection() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [result, setResult] = useState<BackyPushResponse | null>(null);
+
+  // Config form state
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [apiKeyChanged, setApiKeyChanged] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings/backy");
+      if (res.ok) {
+        const data = (await res.json()) as {
+          webhookUrl: string;
+          apiKey: string;
+          hasApiKey: boolean;
+        };
+        setWebhookUrl(data.webhookUrl);
+        setApiKey(data.apiKey);
+        setHasApiKey(data.hasApiKey);
+        setApiKeyChanged(false);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadSettings(); }, [loadSettings]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      const body: Record<string, string> = { webhookUrl };
+      if (apiKeyChanged) body.apiKey = apiKey;
+      const res = await fetch("/api/settings/backy", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          webhookUrl: string;
+          apiKey: string;
+          hasApiKey: boolean;
+        };
+        setWebhookUrl(data.webhookUrl);
+        setApiKey(data.apiKey);
+        setHasApiKey(data.hasApiKey);
+        setApiKeyChanged(false);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        toast.error("Failed to save Backy settings");
+      }
+    } catch {
+      toast.error("Failed to save Backy settings");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handlePush = async () => {
     setPushing(true);
@@ -613,6 +680,18 @@ function BackySection() {
     }
   };
 
+  const configured = hasApiKey && !!webhookUrl;
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="mb-4 flex items-center gap-3">
@@ -625,20 +704,82 @@ function BackySection() {
             Push a full backup to Backy for off-site storage.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={handlePush}
-          disabled={pushing}
-        >
-          {pushing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <CloudUpload className="h-3.5 w-3.5" strokeWidth={1.5} />
-          )}
-          Push to Backy
-        </Button>
+      </div>
+
+      {/* Config form */}
+      <div className="space-y-3 mb-4">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="backy-url">
+            Webhook URL
+          </label>
+          <Input
+            id="backy-url"
+            value={webhookUrl}
+            onChange={(e) => setWebhookUrl(e.target.value)}
+            placeholder="https://backy.example.com/api/webhook/..."
+            className="h-8 text-sm font-mono"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="backy-key">
+            API Key
+          </label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Input
+                id="backy-key"
+                type={showApiKey ? "text" : "password"}
+                value={apiKey}
+                onChange={(e) => { setApiKey(e.target.value); setApiKeyChanged(true); }}
+                placeholder={hasApiKey ? "••••••••••••" : "Enter API key"}
+                className="h-8 text-sm font-mono pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showApiKey ? (
+                  <EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" strokeWidth={1.5} />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : saved ? (
+              <Check className="h-3.5 w-3.5" strokeWidth={1.5} />
+            ) : (
+              <Save className="h-3.5 w-3.5" strokeWidth={1.5} />
+            )}
+            {saved ? "Saved" : "Save"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handlePush}
+            disabled={pushing || !configured}
+          >
+            {pushing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CloudUpload className="h-3.5 w-3.5" strokeWidth={1.5} />
+            )}
+            Push to Backy
+          </Button>
+        </div>
       </div>
 
       {result && (

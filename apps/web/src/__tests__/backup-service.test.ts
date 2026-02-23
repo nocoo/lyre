@@ -1192,6 +1192,10 @@ describe("backup service", () => {
 
 describe("pushBackupToBacky", () => {
   const originalFetch = globalThis.fetch;
+  const testCredentials = {
+    webhookUrl: "https://backy.example.com/api/webhook/test-id",
+    apiKey: "test-api-key-12345",
+  };
 
   beforeEach(() => {
     resetDb();
@@ -1217,7 +1221,7 @@ describe("pushBackupToBacky", () => {
       });
     }) as typeof fetch;
 
-    const result = await pushBackupToBacky(user);
+    const result = await pushBackupToBacky(user, testCredentials);
 
     expect(result.ok).toBe(true);
     expect(result.status).toBe(200);
@@ -1225,7 +1229,7 @@ describe("pushBackupToBacky", () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
 
     // Verify request metadata
-    expect(result.request.url).toContain("backy.dev.hexly.ai/api/webhook/");
+    expect(result.request.url).toBe(testCredentials.webhookUrl);
     expect(result.request.method).toBe("POST");
     expect(result.request.environment).toBe("dev");
     expect(result.request.tag).toMatch(/^v\d+\.\d+\.\d+-\d{4}-\d{2}-\d{2}-\d+rec-\d+tr-\d+fld-\d+tag$/);
@@ -1237,12 +1241,12 @@ describe("pushBackupToBacky", () => {
     expect(result.request.backupStats.tags).toBe(2);
 
     // Verify URL
-    expect(capturedUrl).toContain("backy.dev.hexly.ai/api/webhook/");
+    expect(capturedUrl).toBe(testCredentials.webhookUrl);
 
     // Verify auth header
     expect(capturedInit?.method).toBe("POST");
     const headers = capturedInit?.headers as Record<string, string>;
-    expect(headers.Authorization).toMatch(/^Bearer /);
+    expect(headers.Authorization).toBe(`Bearer ${testCredentials.apiKey}`);
 
     // Verify form data fields
     const body = capturedInit?.body as FormData;
@@ -1275,7 +1279,7 @@ describe("pushBackupToBacky", () => {
       });
     }) as typeof fetch;
 
-    const result = await pushBackupToBacky(user);
+    const result = await pushBackupToBacky(user, testCredentials);
 
     expect(result.ok).toBe(false);
     expect(result.status).toBe(429);
@@ -1295,7 +1299,7 @@ describe("pushBackupToBacky", () => {
       });
     }) as typeof fetch;
 
-    const result = await pushBackupToBacky(user);
+    const result = await pushBackupToBacky(user, testCredentials);
 
     expect(result.ok).toBe(false);
     expect(result.status).toBe(500);
@@ -1315,7 +1319,7 @@ describe("pushBackupToBacky", () => {
       });
     }) as typeof fetch;
 
-    const result = await pushBackupToBacky(user);
+    const result = await pushBackupToBacky(user, testCredentials);
 
     // Empty data: 0rec-0tr-0fld-0tag
     expect(result.request.tag).toContain("0rec-0tr-0fld-0tag");
