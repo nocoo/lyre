@@ -1,4 +1,3 @@
-mod audio;
 mod config;
 mod http_client;
 mod recorder;
