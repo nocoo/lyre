@@ -20,8 +20,8 @@ pub enum RecorderState {
 pub struct RecorderConfig {
     /// Directory where recordings are saved.
     pub output_dir: PathBuf,
-    /// Index of the selected input device (None = use default).
-    pub selected_device_index: Option<usize>,
+    /// Name of the selected input device (None = use default).
+    pub selected_device_name: Option<String>,
 }
 
 impl Default for RecorderConfig {
@@ -32,7 +32,7 @@ impl Default for RecorderConfig {
             .join("Lyre Recordings");
         Self {
             output_dir,
-            selected_device_index: None,
+            selected_device_name: None,
         }
     }
 }
@@ -80,11 +80,20 @@ impl Recorder {
             return Err(RecordError::AlreadyRecording);
         }
 
-        // Resolve device
-        let device = match self.config.selected_device_index {
-            Some(idx) => device_manager
-                .input_device_by_index(idx)
-                .ok_or(RecordError::DeviceNotFound)?,
+        // Resolve device: by name (with fallback to default if unavailable)
+        let device = match &self.config.selected_device_name {
+            Some(name) => match device_manager.input_device_by_name(name) {
+                Some(d) => d,
+                None => {
+                    eprintln!(
+                        "selected device '{}' not found, falling back to system default",
+                        name
+                    );
+                    device_manager
+                        .default_input_device()
+                        .ok_or(RecordError::NoDefaultDevice)?
+                }
+            },
             None => device_manager
                 .default_input_device()
                 .ok_or(RecordError::NoDefaultDevice)?,
@@ -199,9 +208,9 @@ impl Recorder {
         self.config.output_dir = dir;
     }
 
-    /// Select a specific device by index, or None for default.
-    pub fn select_device(&mut self, index: Option<usize>) {
-        self.config.selected_device_index = index;
+    /// Select a specific device by name, or None for default.
+    pub fn select_device(&mut self, name: Option<String>) {
+        self.config.selected_device_name = name;
     }
 }
 
@@ -210,6 +219,7 @@ impl Recorder {
 pub enum RecordError {
     AlreadyRecording,
     NotRecording,
+    #[allow(dead_code)]
     DeviceNotFound,
     NoDefaultDevice,
     ConfigError(String),
@@ -355,7 +365,7 @@ mod tests {
             .output_dir
             .to_string_lossy()
             .contains("Lyre Recordings"));
-        assert!(config.selected_device_index.is_none());
+        assert!(config.selected_device_name.is_none());
     }
 
     #[test]
@@ -386,11 +396,14 @@ mod tests {
     #[test]
     fn test_select_device() {
         let mut recorder = Recorder::new(RecorderConfig::default());
-        assert!(recorder.config.selected_device_index.is_none());
-        recorder.select_device(Some(2));
-        assert_eq!(recorder.config.selected_device_index, Some(2));
+        assert!(recorder.config.selected_device_name.is_none());
+        recorder.select_device(Some("Test Mic".to_string()));
+        assert_eq!(
+            recorder.config.selected_device_name,
+            Some("Test Mic".to_string())
+        );
         recorder.select_device(None);
-        assert!(recorder.config.selected_device_index.is_none());
+        assert!(recorder.config.selected_device_name.is_none());
     }
 
     #[test]
@@ -426,27 +439,36 @@ mod tests {
     fn test_recorder_config_custom() {
         let config = RecorderConfig {
             output_dir: PathBuf::from("/custom/path"),
-            selected_device_index: Some(3),
+            selected_device_name: Some("USB Mic".to_string()),
         };
         let recorder = Recorder::new(config);
         assert_eq!(recorder.config.output_dir, PathBuf::from("/custom/path"));
-        assert_eq!(recorder.config.selected_device_index, Some(3));
+        assert_eq!(
+            recorder.config.selected_device_name,
+            Some("USB Mic".to_string())
+        );
         assert_eq!(recorder.state(), RecorderState::Idle);
     }
 
     #[test]
-    fn test_start_with_invalid_device_index() {
+    fn test_start_with_unavailable_device_name() {
         let config = RecorderConfig {
             output_dir: PathBuf::from("/tmp/test-recordings"),
-            selected_device_index: Some(9999),
+            selected_device_name: Some("Nonexistent Device XYZ".to_string()),
         };
         let mut recorder = Recorder::new(config);
         let device_manager = AudioDeviceManager::new();
+        // With a nonexistent device name, start() falls back to default device.
+        // On machines with audio hardware it will succeed (using default),
+        // on CI without audio it will fail with NoDefaultDevice.
         let result = recorder.start(&device_manager);
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            RecordError::DeviceNotFound => {}
-            other => panic!("expected DeviceNotFound, got: {other}"),
+        if device_manager.default_input_device().is_some() {
+            // Has audio hardware: fallback to default should succeed
+            assert!(result.is_ok(), "should fall back to default device");
+            let _ = recorder.stop();
+        } else {
+            // No audio hardware: should fail with NoDefaultDevice
+            assert!(result.is_err());
         }
     }
 }

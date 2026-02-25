@@ -17,6 +17,9 @@ pub struct AppConfig {
     /// Custom output directory for recordings. None = use default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_dir: Option<String>,
+    /// Persisted input device name. None = follow system default ("Auto").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_device: Option<String>,
 }
 
 /// Returns the path to the config file.
@@ -61,6 +64,21 @@ pub fn get_output_dir() -> std::path::PathBuf {
         },
         Err(_) => crate::recordings::default_output_dir(),
     }
+}
+
+/// Save the selected input device name. Pass None for "Auto" (system default).
+pub fn save_input_device(device_name: Option<&str>) -> Result<(), String> {
+    let mut config = load_config().unwrap_or_default();
+    config.input_device = device_name.map(|s| s.to_string());
+    write_config(&config)
+}
+
+/// Get the persisted input device name. None means "Auto" (system default).
+pub fn get_input_device() -> Option<String> {
+    load_config()
+        .ok()
+        .and_then(|c| c.input_device)
+        .filter(|s| !s.is_empty())
 }
 
 /// Write the full config to disk.
@@ -119,6 +137,7 @@ mod tests {
             assert!(config.server_url.is_empty());
             assert!(config.token.is_empty());
             assert!(config.output_dir.is_none());
+            assert!(config.input_device.is_none());
             assert!(!has_config());
 
             // Save server config
@@ -149,6 +168,26 @@ mod tests {
             let dir = get_output_dir();
             assert!(dir.to_string_lossy().contains("Lyre Recordings"));
 
+            // --- Input device persistence ---
+            // Initially no input device
+            assert!(get_input_device().is_none());
+
+            // Save a device name
+            save_input_device(Some("USB Mic")).unwrap();
+            assert_eq!(get_input_device(), Some("USB Mic".to_string()));
+
+            // Server config should not clobber input_device
+            save_config("https://lyre.example.com", "tok").unwrap();
+            assert_eq!(get_input_device(), Some("USB Mic".to_string()));
+
+            // Reset to auto
+            save_input_device(None).unwrap();
+            assert!(get_input_device().is_none());
+
+            // Empty string should also be treated as None
+            save_input_device(Some("")).unwrap();
+            assert!(get_input_device().is_none());
+
             // Clear
             clear_config().unwrap();
             let config = load_config().unwrap();
@@ -163,24 +202,29 @@ mod tests {
             server_url: "https://lyre.example.com".to_string(),
             token: "lyre_abc123".to_string(),
             output_dir: Some("/custom/path".to_string()),
+            input_device: Some("USB Mic".to_string()),
         };
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("server_url"));
         assert!(json.contains("token"));
         assert!(json.contains("output_dir"));
+        assert!(json.contains("input_device"));
+        assert!(json.contains("USB Mic"));
 
         let parsed: AppConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.server_url, config.server_url);
         assert_eq!(parsed.token, config.token);
         assert_eq!(parsed.output_dir, config.output_dir);
+        assert_eq!(parsed.input_device, config.input_device);
     }
 
     #[test]
     fn test_app_config_backward_compat() {
-        // Old config files without output_dir should still parse
+        // Old config files without output_dir or input_device should still parse
         let json = r#"{"server_url":"https://lyre.example.com","token":"tok"}"#;
         let parsed: AppConfig = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.server_url, "https://lyre.example.com");
         assert!(parsed.output_dir.is_none());
+        assert!(parsed.input_device.is_none());
     }
 }

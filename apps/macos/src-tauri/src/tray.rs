@@ -30,6 +30,8 @@ pub fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let mut config = RecorderConfig::default();
     // Use persisted output_dir from config if available.
     config.output_dir = crate::config::get_output_dir();
+    // Restore persisted input device selection.
+    config.selected_device_name = crate::config::get_input_device();
 
     let state = Arc::new(Mutex::new(SendableState {
         recorder: Recorder::new(config),
@@ -112,12 +114,12 @@ fn build_device_items(
     state: &SendableState,
 ) -> Result<Vec<CheckMenuItem<Wry>>, Box<dyn std::error::Error>> {
     let devices = state.device_manager.list_input_devices();
-    let selected_idx = state.recorder.config.selected_device_index;
+    let selected_name = state.recorder.config.selected_device_name.as_deref();
 
     let mut items: Vec<CheckMenuItem<Wry>> = Vec::new();
 
     // "Auto (Default)" option
-    let auto_checked = selected_idx.is_none();
+    let auto_checked = selected_name.is_none();
     let auto_item = CheckMenuItem::with_id(
         handle,
         "device_auto",
@@ -135,7 +137,7 @@ fn build_device_items(
             format!("  {}", dev.name)
         };
         let id = format!("device_{}", dev.index);
-        let checked = selected_idx == Some(dev.index);
+        let checked = selected_name == Some(dev.name.as_str());
         let item = CheckMenuItem::with_id(handle, &id, &label, true, checked, None::<&str>)?;
         items.push(item);
     }
@@ -199,17 +201,17 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
             let mut s = state.lock().unwrap();
             if id == "device_auto" {
                 s.recorder.select_device(None);
+                let _ = crate::config::save_input_device(None);
                 println!("device set to auto (default)");
             } else if let Some(idx_str) = id.strip_prefix("device_") {
                 if let Ok(idx) = idx_str.parse::<usize>() {
-                    s.recorder.select_device(Some(idx));
                     let devices = s.device_manager.list_input_devices();
-                    let name = devices
-                        .iter()
-                        .find(|d| d.index == idx)
-                        .map(|d| d.name.as_str())
-                        .unwrap_or("unknown");
-                    println!("device set to: {name}");
+                    if let Some(dev) = devices.iter().find(|d| d.index == idx) {
+                        let name = dev.name.clone();
+                        s.recorder.select_device(Some(name.clone()));
+                        let _ = crate::config::save_input_device(Some(&name));
+                        println!("device set to: {name}");
+                    }
                 }
             }
             rebuild_tray_menu(app, &s);

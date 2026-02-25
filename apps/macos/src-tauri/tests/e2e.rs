@@ -110,7 +110,7 @@ fn e2e_record_and_verify_mp3() {
 
     let config = RecorderConfig {
         output_dir: output_dir.clone(),
-        selected_device_index: None,
+        selected_device_name: None,
     };
 
     let device_manager = AudioDeviceManager::new();
@@ -165,7 +165,7 @@ fn e2e_double_start_is_error() {
     let tmp_dir = TempDir::new().expect("failed to create temp dir");
     let config = RecorderConfig {
         output_dir: tmp_dir.path().to_path_buf(),
-        selected_device_index: None,
+        selected_device_name: None,
     };
 
     let device_manager = AudioDeviceManager::new();
@@ -187,7 +187,7 @@ fn e2e_double_start_is_error() {
 fn e2e_stop_without_start_is_error() {
     let config = RecorderConfig {
         output_dir: PathBuf::from("/tmp/lyre-test-unused"),
-        selected_device_index: None,
+        selected_device_name: None,
     };
     let mut recorder = lyre::Recorder::new(config);
     let result = recorder.stop();
@@ -210,7 +210,7 @@ fn e2e_record_then_list_then_delete() {
 
     let config = RecorderConfig {
         output_dir: output_dir.clone(),
-        selected_device_index: None,
+        selected_device_name: None,
     };
     let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
@@ -279,7 +279,7 @@ fn e2e_record_to_custom_output_dir() {
 
     let config = RecorderConfig {
         output_dir: custom_dir.clone(),
-        selected_device_index: None,
+        selected_device_name: None,
     };
     let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
@@ -312,12 +312,12 @@ fn e2e_record_with_device_selection() {
     assert!(!devices.is_empty());
 
     // Pick the first available device explicitly
-    let device_index = devices[0].index;
+    let device_name = devices[0].name.clone();
 
     let tmp_dir = TempDir::new().unwrap();
     let config = RecorderConfig {
         output_dir: tmp_dir.path().to_path_buf(),
-        selected_device_index: Some(device_index),
+        selected_device_name: Some(device_name),
     };
     let mut recorder = lyre::Recorder::new(config);
 
@@ -331,16 +331,22 @@ fn e2e_record_with_device_selection() {
 }
 
 #[test]
-fn e2e_record_with_invalid_device_index() {
+fn e2e_record_with_unavailable_device_name() {
     let tmp_dir = TempDir::new().unwrap();
     let config = RecorderConfig {
         output_dir: tmp_dir.path().to_path_buf(),
-        selected_device_index: Some(99999),
+        selected_device_name: Some("Nonexistent Device XYZ 99999".to_string()),
     };
     let mgr = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
     let result = recorder.start(&mgr);
-    assert!(result.is_err(), "should fail with invalid device index");
+    // Falls back to default device — succeeds if audio hardware exists, fails otherwise
+    if mgr.default_input_device().is_some() {
+        assert!(result.is_ok(), "should fall back to default device");
+        let _ = recorder.stop();
+    } else {
+        assert!(result.is_err(), "should fail without audio hardware");
+    }
 }
 
 // ============================================================================
@@ -359,7 +365,7 @@ fn e2e_mp3_duration_is_precise() {
 
     let config = RecorderConfig {
         output_dir: output_dir.clone(),
-        selected_device_index: None,
+        selected_device_name: None,
     };
     let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
@@ -779,6 +785,26 @@ fn e2e_config_roundtrip() {
         "should fall back to default dir after reset"
     );
 
+    // --- Input device persistence ---
+    // Initially no saved device
+    assert!(lyre::get_input_device().is_none());
+
+    // Save a device selection
+    lyre::save_input_device(Some("USB Mic")).unwrap();
+    assert_eq!(lyre::get_input_device(), Some("USB Mic".to_string()));
+
+    // Save server config — input_device should survive
+    lyre::save_config("https://lyre.example.com", "tok").unwrap();
+    assert_eq!(
+        lyre::get_input_device(),
+        Some("USB Mic".to_string()),
+        "input_device should survive server config save"
+    );
+
+    // Reset to auto
+    lyre::save_input_device(None).unwrap();
+    assert!(lyre::get_input_device().is_none());
+
     // Clear config entirely
     lyre::clear_config().unwrap();
     assert!(!lyre::has_config());
@@ -806,7 +832,7 @@ fn e2e_set_output_dir_then_record() {
 
     let config = RecorderConfig {
         output_dir: dir1.clone(),
-        selected_device_index: None,
+        selected_device_name: None,
     };
     let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
@@ -847,7 +873,7 @@ fn e2e_multiple_sequential_recordings() {
 
     let config = RecorderConfig {
         output_dir: output_dir.clone(),
-        selected_device_index: None,
+        selected_device_name: None,
     };
     let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
@@ -899,7 +925,7 @@ fn e2e_recorder_state_transitions() {
     let tmp_dir = TempDir::new().unwrap();
     let config = RecorderConfig {
         output_dir: tmp_dir.path().to_path_buf(),
-        selected_device_index: None,
+        selected_device_name: None,
     };
     let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);

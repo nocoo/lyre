@@ -58,8 +58,17 @@ impl AudioDeviceManager {
     }
 
     /// Get an input device by index (as returned by `list_input_devices`).
+    #[allow(dead_code)]
     pub fn input_device_by_index(&self, index: usize) -> Option<Device> {
         self.host.input_devices().ok()?.nth(index)
+    }
+
+    /// Find an input device by name. Returns None if no device matches.
+    pub fn input_device_by_name(&self, name: &str) -> Option<Device> {
+        self.host
+            .input_devices()
+            .ok()?
+            .find(|d| d.name().ok().as_deref() == Some(name))
     }
 
     /// Get the default input config for a device.

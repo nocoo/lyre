@@ -6,7 +6,7 @@ pub mod recordings;
 pub mod upload;
 
 pub use audio::AudioDeviceManager;
-pub use config::{clear_config, get_output_dir, has_config, load_config, save_config, save_output_dir, AppConfig};
+pub use config::{clear_config, get_input_device, get_output_dir, has_config, load_config, save_config, save_input_device, save_output_dir, AppConfig};
 pub use recorder::{generate_filename, Recorder, RecorderConfig, RecorderState};
 pub use recordings::{
     batch_delete_recordings, default_output_dir, delete_recording, find_cleanable_recordings,
