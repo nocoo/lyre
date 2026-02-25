@@ -20,6 +20,9 @@ pub struct AppConfig {
     /// Persisted input device name. None = follow system default ("Auto").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_device: Option<String>,
+    /// Persisted input device ID (ScreenCaptureKit). None = follow system default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_device_id: Option<String>,
 }
 
 /// Returns the path to the config file.
@@ -66,9 +69,10 @@ pub fn get_output_dir() -> std::path::PathBuf {
     }
 }
 
-/// Save the selected input device name. Pass None for "Auto" (system default).
-pub fn save_input_device(device_name: Option<&str>) -> Result<(), String> {
+/// Save the selected input device. Pass None for "Auto" (system default).
+pub fn save_input_device(device_id: Option<&str>, device_name: Option<&str>) -> Result<(), String> {
     let mut config = load_config().unwrap_or_default();
+    config.input_device_id = device_id.map(|s| s.to_string());
     config.input_device = device_name.map(|s| s.to_string());
     write_config(&config)
 }
@@ -79,6 +83,19 @@ pub fn get_input_device() -> Option<String> {
         .ok()
         .and_then(|c| c.input_device)
         .filter(|s| !s.is_empty())
+}
+
+/// Get the persisted input device ID and name as a tuple.
+/// Both are None when set to "Auto" (system default).
+pub fn get_input_device_full() -> (Option<String>, Option<String>) {
+    match load_config() {
+        Ok(c) => {
+            let id = c.input_device_id.filter(|s| !s.is_empty());
+            let name = c.input_device.filter(|s| !s.is_empty());
+            (id, name)
+        }
+        Err(_) => (None, None),
+    }
 }
 
 /// Write the full config to disk.
@@ -171,22 +188,36 @@ mod tests {
             // --- Input device persistence ---
             // Initially no input device
             assert!(get_input_device().is_none());
+            let (id, name) = get_input_device_full();
+            assert!(id.is_none());
+            assert!(name.is_none());
 
-            // Save a device name
-            save_input_device(Some("USB Mic")).unwrap();
+            // Save a device with ID and name
+            save_input_device(Some("device-123"), Some("USB Mic")).unwrap();
             assert_eq!(get_input_device(), Some("USB Mic".to_string()));
+            let (id, name) = get_input_device_full();
+            assert_eq!(id, Some("device-123".to_string()));
+            assert_eq!(name, Some("USB Mic".to_string()));
 
             // Server config should not clobber input_device
             save_config("https://lyre.example.com", "tok").unwrap();
             assert_eq!(get_input_device(), Some("USB Mic".to_string()));
+            let (id, _) = get_input_device_full();
+            assert_eq!(id, Some("device-123".to_string()));
 
             // Reset to auto
-            save_input_device(None).unwrap();
+            save_input_device(None, None).unwrap();
             assert!(get_input_device().is_none());
+            let (id, name) = get_input_device_full();
+            assert!(id.is_none());
+            assert!(name.is_none());
 
             // Empty string should also be treated as None
-            save_input_device(Some("")).unwrap();
+            save_input_device(Some(""), Some("")).unwrap();
             assert!(get_input_device().is_none());
+            let (id, name) = get_input_device_full();
+            assert!(id.is_none());
+            assert!(name.is_none());
 
             // Clear
             clear_config().unwrap();
@@ -203,28 +234,33 @@ mod tests {
             token: "lyre_abc123".to_string(),
             output_dir: Some("/custom/path".to_string()),
             input_device: Some("USB Mic".to_string()),
+            input_device_id: Some("device-123".to_string()),
         };
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("server_url"));
         assert!(json.contains("token"));
         assert!(json.contains("output_dir"));
         assert!(json.contains("input_device"));
+        assert!(json.contains("input_device_id"));
         assert!(json.contains("USB Mic"));
+        assert!(json.contains("device-123"));
 
         let parsed: AppConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.server_url, config.server_url);
         assert_eq!(parsed.token, config.token);
         assert_eq!(parsed.output_dir, config.output_dir);
         assert_eq!(parsed.input_device, config.input_device);
+        assert_eq!(parsed.input_device_id, config.input_device_id);
     }
 
     #[test]
     fn test_app_config_backward_compat() {
-        // Old config files without output_dir or input_device should still parse
+        // Old config files without output_dir, input_device, or input_device_id should still parse
         let json = r#"{"server_url":"https://lyre.example.com","token":"tok"}"#;
         let parsed: AppConfig = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.server_url, "https://lyre.example.com");
         assert!(parsed.output_dir.is_none());
         assert!(parsed.input_device.is_none());
+        assert!(parsed.input_device_id.is_none());
     }
 }

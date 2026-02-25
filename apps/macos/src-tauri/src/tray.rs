@@ -4,8 +4,8 @@ use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{App, AppHandle, Emitter, Manager, Wry};
 
-use crate::audio::AudioDeviceManager;
 use crate::recorder::{Recorder, RecorderConfig, RecorderState};
+use crate::system_audio;
 
 // Tray icons embedded at compile time.
 // Idle icon: pure black foreground + alpha (macOS template image).
@@ -16,11 +16,10 @@ const TRAY_ICON_RECORDING: &[u8] = include_bytes!("../icons/tray-icon-recording.
 /// Shared state that is Send+Sync safe.
 struct SendableState {
     recorder: Recorder,
-    device_manager: AudioDeviceManager,
 }
 
 // Safety: On macOS, Tauri menu events are dispatched on the main thread.
-// The cpal::Stream inside Recorder is only accessed from menu event handlers,
+// The SCStream inside Recorder is only accessed from menu event handlers,
 // which all run on the same (main) thread.
 unsafe impl Send for SendableState {}
 unsafe impl Sync for SendableState {}
@@ -30,12 +29,13 @@ pub fn setup_tray(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let mut config = RecorderConfig::default();
     // Use persisted output_dir from config if available.
     config.output_dir = crate::config::get_output_dir();
-    // Restore persisted input device selection.
-    config.selected_device_name = crate::config::get_input_device();
+    // Restore persisted input device selection (id + name).
+    let (device_id, device_name) = crate::config::get_input_device_full();
+    config.selected_device_id = device_id;
+    config.selected_device_name = device_name;
 
     let state = Arc::new(Mutex::new(SendableState {
         recorder: Recorder::new(config),
-        device_manager: AudioDeviceManager::new(),
     }));
 
     let tray_menu = {
@@ -108,18 +108,18 @@ fn build_tray_menu(
     Ok(menu)
 }
 
-/// Build flat list of device check-menu-items (no submenu).
+/// Build flat list of device check-menu-items using ScreenCaptureKit device enumeration.
 fn build_device_items(
     handle: &AppHandle,
     state: &SendableState,
 ) -> Result<Vec<CheckMenuItem<Wry>>, Box<dyn std::error::Error>> {
-    let devices = state.device_manager.list_input_devices();
-    let selected_name = state.recorder.config.selected_device_name.as_deref();
+    let devices = system_audio::list_audio_input_devices();
+    let selected_id = state.recorder.config.selected_device_id.as_deref();
 
     let mut items: Vec<CheckMenuItem<Wry>> = Vec::new();
 
     // "Auto (Default)" option
-    let auto_checked = selected_name.is_none();
+    let auto_checked = selected_id.is_none();
     let auto_item = CheckMenuItem::with_id(
         handle,
         "device_auto",
@@ -131,13 +131,9 @@ fn build_device_items(
     items.push(auto_item);
 
     for dev in &devices {
-        let label = if dev.is_default {
-            format!("  {} (Default)", dev.name)
-        } else {
-            format!("  {}", dev.name)
-        };
-        let id = format!("device_{}", dev.index);
-        let checked = selected_name == Some(dev.name.as_str());
+        let label = format!("  {}", dev.name);
+        let id = format!("device_{}", dev.id);
+        let checked = selected_id == Some(dev.id.as_str());
         let item = CheckMenuItem::with_id(handle, &id, &label, true, checked, None::<&str>)?;
         items.push(item);
     }
@@ -154,12 +150,8 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
                 RecorderState::Idle => {
                     // Sync output dir from config before starting (user may have changed it in Settings).
                     s.recorder.set_output_dir(crate::config::get_output_dir());
-                    // Borrow device_manager via raw pointer to avoid
-                    // simultaneous mutable + immutable borrow of `s`.
-                    let dm_ptr = &s.device_manager as *const AudioDeviceManager;
-                    // Safety: dm_ptr points into the same MutexGuard we hold,
-                    // and `start` does not modify device_manager.
-                    match s.recorder.start(unsafe { &*dm_ptr }) {
+
+                    match s.recorder.start() {
                         Ok(path) => {
                             println!("recording started: {}", path.display());
                             update_tray_icon(app, true);
@@ -200,18 +192,19 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
         id if id.starts_with("device_") => {
             let mut s = state.lock().unwrap();
             if id == "device_auto" {
-                s.recorder.select_device(None);
-                let _ = crate::config::save_input_device(None);
+                s.recorder.select_device(None, None);
+                let _ = crate::config::save_input_device(None, None);
                 println!("device set to auto (default)");
-            } else if let Some(idx_str) = id.strip_prefix("device_") {
-                if let Ok(idx) = idx_str.parse::<usize>() {
-                    let devices = s.device_manager.list_input_devices();
-                    if let Some(dev) = devices.iter().find(|d| d.index == idx) {
-                        let name = dev.name.clone();
-                        s.recorder.select_device(Some(name.clone()));
-                        let _ = crate::config::save_input_device(Some(&name));
-                        println!("device set to: {name}");
-                    }
+            } else if let Some(device_id) = id.strip_prefix("device_") {
+                // Look up the device name from ScreenCaptureKit
+                let devices = system_audio::list_audio_input_devices();
+                if let Some(dev) = devices.iter().find(|d| d.id == device_id) {
+                    let dev_id = dev.id.clone();
+                    let dev_name = dev.name.clone();
+                    s.recorder
+                        .select_device(Some(dev_id.clone()), Some(dev_name.clone()));
+                    let _ = crate::config::save_input_device(Some(&dev_id), Some(&dev_name));
+                    println!("device set to: {dev_name} ({dev_id})");
                 }
             }
             rebuild_tray_menu(app, &s);
