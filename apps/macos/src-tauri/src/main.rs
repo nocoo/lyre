@@ -3,6 +3,7 @@ mod config;
 mod http_client;
 mod recorder;
 mod recordings;
+mod system_audio;
 mod tray;
 mod upload;
 
