@@ -1,4 +1,3 @@
-pub mod audio;
 pub mod config;
 pub mod http_client;
 pub mod recorder;
@@ -6,7 +5,6 @@ pub mod recordings;
 pub mod system_audio;
 pub mod upload;
 
-pub use audio::AudioDeviceManager;
 pub use config::{clear_config, get_input_device, get_input_device_full, get_output_dir, has_config, load_config, save_config, save_input_device, save_output_dir, AppConfig};
 pub use recorder::{generate_filename, Recorder, RecorderConfig, RecorderState};
 pub use recordings::{

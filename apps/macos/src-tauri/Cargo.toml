@@ -16,7 +16,6 @@ tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-cpal = "0.15"
 screencapturekit = { version = "1.5", features = ["macos_15_0"] }
 hound = "3.5"
 mp3lame-encoder = "0.2"
