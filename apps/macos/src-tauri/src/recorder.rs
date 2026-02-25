@@ -1,12 +1,10 @@
-use cpal::traits::{DeviceTrait, StreamTrait};
-use cpal::{SampleFormat, Stream};
 use mp3lame_encoder::{Builder, Encoder, FlushNoGap, MonoPcm};
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use crate::audio::AudioDeviceManager;
+use crate::system_audio::{CaptureConfig, CaptureError, ClosureAudioHandler, SystemAudioCapture};
 
 /// Recording state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +18,9 @@ pub enum RecorderState {
 pub struct RecorderConfig {
     /// Directory where recordings are saved.
     pub output_dir: PathBuf,
-    /// Name of the selected input device (None = use default).
+    /// ScreenCaptureKit microphone device ID (None = system default).
+    pub selected_device_id: Option<String>,
+    /// Human-readable device name, used for display and config persistence.
     pub selected_device_name: Option<String>,
 }
 
@@ -32,6 +32,7 @@ impl Default for RecorderConfig {
             .join("Lyre Recordings");
         Self {
             output_dir,
+            selected_device_id: None,
             selected_device_name: None,
         }
     }
@@ -43,16 +44,16 @@ struct Mp3Writer {
     file: BufWriter<File>,
 }
 
-/// Core recorder that captures audio from an input device to an MP3 file.
+/// Core recorder that captures system audio + microphone via ScreenCaptureKit
+/// and encodes to MP3 in real time.
 ///
-/// NOTE: `cpal::Stream` is !Send on macOS, so this struct must stay on the
-/// thread that created it (typically the main thread). Do not put it in
-/// Tauri managed state directly — use interior mutability on the main thread.
+/// NOTE: `SystemAudioCapture` wraps an `SCStream` which is !Send on macOS.
+/// The recorder must stay on the thread that created it (main thread).
 pub struct Recorder {
     pub config: RecorderConfig,
     state: RecorderState,
-    /// Active cpal stream (kept alive while recording). Not Send.
-    active_stream: Option<Stream>,
+    /// Active ScreenCaptureKit capture session.
+    active_capture: Option<SystemAudioCapture>,
     /// Path of the file currently being recorded.
     current_file: Option<PathBuf>,
     /// Shared MP3 writer for flushing on stop.
@@ -64,7 +65,7 @@ impl Recorder {
         Self {
             config,
             state: RecorderState::Idle,
-            active_stream: None,
+            active_capture: None,
             current_file: None,
             mp3_writer: None,
         }
@@ -75,43 +76,13 @@ impl Recorder {
     }
 
     /// Start recording. Returns the output file path on success.
-    pub fn start(&mut self, device_manager: &AudioDeviceManager) -> Result<PathBuf, RecordError> {
+    ///
+    /// Captures both system audio (meeting participants) and microphone
+    /// via ScreenCaptureKit (macOS 15.0+).
+    pub fn start(&mut self) -> Result<PathBuf, RecordError> {
         if self.state == RecorderState::Recording {
             return Err(RecordError::AlreadyRecording);
         }
-
-        // Resolve device: by name (with fallback to default if unavailable)
-        let device = match &self.config.selected_device_name {
-            Some(name) => match device_manager.input_device_by_name(name) {
-                Some(d) => d,
-                None => {
-                    eprintln!(
-                        "selected device '{}' not found, falling back to system default",
-                        name
-                    );
-                    device_manager
-                        .default_input_device()
-                        .ok_or(RecordError::NoDefaultDevice)?
-                }
-            },
-            None => device_manager
-                .default_input_device()
-                .ok_or(RecordError::NoDefaultDevice)?,
-        };
-
-        let device_name = device.name().unwrap_or_else(|_| "unknown".to_string());
-
-        let supported_config = AudioDeviceManager::default_input_config(&device)
-            .map_err(|e| RecordError::ConfigError(e.to_string()))?;
-
-        let channels = supported_config.channels();
-        let sample_rate = supported_config.sample_rate().0;
-        let sample_format = supported_config.sample_format();
-
-        println!(
-            "audio device: name={device_name}, channels={channels}, \
-             sample_rate={sample_rate}, format={sample_format:?}"
-        );
 
         // Ensure output dir exists
         fs::create_dir_all(&self.config.output_dir)
@@ -121,47 +92,48 @@ impl Recorder {
         let filename = generate_filename();
         let output_path = self.config.output_dir.join(&filename);
 
-        // Build MP3 encoder — always mono (voice recording).
-        // Multi-channel input is downmixed to mono before encoding.
-        let mp3_writer = build_mp3_writer(&output_path, sample_rate)?;
-        let writer = Arc::new(Mutex::new(Some(mp3_writer)));
-
-        // Build input stream
-        let writer_clone = writer.clone();
-        let err_fn = |err: cpal::StreamError| {
-            eprintln!("audio stream error: {err}");
+        // Build the capture config
+        let capture_config = CaptureConfig {
+            sample_rate: 48000,
+            capture_system_audio: true,
+            capture_microphone: true,
+            microphone_device_id: self.config.selected_device_id.clone(),
         };
 
-        let config = supported_config.into();
+        // Build MP3 encoder — mono 48kHz to match ScreenCaptureKit output.
+        let mp3_writer = build_mp3_writer(&output_path, capture_config.sample_rate)?;
+        let writer = Arc::new(Mutex::new(Some(mp3_writer)));
 
-        let stream = match sample_format {
-            SampleFormat::F32 => device.build_input_stream(
-                &config,
-                move |data: &[f32], _| encode_samples_f32(&writer_clone, data, channels),
-                err_fn,
-                None,
-            ),
-            SampleFormat::I16 => device.build_input_stream(
-                &config,
-                move |data: &[i16], _| encode_samples_i16(&writer_clone, data, channels),
-                err_fn,
-                None,
-            ),
-            SampleFormat::U16 => device.build_input_stream(
-                &config,
-                move |data: &[u16], _| encode_samples_u16(&writer_clone, data, channels),
-                err_fn,
-                None,
-            ),
-            _ => return Err(RecordError::UnsupportedFormat(format!("{sample_format:?}"))),
-        }
-        .map_err(|e| RecordError::StreamError(e.to_string()))?;
+        // Wire ScreenCaptureKit PCM output into the MP3 encoder.
+        let writer_clone = writer.clone();
+        let handler = ClosureAudioHandler::new(move |samples: &[f32]| {
+            if let Ok(mut guard) = writer_clone.lock() {
+                if let Some(ref mut w) = *guard {
+                    encode_mono_f32(w, samples);
+                }
+            }
+        });
 
-        stream
-            .play()
-            .map_err(|e| RecordError::StreamError(e.to_string()))?;
+        // Start capture
+        let capture = crate::system_audio::start_capture(&capture_config, Box::new(handler))
+            .map_err(|e| match e {
+                CaptureError::PermissionDenied(msg) => RecordError::PermissionDenied(msg),
+                CaptureError::NoDisplay => {
+                    RecordError::CaptureError("no display found".to_string())
+                }
+                CaptureError::StartFailed(msg) => RecordError::CaptureError(msg),
+                CaptureError::StopFailed(msg) => RecordError::CaptureError(msg),
+            })?;
 
-        self.active_stream = Some(stream);
+        println!(
+            "recording started: system_audio+mic, sample_rate=48000, device={:?}",
+            self.config
+                .selected_device_name
+                .as_deref()
+                .unwrap_or("auto")
+        );
+
+        self.active_capture = Some(capture);
         self.current_file = Some(output_path.clone());
         self.mp3_writer = Some(writer);
         self.state = RecorderState::Recording;
@@ -175,8 +147,12 @@ impl Recorder {
             return Err(RecordError::NotRecording);
         }
 
-        // Drop the stream first to stop audio callbacks
-        self.active_stream.take();
+        // Stop the capture first to stop audio callbacks
+        if let Some(capture) = self.active_capture.take() {
+            if let Err(e) = capture.stop() {
+                eprintln!("warning: failed to stop capture cleanly: {e}");
+            }
+        }
 
         // Flush the MP3 encoder and close the file
         if let Some(writer_arc) = self.mp3_writer.take() {
@@ -208,8 +184,9 @@ impl Recorder {
         self.config.output_dir = dir;
     }
 
-    /// Select a specific device by name, or None for default.
-    pub fn select_device(&mut self, name: Option<String>) {
+    /// Select a specific microphone device by ID and name, or None for default.
+    pub fn select_device(&mut self, id: Option<String>, name: Option<String>) {
+        self.config.selected_device_id = id;
         self.config.selected_device_name = name;
     }
 }
@@ -219,13 +196,9 @@ impl Recorder {
 pub enum RecordError {
     AlreadyRecording,
     NotRecording,
-    #[allow(dead_code)]
-    DeviceNotFound,
-    NoDefaultDevice,
-    ConfigError(String),
-    StreamError(String),
+    PermissionDenied(String),
+    CaptureError(String),
     IoError(String),
-    UnsupportedFormat(String),
     EncoderError(String),
 }
 
@@ -234,12 +207,9 @@ impl std::fmt::Display for RecordError {
         match self {
             Self::AlreadyRecording => write!(f, "already recording"),
             Self::NotRecording => write!(f, "not recording"),
-            Self::DeviceNotFound => write!(f, "audio device not found"),
-            Self::NoDefaultDevice => write!(f, "no default input device"),
-            Self::ConfigError(e) => write!(f, "config error: {e}"),
-            Self::StreamError(e) => write!(f, "stream error: {e}"),
+            Self::PermissionDenied(e) => write!(f, "permission denied: {e}"),
+            Self::CaptureError(e) => write!(f, "capture error: {e}"),
             Self::IoError(e) => write!(f, "I/O error: {e}"),
-            Self::UnsupportedFormat(e) => write!(f, "unsupported sample format: {e}"),
             Self::EncoderError(e) => write!(f, "encoder error: {e}"),
         }
     }
@@ -254,10 +224,7 @@ pub fn generate_filename() -> String {
     format!("recording-{}.mp3", now.format("%Y%m%d-%H%M%S"))
 }
 
-/// Build an MP3 encoder configured for mono output.
-///
-/// Multi-channel input is downmixed to mono before encoding, so the encoder
-/// is always 1-channel regardless of the capture device.
+/// Build an MP3 encoder configured for mono output at the given sample rate.
 fn build_mp3_writer(path: &PathBuf, sample_rate: u32) -> Result<Mp3Writer, RecordError> {
     let mut builder = Builder::new()
         .ok_or_else(|| RecordError::EncoderError("failed to create LAME builder".into()))?;
@@ -282,55 +249,6 @@ fn build_mp3_writer(path: &PathBuf, sample_rate: u32) -> Result<Mp3Writer, Recor
     let file = BufWriter::new(file);
 
     Ok(Mp3Writer { encoder, file })
-}
-
-/// Downmix interleaved multi-channel f32 samples to mono by averaging channels.
-fn downmix_to_mono_f32(data: &[f32], channels: u16) -> Vec<f32> {
-    if channels == 1 {
-        return data.to_vec();
-    }
-    let ch = channels as usize;
-    data.chunks_exact(ch)
-        .map(|frame| {
-            let sum: f32 = frame.iter().sum();
-            (sum / channels as f32).clamp(-1.0, 1.0)
-        })
-        .collect()
-}
-
-/// Encode f32 PCM samples to MP3 (downmixed to mono).
-fn encode_samples_f32(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[f32], channels: u16) {
-    if let Ok(mut guard) = writer.lock() {
-        if let Some(ref mut w) = *guard {
-            let mono = downmix_to_mono_f32(data, channels);
-            encode_mono_f32(w, &mono);
-        }
-    }
-}
-
-/// Encode i16 PCM samples to MP3 (downmixed to mono, converted to f32).
-fn encode_samples_i16(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[i16], channels: u16) {
-    if let Ok(mut guard) = writer.lock() {
-        if let Some(ref mut w) = *guard {
-            let f32_data: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
-            let mono = downmix_to_mono_f32(&f32_data, channels);
-            encode_mono_f32(w, &mono);
-        }
-    }
-}
-
-/// Encode u16 PCM samples to MP3 (downmixed to mono, converted to f32).
-fn encode_samples_u16(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[u16], channels: u16) {
-    if let Ok(mut guard) = writer.lock() {
-        if let Some(ref mut w) = *guard {
-            let f32_data: Vec<f32> = data
-                .iter()
-                .map(|&s| (s as f32 - 32768.0) / 32768.0)
-                .collect();
-            let mono = downmix_to_mono_f32(&f32_data, channels);
-            encode_mono_f32(w, &mono);
-        }
-    }
 }
 
 /// Encode mono f32 samples to MP3 and write to file.
@@ -365,6 +283,7 @@ mod tests {
             .output_dir
             .to_string_lossy()
             .contains("Lyre Recordings"));
+        assert!(config.selected_device_id.is_none());
         assert!(config.selected_device_name.is_none());
     }
 
@@ -396,13 +315,19 @@ mod tests {
     #[test]
     fn test_select_device() {
         let mut recorder = Recorder::new(RecorderConfig::default());
+        assert!(recorder.config.selected_device_id.is_none());
         assert!(recorder.config.selected_device_name.is_none());
-        recorder.select_device(Some("Test Mic".to_string()));
+        recorder.select_device(Some("device-123".to_string()), Some("USB Mic".to_string()));
+        assert_eq!(
+            recorder.config.selected_device_id,
+            Some("device-123".to_string())
+        );
         assert_eq!(
             recorder.config.selected_device_name,
-            Some("Test Mic".to_string())
+            Some("USB Mic".to_string())
         );
-        recorder.select_device(None);
+        recorder.select_device(None, None);
+        assert!(recorder.config.selected_device_id.is_none());
         assert!(recorder.config.selected_device_name.is_none());
     }
 
@@ -422,12 +347,12 @@ mod tests {
         );
         assert_eq!(RecordError::NotRecording.to_string(), "not recording");
         assert_eq!(
-            RecordError::DeviceNotFound.to_string(),
-            "audio device not found"
+            RecordError::PermissionDenied("test".into()).to_string(),
+            "permission denied: test"
         );
         assert_eq!(
-            RecordError::NoDefaultDevice.to_string(),
-            "no default input device"
+            RecordError::CaptureError("test".into()).to_string(),
+            "capture error: test"
         );
         assert_eq!(
             RecordError::EncoderError("test".into()).to_string(),
@@ -439,36 +364,19 @@ mod tests {
     fn test_recorder_config_custom() {
         let config = RecorderConfig {
             output_dir: PathBuf::from("/custom/path"),
+            selected_device_id: Some("device-456".to_string()),
             selected_device_name: Some("USB Mic".to_string()),
         };
         let recorder = Recorder::new(config);
         assert_eq!(recorder.config.output_dir, PathBuf::from("/custom/path"));
         assert_eq!(
+            recorder.config.selected_device_id,
+            Some("device-456".to_string())
+        );
+        assert_eq!(
             recorder.config.selected_device_name,
             Some("USB Mic".to_string())
         );
         assert_eq!(recorder.state(), RecorderState::Idle);
-    }
-
-    #[test]
-    fn test_start_with_unavailable_device_name() {
-        let config = RecorderConfig {
-            output_dir: PathBuf::from("/tmp/test-recordings"),
-            selected_device_name: Some("Nonexistent Device XYZ".to_string()),
-        };
-        let mut recorder = Recorder::new(config);
-        let device_manager = AudioDeviceManager::new();
-        // With a nonexistent device name, start() falls back to default device.
-        // On machines with audio hardware it will succeed (using default),
-        // on CI without audio it will fail with NoDefaultDevice.
-        let result = recorder.start(&device_manager);
-        if device_manager.default_input_device().is_some() {
-            // Has audio hardware: fallback to default should succeed
-            assert!(result.is_ok(), "should fall back to default device");
-            let _ = recorder.stop();
-        } else {
-            // No audio hardware: should fail with NoDefaultDevice
-            assert!(result.is_err());
-        }
     }
 }
