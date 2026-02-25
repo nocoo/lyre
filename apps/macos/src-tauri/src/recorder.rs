@@ -1,6 +1,6 @@
 use cpal::traits::{DeviceTrait, StreamTrait};
-use cpal::{SampleFormat, Stream, SupportedStreamConfig};
-use mp3lame_encoder::{Builder, Encoder, FlushNoGap, InterleavedPcm};
+use cpal::{SampleFormat, Stream};
+use mp3lame_encoder::{Builder, Encoder, FlushNoGap, MonoPcm};
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -90,8 +90,19 @@ impl Recorder {
                 .ok_or(RecordError::NoDefaultDevice)?,
         };
 
+        let device_name = device.name().unwrap_or_else(|_| "unknown".to_string());
+
         let supported_config = AudioDeviceManager::default_input_config(&device)
             .map_err(|e| RecordError::ConfigError(e.to_string()))?;
+
+        let channels = supported_config.channels();
+        let sample_rate = supported_config.sample_rate().0;
+        let sample_format = supported_config.sample_format();
+
+        println!(
+            "audio device: name={device_name}, channels={channels}, \
+             sample_rate={sample_rate}, format={sample_format:?}"
+        );
 
         // Ensure output dir exists
         fs::create_dir_all(&self.config.output_dir)
@@ -101,8 +112,9 @@ impl Recorder {
         let filename = generate_filename();
         let output_path = self.config.output_dir.join(&filename);
 
-        // Build MP3 encoder
-        let mp3_writer = build_mp3_writer(&output_path, &supported_config)?;
+        // Build MP3 encoder — always mono (voice recording).
+        // Multi-channel input is downmixed to mono before encoding.
+        let mp3_writer = build_mp3_writer(&output_path, sample_rate)?;
         let writer = Arc::new(Mutex::new(Some(mp3_writer)));
 
         // Build input stream
@@ -111,8 +123,6 @@ impl Recorder {
             eprintln!("audio stream error: {err}");
         };
 
-        let channels = supported_config.channels();
-        let sample_format = supported_config.sample_format();
         let config = supported_config.into();
 
         let stream = match sample_format {
@@ -234,17 +244,15 @@ pub fn generate_filename() -> String {
     format!("recording-{}.mp3", now.format("%Y%m%d-%H%M%S"))
 }
 
-fn build_mp3_writer(
-    path: &PathBuf,
-    config: &SupportedStreamConfig,
-) -> Result<Mp3Writer, RecordError> {
-    let channels = config.channels();
-    let sample_rate = config.sample_rate().0;
-
+/// Build an MP3 encoder configured for mono output.
+///
+/// Multi-channel input is downmixed to mono before encoding, so the encoder
+/// is always 1-channel regardless of the capture device.
+fn build_mp3_writer(path: &PathBuf, sample_rate: u32) -> Result<Mp3Writer, RecordError> {
     let mut builder = Builder::new()
         .ok_or_else(|| RecordError::EncoderError("failed to create LAME builder".into()))?;
     builder
-        .set_num_channels(channels as u8)
+        .set_num_channels(1)
         .map_err(|e| RecordError::EncoderError(format!("{e:?}")))?;
     builder
         .set_sample_rate(sample_rate)
@@ -266,54 +274,64 @@ fn build_mp3_writer(
     Ok(Mp3Writer { encoder, file })
 }
 
-/// Encode interleaved f32 PCM samples to MP3 and write to file.
+/// Downmix interleaved multi-channel f32 samples to mono by averaging channels.
+fn downmix_to_mono_f32(data: &[f32], channels: u16) -> Vec<f32> {
+    if channels == 1 {
+        return data.to_vec();
+    }
+    let ch = channels as usize;
+    data.chunks_exact(ch)
+        .map(|frame| {
+            let sum: f32 = frame.iter().sum();
+            (sum / channels as f32).clamp(-1.0, 1.0)
+        })
+        .collect()
+}
+
+/// Encode f32 PCM samples to MP3 (downmixed to mono).
 fn encode_samples_f32(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[f32], channels: u16) {
     if let Ok(mut guard) = writer.lock() {
         if let Some(ref mut w) = *guard {
-            // Convert f32 [-1.0, 1.0] to i16 for LAME
-            let samples_i16: Vec<i16> = data
-                .iter()
-                .map(|&s| {
-                    let clamped = s.clamp(-1.0, 1.0);
-                    (clamped * i16::MAX as f32) as i16
-                })
-                .collect();
-            encode_and_write(w, &samples_i16, channels);
+            let mono = downmix_to_mono_f32(data, channels);
+            encode_mono_f32(w, &mono);
         }
     }
 }
 
-/// Encode interleaved i16 PCM samples to MP3 and write to file.
+/// Encode i16 PCM samples to MP3 (downmixed to mono, converted to f32).
 fn encode_samples_i16(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[i16], channels: u16) {
     if let Ok(mut guard) = writer.lock() {
         if let Some(ref mut w) = *guard {
-            encode_and_write(w, data, channels);
+            let f32_data: Vec<f32> = data.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
+            let mono = downmix_to_mono_f32(&f32_data, channels);
+            encode_mono_f32(w, &mono);
         }
     }
 }
 
-/// Encode interleaved u16 PCM samples to MP3 and write to file.
+/// Encode u16 PCM samples to MP3 (downmixed to mono, converted to f32).
 fn encode_samples_u16(writer: &Arc<Mutex<Option<Mp3Writer>>>, data: &[u16], channels: u16) {
     if let Ok(mut guard) = writer.lock() {
         if let Some(ref mut w) = *guard {
-            let samples_i16: Vec<i16> = data.iter().map(|&s| (s as i32 - 32768) as i16).collect();
-            encode_and_write(w, &samples_i16, channels);
+            let f32_data: Vec<f32> = data
+                .iter()
+                .map(|&s| (s as f32 - 32768.0) / 32768.0)
+                .collect();
+            let mono = downmix_to_mono_f32(&f32_data, channels);
+            encode_mono_f32(w, &mono);
         }
     }
 }
 
-/// Encode a chunk of interleaved i16 samples and write MP3 bytes to file.
-fn encode_and_write(w: &mut Mp3Writer, samples: &[i16], channels: u16) {
-    // Ensure sample count is a multiple of channel count
-    let num_samples = samples.len() - (samples.len() % channels as usize);
-    if num_samples == 0 {
+/// Encode mono f32 samples to MP3 and write to file.
+fn encode_mono_f32(w: &mut Mp3Writer, samples: &[f32]) {
+    if samples.is_empty() {
         return;
     }
-    let input = InterleavedPcm(&samples[..num_samples]);
+    let input = MonoPcm(samples);
 
-    let num_frames = num_samples / channels as usize;
     let mut mp3_buf = Vec::new();
-    mp3_buf.reserve(mp3lame_encoder::max_required_buffer_size(num_frames));
+    mp3_buf.reserve(mp3lame_encoder::max_required_buffer_size(samples.len()));
 
     match w.encoder.encode(input, mp3_buf.spare_capacity_mut()) {
         Ok(encoded_size) => {
