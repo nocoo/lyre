@@ -151,6 +151,13 @@ fn handle_menu_event(app: &AppHandle, id: &str, state: &Arc<Mutex<SendableState>
                     // Sync output dir from config before starting (user may have changed it in Settings).
                     s.recorder.set_output_dir(crate::config::get_output_dir());
 
+                    // Check ScreenCaptureKit permission before starting.
+                    if system_audio::check_permission() == system_audio::PermissionStatus::Denied {
+                        eprintln!("screen capture permission denied — open System Settings > Privacy & Security > Screen & System Audio Recording");
+                        rebuild_tray_menu(app, &s);
+                        return;
+                    }
+
                     match s.recorder.start() {
                         Ok(path) => {
                             println!("recording started: {}", path.display());

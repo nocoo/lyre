@@ -78,6 +78,8 @@ pub fn save_input_device(device_id: Option<&str>, device_name: Option<&str>) -> 
 }
 
 /// Get the persisted input device name. None means "Auto" (system default).
+/// Used by lib crate consumers; binary uses `get_input_device_full` instead.
+#[allow(dead_code)]
 pub fn get_input_device() -> Option<String> {
     load_config()
         .ok()

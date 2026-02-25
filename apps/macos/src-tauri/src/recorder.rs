@@ -252,14 +252,29 @@ fn build_mp3_writer(path: &PathBuf, sample_rate: u32) -> Result<Mp3Writer, Recor
 }
 
 /// Encode mono f32 samples to MP3 and write to file.
+///
+/// Sanitizes input: NaN/Inf are replaced with 0.0 and values are clamped
+/// to [-1.0, 1.0] to prevent LAME assertion failures in `calc_energy`.
 fn encode_mono_f32(w: &mut Mp3Writer, samples: &[f32]) {
     if samples.is_empty() {
         return;
     }
-    let input = MonoPcm(samples);
+
+    // Sanitize: LAME's psymodel asserts energy >= 0, which fails on NaN/Inf.
+    let clean: Vec<f32> = samples
+        .iter()
+        .map(|&s| {
+            if s.is_finite() {
+                s.clamp(-1.0, 1.0)
+            } else {
+                0.0
+            }
+        })
+        .collect();
+    let input = MonoPcm(&clean);
 
     let mut mp3_buf = Vec::new();
-    mp3_buf.reserve(mp3lame_encoder::max_required_buffer_size(samples.len()));
+    mp3_buf.reserve(mp3lame_encoder::max_required_buffer_size(clean.len()));
 
     match w.encoder.encode(input, mp3_buf.spare_capacity_mut()) {
         Ok(encoded_size) => {
