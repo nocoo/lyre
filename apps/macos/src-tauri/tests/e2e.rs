@@ -1,32 +1,41 @@
 //! End-to-end integration tests for the Lyre macOS app.
 //!
 //! These tests exercise real subsystems as independent processes would:
-//! - Audio device enumeration and recording pipeline
+//! - System audio + microphone capture via ScreenCaptureKit
 //! - Local recording file management (list, delete, cleanup)
 //! - Configuration persistence
 //! - Full record → list → verify → delete lifecycle
 //!
-//! Tests that require an audio input device are skipped gracefully in CI
-//! (where no audio hardware exists) using a helper check.
+//! Tests that require ScreenCaptureKit permission are skipped gracefully
+//! in CI (where no permission exists) using a helper check.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
 
 use lyre::{
-    batch_delete_recordings, delete_recording, find_cleanable_recordings, list_recordings,
-    AudioDeviceManager, CleanupFilter, RecorderConfig, RecorderState,
+    batch_delete_recordings, check_permission, delete_recording, find_cleanable_recordings,
+    list_audio_input_devices, list_recordings, CleanupFilter, PermissionStatus, RecorderConfig,
+    RecorderState,
 };
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-/// Check if any audio input device is available.
-fn has_audio_input() -> bool {
-    let mgr = AudioDeviceManager::new();
-    !mgr.list_input_devices().is_empty()
+/// Global mutex to serialize recording tests.
+///
+/// The `screencapturekit` crate uses a global handler registry that dispatches
+/// every sample buffer to ALL registered handlers, not just the one matching
+/// the output type. When multiple tests record concurrently, each test's
+/// handler receives audio from other tests' streams, inflating the MP3 duration.
+static RECORDING_MUTEX: Mutex<()> = Mutex::new(());
+
+/// Check if ScreenCaptureKit capture permission is available.
+fn has_capture_permission() -> bool {
+    check_permission() == PermissionStatus::Granted
 }
 
 /// Create a minimal valid WAV file (0.1s of audio at 44100 Hz mono).
@@ -78,48 +87,43 @@ fn create_test_mp3(path: &Path, num_samples: usize) {
 }
 
 // ============================================================================
-// 1. Audio device enumeration
+// 1. Audio device enumeration (via ScreenCaptureKit)
 // ============================================================================
 
 #[test]
 fn e2e_device_enumeration() {
-    let mgr = AudioDeviceManager::new();
-    let devices = mgr.list_input_devices();
+    let devices = list_audio_input_devices();
     // Verify the call doesn't panic; print for manual inspection.
     for dev in &devices {
-        println!(
-            "  device[{}]: {} (default={})",
-            dev.index, dev.name, dev.is_default
-        );
+        println!("  device: {} (id={})", dev.name, dev.id);
     }
 }
 
 // ============================================================================
-// 2. Recording pipeline (requires audio hardware)
+// 2. Recording pipeline (requires ScreenCaptureKit permission)
 // ============================================================================
 
 #[test]
 fn e2e_record_and_verify_mp3() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
         return;
     }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
 
     let tmp_dir = TempDir::new().expect("failed to create temp dir");
     let output_dir = tmp_dir.path().to_path_buf();
 
     let config = RecorderConfig {
         output_dir: output_dir.clone(),
+        selected_device_id: None,
         selected_device_name: None,
     };
 
-    let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
 
     // Start recording
-    let recording_path = recorder
-        .start(&device_manager)
-        .expect("failed to start recording");
+    let recording_path = recorder.start().expect("failed to start recording");
     assert_eq!(recorder.state(), RecorderState::Recording);
     assert!(recording_path.starts_with(&output_dir));
     assert!(recording_path
@@ -157,26 +161,25 @@ fn e2e_record_and_verify_mp3() {
 
 #[test]
 fn e2e_double_start_is_error() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
         return;
     }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
 
     let tmp_dir = TempDir::new().expect("failed to create temp dir");
     let config = RecorderConfig {
         output_dir: tmp_dir.path().to_path_buf(),
+        selected_device_id: None,
         selected_device_name: None,
     };
 
-    let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
 
-    recorder
-        .start(&device_manager)
-        .expect("first start should succeed");
+    recorder.start().expect("first start should succeed");
 
     // Second start should fail
-    let result = recorder.start(&device_manager);
+    let result = recorder.start();
     assert!(result.is_err());
 
     // Clean up
@@ -187,6 +190,7 @@ fn e2e_double_start_is_error() {
 fn e2e_stop_without_start_is_error() {
     let config = RecorderConfig {
         output_dir: PathBuf::from("/tmp/lyre-test-unused"),
+        selected_device_id: None,
         selected_device_name: None,
     };
     let mut recorder = lyre::Recorder::new(config);
@@ -195,28 +199,29 @@ fn e2e_stop_without_start_is_error() {
 }
 
 // ============================================================================
-// 3. Record → List → Verify → Delete lifecycle (requires audio hardware)
+// 3. Record → List → Verify → Delete lifecycle
 // ============================================================================
 
 #[test]
 fn e2e_record_then_list_then_delete() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
         return;
     }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
 
     let tmp_dir = TempDir::new().unwrap();
     let output_dir = tmp_dir.path().to_path_buf();
 
     let config = RecorderConfig {
         output_dir: output_dir.clone(),
+        selected_device_id: None,
         selected_device_name: None,
     };
-    let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
 
     // Record for 500ms
-    let recording_path = recorder.start(&device_manager).unwrap();
+    let recording_path = recorder.start().unwrap();
     thread::sleep(Duration::from_millis(500));
     recorder.stop().unwrap();
 
@@ -267,10 +272,11 @@ fn e2e_record_then_list_then_delete() {
 
 #[test]
 fn e2e_record_to_custom_output_dir() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
         return;
     }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
 
     let tmp_dir = TempDir::new().unwrap();
     // Use a nested directory that doesn't exist yet — recorder should auto-create it
@@ -279,12 +285,12 @@ fn e2e_record_to_custom_output_dir() {
 
     let config = RecorderConfig {
         output_dir: custom_dir.clone(),
+        selected_device_id: None,
         selected_device_name: None,
     };
-    let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
 
-    let path = recorder.start(&device_manager).unwrap();
+    let path = recorder.start().unwrap();
     assert!(custom_dir.exists(), "output dir should be auto-created");
     assert!(path.starts_with(&custom_dir));
 
@@ -297,31 +303,35 @@ fn e2e_record_to_custom_output_dir() {
 }
 
 // ============================================================================
-// 5. Record with specific device index
+// 5. Record with specific device selection
 // ============================================================================
 
 #[test]
 fn e2e_record_with_device_selection() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
+        return;
+    }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
+
+    let devices = list_audio_input_devices();
+    if devices.is_empty() {
+        println!("SKIP: no audio input devices available");
         return;
     }
 
-    let mgr = AudioDeviceManager::new();
-    let devices = mgr.list_input_devices();
-    assert!(!devices.is_empty());
-
     // Pick the first available device explicitly
-    let device_name = devices[0].name.clone();
+    let device = &devices[0];
 
     let tmp_dir = TempDir::new().unwrap();
     let config = RecorderConfig {
         output_dir: tmp_dir.path().to_path_buf(),
-        selected_device_name: Some(device_name),
+        selected_device_id: Some(device.id.clone()),
+        selected_device_name: Some(device.name.clone()),
     };
     let mut recorder = lyre::Recorder::new(config);
 
-    let path = recorder.start(&mgr).unwrap();
+    let path = recorder.start().unwrap();
     assert_eq!(recorder.state(), RecorderState::Recording);
     thread::sleep(Duration::from_millis(300));
     recorder.stop().unwrap();
@@ -330,49 +340,31 @@ fn e2e_record_with_device_selection() {
     assert!(std::fs::metadata(&path).unwrap().len() > 0);
 }
 
-#[test]
-fn e2e_record_with_unavailable_device_name() {
-    let tmp_dir = TempDir::new().unwrap();
-    let config = RecorderConfig {
-        output_dir: tmp_dir.path().to_path_buf(),
-        selected_device_name: Some("Nonexistent Device XYZ 99999".to_string()),
-    };
-    let mgr = AudioDeviceManager::new();
-    let mut recorder = lyre::Recorder::new(config);
-    let result = recorder.start(&mgr);
-    // Falls back to default device — succeeds if audio hardware exists, fails otherwise
-    if mgr.default_input_device().is_some() {
-        assert!(result.is_ok(), "should fall back to default device");
-        let _ = recorder.stop();
-    } else {
-        assert!(result.is_err(), "should fail without audio hardware");
-    }
-}
-
 // ============================================================================
 // 6. MP3 duration precision (record → list → verify duration matches time)
 // ============================================================================
 
 #[test]
 fn e2e_mp3_duration_is_precise() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
         return;
     }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
 
     let tmp_dir = TempDir::new().unwrap();
     let output_dir = tmp_dir.path().to_path_buf();
 
     let config = RecorderConfig {
         output_dir: output_dir.clone(),
+        selected_device_id: None,
         selected_device_name: None,
     };
-    let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
 
     // Record for ~2 seconds
     let recording_duration_ms = 2000;
-    recorder.start(&device_manager).unwrap();
+    recorder.start().unwrap();
     thread::sleep(Duration::from_millis(recording_duration_ms));
     recorder.stop().unwrap();
 
@@ -394,11 +386,10 @@ fn e2e_mp3_duration_is_precise() {
         "duration should be at least 0.5s for a 2s recording"
     );
     println!("  recorded {recording_duration_ms}ms, measured duration: {duration:.3}s");
-    println!("  recorded {recording_duration_ms}ms, measured duration: {duration:.3}s");
 }
 
 // ============================================================================
-// 7. Recording list management (no audio hardware needed)
+// 7. Recording list management (no hardware needed)
 // ============================================================================
 
 #[test]
@@ -788,10 +779,16 @@ fn e2e_config_roundtrip() {
     // --- Input device persistence ---
     // Initially no saved device
     assert!(lyre::get_input_device().is_none());
+    let (id, name) = lyre::get_input_device_full();
+    assert!(id.is_none());
+    assert!(name.is_none());
 
-    // Save a device selection
-    lyre::save_input_device(Some("USB Mic")).unwrap();
+    // Save a device selection (id + name)
+    lyre::save_input_device(Some("device-123"), Some("USB Mic")).unwrap();
     assert_eq!(lyre::get_input_device(), Some("USB Mic".to_string()));
+    let (id, name) = lyre::get_input_device_full();
+    assert_eq!(id, Some("device-123".to_string()));
+    assert_eq!(name, Some("USB Mic".to_string()));
 
     // Save server config — input_device should survive
     lyre::save_config("https://lyre.example.com", "tok").unwrap();
@@ -800,10 +797,15 @@ fn e2e_config_roundtrip() {
         Some("USB Mic".to_string()),
         "input_device should survive server config save"
     );
+    let (id, _) = lyre::get_input_device_full();
+    assert_eq!(id, Some("device-123".to_string()));
 
     // Reset to auto
-    lyre::save_input_device(None).unwrap();
+    lyre::save_input_device(None, None).unwrap();
     assert!(lyre::get_input_device().is_none());
+    let (id, name) = lyre::get_input_device_full();
+    assert!(id.is_none());
+    assert!(name.is_none());
 
     // Clear config entirely
     lyre::clear_config().unwrap();
@@ -821,10 +823,11 @@ fn e2e_config_roundtrip() {
 
 #[test]
 fn e2e_set_output_dir_then_record() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
         return;
     }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
 
     let tmp_dir = TempDir::new().unwrap();
     let dir1 = tmp_dir.path().join("dir1");
@@ -832,13 +835,13 @@ fn e2e_set_output_dir_then_record() {
 
     let config = RecorderConfig {
         output_dir: dir1.clone(),
+        selected_device_id: None,
         selected_device_name: None,
     };
-    let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
 
     // Record to dir1
-    let path1 = recorder.start(&device_manager).unwrap();
+    let path1 = recorder.start().unwrap();
     assert!(path1.starts_with(&dir1));
     thread::sleep(Duration::from_millis(300));
     recorder.stop().unwrap();
@@ -847,7 +850,7 @@ fn e2e_set_output_dir_then_record() {
     recorder.set_output_dir(dir2.clone());
 
     // Record to dir2
-    let path2 = recorder.start(&device_manager).unwrap();
+    let path2 = recorder.start().unwrap();
     assert!(path2.starts_with(&dir2));
     thread::sleep(Duration::from_millis(300));
     recorder.stop().unwrap();
@@ -863,24 +866,25 @@ fn e2e_set_output_dir_then_record() {
 
 #[test]
 fn e2e_multiple_sequential_recordings() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
         return;
     }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
 
     let tmp_dir = TempDir::new().unwrap();
     let output_dir = tmp_dir.path().to_path_buf();
 
     let config = RecorderConfig {
         output_dir: output_dir.clone(),
+        selected_device_id: None,
         selected_device_name: None,
     };
-    let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
 
     // Record 3 clips back-to-back
     for i in 0..3 {
-        recorder.start(&device_manager).unwrap();
+        recorder.start().unwrap();
         thread::sleep(Duration::from_millis(300));
         recorder.stop().unwrap();
         println!("  recorded clip {}", i + 1);
@@ -917,17 +921,18 @@ fn e2e_multiple_sequential_recordings() {
 
 #[test]
 fn e2e_recorder_state_transitions() {
-    if !has_audio_input() {
-        println!("SKIP: no audio input device available");
+    if !has_capture_permission() {
+        println!("SKIP: ScreenCaptureKit permission not granted");
         return;
     }
+    let _lock = RECORDING_MUTEX.lock().unwrap();
 
     let tmp_dir = TempDir::new().unwrap();
     let config = RecorderConfig {
         output_dir: tmp_dir.path().to_path_buf(),
+        selected_device_id: None,
         selected_device_name: None,
     };
-    let device_manager = AudioDeviceManager::new();
     let mut recorder = lyre::Recorder::new(config);
 
     // Initial state
@@ -938,11 +943,11 @@ fn e2e_recorder_state_transitions() {
     assert_eq!(recorder.state(), RecorderState::Idle);
 
     // Start → Recording
-    recorder.start(&device_manager).unwrap();
+    recorder.start().unwrap();
     assert_eq!(recorder.state(), RecorderState::Recording);
 
     // Start while recording → error, state unchanged
-    assert!(recorder.start(&device_manager).is_err());
+    assert!(recorder.start().is_err());
     assert_eq!(recorder.state(), RecorderState::Recording);
 
     // Stop → Idle
@@ -951,7 +956,7 @@ fn e2e_recorder_state_transitions() {
     assert_eq!(recorder.state(), RecorderState::Idle);
 
     // Can start again after stopping
-    recorder.start(&device_manager).unwrap();
+    recorder.start().unwrap();
     assert_eq!(recorder.state(), RecorderState::Recording);
     thread::sleep(Duration::from_millis(200));
     recorder.stop().unwrap();
