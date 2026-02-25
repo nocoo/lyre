@@ -166,8 +166,8 @@ src-tauri/
 ├── src/
 │   ├── main.rs       # Tauri app entry point (setup tray, plugins)
 │   ├── lib.rs        # Library root (re-exports for integration tests)
-│   ├── audio.rs      # Audio device enumeration (cpal)
-│   ├── recorder.rs   # WAV recording engine (cpal + hound)
+│   ├── system_audio.rs # ScreenCaptureKit audio capture (system + mic)
+│   ├── recorder.rs     # MP3 recording engine (ScreenCaptureKit + LAME)
 │   └── tray.rs       # System tray menu & event handling
 ├── icons/            # App & tray icons (generated from logo.png)
 ├── capabilities/     # Tauri v2 security capabilities
@@ -195,3 +195,4 @@ src-tauri/
 - **Pre-push hook must include `bun run build`**: UT, lint, and E2E alone do NOT catch TypeScript type errors that only surface during `next build` (which runs full `tsc`). ESLint doesn't flag array-index `string | undefined` narrowing issues, and E2E uses `next dev` which skips type checking. The pre-push hook order is: `test:coverage → lint → build → test:e2e`.
 - **screencapturekit crate dispatches to ALL handlers**: The `screencapturekit` crate v1.5 uses a global `HANDLER_REGISTRY` and its `sample_handler` callback iterates over ALL registered handlers for every sample buffer, ignoring the `SCStreamOutputType` they were registered with. This means registering separate handlers for `Audio` and `Microphone` causes each buffer to be delivered twice (once per handler), doubling the encoded data. Workaround: register a single handler on `SCStreamOutputType::Audio` and let `did_output_sample_buffer` handle both Audio and Microphone types via the `output_type` parameter.
 - **LAME encoder crashes on non-finite PCM samples**: The `mp3lame-encoder` crate's internal `calc_energy` function in `psymodel.c` asserts `el >= 0`, which fails (SIGABRT) when input contains NaN or Infinity values. ScreenCaptureKit can occasionally deliver such values in audio buffers. Always sanitize f32 PCM samples before encoding: replace non-finite values with 0.0 and clamp to [-1.0, 1.0].
+- **screencapturekit crate rpath not propagated to binary**: The `screencapturekit` crate emits `cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift` in its build script, but Cargo only applies `rustc-link-arg` from dependencies to lib targets, not the final binary. On macOS 26+ where `libswift_Concurrency.dylib` lives only in the dyld shared cache (no standalone file on disk), the binary fails with `Library not loaded: @rpath/libswift_Concurrency.dylib`. Fix: re-emit the rpath in the app's own `build.rs` with `println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift")`.
