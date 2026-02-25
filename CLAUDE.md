@@ -183,8 +183,9 @@ src-tauri/
 - **Tray-only app**: No window UI. All interaction via system tray menu.
 - **Menu structure**: Start/Stop Recording → Input Device submenu → Output folder → Quit
 - **Recording indicator**: Tray icon switches between template (idle) and red-dot (recording)
-- **Thread safety**: `cpal::Stream` is !Send on macOS. Wrapped in `unsafe impl Send/Sync` since Tauri menu events run on the main thread.
-- **E2E tests**: Skip gracefully when no audio input device is available (CI-safe).
+- **Audio capture**: ScreenCaptureKit (macOS 15.0+) captures both system audio and microphone in a single `SCStream`. Requires "Screen & System Audio Recording" permission.
+- **Thread safety**: `SCStream` is !Send on macOS. The recorder must stay on the thread that created it (main thread).
+- **E2E tests**: Skip gracefully when ScreenCaptureKit permission is not granted (CI-safe). Recording tests are serialized via a global mutex due to a `screencapturekit` crate handler dispatch bug.
 
 ## Retrospective
 
@@ -192,3 +193,5 @@ src-tauri/
 - **SQLite WAL mode: always checkpoint before copying**: When copying a SQLite database file, `ALTER TABLE` and other schema changes may live in the `.db-wal` file, not the main `.db` file. Always run `PRAGMA wal_checkpoint(TRUNCATE)` before `cp`, or copy all three files (`.db`, `.db-shm`, `.db-wal`) together. Copying only the `.db` file silently loses uncommitted WAL changes.
 - **Production DB schema must be migrated after schema changes**: Drizzle schema changes (new columns, new tables) only affect the local dev DB when running `db:push`. The production SQLite on Railway volume is **not** auto-migrated on deploy. After any schema change, SSH into the Railway container (`railway ssh`) and run the necessary `ALTER TABLE ADD COLUMN` statements via `bun -e` (since `sqlite3` CLI is not available in the standalone image). Always run `PRAGMA wal_checkpoint(TRUNCATE)` after migration. Failure to migrate causes silent HTTP 500 errors because Drizzle generates SQL referencing columns that don't exist yet — and without try/catch the real error (`table X has no column named Y`) is swallowed by Next.js's generic 500 handler.
 - **Pre-push hook must include `bun run build`**: UT, lint, and E2E alone do NOT catch TypeScript type errors that only surface during `next build` (which runs full `tsc`). ESLint doesn't flag array-index `string | undefined` narrowing issues, and E2E uses `next dev` which skips type checking. The pre-push hook order is: `test:coverage → lint → build → test:e2e`.
+- **screencapturekit crate dispatches to ALL handlers**: The `screencapturekit` crate v1.5 uses a global `HANDLER_REGISTRY` and its `sample_handler` callback iterates over ALL registered handlers for every sample buffer, ignoring the `SCStreamOutputType` they were registered with. This means registering separate handlers for `Audio` and `Microphone` causes each buffer to be delivered twice (once per handler), doubling the encoded data. Workaround: register a single handler on `SCStreamOutputType::Audio` and let `did_output_sample_buffer` handle both Audio and Microphone types via the `output_type` parameter.
+- **LAME encoder crashes on non-finite PCM samples**: The `mp3lame-encoder` crate's internal `calc_energy` function in `psymodel.c` asserts `el >= 0`, which fails (SIGABRT) when input contains NaN or Infinity values. ScreenCaptureKit can occasionally deliver such values in audio buffers. Always sanitize f32 PCM samples before encoding: replace non-finite values with 0.0 and clamp to [-1.0, 1.0].
