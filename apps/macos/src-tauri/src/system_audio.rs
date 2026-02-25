@@ -129,8 +129,17 @@ struct AudioOutputHandler {
 impl SCStreamOutputTrait for AudioOutputHandler {
     fn did_output_sample_buffer(&self, sample: CMSampleBuffer, output_type: SCStreamOutputType) {
         match output_type {
-            SCStreamOutputType::Audio | SCStreamOutputType::Microphone => {
+            SCStreamOutputType::Audio => {
                 if let Some(pcm) = extract_mono_f32_samples(&sample, self.channels) {
+                    eprintln!("[debug] system audio: {} samples", pcm.len());
+                    if let Ok(handler) = self.handler.lock() {
+                        handler.on_audio_data(&pcm);
+                    }
+                }
+            }
+            SCStreamOutputType::Microphone => {
+                if let Some(pcm) = extract_mono_f32_samples(&sample, self.channels) {
+                    eprintln!("[debug] microphone: {} samples", pcm.len());
                     if let Ok(handler) = self.handler.lock() {
                         handler.on_audio_data(&pcm);
                     }
