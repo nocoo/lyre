@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		1F413F3779C11F9BCBAF57A1 /* LyreApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD16DFD242493414EA1EA2C /* LyreApp.swift */; };
+		480F11687C07C1CA0543473B /* PermissionManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD9C1C2B1DAFB998D03C2D8 /* PermissionManagerTests.swift */; };
 		734386A9E52FDC8D202FA087 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B117D6D713498A7716527C /* SmokeTests.swift */; };
+		B004BA99B8CA6E86985DA16B /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5854B120C2D1FD845D584070 /* PermissionManager.swift */; };
 		E4933617F330AB736338195D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A996D6B8786E6F67E74BC294 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -26,6 +28,8 @@
 		1F7BC4335B6D6809472D18F2 /* Lyre.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lyre.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		38EB579CEBF90EFF9A4A8011 /* LyreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LyreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DD16DFD242493414EA1EA2C /* LyreApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyreApp.swift; sourceTree = "<group>"; };
+		4FD9C1C2B1DAFB998D03C2D8 /* PermissionManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManagerTests.swift; sourceTree = "<group>"; };
+		5854B120C2D1FD845D584070 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		76B15AEDC1503219D6CB881B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		865B1312BF623D7C897306B8 /* Lyre.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Lyre.entitlements; sourceTree = "<group>"; };
 		A1B117D6D713498A7716527C /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
@@ -33,9 +37,18 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		10D883441E981CC58678A0F1 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				5854B120C2D1FD845D584070 /* PermissionManager.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
 		18AB2DEE5EA48A4532B9DC7A /* LyreTests */ = {
 			isa = PBXGroup;
 			children = (
+				4FD9C1C2B1DAFB998D03C2D8 /* PermissionManagerTests.swift */,
 				A1B117D6D713498A7716527C /* SmokeTests.swift */,
 			);
 			path = LyreTests;
@@ -48,6 +61,7 @@
 				76B15AEDC1503219D6CB881B /* Info.plist */,
 				865B1312BF623D7C897306B8 /* Lyre.entitlements */,
 				3DD16DFD242493414EA1EA2C /* LyreApp.swift */,
+				10D883441E981CC58678A0F1 /* Audio */,
 			);
 			path = Lyre;
 			sourceTree = "<group>";
@@ -159,6 +173,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				480F11687C07C1CA0543473B /* PermissionManagerTests.swift in Sources */,
 				734386A9E52FDC8D202FA087 /* SmokeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -168,6 +183,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1F413F3779C11F9BCBAF57A1 /* LyreApp.swift in Sources */,
+				B004BA99B8CA6E86985DA16B /* PermissionManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
