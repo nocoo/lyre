@@ -37,10 +37,11 @@ SCStream (macOS 15+)
        │                │
        ▼                ▼
      AudioMixer
-       sample-by-sample average: (a + b) * 0.5
-       clamp [-1.0, 1.0]
-       single-source drain @ ~100ms threshold
-       NaN/Inf sanitization
+  weighted mixing: sys*0.8 + mic*2.5
+        tanhf() soft clipping [-1.0, 1.0]
+        single-source drain @ ~200ms threshold (9600 samples)
+        NaN/Inf sanitization
+        stereo→mono: louder channel (not average)
        │
        ▼
      AVAssetWriter (M4A/AAC)
@@ -102,11 +103,11 @@ apps/macos/
 ├── LyreTests/
 │   ├── SmokeTests.swift            ← 1 test
 │   ├── PermissionManagerTests.swift ← 4 tests
-│   ├── AudioMixerTests.swift       ← 14 tests
+│   ├── AudioMixerTests.swift       ← 20 tests
 │   ├── AudioCaptureManagerTests.swift ← 12 tests
 │   ├── RecordingManagerTests.swift  ← 12 tests
 │   ├── RecordingsStoreTests.swift   ← 10 tests
-│   ├── AppConfigTests.swift         ← 6 tests
+│   ├── AppConfigTests.swift         ← 8 tests
 │   ├── APIClientTests.swift         ← 15 tests
 │   ├── UploadManagerTests.swift     ← 6 tests
 │   └── RecordingE2ETests.swift      ← 3 E2E tests
@@ -219,3 +220,16 @@ SwiftUI views replacing the Next.js static frontend.
 - [x] Phase 4.7: Code signing — Apple Development certificate (Team ID 93WWLTN9XU) for both targets
 - [x] Phase 4.7: TCC permissions persist across rebuilds (Team ID + Bundle ID matching)
 - [x] Phase 4.8: 84 tests total — all passing, 0 lint errors
+
+### 2026-02-26 (session 2)
+
+- [x] Audio pipeline fix: mic gain boost (2.5×), system attenuation (0.8×), tanhf() soft clipping
+- [x] Audio pipeline fix: louder-channel stereo→mono downmix, consistent drain/flush formulas
+- [x] Audio pipeline fix: increased drain threshold to 9600 samples (~200ms)
+- [x] AudioMixerTests: 14 → 20 tests (+6 new for gain, soft clipping, consistency)
+- [x] App icon: generated all macOS sizes (16–1024px) from apps/web/logo.png
+- [x] Default output directory: ~/Documents → ~/Music/Lyre Recordings
+- [x] Input device memory: selectedInputDeviceID persisted in AppConfig, restored on launch
+- [x] Input device memory: fallback to system default when saved device unavailable
+- [x] AppConfigTests: 6 → 8 tests (+2 for input device persistence)
+- [x] Total: 93 tests, 0 lint violations
