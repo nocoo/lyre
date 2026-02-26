@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreAudio
 import os
 import ScreenCaptureKit
 
@@ -9,12 +10,7 @@ struct AudioInputDevice: Identifiable, Equatable, Sendable {
 }
 
 /// Manages ScreenCaptureKit audio capture for both system audio and microphone.
-///
-/// This is the core audio pipeline for meeting recording:
-/// - System audio (.audio) captures other participants' voices from speaker output
-/// - Microphone (.microphone) captures the local user's voice
-///
-/// Samples from both streams are fed into an `AudioMixer` for combination.
+/// System audio (.audio) + microphone (.microphone) → AudioMixer → mixed PCM output.
 @Observable
 final class AudioCaptureManager: NSObject, @unchecked Sendable {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "AudioCaptureManager")
@@ -43,30 +39,75 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     /// Timer that periodically drains the mixer and delivers mixed samples.
     private var drainTimer: Timer?
 
+    /// Whether CoreAudio device-change listener is installed.
+    private var isListeningForDeviceChanges = false
+
     // MARK: - Device Enumeration
 
     /// Refresh the list of available microphone input devices using AVFoundation.
     func refreshDevices() {
+        enumerateDevices()
+        installDeviceChangeListener()
+    }
+
+    /// Install a CoreAudio property listener that auto-refreshes the device list
+    /// whenever audio devices are connected or disconnected.
+    private func installDeviceChangeListener() {
+        guard !isListeningForDeviceChanges else { return }
+        isListeningForDeviceChanges = true
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main
+        ) { [weak self] _, _ in
+            Self.logger.debug("Audio device list changed, refreshing")
+            self?.enumerateDevices()
+        }
+
+        if status != noErr {
+            Self.logger.warning("Failed to install audio device change listener: \(status)")
+            isListeningForDeviceChanges = false
+        }
+    }
+
+    /// Enumerate audio input devices and update the list. Falls back to system default
+    /// if the currently selected device is no longer available.
+    private func enumerateDevices() {
         let discovery = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.builtInMicrophone, .external],
             mediaType: .audio,
             position: .unspecified
         )
-        availableDevices = discovery.devices.map { device in
+        let newDevices = discovery.devices.map { device in
             AudioInputDevice(id: device.uniqueID, name: device.localizedName)
+        }
+
+        guard newDevices != availableDevices else { return }
+        availableDevices = newDevices
+        Self.logger.info("Device list updated: \(newDevices.map(\.name).joined(separator: ", "))")
+
+        // If the selected device was unplugged, fall back to system default
+        if let selected = selectedDeviceID,
+           !newDevices.contains(where: { $0.id == selected }) {
+            Self.logger.info("Selected device \(selected) disconnected, falling back to default")
+            selectedDeviceID = nil
         }
     }
 
     // MARK: - Capture Control
 
     /// Start capturing system audio and microphone.
-    ///
-    /// - Throws: If ScreenCaptureKit fails to initialize or start.
     func startCapture() async throws {
         let content = try await SCShareableContent.current
 
-        // We need a display to create a content filter (required even for audio-only).
-        // Use a minimal video config to avoid wasting resources.
+        // Display required for content filter, even for audio-only capture.
         guard let display = content.displays.first else {
             throw CaptureError.noDisplayFound
         }
@@ -78,8 +119,7 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         )
 
         let config = SCStreamConfiguration()
-        // Minimal video (required by SCStream but we don't use it)
-        config.width = 2
+        config.width = 2  // Minimal video (required by SCStream, unused)
         config.height = 2
         config.minimumFrameInterval = CMTime(value: 1, timescale: 1) // 1 FPS
 
@@ -149,17 +189,8 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     }
 
     /// Extract Float32 mono PCM samples from a CMSampleBuffer.
-    ///
-    /// Handles multiple input formats:
-    /// - Float32 mono (system audio default): direct copy
-    /// - Int16 stereo (microphone default): convert Int16→Float32 + downmix to mono
-    /// - Int16 mono: convert Int16→Float32
-    /// - Float32 stereo: downmix to mono
-    ///
-    /// Stereo→mono downmix uses "louder channel" strategy: for each frame,
-    /// the channel with the larger absolute value is selected. This handles
-    /// the common case where macOS mics report as stereo but only one channel
-    /// carries signal — averaging would halve the real signal (-6dB loss).
+    /// Handles Float32/Int16, mono/stereo. Stereo→mono uses "louder channel" strategy
+    /// (picks channel with larger absolute value per frame, avoids -6dB loss from averaging).
     static func extractSamples(from sampleBuffer: CMSampleBuffer) -> [Float]? {
         guard let rawData = getRawAudioData(from: sampleBuffer) else { return nil }
 

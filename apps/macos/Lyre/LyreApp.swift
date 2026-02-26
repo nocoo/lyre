@@ -164,6 +164,17 @@ struct TrayMenu: View {
                 }
             }
         }
+        .onChange(of: recorder.capture.selectedDeviceID) { _, newValue in
+            // Sync config when capture manager auto-resets (e.g. device unplugged)
+            if newValue == nil, config.selectedInputDeviceID != nil {
+                let stillExists = recorder.capture.availableDevices.contains {
+                    $0.id == config.selectedInputDeviceID
+                }
+                if !stillExists {
+                    config.selectedInputDeviceID = nil
+                }
+            }
+        }
     }
 
     // MARK: - Actions
