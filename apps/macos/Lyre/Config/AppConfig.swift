@@ -7,7 +7,7 @@ import os
 /// Thread-safe via actor-like manual serialization (all mutations on MainActor).
 @Observable
 final class AppConfig: @unchecked Sendable {
-    private static let logger = Logger(subsystem: "com.lyre.app", category: "AppConfig")
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "AppConfig")
 
     // MARK: - Persisted properties
 

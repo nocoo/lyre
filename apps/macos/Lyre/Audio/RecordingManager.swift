@@ -65,8 +65,8 @@ final class RecordingManager: @unchecked Sendable {
     private var inputFormat: AVAudioFormat?
 
     /// Sample rate and channel count — must match AudioCaptureManager.
-    private let sampleRate: Double = 48000
-    private let channelCount: UInt32 = 1
+    private let sampleRate: Double = Constants.Audio.sampleRate
+    private let channelCount: UInt32 = Constants.Audio.channelCount
 
     // MARK: - Init
 
@@ -164,7 +164,7 @@ final class RecordingManager: @unchecked Sendable {
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: channelCount,
-            AVEncoderBitRateKey: 128_000,
+            AVEncoderBitRateKey: Constants.Audio.aacBitRate,
         ]
 
         let input = AVAssetWriterInput(

@@ -10,7 +10,7 @@ import ScreenCaptureKit
 /// 2. **Microphone** — grants access to the mic input (your own voice).
 @Observable
 final class PermissionManager: @unchecked Sendable {
-    private static let logger = Logger(subsystem: "com.lyre.app", category: "PermissionManager")
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "PermissionManager")
 
     enum Status: Sendable, Equatable {
         case unknown

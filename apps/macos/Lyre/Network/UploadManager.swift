@@ -6,7 +6,7 @@ import os
 /// Designed to be used as an `@Observable` state holder for the upload UI.
 @Observable
 final class UploadManager: @unchecked Sendable {
-    private static let logger = Logger(subsystem: "com.lyre.app", category: "UploadManager")
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "UploadManager")
 
     // MARK: - State
 
@@ -111,7 +111,7 @@ final class UploadManager: @unchecked Sendable {
     private func performUpload(file: RecordingFile) async {
         let client = makeClient()
         let fileName = file.url.lastPathComponent
-        let contentType = "audio/x-m4a"
+        let contentType = Constants.Audio.mimeType
 
         // Step 1: Presign
         state = .presigning
@@ -172,8 +172,8 @@ final class UploadManager: @unchecked Sendable {
                     ossKey: presignResponse.ossKey,
                     fileSize: file.fileSize,
                     duration: file.duration,
-                    format: "m4a",
-                    sampleRate: 48000,
+                    format: Constants.Audio.fileExtension,
+                    sampleRate: Constants.Audio.sampleRateInt,
                     tags: selectedTagIDs.isEmpty ? nil : Array(selectedTagIDs),
                     folderId: selectedFolderID,
                     recordedAt: Int64(file.createdAt.timeIntervalSince1970 * 1000)

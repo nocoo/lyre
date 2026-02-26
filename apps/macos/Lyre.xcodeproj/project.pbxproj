@@ -17,6 +17,7 @@
 		60A286D2B59A4A32F9DCE65A /* RecordingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF6BAE40EB51C3AF754AC56 /* RecordingManager.swift */; };
 		6955B2A8546957F6E6054A61 /* RecordingE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84479354E7634918D8CBADA9 /* RecordingE2ETests.swift */; };
 		734386A9E52FDC8D202FA087 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B117D6D713498A7716527C /* SmokeTests.swift */; };
+		7E5FC4E676D1D8F70794F464 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D832E17110F005B9AF3ADC /* Constants.swift */; };
 		865AC802B3238708D2353DB7 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FACC09867086EAC00C77EF3 /* APIClient.swift */; };
 		87A76563DDB05A517E9F1585 /* UploadManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55B363D5C64AB617DE72C8A /* UploadManagerTests.swift */; };
 		8B317CF26B7DC2ACDB18F90F /* UploadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903611D6BFF56C9CE3B574A3 /* UploadView.swift */; };
@@ -65,6 +66,7 @@
 		84479354E7634918D8CBADA9 /* RecordingE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingE2ETests.swift; sourceTree = "<group>"; };
 		865B1312BF623D7C897306B8 /* Lyre.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Lyre.entitlements; sourceTree = "<group>"; };
 		903611D6BFF56C9CE3B574A3 /* UploadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadView.swift; sourceTree = "<group>"; };
+		90D832E17110F005B9AF3ADC /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 		A1B117D6D713498A7716527C /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		A5708B989E5F7501403FAB84 /* AudioMixer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMixer.swift; sourceTree = "<group>"; };
 		A71B0C8D8B67DE3BAE19677E /* RecordingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingsStore.swift; sourceTree = "<group>"; };
@@ -156,6 +158,7 @@
 			isa = PBXGroup;
 			children = (
 				A996D6B8786E6F67E74BC294 /* Assets.xcassets */,
+				90D832E17110F005B9AF3ADC /* Constants.swift */,
 				76B15AEDC1503219D6CB881B /* Info.plist */,
 				865B1312BF623D7C897306B8 /* Lyre.entitlements */,
 				3DD16DFD242493414EA1EA2C /* LyreApp.swift */,
@@ -304,6 +307,7 @@
 				EF857C38565155712D2AEA1F /* AudioCaptureManager.swift in Sources */,
 				9D063CCD246FB23505FDD103 /* AudioMixer.swift in Sources */,
 				D01DAF341010AE4E658C89F6 /* AudioPlayerManager.swift in Sources */,
+				7E5FC4E676D1D8F70794F464 /* Constants.swift in Sources */,
 				1F413F3779C11F9BCBAF57A1 /* LyreApp.swift in Sources */,
 				AC72919ABC690F2270C864E7 /* PermissionGuideView.swift in Sources */,
 				B004BA99B8CA6E86985DA16B /* PermissionManager.swift in Sources */,

@@ -37,7 +37,7 @@ struct RecordingFile: Identifiable, Sendable {
 /// Scans the output directory for M4A recording files and loads metadata.
 @Observable
 final class RecordingsStore: @unchecked Sendable {
-    private static let logger = Logger(subsystem: "com.lyre.app", category: "RecordingsStore")
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "RecordingsStore")
 
     /// Sorted list of recordings (newest first).
     internal(set) var recordings: [RecordingFile] = []

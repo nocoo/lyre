@@ -29,8 +29,8 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
 
     private var stream: SCStream?
     private let mixer = AudioMixer()
-    private let sampleRate: Int = 48000
-    private let channelCount: Int = 1
+    private let sampleRate: Int = Constants.Audio.sampleRateInt
+    private let channelCount: Int = Constants.Audio.channelCountInt
 
     /// Timer that periodically drains the mixer and delivers mixed samples.
     private var drainTimer: Timer?

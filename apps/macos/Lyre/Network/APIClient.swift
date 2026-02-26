@@ -6,7 +6,7 @@ import os
 /// Uses URLSession with async/await. All requests include Bearer token auth
 /// (except `/api/live` which is public).
 actor APIClient {
-    private static let logger = Logger(subsystem: "com.lyre.app", category: "APIClient")
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "APIClient")
 
     let baseURL: String
     let authToken: String
