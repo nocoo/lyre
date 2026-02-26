@@ -10,11 +10,13 @@ actor APIClient {
 
     let baseURL: String
     let authToken: String
+    let session: URLSession
 
-    init(baseURL: String, authToken: String) {
+    init(baseURL: String, authToken: String, session: URLSession = .shared) {
         self.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         self.authToken = authToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.session = session
     }
 
     // MARK: - Errors
@@ -130,7 +132,7 @@ actor APIClient {
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 300 // 5 minutes for large files
 
-        let (_, response) = try await URLSession.shared.upload(for: request, from: data)
+        let (_, response) = try await session.upload(for: request, from: data)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.networkError("Invalid response from OSS")
@@ -193,7 +195,7 @@ actor APIClient {
         let response: URLResponse
 
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await session.data(for: request)
         } catch {
             throw APIError.networkError(error.localizedDescription)
         }
