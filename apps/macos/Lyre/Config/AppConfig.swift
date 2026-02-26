@@ -101,7 +101,7 @@ final class AppConfig: @unchecked Sendable {
     // MARK: - Defaults
 
     static func defaultOutputDirectory() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        FileManager.default.urls(for: .musicDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Lyre Recordings", isDirectory: true)
     }
 
