@@ -8,8 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		17C8D15314068A964243F435 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F7E85877A862D61AFEA40B1 /* AboutView.swift */; };
+		1BEEC56962D094CC3FCC6DDE /* KeychainHelperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1629DB7A4A093BC939BCFC56 /* KeychainHelperTests.swift */; };
 		1F413F3779C11F9BCBAF57A1 /* LyreApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD16DFD242493414EA1EA2C /* LyreApp.swift */; };
 		222511AB5DCBDAE7356A1F0A /* UploadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB98E36516BA802546FB5DD3 /* UploadManager.swift */; };
+		22F75AA5A24C2C1245CF94B9 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFDEF015E5BBAD4D481D4CF5 /* KeychainHelper.swift */; };
 		230C26A7C8A3591AAA595374 /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DD67E445ECC5A650871E39 /* AppConfigTests.swift */; };
 		468D65919A6805A74C84652F /* AudioCaptureManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD146B1E12A00EF03AF5F9 /* AudioCaptureManagerTests.swift */; };
 		480F11687C07C1CA0543473B /* PermissionManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD9C1C2B1DAFB998D03C2D8 /* PermissionManagerTests.swift */; };
@@ -50,6 +52,7 @@
 
 /* Begin PBXFileReference section */
 		06DD67E445ECC5A650871E39 /* AppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfigTests.swift; sourceTree = "<group>"; };
+		1629DB7A4A093BC939BCFC56 /* KeychainHelperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelperTests.swift; sourceTree = "<group>"; };
 		190F35B324B98FC809E646E8 /* AudioPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
 		1F7BC4335B6D6809472D18F2 /* Lyre.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lyre.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23F6AEC04C4D65B659CCA8D4 /* AudioEncoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEncoderTests.swift; sourceTree = "<group>"; };
@@ -76,6 +79,7 @@
 		A71B0C8D8B67DE3BAE19677E /* RecordingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingsStore.swift; sourceTree = "<group>"; };
 		A996D6B8786E6F67E74BC294 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB98E36516BA802546FB5DD3 /* UploadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadManager.swift; sourceTree = "<group>"; };
+		AFDEF015E5BBAD4D481D4CF5 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		B2052D85DB430140DDB2BDAC /* AudioMixerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMixerTests.swift; sourceTree = "<group>"; };
 		D335FDFB9ACAFBA6677C83E6 /* AudioCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureManager.swift; sourceTree = "<group>"; };
 		E36D775727AB1819FA065426 /* RecordingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingsView.swift; sourceTree = "<group>"; };
@@ -105,6 +109,7 @@
 				75DD146B1E12A00EF03AF5F9 /* AudioCaptureManagerTests.swift */,
 				23F6AEC04C4D65B659CCA8D4 /* AudioEncoderTests.swift */,
 				B2052D85DB430140DDB2BDAC /* AudioMixerTests.swift */,
+				1629DB7A4A093BC939BCFC56 /* KeychainHelperTests.swift */,
 				4FD9C1C2B1DAFB998D03C2D8 /* PermissionManagerTests.swift */,
 				84479354E7634918D8CBADA9 /* RecordingE2ETests.swift */,
 				6D97AB56A2DEA8A8D28AC461 /* RecordingManagerTests.swift */,
@@ -156,6 +161,7 @@
 			isa = PBXGroup;
 			children = (
 				190F35B324B98FC809E646E8 /* AudioPlayerManager.swift */,
+				AFDEF015E5BBAD4D481D4CF5 /* KeychainHelper.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -295,6 +301,7 @@
 				468D65919A6805A74C84652F /* AudioCaptureManagerTests.swift in Sources */,
 				6329A96A3ED4D8817CD5E9A1 /* AudioEncoderTests.swift in Sources */,
 				597E6093995248E45AD85311 /* AudioMixerTests.swift in Sources */,
+				1BEEC56962D094CC3FCC6DDE /* KeychainHelperTests.swift in Sources */,
 				480F11687C07C1CA0543473B /* PermissionManagerTests.swift in Sources */,
 				6955B2A8546957F6E6054A61 /* RecordingE2ETests.swift in Sources */,
 				CCB49354534AB29E5B4D5205 /* RecordingManagerTests.swift in Sources */,
@@ -316,6 +323,7 @@
 				9D063CCD246FB23505FDD103 /* AudioMixer.swift in Sources */,
 				D01DAF341010AE4E658C89F6 /* AudioPlayerManager.swift in Sources */,
 				7E5FC4E676D1D8F70794F464 /* Constants.swift in Sources */,
+				22F75AA5A24C2C1245CF94B9 /* KeychainHelper.swift in Sources */,
 				1F413F3779C11F9BCBAF57A1 /* LyreApp.swift in Sources */,
 				AC72919ABC690F2270C864E7 /* PermissionGuideView.swift in Sources */,
 				B004BA99B8CA6E86985DA16B /* PermissionManager.swift in Sources */,
