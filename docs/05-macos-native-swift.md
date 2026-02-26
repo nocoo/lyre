@@ -70,9 +70,12 @@ granted and auto-advances.
 
 ```
 apps/macos/
-├── Lyre.xcodeproj/
+├── project.yml                    ← xcodegen project definition
+├── .swiftlint.yml                 ← SwiftLint config
+├── Lyre.xcodeproj/                ← Generated (xcodegen generate)
 ├── Lyre/
-│   ├── LyreApp.swift              ← @main, MenuBarExtra, lifecycle
+│   ├── LyreApp.swift              ← @main, MenuBarExtra, TrayMenu, MainWindowView
+│   ├── Constants.swift            ← Shared constants (subsystem, audio params)
 │   ├── Info.plist                  ← LSUIElement, NSMicrophoneUsageDescription
 │   ├── Lyre.entitlements           ← Audio Input
 │   ├── Assets.xcassets/            ← App icon, tray icons
@@ -80,39 +83,34 @@ apps/macos/
 │   │   ├── PermissionManager.swift
 │   │   ├── AudioCaptureManager.swift
 │   │   ├── AudioMixer.swift
-│   │   └── AudioEncoder.swift
+│   │   └── RecordingManager.swift  ← State machine + AVAssetWriter
 │   ├── Recording/
-│   │   ├── RecordingManager.swift
-│   │   ├── RecordingFile.swift
-│   │   └── RecordingsStore.swift
+│   │   └── RecordingsStore.swift   ← File scanning, metadata, bulk delete
 │   ├── Network/
-│   │   ├── APIClient.swift
-│   │   ├── UploadManager.swift
-│   │   └── ServerModels.swift
+│   │   ├── APIClient.swift         ← Actor, all endpoints, injectable URLSession
+│   │   └── UploadManager.swift     ← 3-step upload flow
 │   ├── Config/
-│   │   └── AppConfig.swift
+│   │   └── AppConfig.swift         ← JSON persistence
 │   ├── Views/
-│   │   ├── TrayMenu.swift
-│   │   ├── MainWindow.swift
-│   │   ├── RecordingsView.swift
-│   │   ├── UploadView.swift
-│   │   ├── SettingsView.swift
-│   │   ├── CleanupView.swift
-│   │   ├── AboutView.swift
-│   │   └── PermissionGuideView.swift
+│   │   ├── RecordingsView.swift    ← List, playback, multi-select batch delete
+│   │   ├── UploadView.swift        ← Upload form, folder/tag, progress
+│   │   ├── SettingsView.swift      ← Server config, connection test
+│   │   ├── AboutView.swift         ← Version, GitHub links
+│   │   └── PermissionGuideView.swift ← Step-by-step onboarding
 │   └── Utilities/
-│       ├── AudioMetadata.swift
-│       └── FileUtils.swift
+│       └── AudioPlayerManager.swift ← AVAudioPlayer wrapper
 ├── LyreTests/
-│   ├── AudioMixerTests.swift
-│   ├── RecordingManagerTests.swift
-│   ├── AppConfigTests.swift
-│   ├── APIClientTests.swift
-│   ├── UploadManagerTests.swift
-│   ├── RecordingsStoreTests.swift
-│   └── PermissionManagerTests.swift
-└── LyreE2ETests/
-    └── RecordingE2ETests.swift
+│   ├── SmokeTests.swift            ← 1 test
+│   ├── PermissionManagerTests.swift ← 4 tests
+│   ├── AudioMixerTests.swift       ← 14 tests
+│   ├── AudioCaptureManagerTests.swift ← 12 tests
+│   ├── RecordingManagerTests.swift  ← 12 tests
+│   ├── RecordingsStoreTests.swift   ← 10 tests
+│   ├── AppConfigTests.swift         ← 6 tests
+│   ├── APIClientTests.swift         ← 15 tests
+│   ├── UploadManagerTests.swift     ← 6 tests
+│   └── RecordingE2ETests.swift      ← 3 E2E tests
+└── .gitignore
 ```
 
 ## Phased Implementation
@@ -155,9 +153,14 @@ SwiftUI views replacing the Next.js static frontend.
 
 | Step | Component       | Description                              |
 |------|-----------------|------------------------------------------|
-| 4.1  | CleanupView     | Batch delete with filter criteria        |
-| 4.2  | AppConfig       | JSON persistence (server, token, etc.)   |
-| 4.3  | Full test suite | Coverage ≥ 90%, lint, E2E                |
+| 4.1  | Constants.swift | Extract shared constants (subsystem, audio params) |
+| 4.2  | Logging         | Replace all print() with os.Logger       |
+| 4.3  | Error surfacing | NSAlert for recording errors, alert for delete errors |
+| 4.4  | Dead code       | Remove unused fields, fix force-unwraps  |
+| 4.5  | SwiftLint       | Config + 0 production violations         |
+| 4.6  | Batch delete    | Multi-select in RecordingsView           |
+| 4.7  | Code signing    | Apple Development cert for TCC persistence |
+| 4.8  | Full test suite | 84 tests, 0 lint violations              |
 
 ## Testing Strategy (3-Layer)
 
@@ -202,3 +205,17 @@ SwiftUI views replacing the Next.js static frontend.
 - [x] LyreTests target signing: added matching CODE_SIGN_IDENTITY, CODE_SIGN_STYLE, DEVELOPMENT_TEAM
 - [x] Verified TCC permissions persist across rebuilds (Team ID + Bundle ID matching)
 - [x] All 84 tests passing (81 unit + 3 E2E with known issues)
+- [x] Phase 4.1: Constants.swift — extracted shared constants (subsystem, sampleRate, channelCount, bitRate, mimeType)
+- [x] Phase 4.2: Replaced all 5 print() calls with os.Logger across all managers
+- [x] Phase 4.3: Surface recording start/stop errors via NSAlert in TrayMenu
+- [x] Phase 4.3: Surface delete errors via alert in RecordingsView
+- [x] Phase 4.4: SettingsView uses APIClient.checkLive() (removed duplicated HTTP logic)
+- [x] Phase 4.4: Removed dead UploadManager.description field
+- [x] Phase 4.4: Fixed force-unwrap on RecordingManager.currentFileURL (guard let)
+- [x] Phase 4.4: Fixed AudioPlayerManager import (SwiftUI → AVFoundation + Observation)
+- [x] Phase 4.5: Created .swiftlint.yml, refactored performUpload into 3 step methods
+- [x] Phase 4.5: 0 production violations, 0 serious violations across all code
+- [x] Phase 4.6: Multi-select batch delete in RecordingsView (Set<URL> selection, toolbar, confirmation)
+- [x] Phase 4.7: Code signing — Apple Development certificate (Team ID 93WWLTN9XU) for both targets
+- [x] Phase 4.7: TCC permissions persist across rebuilds (Team ID + Bundle ID matching)
+- [x] Phase 4.8: 84 tests total — all passing, 0 lint errors
