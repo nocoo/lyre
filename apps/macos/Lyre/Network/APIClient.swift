@@ -119,10 +119,12 @@ actor APIClient {
         return try await perform(request)
     }
 
-    /// Upload file data directly to OSS using the presigned URL.
+    /// Upload a file to OSS using the presigned URL (streaming, no memory spike).
     ///
+    /// Uses `URLSession.upload(for:fromFile:)` to stream directly from disk,
+    /// avoiding loading the entire file into memory.
     /// This does NOT use Bearer auth — the URL itself contains the signature.
-    func uploadToOSS(uploadURL: String, data: Data, contentType: String) async throws {
+    func uploadToOSS(uploadURL: String, fileURL: URL, contentType: String) async throws {
         guard let url = URL(string: uploadURL) else {
             throw APIError.invalidURL(uploadURL)
         }
@@ -132,7 +134,7 @@ actor APIClient {
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 300 // 5 minutes for large files
 
-        let (_, response) = try await session.upload(for: request, from: data)
+        let (_, response) = try await session.upload(for: request, fromFile: fileURL)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.networkError("Invalid response from OSS")
@@ -141,7 +143,8 @@ actor APIClient {
             throw APIError.httpError(httpResponse.statusCode, "OSS upload failed")
         }
 
-        Self.logger.info("OSS upload succeeded (\(data.count) bytes)")
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int64) ?? 0
+        Self.logger.info("OSS upload succeeded (\(fileSize) bytes)")
     }
 
     /// Create a recording in the database.

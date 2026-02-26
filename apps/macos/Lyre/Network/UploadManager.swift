@@ -156,9 +156,12 @@ final class UploadManager: @unchecked Sendable {
         Self.logger.info("Step 2/3: Uploading to OSS (\(file.fileSize) bytes)")
 
         do {
-            let data = try Data(contentsOf: file.url)
             state = .uploading(progress: 0.1)
-            try await client.uploadToOSS(uploadURL: presignResponse.uploadUrl, data: data, contentType: contentType)
+            try await client.uploadToOSS(
+                uploadURL: presignResponse.uploadUrl,
+                fileURL: file.url,
+                contentType: contentType
+            )
             state = .uploading(progress: 0.9)
             return true
         } catch {

@@ -56,6 +56,16 @@ private func jsonResponse(
     return (data, response)
 }
 
+/// Create a temporary file with the given number of bytes for upload tests.
+private func makeTempFile(size: Int) -> URL {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("lyre-api-test-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let url = dir.appendingPathComponent("upload-test.m4a")
+    try? Data(repeating: 0xAB, count: size).write(to: url)
+    return url
+}
+
 // MARK: - Tests
 
 @Suite("APIClient Tests", .serialized)
@@ -139,8 +149,6 @@ struct APIClientTests {
     // MARK: - uploadToOSS
 
     @Test func uploadToOSSSuccess() async throws {
-        let uploadData = Data(repeating: 0xAB, count: 256)
-
         MockURLProtocol.handler = { request in
             #expect(request.httpMethod == "PUT")
             #expect(request.url?.absoluteString == "https://oss.example.com/upload")
@@ -151,17 +159,21 @@ struct APIClientTests {
         }
 
         let client = makeClient()
+        let fileURL = makeTempFile(size: 256)
         try await client.uploadToOSS(
             uploadURL: "https://oss.example.com/upload",
-            data: uploadData,
+            fileURL: fileURL,
             contentType: "audio/x-m4a"
         )
     }
 
     @Test func uploadToOSSInvalidURL() async {
         let client = makeClient()
+        let fileURL = makeTempFile(size: 10)
         do {
-            try await client.uploadToOSS(uploadURL: "", data: Data(), contentType: "audio/x-m4a")
+            try await client.uploadToOSS(
+                uploadURL: "", fileURL: fileURL, contentType: "audio/x-m4a"
+            )
             Issue.record("Expected APIError")
         } catch let error as APIClient.APIError {
             if case .invalidURL = error {
@@ -180,10 +192,11 @@ struct APIClientTests {
         }
 
         let client = makeClient()
+        let fileURL = makeTempFile(size: 10)
         do {
             try await client.uploadToOSS(
                 uploadURL: "https://oss.example.com/upload",
-                data: Data(repeating: 0, count: 10),
+                fileURL: fileURL,
                 contentType: "audio/x-m4a"
             )
             Issue.record("Expected APIError")
