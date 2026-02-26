@@ -200,7 +200,8 @@ apps/macos/
     ├── AudioCaptureManagerTests.swift ← 12 tests
     ├── RecordingManagerTests.swift  ← 12 tests
     ├── RecordingsStoreTests.swift   ← 10 tests
-    ├── AppConfigTests.swift         ← 8 tests
+    ├── AppConfigTests.swift         ← 11 tests
+    ├── KeychainHelperTests.swift    ← 9 tests
     ├── APIClientTests.swift         ← 15 tests
     ├── UploadManagerTests.swift     ← 6 tests
     └── RecordingE2ETests.swift      ← 3 E2E tests
