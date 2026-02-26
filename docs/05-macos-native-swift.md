@@ -198,3 +198,7 @@ SwiftUI views replacing the Next.js static frontend.
 - [x] Phase 3.3: MainWindowView updated to pass config to RecordingsView
 - [x] APIClient made injectable (URLSession param) for unit testing with MockURLProtocol
 - [x] Unit tests: APIClient (15 tests) + UploadManager (6 tests) — 84 total tests
+- [x] Code signing fix: switched from ad-hoc (`-`) to Apple Development certificate (Team ID 93WWLTN9XU)
+- [x] LyreTests target signing: added matching CODE_SIGN_IDENTITY, CODE_SIGN_STYLE, DEVELOPMENT_TEAM
+- [x] Verified TCC permissions persist across rebuilds (Team ID + Bundle ID matching)
+- [x] All 84 tests passing (81 unit + 3 E2E with known issues)
