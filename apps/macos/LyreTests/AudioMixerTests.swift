@@ -228,3 +228,64 @@ import Testing
 @Test func drainThresholdIs9600() {
     #expect(AudioMixer.drainThreshold == 9600)
 }
+
+@Test func maxBufferSizeIs240000() {
+    #expect(AudioMixer.maxBufferSize == 240_000)
+}
+
+// MARK: - Buffer cap
+
+@Test func systemBufferCappedAtMaxSize() {
+    let mixer = AudioMixer()
+    mixer.systemGain = 1.0
+    // Push more than maxBufferSize samples
+    let oversize = AudioMixer.maxBufferSize + 1000
+    mixer.pushSystemAudio([Float](repeating: 0.1, count: oversize))
+    // Push a known mic sample so we can drain via mix path
+    mixer.pushMicrophone([Float](repeating: 0.2, count: 1))
+    let output = mixer.drain()
+    // Only 1 overlapping sample (min of capped system vs 1 mic)
+    #expect(output.count == 1)
+    // After drain, remaining system buffer should be maxBufferSize - 1
+    // Flush to verify total <= maxBufferSize
+    let flushed = mixer.flush()
+    #expect(flushed.count == AudioMixer.maxBufferSize - 1)
+}
+
+@Test func micBufferCappedAtMaxSize() {
+    let mixer = AudioMixer()
+    mixer.micGain = 1.0
+    let oversize = AudioMixer.maxBufferSize + 500
+    mixer.pushMicrophone([Float](repeating: 0.3, count: oversize))
+    mixer.pushSystemAudio([Float](repeating: 0.1, count: 1))
+    let output = mixer.drain()
+    #expect(output.count == 1)
+    let flushed = mixer.flush()
+    #expect(flushed.count == AudioMixer.maxBufferSize - 1)
+}
+
+@Test func bufferCapPreservesNewestSamples() {
+    let mixer = AudioMixer()
+    mixer.systemGain = 1.0
+    mixer.micGain = 1.0
+    // Push maxBufferSize samples of 0.1, then push 100 samples of 0.9
+    // After cap, the 0.9 samples should be at the end (preserved)
+    mixer.pushSystemAudio([Float](repeating: 0.1, count: AudioMixer.maxBufferSize))
+    mixer.pushSystemAudio([Float](repeating: 0.9, count: 100))
+    // Now push matching mic to drain last 100 samples
+    mixer.pushMicrophone([Float](repeating: 0.0, count: AudioMixer.maxBufferSize))
+    // Drain should mix maxBufferSize overlapping samples
+    let output = mixer.drain()
+    #expect(output.count == AudioMixer.maxBufferSize)
+    // The last 100 samples should be softClip(0.9 * 1.0 + 0.0 * 2.5) = tanh(0.9)
+    let lastSample = output[AudioMixer.maxBufferSize - 1]
+    #expect(abs(lastSample - tanhf(0.9)) < 0.001)
+}
+
+@Test func bufferExactlyAtMaxDoesNotTruncate() {
+    let mixer = AudioMixer()
+    mixer.pushSystemAudio([Float](repeating: 0.5, count: AudioMixer.maxBufferSize))
+    // Should not truncate — exactly at max
+    let flushed = mixer.flush()
+    #expect(flushed.count == AudioMixer.maxBufferSize)
+}

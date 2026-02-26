@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Mixes two audio streams (system audio + microphone) into a single output.
 ///
@@ -13,10 +14,22 @@ import Foundation
 ///   48kHz = 9600 samples), drains the single-source buffer to prevent
 ///   unbounded accumulation (handles cases like no mic permission).
 /// - Sanitizes NaN/Infinity values to 0.0 before mixing.
+/// - Enforces a maximum buffer size (~5s at 48kHz) to prevent unbounded
+///   memory growth if drain() stops being called.
 final class AudioMixer: @unchecked Sendable {
     /// Number of samples before a single-source buffer is drained.
     /// At 48kHz mono, 9600 samples ≈ 200ms.
     static let drainThreshold = 9600
+
+    /// Maximum number of samples allowed per buffer.
+    /// At 48kHz mono, 240_000 samples ≈ 5 seconds.
+    /// If a push would exceed this limit, the oldest samples are discarded.
+    static let maxBufferSize = 240_000
+
+    private static let logger = Logger(
+        subsystem: Constants.subsystem,
+        category: "AudioMixer"
+    )
 
     /// Gain applied to microphone samples before mixing.
     /// Raw mic input is typically much quieter than mastered system audio.
@@ -34,6 +47,7 @@ final class AudioMixer: @unchecked Sendable {
         let sanitized = Self.sanitize(samples)
         lock.withLock {
             systemBuffer.append(contentsOf: sanitized)
+            capBuffer(&systemBuffer, label: "systemAudio")
         }
     }
 
@@ -42,6 +56,7 @@ final class AudioMixer: @unchecked Sendable {
         let sanitized = Self.sanitize(samples)
         lock.withLock {
             micBuffer.append(contentsOf: sanitized)
+            capBuffer(&micBuffer, label: "microphone")
         }
     }
 
@@ -72,6 +87,17 @@ final class AudioMixer: @unchecked Sendable {
     }
 
     // MARK: - Internal (lock must be held)
+
+    /// Enforce max buffer size by discarding oldest samples if needed.
+    private func capBuffer(_ buffer: inout [Float], label: String) {
+        let overflow = buffer.count - Self.maxBufferSize
+        if overflow > 0 {
+            buffer.removeFirst(overflow)
+            Self.logger.warning(
+                "\(label) buffer overflow: dropped \(overflow) oldest samples"
+            )
+        }
+    }
 
     private func drainLocked() -> [Float] {
         let sysCount = systemBuffer.count
