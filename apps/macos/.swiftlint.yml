@@ -45,11 +45,3 @@ identifier_name:
 nesting:
   type_level: 3
   function_level: 5
-
-# Downgrade to warning — production code has zero instances;
-# test code legitimately uses force_try for brevity.
-force_try:
-  severity: warning
-
-force_cast:
-  severity: warning

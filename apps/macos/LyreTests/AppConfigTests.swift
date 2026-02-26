@@ -9,7 +9,7 @@ struct AppConfigTests {
     private func makeConfig() -> (AppConfig, URL) {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyre-test-\(UUID().uuidString)", isDirectory: true)
-        try! FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
         let config = AppConfig(configURL: configURL)
         return (config, tempDir)
@@ -89,7 +89,7 @@ struct AppConfigTests {
         defer { cleanup(dir) }
 
         let configURL = dir.appendingPathComponent("config.json")
-        try! "not json".data(using: .utf8)!.write(to: configURL)
+        try? Data("not json".utf8).write(to: configURL)
 
         let config = AppConfig(configURL: configURL)
         #expect(config.serverURL == "")
@@ -105,8 +105,14 @@ struct AppConfigTests {
         let configURL = dir.appendingPathComponent("config.json")
         config.save()
 
-        let data = try! Data(contentsOf: configURL)
-        let json = try! JSONDecoder().decode([String: String?].self, from: data)
+        guard let data = try? Data(contentsOf: configURL) else {
+            Issue.record("Failed to read config file")
+            return
+        }
+        guard let json = try? JSONDecoder().decode([String: String?].self, from: data) else {
+            Issue.record("Failed to decode config JSON")
+            return
+        }
 
         // serverURL and authToken should be null (not stored) when empty
         #expect(json["serverURL"] == nil)

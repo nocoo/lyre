@@ -10,7 +10,7 @@ struct RecordingsStoreTests {
     private func makeTempDir() -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyre-recordings-test-\(UUID().uuidString)", isDirectory: true)
-        try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
 
@@ -22,7 +22,7 @@ struct RecordingsStoreTests {
     private func createDummyM4A(in dir: URL, name: String, content: Data? = nil) -> URL {
         let url = dir.appendingPathComponent(name)
         let data = content ?? Data(repeating: 0, count: 1024)
-        try! data.write(to: url)
+        try? data.write(to: url)
         return url
     }
 
@@ -56,7 +56,7 @@ struct RecordingsStoreTests {
         _ = createDummyM4A(in: dir, name: "Recording 2026-02-26 at 10.00.00.m4a")
         _ = createDummyM4A(in: dir, name: "Recording 2026-02-26 at 11.00.00.m4a")
         // Non-M4A files should be ignored
-        try! "not audio".data(using: .utf8)!.write(to: dir.appendingPathComponent("notes.txt"))
+        try? Data("not audio".utf8).write(to: dir.appendingPathComponent("notes.txt"))
 
         let store = RecordingsStore(directory: dir)
         await store.scan()
