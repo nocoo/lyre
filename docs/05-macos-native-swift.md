@@ -191,3 +191,10 @@ SwiftUI views replacing the Next.js static frontend.
 - [x] Phase 2.4: AboutView (version, build number, GitHub links)
 - [x] Phase 2.2: "Open Lyre..." menu item in tray to open main window
 - [x] Config → RecordingManager → RecordingsStore output directory sync
+- [x] Phase 3.1: APIClient (actor, URLSession, all endpoints: live, presign, uploadToOSS, createRecording, listFolders, listTags)
+- [x] Phase 3.2: UploadManager (3-step upload flow: presign → OSS → create, with state machine, cancel support)
+- [x] Phase 3.3: UploadView (upload form with title, folder/tag picker, progress, completion)
+- [x] Phase 3.3: RecordingsView updated with upload integration (context menu "Upload to Server")
+- [x] Phase 3.3: MainWindowView updated to pass config to RecordingsView
+- [x] APIClient made injectable (URLSession param) for unit testing with MockURLProtocol
+- [x] Unit tests: APIClient (15 tests) + UploadManager (6 tests) — 84 total tests
