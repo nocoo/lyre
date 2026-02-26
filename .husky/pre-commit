@@ -1,1 +1,7 @@
+# Web: unit tests + lint
 bun run test && bun run lint
+
+# macOS: unit tests + lint
+cd apps/macos && \
+  xcodebuild test -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS" -quiet && \
+  swiftlint lint --strict Lyre/ LyreTests/

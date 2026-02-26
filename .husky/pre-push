@@ -1,1 +1,7 @@
+# Web: coverage + lint + build + e2e
 bun run test:coverage && bun run lint && bun run build && bun run test:e2e
+
+# macOS: unit tests + lint (E2E included in LyreTests scheme)
+cd apps/macos && \
+  xcodebuild test -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS" -quiet && \
+  swiftlint lint --strict Lyre/ LyreTests/
