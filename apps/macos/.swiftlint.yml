@@ -1,0 +1,55 @@
+excluded:
+  - Lyre.xcodeproj
+
+disabled_rules:
+  - trailing_comma # we prefer trailing commas
+  - opening_brace  # conflicts with xcodegen formatting
+  - todo           # TODOs are tracked elsewhere
+
+opt_in_rules:
+  - closure_spacing
+  - contains_over_filter_count
+  - discouraged_optional_boolean
+  - fatal_error_message
+  - first_where
+  - last_where
+  - modifier_order
+  - overridden_super_call
+  - redundant_nil_coalescing
+  - unowned_variable_capture
+  # empty_string and empty_count removed from opt-in — too noisy in tests
+  # and not worth file-level disables for assertion patterns like `== ""`
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+type_body_length:
+  warning: 300
+  error: 500
+
+file_length:
+  warning: 400
+  error: 600
+
+function_body_length:
+  warning: 60
+  error: 100
+
+identifier_name:
+  min_length: 1
+  max_length: 60
+
+nesting:
+  type_level: 3
+  function_level: 5
+
+# Downgrade to warning — production code has zero instances;
+# test code legitimately uses force_try for brevity.
+force_try:
+  severity: warning
+
+force_cast:
+  severity: warning

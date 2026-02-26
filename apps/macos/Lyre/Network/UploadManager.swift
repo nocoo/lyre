@@ -112,50 +112,67 @@ final class UploadManager: @unchecked Sendable {
         let contentType = Constants.Audio.mimeType
 
         // Step 1: Presign
+        guard let presign = await stepPresign(
+            client: client, fileName: fileName, contentType: contentType
+        ) else { return }
+        guard !Task.isCancelled else { state = .idle; return }
+
+        // Step 2: Upload to OSS
+        let uploaded = await stepUploadToOSS(
+            client: client, file: file,
+            presignResponse: presign, contentType: contentType
+        )
+        guard uploaded else { return }
+        guard !Task.isCancelled else { state = .idle; return }
+
+        // Step 3: Create recording
+        await stepCreateRecording(
+            client: client, file: file,
+            fileName: fileName, presignResponse: presign
+        )
+    }
+
+    private func stepPresign(
+        client: APIClient, fileName: String, contentType: String
+    ) async -> APIClient.PresignResponse? {
         state = .presigning
         Self.logger.info("Step 1/3: Presigning for \(fileName)")
 
-        let presignResponse: APIClient.PresignResponse
         do {
-            presignResponse = try await client.presign(
-                fileName: fileName,
-                contentType: contentType
-            )
+            return try await client.presign(fileName: fileName, contentType: contentType)
         } catch {
             state = .failed("Presign failed: \(error.localizedDescription)")
-            return
+            return nil
         }
+    }
 
-        guard !Task.isCancelled else {
-            state = .idle
-            return
-        }
-
-        // Step 2: Upload to OSS
+    private func stepUploadToOSS(
+        client: APIClient,
+        file: RecordingFile,
+        presignResponse: APIClient.PresignResponse,
+        contentType: String
+    ) async -> Bool {
         state = .uploading(progress: 0)
         Self.logger.info("Step 2/3: Uploading to OSS (\(file.fileSize) bytes)")
 
         do {
             let data = try Data(contentsOf: file.url)
             state = .uploading(progress: 0.1)
-
-            try await client.uploadToOSS(
-                uploadURL: presignResponse.uploadUrl,
-                data: data,
-                contentType: contentType
-            )
+            try await client.uploadToOSS(uploadURL: presignResponse.uploadUrl, data: data, contentType: contentType)
             state = .uploading(progress: 0.9)
+            return true
         } catch {
             state = .failed("Upload failed: \(error.localizedDescription)")
-            return
+            return false
         }
+    }
 
-        guard !Task.isCancelled else {
-            state = .idle
-            return
-        }
-
-        // Step 3: Create recording
+    private func stepCreateRecording(
+        client: APIClient,
+        file: RecordingFile,
+        fileName: String,
+        presignResponse: APIClient.PresignResponse
+    ) async {
         state = .creating
         Self.logger.info("Step 3/3: Creating recording")
 
