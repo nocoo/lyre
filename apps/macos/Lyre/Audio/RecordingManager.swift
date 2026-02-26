@@ -1,4 +1,5 @@
 import AVFoundation
+import os
 
 /// Manages the full recording lifecycle: permissions → capture → encode → M4A file.
 ///
@@ -9,6 +10,7 @@ import AVFoundation
 /// Uses `AudioCaptureManager` for SCK capture and `AVAssetWriter` for M4A/AAC encoding.
 @Observable
 final class RecordingManager: @unchecked Sendable {
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "RecordingManager")
 
     enum State: Equatable, Sendable {
         case idle
@@ -136,7 +138,9 @@ final class RecordingManager: @unchecked Sendable {
         try await capture.stopCapture()
 
         // Finalize encoder
-        let fileURL = currentFileURL!
+        guard let fileURL = currentFileURL else {
+            throw RecordingError.notRecording
+        }
         await finalizeEncoder()
 
         // Reset state
@@ -314,7 +318,7 @@ final class RecordingManager: @unchecked Sendable {
 
     private func handleStreamError(_ error: Error) {
         lastError = error
-        print("[RecordingManager] Stream error: \(error.localizedDescription)")
+        Self.logger.error("Stream error: \(error.localizedDescription)")
 
         // Attempt to stop gracefully
         Task {

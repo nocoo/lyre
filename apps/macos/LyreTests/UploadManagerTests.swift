@@ -42,7 +42,6 @@ struct UploadManagerTests {
         let manager = UploadManager(config: config)
         #expect(manager.state == .idle)
         #expect(manager.title == "")
-        #expect(manager.description == "")
         #expect(manager.selectedFolderID == nil)
         #expect(manager.selectedTagIDs.isEmpty)
         #expect(manager.folders.isEmpty)
@@ -69,7 +68,6 @@ struct UploadManagerTests {
         let manager = UploadManager(config: config)
 
         manager.title = "Test Title"
-        manager.description = "Test Desc"
         manager.selectedFolderID = "folder1"
         manager.selectedTagIDs = ["tag1", "tag2"]
 
@@ -77,7 +75,6 @@ struct UploadManagerTests {
 
         #expect(manager.state == .idle)
         #expect(manager.title == "")
-        #expect(manager.description == "")
         #expect(manager.selectedFolderID == nil)
         #expect(manager.selectedTagIDs.isEmpty)
     }

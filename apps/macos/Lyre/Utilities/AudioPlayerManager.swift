@@ -1,9 +1,12 @@
-import SwiftUI
 import AVFoundation
+import Observation
+import os
 
 /// Simple audio player wrapper for AVAudioPlayer.
 @Observable
 final class AudioPlayerManager: NSObject, @unchecked Sendable, AVAudioPlayerDelegate {
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "AudioPlayerManager")
+
     enum PlaybackState: Equatable {
         case stopped
         case playing(URL)
@@ -56,7 +59,7 @@ final class AudioPlayerManager: NSObject, @unchecked Sendable, AVAudioPlayerDele
             state = .playing(url)
             startTimer()
         } catch {
-            // Silently fail — could log via os.Logger
+            Self.logger.warning("Failed to play audio: \(error.localizedDescription)")
         }
     }
 

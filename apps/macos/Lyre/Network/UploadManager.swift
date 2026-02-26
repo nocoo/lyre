@@ -31,7 +31,6 @@ final class UploadManager: @unchecked Sendable {
     var selectedFolderID: String?
     var selectedTagIDs: Set<String> = []
     var title: String = ""
-    var description: String = ""
 
     // MARK: - Dependencies
 
@@ -101,7 +100,6 @@ final class UploadManager: @unchecked Sendable {
     func reset() {
         cancel()
         title = ""
-        description = ""
         selectedFolderID = nil
         selectedTagIDs = []
     }

@@ -62,10 +62,6 @@ struct UploadView: View {
             TextField("Title", text: $uploadManager.title, prompt: Text(recording.filename))
                 .textFieldStyle(.roundedBorder)
 
-            // Description
-            TextField("Description (optional)", text: $uploadManager.description)
-                .textFieldStyle(.roundedBorder)
-
             // Folder picker
             if uploadManager.isFetchingMetadata {
                 HStack {

@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 @main
@@ -90,6 +91,8 @@ struct MainWindowView: View {
 
 /// The tray dropdown menu.
 struct TrayMenu: View {
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "TrayMenu")
+
     @Bindable var recorder: RecordingManager
     var onOpenWindow: () -> Void
     @State private var elapsedTimer: Timer?
@@ -168,7 +171,8 @@ struct TrayMenu: View {
             try await recorder.startRecording()
             startElapsedTimer()
         } catch {
-            print("[TrayMenu] Start recording failed: \(error.localizedDescription)")
+            Self.logger.error("Start recording failed: \(error.localizedDescription)")
+            showErrorAlert(title: "Recording Failed", message: error.localizedDescription)
         }
     }
 
@@ -176,10 +180,21 @@ struct TrayMenu: View {
         stopElapsedTimer()
         do {
             let url = try await recorder.stopRecording()
-            print("[TrayMenu] Recording saved: \(url.lastPathComponent)")
+            Self.logger.info("Recording saved: \(url.lastPathComponent)")
         } catch {
-            print("[TrayMenu] Stop recording failed: \(error.localizedDescription)")
+            Self.logger.error("Stop recording failed: \(error.localizedDescription)")
+            showErrorAlert(title: "Recording Error", message: error.localizedDescription)
         }
+    }
+
+    /// Show an error alert to the user via NSAlert (works from menu bar apps).
+    private func showErrorAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     // MARK: - Elapsed Timer

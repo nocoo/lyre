@@ -99,40 +99,16 @@ struct SettingsView: View {
         connectionStatus = .testing
         Task {
             do {
-                let url = try buildURL("/api/live")
-                var request = URLRequest(url: url)
-                request.setValue("Bearer \(config.authToken)", forHTTPHeaderField: "Authorization")
-                request.timeoutInterval = 10
-
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    connectionStatus = .failed("Invalid response")
-                    return
-                }
-                guard httpResponse.statusCode == 200 else {
-                    connectionStatus = .failed("HTTP \(httpResponse.statusCode)")
-                    return
-                }
-
-                // Parse JSON for version
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let version = json["version"] as? String {
-                    connectionStatus = .success(version)
-                } else {
-                    connectionStatus = .success("unknown")
-                }
+                let client = APIClient(
+                    baseURL: config.serverURL,
+                    authToken: config.authToken
+                )
+                let response = try await client.checkLive()
+                connectionStatus = .success(response.version ?? "unknown")
             } catch {
                 connectionStatus = .failed(error.localizedDescription)
             }
         }
-    }
-
-    private func buildURL(_ path: String) throws -> URL {
-        let base = config.serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: base)?.appendingPathComponent(path) else {
-            throw URLError(.badURL)
-        }
-        return url
     }
 
     // MARK: - Directory Picker

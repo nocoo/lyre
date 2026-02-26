@@ -1,4 +1,5 @@
 import AVFoundation
+import os
 import ScreenCaptureKit
 
 /// A microphone input device available for recording.
@@ -15,6 +16,8 @@ struct AudioInputDevice: Identifiable, Equatable, Sendable {
 ///
 /// Samples from both streams are fed into an `AudioMixer` for combination.
 final class AudioCaptureManager: NSObject, @unchecked Sendable {
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "AudioCaptureManager")
+
     /// Callback invoked with mixed PCM samples ready for encoding.
     var onMixedSamples: (([Float]) -> Void)?
 
@@ -195,7 +198,7 @@ extension AudioCaptureManager: SCStreamOutput {
 
 extension AudioCaptureManager: SCStreamDelegate {
     func stream(_ stream: SCStream, didStopWithError error: any Error) {
-        print("[AudioCaptureManager] Stream stopped with error: \(error.localizedDescription)")
+        Self.logger.error("Stream stopped with error: \(error.localizedDescription)")
         onStreamError?(error)
     }
 }

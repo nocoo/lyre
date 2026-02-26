@@ -50,3 +50,4 @@ __pycache__/
 # tauri / rust
 apps/macos/src-tauri/target/
 apps/macos/frontend/dist/
+default.profraw

@@ -9,6 +9,7 @@ struct RecordingsView: View {
     @State private var recordingToDelete: RecordingFile?
     @State private var recordingToUpload: RecordingFile?
     @State private var uploadManager: UploadManager?
+    @State private var deleteError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,9 +32,13 @@ struct RecordingsView: View {
         .alert("Delete Recording", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
                 if let recording = recordingToDelete {
-                    try? store.delete(recording)
-                    if player.isActive(recording.url) {
-                        player.stop()
+                    do {
+                        try store.delete(recording)
+                        if player.isActive(recording.url) {
+                            player.stop()
+                        }
+                    } catch {
+                        deleteError = error.localizedDescription
                     }
                 }
                 recordingToDelete = nil
@@ -44,6 +49,16 @@ struct RecordingsView: View {
         } message: {
             if let recording = recordingToDelete {
                 Text("Are you sure you want to delete \"\(recording.filename)\"? This cannot be undone.")
+            }
+        }
+        .alert("Delete Failed", isPresented: .init(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK") { deleteError = nil }
+        } message: {
+            if let error = deleteError {
+                Text(error)
             }
         }
         .sheet(item: $recordingToUpload) { recording in
