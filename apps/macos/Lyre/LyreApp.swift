@@ -11,7 +11,7 @@ struct LyreApp: App {
     var body: some Scene {
         // Menu bar tray
         MenuBarExtra {
-            TrayMenu(recorder: recorder, onOpenWindow: { openWindow(id: "main") })
+            TrayMenu(recorder: recorder, config: config, onOpenWindow: { openWindow(id: "main") })
         } label: {
             TrayLabel(isRecording: recorder.state == .recording)
         }
@@ -94,6 +94,7 @@ struct TrayMenu: View {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "TrayMenu")
 
     @Bindable var recorder: RecordingManager
+    @Bindable var config: AppConfig
     var onOpenWindow: () -> Void
     @State private var elapsedTimer: Timer?
     @State private var elapsedDisplay: String = "00:00"
@@ -121,7 +122,7 @@ struct TrayMenu: View {
             Divider()
 
             // Input device selector
-            InputDeviceMenu(recorder: recorder)
+            InputDeviceMenu(recorder: recorder, config: config)
 
             Divider()
 
@@ -159,12 +160,27 @@ struct TrayMenu: View {
                 Task {
                     await recorder.permissions.checkAll()
                     recorder.capture.refreshDevices()
+                    restoreSavedInputDevice()
                 }
             }
         }
     }
 
     // MARK: - Actions
+
+    /// Restore saved input device from config, falling back to default if unavailable.
+    private func restoreSavedInputDevice() {
+        if let savedID = config.selectedInputDeviceID {
+            let available = recorder.capture.availableDevices.contains { $0.id == savedID }
+            if available {
+                recorder.capture.selectedDeviceID = savedID
+            } else {
+                Self.logger.info("Saved input device \(savedID) no longer available, using default")
+                config.selectedInputDeviceID = nil
+                recorder.capture.selectedDeviceID = nil
+            }
+        }
+    }
 
     private func startRecording() async {
         do {
@@ -219,11 +235,13 @@ struct TrayMenu: View {
 /// Submenu for selecting microphone input device.
 struct InputDeviceMenu: View {
     @Bindable var recorder: RecordingManager
+    @Bindable var config: AppConfig
 
     var body: some View {
         Menu("Input Device") {
             Button {
                 recorder.capture.selectedDeviceID = nil
+                config.selectedInputDeviceID = nil
             } label: {
                 HStack {
                     Text("System Default")
@@ -239,6 +257,7 @@ struct InputDeviceMenu: View {
                 ForEach(recorder.capture.availableDevices) { device in
                     Button {
                         recorder.capture.selectedDeviceID = device.id
+                        config.selectedInputDeviceID = device.id
                     } label: {
                         HStack {
                             Text(device.name)

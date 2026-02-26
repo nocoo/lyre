@@ -27,6 +27,13 @@ final class AppConfig: @unchecked Sendable {
         didSet { scheduleSave() }
     }
 
+    /// Persisted microphone input device ID. Nil = system default.
+    /// Validated against available devices on each launch — if the saved
+    /// device is no longer available, this resets to nil (system default).
+    var selectedInputDeviceID: String? {
+        didSet { scheduleSave() }
+    }
+
     // MARK: - Derived
 
     /// Whether the server connection is configured (URL and token both non-empty).
@@ -62,6 +69,7 @@ final class AppConfig: @unchecked Sendable {
             if let dirPath = stored.outputDirectory {
                 outputDirectory = URL(fileURLWithPath: dirPath, isDirectory: true)
             }
+            selectedInputDeviceID = stored.selectedInputDeviceID
             Self.logger.info("Config loaded from \(self.configURL.lastPathComponent)")
         } catch {
             Self.logger.error("Failed to load config: \(error.localizedDescription)")
@@ -73,7 +81,8 @@ final class AppConfig: @unchecked Sendable {
         let stored = StoredConfig(
             serverURL: serverURL.isEmpty ? nil : serverURL,
             authToken: authToken.isEmpty ? nil : authToken,
-            outputDirectory: outputDirectory.path
+            outputDirectory: outputDirectory.path,
+            selectedInputDeviceID: selectedInputDeviceID
         )
 
         do {
@@ -122,4 +131,5 @@ private struct StoredConfig: Codable {
     var serverURL: String?
     var authToken: String?
     var outputDirectory: String?
+    var selectedInputDeviceID: String?
 }

@@ -28,6 +28,7 @@ struct AppConfigTests {
         #expect(config.serverURL == "")
         #expect(config.authToken == "")
         #expect(config.outputDirectory == AppConfig.defaultOutputDirectory())
+        #expect(config.selectedInputDeviceID == nil)
         #expect(!config.isServerConfigured)
     }
 
@@ -112,5 +113,35 @@ struct AppConfigTests {
         #expect(json["authToken"] == nil)
         // outputDirectory should always be stored
         #expect(json["outputDirectory"] != nil)
+        // selectedInputDeviceID should be null when nil
+        #expect(json["selectedInputDeviceID"] == nil)
+    }
+
+    // MARK: - Input device persistence
+
+    @Test func selectedInputDeviceIDRoundTrip() {
+        let (config, dir) = makeConfig()
+        defer { cleanup(dir) }
+
+        let configURL = dir.appendingPathComponent("config.json")
+
+        config.selectedInputDeviceID = "BuiltInMic:12345"
+        config.save()
+
+        let loaded = AppConfig(configURL: configURL)
+        #expect(loaded.selectedInputDeviceID == "BuiltInMic:12345")
+    }
+
+    @Test func selectedInputDeviceIDNilRoundTrip() {
+        let (config, dir) = makeConfig()
+        defer { cleanup(dir) }
+
+        let configURL = dir.appendingPathComponent("config.json")
+
+        config.selectedInputDeviceID = nil
+        config.save()
+
+        let loaded = AppConfig(configURL: configURL)
+        #expect(loaded.selectedInputDeviceID == nil)
     }
 }
