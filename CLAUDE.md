@@ -15,10 +15,10 @@ lyre/
 │   │   ├── scripts/  ← Build/test helper scripts
 │   │   ├── database/ ← SQLite DB (gitignored)
 │   │   └── ...       ← Config files (tsconfig, eslint, next.config, etc.)
-│   └── macos/        ← Tauri macOS menu bar app (Rust)
-│       ├── src-tauri/  ← Rust source, Cargo.toml, tauri.conf.json
-│       ├── frontend/   ← Minimal HTML placeholder (tray-only app)
-│       └── tests/      ← Integration/E2E tests
+│   └── macos/        ← Native Swift/SwiftUI menu bar app
+│       ├── Lyre/       ← Swift source code
+│       ├── LyreTests/  ← Unit + E2E tests (Swift Testing)
+│       └── project.yml ← xcodegen project definition
 ├── packages/         ← Shared packages placeholder (.gitkeep)
 ├── package.json      ← Root workspace config (proxies scripts to apps/web)
 ├── bun.lock
@@ -47,11 +47,15 @@ lyre/
 
 ### macOS App (apps/macos)
 
-- **Framework**: Tauri v2 (menu bar / system tray app, no window)
-- **Language**: Rust (edition 2021)
-- **Audio**: `cpal` (CoreAudio backend) + `hound` (WAV encoding)
-- **Features**: Microphone enumeration, recording with tray icon indicator, WAV file output
-- **Testing**: `cargo test` (UT + integration), `cargo clippy` (lint)
+- **Framework**: SwiftUI (`MenuBarExtra`) + AppKit glue
+- **Language**: Swift 6 (strict concurrency)
+- **Minimum macOS**: 15.0 (full ScreenCaptureKit support)
+- **Audio**: ScreenCaptureKit (system + mic) → AudioMixer → AVAssetWriter (M4A/AAC)
+- **Build System**: xcodegen (`project.yml`) → Xcode project → `xcodebuild`
+- **Networking**: URLSession (async/await)
+- **Features**: Meeting recording (mic + system audio), upload to Lyre server, input device memory
+- **Testing**: Swift Testing framework (`xcodebuild test`), SwiftLint (lint)
+- **Code Signing**: Apple Development certificate (Team ID `93WWLTN9XU`)
 
 ## Key Commands
 
@@ -70,14 +74,13 @@ bun run db:studio      # Open Drizzle Studio
 
 ### macOS App Commands
 
-Run from `apps/macos/src-tauri/`:
+Run from `apps/macos/`:
 
 ```bash
-cargo build            # Build macOS app (debug)
-cargo test             # Run UT + integration tests
-cargo clippy -- -D warnings  # Lint (zero warnings)
-cargo tauri dev        # Run app in dev mode
-cargo tauri build      # Build release .app bundle
+xcodegen generate                  # Regenerate Xcode project from project.yml
+xcodebuild build -project Lyre.xcodeproj -scheme Lyre -configuration Debug -destination "platform=macOS"
+xcodebuild test -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS"
+swiftlint lint Lyre/               # Lint production code (zero violations)
 ```
 
 ## Git Hooks (Husky)
@@ -120,22 +123,20 @@ Version is managed from the **root `package.json`** as the single source of trut
 | Root (source of truth) | `package.json` | `version` |
 | Web app | `apps/web/package.json` | `version` |
 | Web API fallback | `apps/web/src/app/api/live/route.ts` | hardcoded string |
-| macOS Rust crate | `apps/macos/src-tauri/Cargo.toml` | `version` |
-| macOS Tauri config | `apps/macos/src-tauri/tauri.conf.json` | `version` |
-| macOS frontend | `apps/macos/frontend/package.json` | `version` |
+| macOS app | `apps/macos/project.yml` | `MARKETING_VERSION` |
 
 - `src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION`
 - Sidebar displays the version badge (in `src/components/layout/sidebar.tsx`)
 - `/api/live` endpoint returns the version in its JSON response
-- macOS About page reads the version from `tauri.conf.json` via `getVersion()`
+- macOS About page reads the version from `CFBundleShortVersionString` (set by `MARKETING_VERSION`)
 
 ### How to bump version
 
-1. Update `version` in **all 6 locations** listed above (root, web, web fallback, Cargo.toml, tauri.conf.json, macos frontend)
+1. Update `version` in **all 4 locations** listed above (root, web, web fallback, project.yml MARKETING_VERSION)
 2. Create a git tag: `git tag v<version>`
 3. Push tag: `git push origin v<version>`
-4. Build macOS app: `cargo tauri build` (from `apps/macos/src-tauri/`)
-5. Create GitHub release with macOS `.dmg`: `gh release create v<version> --generate-notes path/to/Lyre.dmg`
+4. Build macOS app: `xcodebuild build -configuration Release` (from `apps/macos/`)
+5. Create GitHub release: `gh release create v<version> --generate-notes`
 
 ## Project Structure (apps/web/src/)
 
@@ -159,33 +160,62 @@ src/
 └── __tests__/        # Unit tests & E2E tests
 ```
 
-## Project Structure (apps/macos/src-tauri/)
+## Project Structure (apps/macos/)
 
 ```
-src-tauri/
-├── src/
-│   ├── main.rs       # Tauri app entry point (setup tray, plugins)
-│   ├── lib.rs        # Library root (re-exports for integration tests)
-│   ├── system_audio.rs # ScreenCaptureKit audio capture (system + mic)
-│   ├── recorder.rs     # MP3 recording engine (ScreenCaptureKit + LAME)
-│   └── tray.rs       # System tray menu & event handling
-├── icons/            # App & tray icons (generated from logo.png)
-├── capabilities/     # Tauri v2 security capabilities
-├── tests/
-│   └── e2e.rs        # Integration tests (real recording pipeline)
-├── Cargo.toml
-├── build.rs
-└── tauri.conf.json
+apps/macos/
+├── project.yml                    ← xcodegen project definition
+├── .swiftlint.yml                 ← SwiftLint config
+├── Lyre.xcodeproj/                ← Generated (xcodegen generate)
+├── Lyre/
+│   ├── LyreApp.swift              ← @main, MenuBarExtra, TrayMenu, MainWindowView
+│   ├── Constants.swift            ← Shared constants (subsystem, audio params)
+│   ├── Info.plist                  ← LSUIElement, NSMicrophoneUsageDescription
+│   ├── Lyre.entitlements           ← Audio Input
+│   ├── Assets.xcassets/            ← App icon, tray icons
+│   ├── Audio/
+│   │   ├── PermissionManager.swift
+│   │   ├── AudioCaptureManager.swift
+│   │   ├── AudioMixer.swift
+│   │   └── RecordingManager.swift  ← State machine + AVAssetWriter encoding
+│   ├── Recording/
+│   │   └── RecordingsStore.swift   ← File scanning, metadata, bulk delete
+│   ├── Network/
+│   │   ├── APIClient.swift         ← Actor, all endpoints, injectable URLSession
+│   │   └── UploadManager.swift     ← 3-step upload flow
+│   ├── Config/
+│   │   └── AppConfig.swift         ← JSON persistence
+│   ├── Views/
+│   │   ├── RecordingsView.swift    ← List, playback, multi-select batch delete
+│   │   ├── UploadView.swift        ← Upload form, folder/tag, progress
+│   │   ├── SettingsView.swift      ← Server config, connection test
+│   │   ├── AboutView.swift         ← Version, GitHub links
+│   │   └── PermissionGuideView.swift ← Step-by-step onboarding
+│   └── Utilities/
+│       └── AudioPlayerManager.swift ← AVAudioPlayer wrapper
+└── LyreTests/
+    ├── SmokeTests.swift            ← 1 test
+    ├── PermissionManagerTests.swift ← 4 tests
+    ├── AudioMixerTests.swift       ← 20 tests
+    ├── AudioCaptureManagerTests.swift ← 12 tests
+    ├── RecordingManagerTests.swift  ← 12 tests
+    ├── RecordingsStoreTests.swift   ← 10 tests
+    ├── AppConfigTests.swift         ← 8 tests
+    ├── APIClientTests.swift         ← 15 tests
+    ├── UploadManagerTests.swift     ← 6 tests
+    └── RecordingE2ETests.swift      ← 3 E2E tests
 ```
 
 ### macOS App Architecture
 
-- **Tray-only app**: No window UI. All interaction via system tray menu.
-- **Menu structure**: Start/Stop Recording → Input Device submenu → Output folder → Quit
+- **Tray-only app**: Menu bar icon with popup menu. Window UI via "Open Lyre..." menu item.
+- **Menu structure**: Start/Stop Recording → Input Device submenu → Open Lyre... → Quit
 - **Recording indicator**: Tray icon switches between template (idle) and red-dot (recording)
 - **Audio capture**: ScreenCaptureKit (macOS 15.0+) captures both system audio and microphone in a single `SCStream`. Requires "Screen & System Audio Recording" permission.
-- **Thread safety**: `SCStream` is !Send on macOS. The recorder must stay on the thread that created it (main thread).
-- **E2E tests**: Skip gracefully when ScreenCaptureKit permission is not granted (CI-safe). Recording tests are serialized via a global mutex due to a `screencapturekit` crate handler dispatch bug.
+- **Audio mixing**: Weighted mix (system 0.8× + mic 2.5×) with tanhf() soft clipping. Stereo→mono picks louder channel.
+- **Input device memory**: Selected microphone persisted in AppConfig, restored on launch with fallback.
+- **Upload flow**: Presign → OSS PUT → Create recording (3-step, with cancel support).
+- **E2E tests**: Skip gracefully when ScreenCaptureKit permission is not granted (CI-safe).
 
 ## Retrospective
 
@@ -193,8 +223,5 @@ src-tauri/
 - **SQLite WAL mode: always checkpoint before copying**: When copying a SQLite database file, `ALTER TABLE` and other schema changes may live in the `.db-wal` file, not the main `.db` file. Always run `PRAGMA wal_checkpoint(TRUNCATE)` before `cp`, or copy all three files (`.db`, `.db-shm`, `.db-wal`) together. Copying only the `.db` file silently loses uncommitted WAL changes.
 - **Production DB schema must be migrated after schema changes**: Drizzle schema changes (new columns, new tables) only affect the local dev DB when running `db:push`. The production SQLite on Railway volume is **not** auto-migrated on deploy. After any schema change, SSH into the Railway container (`railway ssh`) and run the necessary `ALTER TABLE ADD COLUMN` statements via `bun -e` (since `sqlite3` CLI is not available in the standalone image). Always run `PRAGMA wal_checkpoint(TRUNCATE)` after migration. Failure to migrate causes silent HTTP 500 errors because Drizzle generates SQL referencing columns that don't exist yet — and without try/catch the real error (`table X has no column named Y`) is swallowed by Next.js's generic 500 handler.
 - **Pre-push hook must include `bun run build`**: UT, lint, and E2E alone do NOT catch TypeScript type errors that only surface during `next build` (which runs full `tsc`). ESLint doesn't flag array-index `string | undefined` narrowing issues, and E2E uses `next dev` which skips type checking. The pre-push hook order is: `test:coverage → lint → build → test:e2e`.
-- **screencapturekit crate dispatches to ALL handlers**: The `screencapturekit` crate v1.5 uses a global `HANDLER_REGISTRY` and its `sample_handler` callback iterates over ALL registered handlers for every sample buffer, ignoring the `SCStreamOutputType` they were registered with. This means registering separate handlers for `Audio` and `Microphone` causes each buffer to be delivered twice (once per handler), doubling the encoded data. Workaround: each `AudioOutputHandler` carries an `expected_type` field and silently drops buffers whose `output_type` doesn't match. This is forward-compatible — if the crate fixes the bug, the filter becomes a harmless no-op.
-- **LAME encoder crashes on non-finite PCM samples**: The `mp3lame-encoder` crate's internal `calc_energy` function in `psymodel.c` asserts `el >= 0`, which fails (SIGABRT) when input contains NaN or Infinity values. ScreenCaptureKit can occasionally deliver such values in audio buffers. Always sanitize f32 PCM samples before encoding: replace non-finite values with 0.0 and clamp to [-1.0, 1.0].
 - **SCStream requires registering each output type separately**: Apple's `SCStream.addStreamOutput(_:type:)` must be called for **each** `SCStreamOutputType` you want to receive. Setting `capturesMicrophone = true` in `SCStreamConfiguration` enables microphone capture at the system level, but the stream only delivers microphone buffers if you also register an output handler with type `.microphone`. Without this registration, mic samples are silently discarded — the handler registered for `.audio` never sees them.
 - **System audio + microphone are separate PCM streams that must be mixed**: ScreenCaptureKit delivers system audio and microphone as independent `CMSampleBuffer` streams. Simply concatenating both into the same MP3 encoder doubles the recording duration (2s recording → 4s file). The correct approach is an `AudioMixer` that buffers both sources independently and outputs their sample-by-sample average `(a + b) / 2`. The mixer also handles the single-source fallback (e.g. no mic permission) by draining the active buffer after a threshold (~100ms at 48kHz) to prevent unbounded accumulation.
-- **screencapturekit crate rpath not propagated to binary**: The `screencapturekit` crate emits `cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift` in its build script, but Cargo only applies `rustc-link-arg` from dependencies to lib targets, not the final binary. On macOS 26+ where `libswift_Concurrency.dylib` lives only in the dyld shared cache (no standalone file on disk), the binary fails with `Library not loaded: @rpath/libswift_Concurrency.dylib`. Fix: re-emit the rpath in the app's own `build.rs` with `println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift")`.

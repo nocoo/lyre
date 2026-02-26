@@ -47,7 +47,8 @@ next-env.d.ts
 .ruff_cache/
 __pycache__/
 
-# tauri / rust
-apps/macos/src-tauri/target/
-apps/macos/frontend/dist/
+# xcode
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
 default.profraw
