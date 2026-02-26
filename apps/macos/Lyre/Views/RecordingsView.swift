@@ -10,6 +10,8 @@ struct RecordingsView: View {
     @State private var recordingToUpload: RecordingFile?
     @State private var uploadManager: UploadManager?
     @State private var deleteError: String?
+    @State private var selection: Set<URL> = []
+    @State private var showBatchDeleteConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +25,7 @@ struct RecordingsView: View {
             }
         }
         .frame(minWidth: 400, minHeight: 300)
+        .toolbar { toolbarContent }
         .onAppear {
             Task { await store.scan() }
         }
@@ -32,14 +35,7 @@ struct RecordingsView: View {
         .alert("Delete Recording", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) {
                 if let recording = recordingToDelete {
-                    do {
-                        try store.delete(recording)
-                        if player.isActive(recording.url) {
-                            player.stop()
-                        }
-                    } catch {
-                        deleteError = error.localizedDescription
-                    }
+                    deleteSingle(recording)
                 }
                 recordingToDelete = nil
             }
@@ -48,8 +44,17 @@ struct RecordingsView: View {
             }
         } message: {
             if let recording = recordingToDelete {
-                Text("Are you sure you want to delete \"\(recording.filename)\"? This cannot be undone.")
+                Text(deleteConfirmMessage(for: recording))
             }
+        }
+        .alert("Delete \(selection.count) Recordings",
+               isPresented: $showBatchDeleteConfirm) {
+            Button("Delete All", role: .destructive) {
+                deleteSelected()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(batchDeleteMessage)
         }
         .alert("Delete Failed", isPresented: .init(
             get: { deleteError != nil },
@@ -75,6 +80,26 @@ struct RecordingsView: View {
         }
     }
 
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .automatic) {
+            if !selection.isEmpty {
+                Text("\(selection.count) selected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button(role: .destructive) {
+                    showBatchDeleteConfirm = true
+                } label: {
+                    Label("Delete Selected", systemImage: "trash")
+                }
+                .help("Delete \(selection.count) selected recordings")
+            }
+        }
+    }
+
     // MARK: - Empty State
 
     private var emptyState: some View {
@@ -96,7 +121,7 @@ struct RecordingsView: View {
     // MARK: - Recordings List
 
     private var recordingsList: some View {
-        List {
+        List(selection: $selection) {
             ForEach(store.recordings) { recording in
                 RecordingRow(
                     recording: recording,
@@ -111,12 +136,58 @@ struct RecordingsView: View {
                         showDeleteConfirm = true
                     },
                     onReveal: {
-                        NSWorkspace.shared.activateFileViewerSelecting([recording.url])
+                        NSWorkspace.shared.activateFileViewerSelecting(
+                            [recording.url]
+                        )
                     }
                 )
+                .tag(recording.url)
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
+    }
+
+    // MARK: - Delete Helpers
+
+    private func deleteSingle(_ recording: RecordingFile) {
+        do {
+            try store.delete(recording)
+            selection.remove(recording.url)
+            if player.isActive(recording.url) {
+                player.stop()
+            }
+        } catch {
+            deleteError = error.localizedDescription
+        }
+    }
+
+    private func deleteSelected() {
+        let toDelete = store.recordings.filter {
+            selection.contains($0.url)
+        }
+        guard !toDelete.isEmpty else { return }
+
+        // Stop playback if any selected recording is playing
+        for recording in toDelete where player.isActive(recording.url) {
+            player.stop()
+        }
+
+        do {
+            try store.delete(toDelete)
+            selection = []
+        } catch {
+            deleteError = error.localizedDescription
+        }
+    }
+
+    private func deleteConfirmMessage(for recording: RecordingFile) -> String {
+        "Are you sure you want to delete \"\(recording.filename)\"? "
+        + "This cannot be undone."
+    }
+
+    private var batchDeleteMessage: String {
+        "Are you sure you want to delete \(selection.count) recordings? "
+        + "This cannot be undone."
     }
 }
 
