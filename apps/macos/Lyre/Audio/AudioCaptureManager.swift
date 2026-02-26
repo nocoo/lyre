@@ -15,6 +15,7 @@ struct AudioInputDevice: Identifiable, Equatable, Sendable {
 /// - Microphone (.microphone) captures the local user's voice
 ///
 /// Samples from both streams are fed into an `AudioMixer` for combination.
+@Observable
 final class AudioCaptureManager: NSObject, @unchecked Sendable {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "AudioCaptureManager")
 
@@ -25,7 +26,7 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     var onStreamError: ((Error) -> Void)?
 
     /// Available microphone input devices.
-    private(set) var availableDevices: [AudioInputDevice] = []
+    internal(set) var availableDevices: [AudioInputDevice] = []
 
     /// Currently selected microphone device ID. Nil = system default.
     var selectedDeviceID: String?
@@ -34,6 +35,10 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     private let mixer = AudioMixer()
     private let sampleRate: Int = Constants.Audio.sampleRateInt
     private let channelCount: Int = Constants.Audio.channelCountInt
+
+    /// Counters for debugging audio delivery.
+    private var systemAudioBufferCount: Int = 0
+    private var micBufferCount: Int = 0
 
     /// Timer that periodically drains the mixer and delivers mixed samples.
     private var drainTimer: Timer?
@@ -90,12 +95,17 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         }
 
         mixer.reset()
+        systemAudioBufferCount = 0
+        micBufferCount = 0
 
         let newStream = SCStream(filter: filter, configuration: config, delegate: self)
 
         // Register separate output handlers for system audio and microphone
         try newStream.addStreamOutput(self, type: .audio, sampleHandlerQueue: .global(qos: .userInitiated))
         try newStream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: .global(qos: .userInitiated))
+
+        let deviceLabel = selectedDeviceID ?? "default"
+        Self.logger.info("Starting capture: mic=\(config.captureMicrophone), device=\(deviceLabel)")
 
         try await newStream.startCapture()
         stream = newStream
@@ -114,6 +124,8 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
             drainTimer?.invalidate()
             drainTimer = nil
         }
+
+        Self.logger.info("Stopping capture: systemAudio=\(self.systemAudioBufferCount) buffers, mic=\(self.micBufferCount) buffers")
 
         if let stream {
             try await stream.stopCapture()
@@ -136,26 +148,141 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         }
     }
 
-    /// Extract Float32 PCM samples from a CMSampleBuffer.
+    /// Extract Float32 mono PCM samples from a CMSampleBuffer.
+    ///
+    /// Handles multiple input formats:
+    /// - Float32 mono (system audio default): direct copy
+    /// - Int16 stereo (microphone default): convert Int16→Float32 + downmix to mono
+    /// - Int16 mono: convert Int16→Float32
+    /// - Float32 stereo: downmix to mono
+    ///
+    /// Stereo→mono downmix uses "louder channel" strategy: for each frame,
+    /// the channel with the larger absolute value is selected. This handles
+    /// the common case where macOS mics report as stereo but only one channel
+    /// carries signal — averaging would halve the real signal (-6dB loss).
     static func extractSamples(from sampleBuffer: CMSampleBuffer) -> [Float]? {
+        guard let rawData = getRawAudioData(from: sampleBuffer) else { return nil }
+
+        if rawData.bitsPerChannel == 32 {
+            return extractFloat32Samples(rawData)
+        } else if rawData.bitsPerChannel == 16 {
+            return extractInt16Samples(rawData)
+        } else {
+            logger.warning("Unsupported audio format: \(rawData.bitsPerChannel) bits/channel")
+            return nil
+        }
+    }
+
+    /// Raw audio data extracted from a CMSampleBuffer.
+    private struct RawAudioData {
+        let rawPtr: UnsafeRawPointer
+        let length: Int
+        let channels: Int
+        let bitsPerChannel: Int
+    }
+
+    /// Extract raw byte pointer and format info from a CMSampleBuffer.
+    private static func getRawAudioData(from sampleBuffer: CMSampleBuffer) -> RawAudioData? {
         guard let blockBuffer = sampleBuffer.dataBuffer else { return nil }
+        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else {
+            return nil
+        }
 
         var length = 0
         var dataPointer: UnsafeMutablePointer<Int8>?
         let status = CMBlockBufferGetDataPointer(
-            blockBuffer,
-            atOffset: 0,
-            lengthAtOffsetOut: nil,
-            totalLengthOut: &length,
+            blockBuffer, atOffset: 0,
+            lengthAtOffsetOut: nil, totalLengthOut: &length,
             dataPointerOut: &dataPointer
         )
-        guard status == kCMBlockBufferNoErr, let data = dataPointer else { return nil }
+        guard status == kCMBlockBufferNoErr, let data = dataPointer, length > 0 else {
+            return nil
+        }
 
-        let floatCount = length / MemoryLayout<Float>.size
-        guard floatCount > 0 else { return nil }
+        let desc = asbd.pointee
+        return RawAudioData(
+            rawPtr: UnsafeRawPointer(data),
+            length: length,
+            channels: Int(desc.mChannelsPerFrame),
+            bitsPerChannel: Int(desc.mBitsPerChannel)
+        )
+    }
 
-        let floatPointer = UnsafeRawPointer(data).bindMemory(to: Float.self, capacity: floatCount)
-        return Array(UnsafeBufferPointer(start: floatPointer, count: floatCount))
+    /// Extract Float32 samples, downmixing to mono if multi-channel.
+    private static func extractFloat32Samples(_ data: RawAudioData) -> [Float]? {
+        let totalFloats = data.length / MemoryLayout<Float>.size
+        guard totalFloats > 0 else { return nil }
+        let floatPtr = data.rawPtr.bindMemory(to: Float.self, capacity: totalFloats)
+        let floats = UnsafeBufferPointer(start: floatPtr, count: totalFloats)
+
+        guard data.channels > 1 else { return Array(floats) }
+
+        let frameCount = totalFloats / data.channels
+        var mono = [Float](repeating: 0, count: frameCount)
+        for frame in 0..<frameCount {
+            mono[frame] = pickLouderChannel(floats, frame: frame, channels: data.channels)
+        }
+        return mono
+    }
+
+    /// Extract Int16 samples as Float32, downmixing to mono if multi-channel.
+    private static func extractInt16Samples(_ data: RawAudioData) -> [Float]? {
+        let totalInt16s = data.length / MemoryLayout<Int16>.size
+        guard totalInt16s > 0 else { return nil }
+        let int16Ptr = data.rawPtr.bindMemory(to: Int16.self, capacity: totalInt16s)
+        let int16s = UnsafeBufferPointer(start: int16Ptr, count: totalInt16s)
+        let scale: Float = 1.0 / 32768.0
+
+        guard data.channels > 1 else {
+            return int16s.map { Float($0) * scale }
+        }
+
+        let frameCount = totalInt16s / data.channels
+        var mono = [Float](repeating: 0, count: frameCount)
+        for frame in 0..<frameCount {
+            mono[frame] = pickLouderInt16Channel(int16s, frame: frame, channels: data.channels, scale: scale)
+        }
+        return mono
+    }
+
+    /// Pick the channel with the largest absolute value for a given Float32 frame.
+    private static func pickLouderChannel(
+        _ buffer: UnsafeBufferPointer<Float>,
+        frame: Int,
+        channels: Int
+    ) -> Float {
+        var best: Float = 0
+        var bestAbs: Float = 0
+        for ch in 0..<channels {
+            let val = buffer[frame * channels + ch]
+            let absVal = abs(val)
+            if absVal > bestAbs {
+                best = val
+                bestAbs = absVal
+            }
+        }
+        return best
+    }
+
+    /// Pick the channel with the largest absolute value for a given Int16 frame.
+    private static func pickLouderInt16Channel(
+        _ buffer: UnsafeBufferPointer<Int16>,
+        frame: Int,
+        channels: Int,
+        scale: Float
+    ) -> Float {
+        var best: Float = 0
+        var bestAbs: Float = 0
+        for ch in 0..<channels {
+            let val = Float(buffer[frame * channels + ch]) * scale
+            let absVal = abs(val)
+            if absVal > bestAbs {
+                best = val
+                bestAbs = absVal
+            }
+        }
+        return best
     }
 
     // MARK: - Errors
@@ -181,15 +308,53 @@ extension AudioCaptureManager: SCStreamOutput {
         of outputType: SCStreamOutputType
     ) {
         guard sampleBuffer.isValid else { return }
+        guard outputType == .audio || outputType == .microphone else { return }
+
+        trackBufferCount(outputType, sampleBuffer: sampleBuffer)
+
         guard let samples = Self.extractSamples(from: sampleBuffer) else { return }
 
-        switch outputType {
-        case .audio:
+        logAmplitudeIfNeeded(outputType, samples: samples)
+
+        if outputType == .audio {
             mixer.pushSystemAudio(samples)
-        case .microphone:
+        } else {
             mixer.pushMicrophone(samples)
-        default:
-            break // Ignore video frames
+        }
+    }
+
+    /// Increment buffer count and log format details on first buffer of each type.
+    private func trackBufferCount(_ type: SCStreamOutputType, sampleBuffer: CMSampleBuffer) {
+        if type == .audio {
+            systemAudioBufferCount += 1
+            if systemAudioBufferCount == 1 { logBufferFormat(sampleBuffer, label: "SystemAudio") }
+        } else {
+            micBufferCount += 1
+            if micBufferCount == 1 { logBufferFormat(sampleBuffer, label: "Microphone") }
+        }
+    }
+
+    /// Log peak amplitude every ~1 second (48000/1024 ≈ 47 buffers).
+    private func logAmplitudeIfNeeded(_ type: SCStreamOutputType, samples: [Float]) {
+        let count = type == .audio ? systemAudioBufferCount : micBufferCount
+        guard count % 47 == 1 else { return }
+        let peak = samples.reduce(Float(0)) { max($0, abs($1)) }
+        let label = type == .audio ? "SystemAudio" : "Microphone"
+        Self.logger.debug("\(label) peak=\(String(format: "%.4f", peak)) samples=\(samples.count)")
+    }
+
+    private func logBufferFormat(_ sampleBuffer: CMSampleBuffer, label: String) {
+        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) else {
+            Self.logger.info("\(label): no format description")
+            return
+        }
+        if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) {
+            let desc = asbd.pointee
+            Self.logger.info("""
+                \(label) format: rate=\(desc.mSampleRate) ch=\(desc.mChannelsPerFrame) \
+                bits=\(desc.mBitsPerChannel) bytesPerFrame=\(desc.mBytesPerFrame) \
+                framesPerPacket=\(desc.mFramesPerPacket) format=\(desc.mFormatID)
+                """)
         }
     }
 }
