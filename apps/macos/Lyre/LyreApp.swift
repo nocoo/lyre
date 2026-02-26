@@ -20,15 +20,25 @@ struct LyreApp: App {
             MainWindowView(
                 recorder: recorder,
                 config: config,
-                recordingsStore: recordingsStore ?? RecordingsStore(directory: config.outputDirectory)
+                recordingsStore: resolvedStore
             )
+            .onChange(of: config.outputDirectory) { _, newDir in
+                recorder.outputDirectory = newDir
+                recordingsStore = RecordingsStore(directory: newDir)
+            }
             .onAppear {
+                // Sync config → recorder on first launch
+                recorder.outputDirectory = config.outputDirectory
                 if recordingsStore == nil {
                     recordingsStore = RecordingsStore(directory: config.outputDirectory)
                 }
             }
         }
         .defaultSize(width: 600, height: 500)
+    }
+
+    private var resolvedStore: RecordingsStore {
+        recordingsStore ?? RecordingsStore(directory: config.outputDirectory)
     }
 }
 
