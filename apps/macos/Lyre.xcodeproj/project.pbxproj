@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		17C8D15314068A964243F435 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F7E85877A862D61AFEA40B1 /* AboutView.swift */; };
 		1F413F3779C11F9BCBAF57A1 /* LyreApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD16DFD242493414EA1EA2C /* LyreApp.swift */; };
+		222511AB5DCBDAE7356A1F0A /* UploadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB98E36516BA802546FB5DD3 /* UploadManager.swift */; };
 		230C26A7C8A3591AAA595374 /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DD67E445ECC5A650871E39 /* AppConfigTests.swift */; };
 		468D65919A6805A74C84652F /* AudioCaptureManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD146B1E12A00EF03AF5F9 /* AudioCaptureManagerTests.swift */; };
 		480F11687C07C1CA0543473B /* PermissionManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD9C1C2B1DAFB998D03C2D8 /* PermissionManagerTests.swift */; };
@@ -16,6 +17,8 @@
 		60A286D2B59A4A32F9DCE65A /* RecordingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF6BAE40EB51C3AF754AC56 /* RecordingManager.swift */; };
 		6955B2A8546957F6E6054A61 /* RecordingE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84479354E7634918D8CBADA9 /* RecordingE2ETests.swift */; };
 		734386A9E52FDC8D202FA087 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B117D6D713498A7716527C /* SmokeTests.swift */; };
+		865AC802B3238708D2353DB7 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FACC09867086EAC00C77EF3 /* APIClient.swift */; };
+		8B317CF26B7DC2ACDB18F90F /* UploadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903611D6BFF56C9CE3B574A3 /* UploadView.swift */; };
 		984FEB538739A932909C1235 /* RecordingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F91E0D26696DF1EA2A6E00AC /* RecordingsStoreTests.swift */; };
 		9D063CCD246FB23505FDD103 /* AudioMixer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5708B989E5F7501403FAB84 /* AudioMixer.swift */; };
 		AC72919ABC690F2270C864E7 /* PermissionGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF5FFE40BC27B3A080DABD3 /* PermissionGuideView.swift */; };
@@ -52,15 +55,18 @@
 		6D97AB56A2DEA8A8D28AC461 /* RecordingManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManagerTests.swift; sourceTree = "<group>"; };
 		6EB02B42EFD504463A3B4EF1 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		6EF6BAE40EB51C3AF754AC56 /* RecordingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManager.swift; sourceTree = "<group>"; };
+		6FACC09867086EAC00C77EF3 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		75DD146B1E12A00EF03AF5F9 /* AudioCaptureManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureManagerTests.swift; sourceTree = "<group>"; };
 		76B15AEDC1503219D6CB881B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		778611E3A8ACB3CC04691360 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		84479354E7634918D8CBADA9 /* RecordingE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingE2ETests.swift; sourceTree = "<group>"; };
 		865B1312BF623D7C897306B8 /* Lyre.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Lyre.entitlements; sourceTree = "<group>"; };
+		903611D6BFF56C9CE3B574A3 /* UploadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadView.swift; sourceTree = "<group>"; };
 		A1B117D6D713498A7716527C /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		A5708B989E5F7501403FAB84 /* AudioMixer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMixer.swift; sourceTree = "<group>"; };
 		A71B0C8D8B67DE3BAE19677E /* RecordingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingsStore.swift; sourceTree = "<group>"; };
 		A996D6B8786E6F67E74BC294 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AB98E36516BA802546FB5DD3 /* UploadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadManager.swift; sourceTree = "<group>"; };
 		B2052D85DB430140DDB2BDAC /* AudioMixerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMixerTests.swift; sourceTree = "<group>"; };
 		D335FDFB9ACAFBA6677C83E6 /* AudioCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureManager.swift; sourceTree = "<group>"; };
 		E36D775727AB1819FA065426 /* RecordingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingsView.swift; sourceTree = "<group>"; };
@@ -102,6 +108,7 @@
 				FDF5FFE40BC27B3A080DABD3 /* PermissionGuideView.swift */,
 				E36D775727AB1819FA065426 /* RecordingsView.swift */,
 				778611E3A8ACB3CC04691360 /* SettingsView.swift */,
+				903611D6BFF56C9CE3B574A3 /* UploadView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -122,6 +129,15 @@
 			path = Recording;
 			sourceTree = "<group>";
 		};
+		7388FE2CB3C863EF27E23737 /* Network */ = {
+			isa = PBXGroup;
+			children = (
+				6FACC09867086EAC00C77EF3 /* APIClient.swift */,
+				AB98E36516BA802546FB5DD3 /* UploadManager.swift */,
+			);
+			path = Network;
+			sourceTree = "<group>";
+		};
 		81E8DAE907E9FFEFC2DDDA52 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
@@ -139,6 +155,7 @@
 				3DD16DFD242493414EA1EA2C /* LyreApp.swift */,
 				10D883441E981CC58678A0F1 /* Audio */,
 				4F4C8682CD49DAB8CCEF0D90 /* Config */,
+				7388FE2CB3C863EF27E23737 /* Network */,
 				5B8A2D403A5B1B5CB4EE1141 /* Recording */,
 				81E8DAE907E9FFEFC2DDDA52 /* Utilities */,
 				2E7306FA10218C6E91AD3F82 /* Views */,
@@ -268,6 +285,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				865AC802B3238708D2353DB7 /* APIClient.swift in Sources */,
 				17C8D15314068A964243F435 /* AboutView.swift in Sources */,
 				E5F8BD47EECC4B4CA7922712 /* AppConfig.swift in Sources */,
 				EF857C38565155712D2AEA1F /* AudioCaptureManager.swift in Sources */,
@@ -280,6 +298,8 @@
 				F79327C2DA663C8C7028F40A /* RecordingsStore.swift in Sources */,
 				FA91F08C25A03E6B9C65961F /* RecordingsView.swift in Sources */,
 				ED76B6F1ECCA290705C5BCB7 /* SettingsView.swift in Sources */,
+				222511AB5DCBDAE7356A1F0A /* UploadManager.swift in Sources */,
+				8B317CF26B7DC2ACDB18F90F /* UploadView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

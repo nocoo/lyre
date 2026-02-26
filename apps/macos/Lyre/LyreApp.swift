@@ -70,7 +70,7 @@ struct MainWindowView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             SwiftUI.Tab("Recordings", systemImage: "waveform", value: SidebarTab.recordings) {
-                RecordingsView(store: recordingsStore)
+                RecordingsView(store: recordingsStore, config: config)
             }
 
             SwiftUI.Tab("Permissions", systemImage: "shield.checkered", value: SidebarTab.permissions) {

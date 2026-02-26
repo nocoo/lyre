@@ -3,9 +3,12 @@ import SwiftUI
 /// List of local recordings with playback and delete controls.
 struct RecordingsView: View {
     @Bindable var store: RecordingsStore
+    @Bindable var config: AppConfig
     @State private var player = AudioPlayerManager()
     @State private var showDeleteConfirm = false
     @State private var recordingToDelete: RecordingFile?
+    @State private var recordingToUpload: RecordingFile?
+    @State private var uploadManager: UploadManager?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +46,18 @@ struct RecordingsView: View {
                 Text("Are you sure you want to delete \"\(recording.filename)\"? This cannot be undone.")
             }
         }
+        .sheet(item: $recordingToUpload) { recording in
+            if let manager = uploadManager {
+                UploadView(
+                    uploadManager: manager,
+                    recording: recording,
+                    onDismiss: {
+                        recordingToUpload = nil
+                        uploadManager?.reset()
+                    }
+                )
+            }
+        }
     }
 
     // MARK: - Empty State
@@ -71,6 +86,11 @@ struct RecordingsView: View {
                 RecordingRow(
                     recording: recording,
                     player: player,
+                    showUpload: config.isServerConfigured,
+                    onUpload: {
+                        uploadManager = UploadManager(config: config)
+                        recordingToUpload = recording
+                    },
                     onDelete: {
                         recordingToDelete = recording
                         showDeleteConfirm = true
@@ -89,6 +109,8 @@ struct RecordingsView: View {
 struct RecordingRow: View {
     let recording: RecordingFile
     @Bindable var player: AudioPlayerManager
+    var showUpload: Bool = false
+    var onUpload: (() -> Void)?
     var onDelete: () -> Void
     var onReveal: () -> Void
 
@@ -138,6 +160,10 @@ struct RecordingRow: View {
 
             // Actions
             Menu {
+                if showUpload, let onUpload {
+                    Button("Upload to Server") { onUpload() }
+                    Divider()
+                }
                 Button("Show in Finder") { onReveal() }
                 Divider()
                 Button("Delete", role: .destructive) { onDelete() }
