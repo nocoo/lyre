@@ -87,29 +87,9 @@ struct RecordingManagerTests {
         #expect(RecordingManager.RecordingError.alreadyRecording != .notRecording)
     }
 
-    // MARK: - Sample Buffer Creation
-
-    @Test func createSampleBufferWithEmptySamplesReturnsNil() {
-        let manager = RecordingManager()
-        let result = manager.createSampleBuffer(from: [])
-        #expect(result == nil)
-    }
-
-    @Test func createSampleBufferWithoutFormatReturnsNil() {
-        // Manager has no inputFormat set (never called setupEncoder)
-        let manager = RecordingManager()
-        let result = manager.createSampleBuffer(from: [0.1, 0.2, 0.3])
-        #expect(result == nil)
-    }
-
     // MARK: - Permission Check on Start
-    // Note: startRecording() calls real ScreenCaptureKit/AVFoundation APIs
-    // for permission checks, so integration-level permission tests belong in E2E.
-    // The permission guard logic is verified by inspecting PermissionManager state.
 
     @Test func startRequiresPermissions() {
-        // Verify the manager references a PermissionManager whose state
-        // determines whether recording can proceed.
         let permissions = PermissionManager()
         permissions.screenRecording = .denied
         permissions.microphone = .denied

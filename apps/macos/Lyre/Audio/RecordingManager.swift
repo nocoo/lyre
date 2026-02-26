@@ -7,7 +7,7 @@ import os
 /// - `.idle` → ready to record
 /// - `.recording` → actively capturing and encoding audio
 ///
-/// Uses `AudioCaptureManager` for SCK capture and `AVAssetWriter` for M4A/AAC encoding.
+/// Uses `AudioCaptureManager` for SCK capture and `AudioEncoder` for M4A/AAC encoding.
 @Observable
 final class RecordingManager: @unchecked Sendable {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "RecordingManager")
@@ -60,15 +60,9 @@ final class RecordingManager: @unchecked Sendable {
     /// Directory where recordings are saved.
     var outputDirectory: URL
 
-    // MARK: - Private encoder state
+    // MARK: - Private encoder
 
-    private var assetWriter: AVAssetWriter?
-    private var assetWriterInput: AVAssetWriterInput?
-    private var inputFormat: AVAudioFormat?
-
-    /// Sample rate and channel count — must match AudioCaptureManager.
-    private let sampleRate: Double = Constants.Audio.sampleRate
-    private let channelCount: UInt32 = Constants.Audio.channelCount
+    private var encoder: AudioEncoder?
 
     // MARK: - Init
 
@@ -104,13 +98,18 @@ final class RecordingManager: @unchecked Sendable {
         try ensureOutputDirectory()
         let fileURL = generateOutputURL()
 
-        // Set up AVAssetWriter for M4A/AAC encoding
-        totalSamplesWritten = 0
-        try setupEncoder(outputURL: fileURL)
+        // Set up encoder
+        let enc = AudioEncoder()
+        do {
+            try enc.setup(outputURL: fileURL)
+        } catch let error as AudioEncoder.EncoderError {
+            throw RecordingError.encoderSetupFailed(error.localizedDescription)
+        }
+        encoder = enc
 
         // Wire up capture → encoder pipeline
         capture.onMixedSamples = { [weak self] samples in
-            self?.encodeSamples(samples)
+            self?.encoder?.encodeSamples(samples)
         }
         capture.onStreamError = { [weak self] error in
             self?.handleStreamError(error)
@@ -141,7 +140,8 @@ final class RecordingManager: @unchecked Sendable {
         guard let fileURL = currentFileURL else {
             throw RecordingError.notRecording
         }
-        await finalizeEncoder()
+        await encoder?.finalize()
+        encoder = nil
 
         // Reset state
         state = .idle
@@ -150,168 +150,6 @@ final class RecordingManager: @unchecked Sendable {
         capture.onStreamError = nil
 
         return fileURL
-    }
-
-    // MARK: - Encoder Setup
-
-    /// Create AVAssetWriter + input for AAC encoding.
-    private func setupEncoder(outputURL: URL) throws {
-        let writer: AVAssetWriter
-        do {
-            writer = try AVAssetWriter(outputURL: outputURL, fileType: .m4a)
-        } catch {
-            throw RecordingError.encoderSetupFailed(error.localizedDescription)
-        }
-
-        // AAC output settings
-        let outputSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: sampleRate,
-            AVNumberOfChannelsKey: channelCount,
-            AVEncoderBitRateKey: Constants.Audio.aacBitRate,
-        ]
-
-        let input = AVAssetWriterInput(
-            mediaType: .audio,
-            outputSettings: outputSettings
-        )
-        input.expectsMediaDataInRealTime = true
-
-        guard writer.canAdd(input) else {
-            throw RecordingError.encoderSetupFailed("AVAssetWriter cannot add audio input")
-        }
-        writer.add(input)
-
-        guard writer.startWriting() else {
-            let detail = writer.error?.localizedDescription ?? "unknown error"
-            throw RecordingError.encoderSetupFailed(detail)
-        }
-        writer.startSession(atSourceTime: .zero)
-
-        // Store input format for creating sample buffers
-        inputFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: channelCount,
-            interleaved: false
-        )
-
-        assetWriter = writer
-        assetWriterInput = input
-    }
-
-    /// Encode Float32 PCM samples into the AVAssetWriter pipeline.
-    private func encodeSamples(_ samples: [Float]) {
-        guard let input = assetWriterInput,
-              let writer = assetWriter,
-              writer.status == .writing,
-              input.isReadyForMoreMediaData else {
-            return
-        }
-
-        guard let sampleBuffer = createSampleBuffer(from: samples) else {
-            return
-        }
-
-        input.append(sampleBuffer)
-    }
-
-    /// Finalize the AVAssetWriter and close the file.
-    private func finalizeEncoder() async {
-        guard let writer = assetWriter else { return }
-
-        assetWriterInput?.markAsFinished()
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            writer.finishWriting {
-                continuation.resume()
-            }
-        }
-
-        assetWriter = nil
-        assetWriterInput = nil
-        inputFormat = nil
-    }
-
-    // MARK: - Sample Buffer Creation
-
-    /// The running sample count, used to calculate presentation timestamps.
-    private var totalSamplesWritten: Int64 = 0
-
-    /// Create a CMSampleBuffer from Float32 PCM data for AVAssetWriter.
-    ///
-    /// Builds the buffer directly from raw bytes without AVAudioPCMBuffer.
-    func createSampleBuffer(from samples: [Float]) -> CMSampleBuffer? {
-        let frameCount = samples.count
-        guard frameCount > 0, let format = inputFormat else { return nil }
-
-        guard let formatDescription = format.formatDescription as CMFormatDescription? else {
-            return nil
-        }
-
-        let pts = CMTime(
-            value: totalSamplesWritten,
-            timescale: CMTimeScale(sampleRate)
-        )
-        let duration = CMTime(
-            value: CMTimeValue(frameCount),
-            timescale: CMTimeScale(sampleRate)
-        )
-        totalSamplesWritten += Int64(frameCount)
-
-        var timing = CMSampleTimingInfo(
-            duration: duration,
-            presentationTimeStamp: pts,
-            decodeTimeStamp: .invalid
-        )
-
-        let dataSize = frameCount * MemoryLayout<Float>.size
-
-        // Create a block buffer with a copy of the sample data
-        var blockBuffer: CMBlockBuffer?
-        var status = CMBlockBufferCreateWithMemoryBlock(
-            allocator: kCFAllocatorDefault,
-            memoryBlock: nil,
-            blockLength: dataSize,
-            blockAllocator: kCFAllocatorDefault,
-            customBlockSource: nil,
-            offsetToData: 0,
-            dataLength: dataSize,
-            flags: 0,
-            blockBufferOut: &blockBuffer
-        )
-        guard status == kCMBlockBufferNoErr, let block = blockBuffer else { return nil }
-
-        // Copy Float32 data into the block buffer
-        status = samples.withUnsafeBytes { rawBuf in
-            CMBlockBufferReplaceDataBytes(
-                with: rawBuf.baseAddress!,
-                blockBuffer: block,
-                offsetIntoDestination: 0,
-                dataLength: dataSize
-            )
-        }
-        guard status == kCMBlockBufferNoErr else { return nil }
-
-        let sampleSize = MemoryLayout<Float>.size
-        var sampleBuffer: CMSampleBuffer?
-        status = CMSampleBufferCreate(
-            allocator: kCFAllocatorDefault,
-            dataBuffer: block,
-            dataReady: true,
-            makeDataReadyCallback: nil,
-            refcon: nil,
-            formatDescription: formatDescription,
-            sampleCount: frameCount,
-            sampleTimingEntryCount: 1,
-            sampleTimingArray: &timing,
-            sampleSizeEntryCount: 1,
-            sampleSizeArray: [sampleSize],
-            sampleBufferOut: &sampleBuffer
-        )
-
-        guard status == noErr else { return nil }
-        return sampleBuffer
     }
 
     // MARK: - Error Handling
