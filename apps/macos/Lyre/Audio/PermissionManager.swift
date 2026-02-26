@@ -1,4 +1,5 @@
 import AVFoundation
+import os
 import ScreenCaptureKit
 
 /// Manages macOS permissions required for audio recording.
@@ -9,6 +10,8 @@ import ScreenCaptureKit
 /// 2. **Microphone** — grants access to the mic input (your own voice).
 @Observable
 final class PermissionManager: @unchecked Sendable {
+    private static let logger = Logger(subsystem: "com.lyre.app", category: "PermissionManager")
+
     enum Status: Sendable, Equatable {
         case unknown
         case granted
@@ -39,9 +42,11 @@ final class PermissionManager: @unchecked Sendable {
     /// ScreenCaptureKit will throw if the user has denied permission.
     func checkScreenRecording() async {
         do {
-            _ = try await SCShareableContent.current
+            let content = try await SCShareableContent.current
+            Self.logger.info("Screen Recording: granted (\(content.displays.count) displays)")
             screenRecording = .granted
         } catch {
+            Self.logger.warning("Screen Recording: denied — \(error.localizedDescription)")
             screenRecording = .denied
         }
     }
@@ -49,6 +54,7 @@ final class PermissionManager: @unchecked Sendable {
     /// Check microphone permission using AVFoundation's authorization status.
     func checkMicrophone() async {
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        Self.logger.info("Microphone AVCaptureDevice status: \(status.rawValue)")
         switch status {
         case .authorized:
             microphone = .granted

@@ -48,5 +48,3 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lyre.app.tests
         GENERATE_INFOPLIST_FILE: true
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Lyre.app/Contents/MacOS/Lyre"
-        BUNDLE_LOADER: "$(TEST_HOST)"
