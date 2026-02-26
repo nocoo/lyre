@@ -171,12 +171,14 @@ SwiftUI views replacing the Next.js static frontend.
 
 ### 2026-02-26
 
-- [ ] Created planning document (this file)
-- [ ] Phase 1.1: Xcode project skeleton
-- [ ] Phase 1.2: PermissionManager
-- [ ] Phase 1.3: AudioCaptureManager
-- [ ] Phase 1.4: AudioMixer
-- [ ] Phase 1.5: RecordingManager
-- [ ] Phase 1.6: MenuBarExtra tray
-- [ ] Phase 1.7: Unit tests
-- [ ] Phase 1.8: E2E test
+- [x] Created planning document (this file)
+- [x] Phase 1.1: Xcode project skeleton
+- [x] Phase 1.2: PermissionManager
+- [x] Phase 1.3: AudioCaptureManager + AudioMixer (combined commit)
+- [x] Phase 1.4: AudioMixer (14 unit tests)
+- [x] Phase 1.5: RecordingManager (12 unit tests)
+- [x] Phase 1.6: MenuBarExtra tray UI
+- [x] Phase 1.7: Unit tests (44 total: smoke + permission + mixer + capture + recording)
+- [x] Phase 1.8: E2E tests (3 tests with withKnownIssue for TCC skip)
+- [x] Replaced debug print() with os.Logger in PermissionManager
+- [x] Removed TEST_HOST from project.yml (standalone test bundle)
