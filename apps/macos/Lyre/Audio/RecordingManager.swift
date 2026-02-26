@@ -158,9 +158,29 @@ final class RecordingManager: @unchecked Sendable {
         lastError = error
         Self.logger.error("Stream error: \(error.localizedDescription)")
 
-        // Attempt to stop gracefully
+        // Best-effort recovery: always finalize encoder even if capture
+        // stop fails, to avoid corrupting the output file.
         Task {
-            try? await stopRecording()
+            // Try to stop capture, but don't let failure prevent finalization
+            do {
+                try await capture.stopCapture()
+            } catch {
+                Self.logger.warning(
+                    "stopCapture failed during error recovery: \(error.localizedDescription)"
+                )
+            }
+
+            // Always finalize encoder to close the output file properly
+            await encoder?.finalize()
+            encoder = nil
+
+            // Reset state
+            state = .idle
+            recordingStartTime = nil
+            capture.onMixedSamples = nil
+            capture.onStreamError = nil
+
+            Self.logger.info("Recording stopped after stream error, file may be partial")
         }
     }
 
