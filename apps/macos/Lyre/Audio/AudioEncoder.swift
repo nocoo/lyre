@@ -8,9 +8,10 @@ import os
 /// - CMSampleBuffer creation from raw Float32 arrays
 /// - Presentation timestamp tracking
 ///
-/// Thread safety: callers must ensure `encodeSamples(_:)` and `finalize()`
-/// are not called concurrently. The next step (P0-2) will add a dedicated
-/// serial queue for this.
+/// Thread safety: all mutable state is protected by a dedicated serial
+/// `DispatchQueue`. `encodeSamples(_:)` can safely be called from any thread
+/// (typically SCStream's background callback), while `setup()` and `finalize()`
+/// are called from the main actor.
 final class AudioEncoder: @unchecked Sendable {
     private static let logger = Logger(
         subsystem: Constants.subsystem,
@@ -33,10 +34,13 @@ final class AudioEncoder: @unchecked Sendable {
 
     /// Whether the encoder is actively writing.
     var isWriting: Bool {
-        assetWriter?.status == .writing
+        queue.sync { assetWriter?.status == .writing }
     }
 
-    // MARK: - Private state
+    // MARK: - Private state (guarded by queue)
+
+    /// Serial queue protecting all mutable encoder state.
+    private let queue = DispatchQueue(label: "com.lyre.app.AudioEncoder")
 
     private var assetWriter: AVAssetWriter?
     private var assetWriterInput: AVAssetWriterInput?
@@ -94,52 +98,46 @@ final class AudioEncoder: @unchecked Sendable {
         }
         writer.startSession(atSourceTime: .zero)
 
-        inputFormat = AVAudioFormat(
+        let format = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: sampleRate,
             channels: channelCount,
             interleaved: false
         )
 
-        totalSamplesWritten = 0
-        assetWriter = writer
-        assetWriterInput = input
+        queue.sync {
+            totalSamplesWritten = 0
+            assetWriter = writer
+            assetWriterInput = input
+            inputFormat = format
+        }
     }
 
     /// Encode Float32 PCM samples into the AVAssetWriter pipeline.
     ///
+    /// Thread-safe: dispatches synchronously on the encoder queue.
+    ///
     /// - Returns: `true` if samples were appended, `false` if skipped or failed.
     @discardableResult
     func encodeSamples(_ samples: [Float]) -> Bool {
-        guard let input = assetWriterInput,
-              let writer = assetWriter,
-              writer.status == .writing else {
-            return false
+        queue.sync {
+            encodeSamplesLocked(samples)
         }
-
-        guard input.isReadyForMoreMediaData else {
-            Self.logger.warning("Writer input not ready, dropping \(samples.count) samples")
-            return false
-        }
-
-        guard let sampleBuffer = createSampleBuffer(from: samples) else {
-            Self.logger.warning("Failed to create sample buffer from \(samples.count) samples")
-            return false
-        }
-
-        let appended = input.append(sampleBuffer)
-        if !appended {
-            let detail = writer.error?.localizedDescription ?? "unknown"
-            Self.logger.error("append() failed: \(detail)")
-        }
-        return appended
     }
 
     /// Finalize the AVAssetWriter and close the file.
+    ///
+    /// Thread-safe: acquires the encoder queue to mark finished, then awaits
+    /// the asynchronous `finishWriting` completion outside the queue.
     func finalize() async {
-        guard let writer = assetWriter else { return }
+        // Snapshot writer and mark input as finished under lock
+        let writer: AVAssetWriter? = queue.sync {
+            let w = assetWriter
+            assetWriterInput?.markAsFinished()
+            return w
+        }
 
-        assetWriterInput?.markAsFinished()
+        guard let writer else { return }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             writer.finishWriting {
@@ -152,15 +150,51 @@ final class AudioEncoder: @unchecked Sendable {
             Self.logger.error("Writer finalization failed: \(detail)")
         }
 
-        assetWriter = nil
-        assetWriterInput = nil
-        inputFormat = nil
+        // Clear state under lock
+        queue.sync {
+            assetWriter = nil
+            assetWriterInput = nil
+            inputFormat = nil
+        }
     }
 
-    // MARK: - Sample Buffer Creation
+    // MARK: - Internal (queue must be held)
+
+    private func encodeSamplesLocked(_ samples: [Float]) -> Bool {
+        guard let input = assetWriterInput,
+              let writer = assetWriter,
+              writer.status == .writing else {
+            return false
+        }
+
+        guard input.isReadyForMoreMediaData else {
+            Self.logger.warning("Writer input not ready, dropping \(samples.count) samples")
+            return false
+        }
+
+        guard let sampleBuffer = createSampleBufferLocked(from: samples) else {
+            Self.logger.warning("Failed to create sample buffer from \(samples.count) samples")
+            return false
+        }
+
+        let appended = input.append(sampleBuffer)
+        if !appended {
+            let detail = writer.error?.localizedDescription ?? "unknown"
+            Self.logger.error("append() failed: \(detail)")
+        }
+        return appended
+    }
+
+    // MARK: - Sample Buffer Creation (queue must be held)
 
     /// Create a CMSampleBuffer from Float32 PCM data for AVAssetWriter.
     func createSampleBuffer(from samples: [Float]) -> CMSampleBuffer? {
+        queue.sync {
+            createSampleBufferLocked(from: samples)
+        }
+    }
+
+    private func createSampleBufferLocked(from samples: [Float]) -> CMSampleBuffer? {
         let frameCount = samples.count
         guard frameCount > 0, let format = inputFormat else { return nil }
 

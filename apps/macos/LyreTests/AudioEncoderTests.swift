@@ -136,6 +136,34 @@ struct AudioEncoderTests {
         #expect(AudioEncoder.EncoderError.writerFailed("x") == .writerFailed("x"))
     }
 
+    // MARK: - Thread Safety
+
+    @Test func concurrentEncodeSamplesDoesNotCrash() throws {
+        let encoder = AudioEncoder()
+        let url = makeTemporaryURL()
+        try encoder.setup(outputURL: url)
+
+        // Simulate concurrent writes from multiple threads
+        let iterations = 100
+        let group = DispatchGroup()
+        let queues = (0..<4).map {
+            DispatchQueue(label: "test-thread-\($0)")
+        }
+
+        for i in 0..<iterations {
+            group.enter()
+            queues[i % queues.count].async {
+                let samples = [Float](repeating: Float(i) * 0.001, count: 480)
+                encoder.encodeSamples(samples)
+                group.leave()
+            }
+        }
+        group.wait()
+
+        // Should still be writing (not crashed or corrupted)
+        #expect(encoder.isWriting == true)
+    }
+
     // MARK: - Helpers
 
     private func makeTemporaryURL() -> URL {
