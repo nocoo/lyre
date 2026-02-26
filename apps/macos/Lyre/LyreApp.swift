@@ -3,13 +3,32 @@ import SwiftUI
 @main
 struct LyreApp: App {
     @State private var recorder = RecordingManager()
+    @State private var config = AppConfig()
+    @State private var recordingsStore: RecordingsStore?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
+        // Menu bar tray
         MenuBarExtra {
-            TrayMenu(recorder: recorder)
+            TrayMenu(recorder: recorder, onOpenWindow: { openWindow(id: "main") })
         } label: {
             TrayLabel(isRecording: recorder.state == .recording)
         }
+
+        // Main window (opened from tray menu)
+        Window("Lyre", id: "main") {
+            MainWindowView(
+                recorder: recorder,
+                config: config,
+                recordingsStore: recordingsStore ?? RecordingsStore(directory: config.outputDirectory)
+            )
+            .onAppear {
+                if recordingsStore == nil {
+                    recordingsStore = RecordingsStore(directory: config.outputDirectory)
+                }
+            }
+        }
+        .defaultSize(width: 600, height: 500)
     }
 }
 
@@ -23,9 +42,46 @@ struct TrayLabel: View {
     }
 }
 
+/// The main window content with tab navigation.
+struct MainWindowView: View {
+    @Bindable var recorder: RecordingManager
+    @Bindable var config: AppConfig
+    @Bindable var recordingsStore: RecordingsStore
+
+    enum SidebarTab: Hashable {
+        case recordings
+        case permissions
+        case settings
+        case about
+    }
+
+    @State private var selectedTab: SidebarTab = .recordings
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            SwiftUI.Tab("Recordings", systemImage: "waveform", value: SidebarTab.recordings) {
+                RecordingsView(store: recordingsStore)
+            }
+
+            SwiftUI.Tab("Permissions", systemImage: "shield.checkered", value: SidebarTab.permissions) {
+                PermissionGuideView(permissions: recorder.permissions)
+            }
+
+            SwiftUI.Tab("Settings", systemImage: "gearshape", value: SidebarTab.settings) {
+                SettingsView(config: config)
+            }
+
+            SwiftUI.Tab("About", systemImage: "info.circle", value: SidebarTab.about) {
+                AboutView()
+            }
+        }
+    }
+}
+
 /// The tray dropdown menu.
 struct TrayMenu: View {
     @Bindable var recorder: RecordingManager
+    var onOpenWindow: () -> Void
     @State private var elapsedTimer: Timer?
     @State private var elapsedDisplay: String = "00:00"
     @State private var hasCheckedPermissions = false
@@ -55,6 +111,13 @@ struct TrayMenu: View {
             InputDeviceMenu(recorder: recorder)
 
             Divider()
+
+            // Open main window
+            Button("Open Lyre...") {
+                onOpenWindow()
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            .keyboardShortcut(",")
 
             // Output folder
             Button("Show Recordings in Finder") {
