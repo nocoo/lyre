@@ -142,7 +142,36 @@ struct AudioCaptureManagerTests {
         let dataSize = samples.count * MemoryLayout<Float>.size
         guard dataSize > 0 else { return nil }
 
-        // Create an audio format description for Float32 mono 48kHz
+        guard let desc = createAudioFormatDescription() else { return nil }
+        guard let block = createBlockBuffer(from: samples, dataSize: dataSize) else { return nil }
+
+        var timing = CMSampleTimingInfo(
+            duration: CMTime(value: CMTimeValue(samples.count), timescale: 48000),
+            presentationTimeStamp: .zero,
+            decodeTimeStamp: .invalid
+        )
+
+        var sampleBuffer: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: block,
+            dataReady: true,
+            makeDataReadyCallback: nil,
+            refcon: nil,
+            formatDescription: desc,
+            sampleCount: samples.count,
+            sampleTimingEntryCount: 1,
+            sampleTimingArray: &timing,
+            sampleSizeEntryCount: 1,
+            sampleSizeArray: [MemoryLayout<Float>.size],
+            sampleBufferOut: &sampleBuffer
+        )
+        guard status == noErr else { return nil }
+        return sampleBuffer
+    }
+
+    /// Create an audio format description for Float32 mono 48kHz.
+    private func createAudioFormatDescription() -> CMAudioFormatDescription? {
         var asbd = AudioStreamBasicDescription(
             mSampleRate: 48000,
             mFormatID: kAudioFormatLinearPCM,
@@ -155,8 +184,8 @@ struct AudioCaptureManagerTests {
             mReserved: 0
         )
 
-        var formatDescription: CMAudioFormatDescription?
-        let formatStatus = CMAudioFormatDescriptionCreate(
+        var desc: CMAudioFormatDescription?
+        let status = CMAudioFormatDescriptionCreate(
             allocator: kCFAllocatorDefault,
             asbd: &asbd,
             layoutSize: 0,
@@ -164,11 +193,13 @@ struct AudioCaptureManagerTests {
             magicCookieSize: 0,
             magicCookie: nil,
             extensions: nil,
-            formatDescriptionOut: &formatDescription
+            formatDescriptionOut: &desc
         )
-        guard formatStatus == noErr, let desc = formatDescription else { return nil }
+        return status == noErr ? desc : nil
+    }
 
-        // Create block buffer
+    /// Create a CMBlockBuffer filled with Float32 sample data.
+    private func createBlockBuffer(from samples: [Float], dataSize: Int) -> CMBlockBuffer? {
         var blockBuffer: CMBlockBuffer?
         var status = CMBlockBufferCreateWithMemoryBlock(
             allocator: kCFAllocatorDefault,
@@ -183,7 +214,6 @@ struct AudioCaptureManagerTests {
         )
         guard status == kCMBlockBufferNoErr, let block = blockBuffer else { return nil }
 
-        // Copy sample data
         status = samples.withUnsafeBytes { rawBuf in
             CMBlockBufferReplaceDataBytes(
                 with: rawBuf.baseAddress!,
@@ -192,32 +222,6 @@ struct AudioCaptureManagerTests {
                 dataLength: dataSize
             )
         }
-        guard status == kCMBlockBufferNoErr else { return nil }
-
-        // Create sample buffer
-        var timing = CMSampleTimingInfo(
-            duration: CMTime(value: CMTimeValue(samples.count), timescale: 48000),
-            presentationTimeStamp: .zero,
-            decodeTimeStamp: .invalid
-        )
-        let sampleSize = MemoryLayout<Float>.size
-
-        var sampleBuffer: CMSampleBuffer?
-        status = CMSampleBufferCreate(
-            allocator: kCFAllocatorDefault,
-            dataBuffer: block,
-            dataReady: true,
-            makeDataReadyCallback: nil,
-            refcon: nil,
-            formatDescription: desc,
-            sampleCount: samples.count,
-            sampleTimingEntryCount: 1,
-            sampleTimingArray: &timing,
-            sampleSizeEntryCount: 1,
-            sampleSizeArray: [sampleSize],
-            sampleBufferOut: &sampleBuffer
-        )
-        guard status == noErr else { return nil }
-        return sampleBuffer
+        return status == kCMBlockBufferNoErr ? block : nil
     }
 }

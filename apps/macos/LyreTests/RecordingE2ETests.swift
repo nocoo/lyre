@@ -19,7 +19,10 @@ struct RecordingE2ETests {
     private static func hasPermissions() async -> Bool {
         let permissions = PermissionManager()
         await permissions.checkAll()
-        print("[E2E] Screen Recording: \(permissions.screenRecording), Microphone: \(permissions.microphone), allGranted: \(permissions.allGranted)")
+        print(
+            "[E2E] Screen Recording: \(permissions.screenRecording), " +
+            "Microphone: \(permissions.microphone), allGranted: \(permissions.allGranted)"
+        )
         return permissions.allGranted
     }
 

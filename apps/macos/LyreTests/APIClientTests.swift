@@ -9,8 +9,8 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     /// Handler called for every request. Set before each test.
     nonisolated(unsafe) static var handler: ((URLRequest) -> (Data, HTTPURLResponse))?
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override static func canInit(with request: URLRequest) -> Bool { true }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         guard let handler = Self.handler else {
@@ -41,8 +41,12 @@ private func makeClient(
     APIClient(baseURL: baseURL, authToken: authToken, session: makeSession())
 }
 
-private func jsonResponse(_ json: Any, status: Int = 200, url: String = "https://lyre.test") -> (Data, HTTPURLResponse) {
-    let data = try! JSONSerialization.data(withJSONObject: json)
+private func jsonResponse(
+    _ json: Any,
+    status: Int = 200,
+    url: String = "https://lyre.test"
+) -> (Data, HTTPURLResponse) {
+    let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
     let response = HTTPURLResponse(
         url: URL(string: url)!,
         statusCode: status,
@@ -112,8 +116,8 @@ struct APIClientTests {
             #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
 
             // Note: URLProtocol may strip httpBody; verify via httpBodyStream if needed
-            if let body = request.httpBody {
-                let json = try! JSONSerialization.jsonObject(with: body) as! [String: String]
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: String] {
                 #expect(json["fileName"] == "test.m4a")
                 #expect(json["contentType"] == "audio/x-m4a")
             }
@@ -298,7 +302,7 @@ struct APIClientTests {
 
     @Test func httpErrorFallsBackToBody() async {
         MockURLProtocol.handler = { _ in
-            let data = "plain text error".data(using: .utf8)!
+            let data = Data("plain text error".utf8)
             let response = HTTPURLResponse(
                 url: URL(string: "https://lyre.test/api/live")!,
                 statusCode: 500,
@@ -321,7 +325,7 @@ struct APIClientTests {
 
     @Test func decodingErrorOnMalformedJSON() async {
         MockURLProtocol.handler = { _ in
-            let data = "{}".data(using: .utf8)!
+            let data = Data("{}".utf8)
             let response = HTTPURLResponse(
                 url: URL(string: "https://lyre.test/api/live")!,
                 statusCode: 200,

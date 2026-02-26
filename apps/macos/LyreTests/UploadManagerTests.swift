@@ -13,7 +13,7 @@ struct UploadManagerTests {
     ) -> AppConfig {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyre-upload-test-\(UUID().uuidString)", isDirectory: true)
-        try! FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
         let config = AppConfig(configURL: configURL)
         config.serverURL = serverURL
@@ -24,9 +24,9 @@ struct UploadManagerTests {
     private func makeDummyRecording() -> RecordingFile {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyre-upload-test-\(UUID().uuidString)", isDirectory: true)
-        try! FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let url = tempDir.appendingPathComponent("test-recording.m4a")
-        try! Data(repeating: 0xAB, count: 2048).write(to: url)
+        try? Data(repeating: 0xAB, count: 2048).write(to: url)
         return RecordingFile(
             url: url,
             fileSize: 2048,
