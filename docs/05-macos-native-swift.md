@@ -182,3 +182,12 @@ SwiftUI views replacing the Next.js static frontend.
 - [x] Phase 1.8: E2E tests (3 tests with withKnownIssue for TCC skip)
 - [x] Replaced debug print() with os.Logger in PermissionManager
 - [x] Removed TEST_HOST from project.yml (standalone test bundle)
+- [x] Phase 2.0: AppConfig with JSON persistence (server URL, auth token, output directory) + 6 unit tests
+- [x] Phase 2.1: RecordingsStore (M4A file scanning, metadata, deletion) + 10 unit tests
+- [x] Phase 2.2: Main window with TabView (Recordings, Permissions, Settings, About)
+- [x] Phase 2.2: RecordingsView with AudioPlayerManager (play/pause, delete confirmation)
+- [x] Phase 2.2: SettingsView (server URL, auth token with show/hide, output directory picker, connection test)
+- [x] Phase 2.3: PermissionGuideView (step-by-step onboarding with polling)
+- [x] Phase 2.4: AboutView (version, build number, GitHub links)
+- [x] Phase 2.2: "Open Lyre..." menu item in tray to open main window
+- [x] Config → RecordingManager → RecordingsStore output directory sync
