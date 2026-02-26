@@ -13,9 +13,11 @@ struct AboutView: View {
     var body: some View {
         VStack(spacing: 20) {
             // App icon
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 96, height: 96)
+            if let icon = NSImage(named: "AppIcon") {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 96, height: 96)
+            }
 
             // App name and version
             VStack(spacing: 4) {
