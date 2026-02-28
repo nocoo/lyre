@@ -201,6 +201,25 @@ final class RecordingsStore: @unchecked Sendable {
         }
     }
 
+    // MARK: - Single-file Refresh
+
+    /// Reload metadata for a specific file and update the recordings list.
+    ///
+    /// Called after a recording finishes so the finalized file size and duration
+    /// replace the partial values captured while the file was still being written.
+    func refresh(url: URL) async {
+        guard let updated = await loadRecordingFile(url: url) else { return }
+
+        if let index = recordings.firstIndex(where: { $0.id == url }) {
+            recordings[index] = updated
+        } else {
+            // File wasn't in the list yet — insert and re-sort newest first
+            recordings.append(updated)
+            recordings.sort { $0.createdAt > $1.createdAt }
+        }
+        Self.logger.info("Refreshed recording: \(url.lastPathComponent)")
+    }
+
     // MARK: - Delete
 
     /// Delete a recording file from disk and remove from the list.

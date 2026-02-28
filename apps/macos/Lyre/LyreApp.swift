@@ -15,6 +15,7 @@ struct LyreApp: App {
             TrayMenu(
                 recorder: recorder,
                 config: config,
+                recordingsStore: resolvedStore,
                 onOpenWindow: { openWindow(id: "main") },
                 onOpenPermissions: {
                     selectedTab = .permissions
@@ -106,6 +107,7 @@ struct TrayMenu: View {
 
     @Bindable var recorder: RecordingManager
     @Bindable var config: AppConfig
+    @Bindable var recordingsStore: RecordingsStore
     var onOpenWindow: () -> Void
     var onOpenPermissions: () -> Void
     @State private var elapsedTimer: Timer?
@@ -220,6 +222,7 @@ struct TrayMenu: View {
         do {
             let url = try await recorder.stopRecording()
             Self.logger.info("Recording saved: \(url.lastPathComponent)")
+            await recordingsStore.refresh(url: url)
         } catch {
             Self.logger.error("Stop recording failed: \(error.localizedDescription)")
             showErrorAlert(title: "Recording Error", message: error.localizedDescription)
