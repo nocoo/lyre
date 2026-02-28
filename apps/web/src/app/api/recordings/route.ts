@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
     sampleRate?: number;
     ossKey?: string;
     tags?: string[];
+    tagIds?: string[];
     recordedAt?: number;
     folderId?: string | null;
   };
@@ -140,6 +141,12 @@ export async function POST(request: NextRequest) {
       recordedAt: body.recordedAt ?? null,
       folderId: body.folderId ?? null,
     });
+
+    // Write tag associations to the normalized join table
+    const tagIds = body.tagIds ?? body.tags ?? [];
+    if (tagIds.length > 0) {
+      tagsRepo.setTagsForRecording(recording.id, tagIds);
+    }
 
     return NextResponse.json(
       { ...recording, tags: recordingsRepo.parseTags(recording.tags) },
