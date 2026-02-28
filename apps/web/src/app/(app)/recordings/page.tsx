@@ -16,6 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useSetBreadcrumbs } from "@/components/layout";
+import { useJobEvents } from "@/hooks/use-job-events";
 import { RecordingListItem } from "@/components/recording-list-item";
 import { RecordingTileCard } from "@/components/recording-tile-card";
 import { UploadDialog } from "@/components/upload-dialog";
@@ -146,6 +147,18 @@ function RecordingsPageInner() {
   useEffect(() => {
     void fetchRecordings();
   }, [fetchRecordings]);
+
+  // Refresh the list when any job reaches a terminal state via SSE
+  useJobEvents({
+    onEvent: useCallback(
+      (event) => {
+        if (event.status === "SUCCEEDED" || event.status === "FAILED") {
+          void fetchRecordings();
+        }
+      },
+      [fetchRecordings],
+    ),
+  });
 
   const listVM = toRecordingsListVM(recordings);
 
