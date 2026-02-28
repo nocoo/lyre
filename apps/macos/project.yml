@@ -1,6 +1,6 @@
 name: Lyre
 options:
-  bundleIdPrefix: com.lyre
+  bundleIdPrefix: ai.hexly.lyre
   deploymentTarget:
     macOS: "15.0"
   xcodeVersion: "16.0"
@@ -21,7 +21,7 @@ targets:
       - path: Lyre
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.lyre.app
+        PRODUCT_BUNDLE_IDENTIFIER: ai.hexly.lyre
         PRODUCT_NAME: Lyre
         MARKETING_VERSION: "1.5.2"
         CURRENT_PROJECT_VERSION: "1"
@@ -47,7 +47,7 @@ targets:
       - target: Lyre
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.lyre.app.tests
+        PRODUCT_BUNDLE_IDENTIFIER: ai.hexly.lyre.tests
         GENERATE_INFOPLIST_FILE: true
         CODE_SIGN_IDENTITY: "Apple Development"
         CODE_SIGN_STYLE: Automatic

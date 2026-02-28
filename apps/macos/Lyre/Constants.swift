@@ -3,7 +3,7 @@ import Foundation
 /// Shared constants used across the app.
 enum Constants {
     /// Bundle identifier / os.Logger subsystem.
-    static let subsystem = "com.lyre.app"
+    static let subsystem = "ai.hexly.lyre"
 
     /// Audio format settings — must be consistent between capture and encoding.
     enum Audio {

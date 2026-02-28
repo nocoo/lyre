@@ -420,7 +420,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.5.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lyre.app;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.hexly.lyre;
 				PRODUCT_NAME = Lyre;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -504,7 +504,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.lyre.app.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.hexly.lyre.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lyre.app/Contents/MacOS/Lyre";
 			};
@@ -527,7 +527,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.5.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.lyre.app;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.hexly.lyre;
 				PRODUCT_NAME = Lyre;
 				SDKROOT = macosx;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -548,7 +548,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.lyre.app.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = ai.hexly.lyre.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lyre.app/Contents/MacOS/Lyre";
 			};

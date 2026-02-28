@@ -40,7 +40,7 @@ final class AudioEncoder: @unchecked Sendable {
     // MARK: - Private state (guarded by queue)
 
     /// Serial queue protecting all mutable encoder state.
-    private let queue = DispatchQueue(label: "com.lyre.app.AudioEncoder")
+    private let queue = DispatchQueue(label: "ai.hexly.lyre.AudioEncoder")
 
     private var assetWriter: AVAssetWriter?
     private var assetWriterInput: AVAssetWriterInput?
