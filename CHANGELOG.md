@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.5.4] - 2026-02-28
+
+### Added
+
+- Server-Sent Events (SSE) infrastructure for real-time job status updates (`/api/jobs/events`)
+- `JobManager` server-side polling engine that tracks ASR jobs and broadcasts state changes
+- `JobEventHub` singleton for fan-out SSE delivery to connected clients
+- `useJobEvents` client-side React hook for subscribing to SSE job events
+- Recordings list page auto-refreshes when transcription jobs complete (via SSE)
+
+### Changed
+
+- Recording detail page uses SSE instead of client-side polling for job status updates
+- Job processing logic extracted into dedicated `job-processor` service for better separation of concerns
+
+### Fixed
+
+- Added missing `sizes` prop to cover `Image` in cassette player to improve page performance
+
 ## [v1.5.2] - 2026-02-23
 
 ### Added

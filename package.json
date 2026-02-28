@@ -1,6 +1,6 @@
 {
   "name": "lyre",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "private": true,
   "workspaces": [
     "apps/*",

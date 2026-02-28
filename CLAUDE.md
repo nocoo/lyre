@@ -122,21 +122,20 @@ Version is managed from the **root `package.json`** as the single source of trut
 |---|---|---|
 | Root (source of truth) | `package.json` | `version` |
 | Web app | `apps/web/package.json` | `version` |
-| Web API fallback | `apps/web/src/app/api/live/route.ts` | hardcoded string |
 | macOS app | `apps/macos/project.yml` | `MARKETING_VERSION` |
 
+- Version format: `1.2.3` in source, displayed as `v1.2.3` in UI and releases
 - `src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION`
 - Sidebar displays the version badge (in `src/components/layout/sidebar.tsx`)
-- `/api/live` endpoint returns the version in its JSON response
+- `/api/live` endpoint returns the version in its JSON response (via `APP_VERSION`)
 - macOS About page reads the version from `CFBundleShortVersionString` (set by `MARKETING_VERSION`)
 
 ### How to bump version
 
-1. Update `version` in **all 4 locations** listed above (root, web, web fallback, project.yml MARKETING_VERSION)
-2. Create a git tag: `git tag v<version>`
-3. Push tag: `git push origin v<version>`
-4. Build macOS app: `xcodebuild build -configuration Release` (from `apps/macos/`)
-5. Create GitHub release: `gh release create v<version> --generate-notes`
+1. Update `version` in **all 3 locations** listed above (root, web, project.yml MARKETING_VERSION)
+2. Run `xcodegen generate` from `apps/macos/` to sync `project.pbxproj`
+3. Update `CHANGELOG.md` with changes since last version
+4. Commit, push, then tag and release via `gh`
 
 ## Project Structure (apps/web/src/)
 
