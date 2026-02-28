@@ -47,14 +47,14 @@ struct RecordingsView: View {
                 Text(deleteConfirmMessage(for: recording))
             }
         }
-        .alert("Delete \(selection.count) Recordings",
+        .alert("Delete Recordings",
                isPresented: $showBatchDeleteConfirm) {
-            Button("Delete All", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 deleteSelected()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(batchDeleteMessage)
+            Text("Are you sure you want to delete these recordings?")
         }
         .alert("Delete Failed", isPresented: .init(
             get: { deleteError != nil },
@@ -84,16 +84,13 @@ struct RecordingsView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .automatic) {
             if !selection.isEmpty {
-                Text("\(selection.count) selected")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 Button(role: .destructive) {
                     showBatchDeleteConfirm = true
                 } label: {
                     Image(systemName: "trash")
+                        .foregroundStyle(.red)
                 }
-                .help("Delete \(selection.count) selected recordings")
+                .help("Delete selected recordings")
             }
         }
     }
@@ -180,11 +177,6 @@ struct RecordingsView: View {
 
     private func deleteConfirmMessage(for recording: RecordingFile) -> String {
         "Are you sure you want to delete \"\(recording.filename)\"? "
-        + "This cannot be undone."
-    }
-
-    private var batchDeleteMessage: String {
-        "Are you sure you want to delete \(selection.count) recordings? "
         + "This cannot be undone."
     }
 }

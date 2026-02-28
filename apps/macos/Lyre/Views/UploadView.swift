@@ -171,9 +171,28 @@ struct UploadView: View {
             Text("Upload Complete")
                 .font(.headline)
 
-            Text("Recording ID: \(recordingId)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // Upload summary
+            VStack(spacing: 4) {
+                Text(uploadManager.title.isEmpty ? recording.filename : uploadManager.title)
+                    .font(.subheadline)
+
+                if let folderName = selectedFolderName {
+                    Label(folderName, systemImage: "folder")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !selectedTagNames.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "tag")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(selectedTagNames.joined(separator: ", "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
 
             Button("Done") {
                 uploadManager.reset()
@@ -184,6 +203,19 @@ struct UploadView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
+    }
+
+    // MARK: - Helpers
+
+    private var selectedFolderName: String? {
+        guard let id = uploadManager.selectedFolderID else { return nil }
+        return uploadManager.folders.first { $0.id == id }?.name
+    }
+
+    private var selectedTagNames: [String] {
+        uploadManager.tags
+            .filter { uploadManager.selectedTagIDs.contains($0.id) }
+            .map(\.name)
     }
 }
 
