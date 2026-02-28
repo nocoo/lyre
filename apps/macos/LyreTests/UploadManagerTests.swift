@@ -7,18 +7,22 @@ struct UploadManagerTests {
 
     // MARK: - Helpers
 
+    /// Creates an isolated AppConfig that writes to a temp directory and a unique Keychain key.
+    /// Returns `(config, cleanup)` — call `cleanup()` when done to remove the Keychain entry.
     private func makeConfig(
         serverURL: String = "https://lyre.test",
         authToken: String = "test-token"
-    ) -> AppConfig {
+    ) -> (config: AppConfig, cleanup: () -> Void) {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyre-upload-test-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
-        let config = AppConfig(configURL: configURL)
+        let keychainKey = "lyre-test-upload-\(UUID().uuidString)"
+        let config = AppConfig(configURL: configURL, keychainKey: keychainKey)
         config.serverURL = serverURL
         config.authToken = authToken
-        return config
+        let cleanup = { _ = KeychainHelper.delete(key: keychainKey) }
+        return (config, cleanup)
     }
 
     private func makeDummyRecording() -> RecordingFile {
@@ -38,7 +42,8 @@ struct UploadManagerTests {
     // MARK: - Init
 
     @Test func initialStateIsIdle() {
-        let config = makeConfig()
+        let (config, cleanup) = makeConfig()
+        defer { cleanup() }
         let manager = UploadManager(config: config)
         #expect(manager.state == .idle)
         #expect(manager.title == "")
@@ -52,7 +57,8 @@ struct UploadManagerTests {
     // MARK: - Upload without config
 
     @Test func uploadFailsWithoutServerConfig() {
-        let config = makeConfig(serverURL: "", authToken: "")
+        let (config, cleanup) = makeConfig(serverURL: "", authToken: "")
+        defer { cleanup() }
         let manager = UploadManager(config: config)
         let recording = makeDummyRecording()
 
@@ -64,7 +70,8 @@ struct UploadManagerTests {
     // MARK: - Reset
 
     @Test func resetClearsState() {
-        let config = makeConfig()
+        let (config, cleanup) = makeConfig()
+        defer { cleanup() }
         let manager = UploadManager(config: config)
 
         manager.title = "Test Title"
@@ -82,7 +89,8 @@ struct UploadManagerTests {
     // MARK: - Cancel
 
     @Test func cancelResetsToIdle() {
-        let config = makeConfig()
+        let (config, cleanup) = makeConfig()
+        defer { cleanup() }
         let manager = UploadManager(config: config)
 
         // Simulate being in-progress
@@ -94,7 +102,8 @@ struct UploadManagerTests {
     // MARK: - fetchMetadata without config
 
     @Test func fetchMetadataSkipsWithoutConfig() async {
-        let config = makeConfig(serverURL: "", authToken: "")
+        let (config, cleanup) = makeConfig(serverURL: "", authToken: "")
+        defer { cleanup() }
         let manager = UploadManager(config: config)
 
         await manager.fetchMetadata()
