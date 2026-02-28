@@ -58,7 +58,7 @@ async function createRecording(data: {
   fileSize?: number;
   format?: string;
   ossKey: string;
-  tags?: string[];
+  tagIds?: string[];
   recordedAt?: number;
 }): Promise<Recording> {
   const res = await fetch(`${BASE_URL}/api/recordings`, {
@@ -80,7 +80,6 @@ const seedRecordings: Parameters<typeof createRecording>[0][] = [
     fileSize: 5_200_000,
     format: "mp3",
     ossKey: "uploads/e2e/standup-monday.mp3",
-    tags: ["meeting", "standup"],
   },
   {
     title: "Podcast Episode 42",
@@ -89,7 +88,6 @@ const seedRecordings: Parameters<typeof createRecording>[0][] = [
     fileSize: 45_000_000,
     format: "mp3",
     ossKey: "uploads/e2e/podcast-ep42.mp3",
-    tags: ["podcast"],
   },
   {
     title: "Customer Interview",
@@ -137,7 +135,6 @@ describe("POST /api/recordings", () => {
         fileSize: 3_000_000,
         format: "mp3",
         ossKey: "uploads/e2e/new-recording.mp3",
-        tags: ["test"],
       }),
     });
     expect(res.status).toBe(201);
