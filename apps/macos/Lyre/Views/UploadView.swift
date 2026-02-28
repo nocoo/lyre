@@ -71,6 +71,10 @@ struct UploadView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            } else if let metadataError = uploadManager.metadataError {
+                Label(metadataError, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.caption)
             } else {
                 if !uploadManager.folders.isEmpty {
                     Picker("Folder", selection: $uploadManager.selectedFolderID) {

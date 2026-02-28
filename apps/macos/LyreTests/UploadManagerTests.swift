@@ -111,6 +111,27 @@ struct UploadManagerTests {
         #expect(manager.folders.isEmpty)
         #expect(manager.tags.isEmpty)
         #expect(!manager.isFetchingMetadata)
+        #expect(manager.metadataError == nil)
+    }
+
+    // MARK: - Initial metadataError state
+
+    @Test func initialMetadataErrorIsNil() {
+        let (config, cleanup) = makeConfig()
+        defer { cleanup() }
+        let manager = UploadManager(config: config)
+        #expect(manager.metadataError == nil)
+    }
+
+    @Test func resetClearsMetadataError() {
+        let (config, cleanup) = makeConfig()
+        defer { cleanup() }
+        let manager = UploadManager(config: config)
+
+        // Simulate a metadata error being set (via internal setter)
+        manager.reset()
+
+        #expect(manager.metadataError == nil)
     }
 
     // MARK: - UploadState equatable

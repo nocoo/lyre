@@ -26,6 +26,9 @@ final class UploadManager: @unchecked Sendable {
     internal(set) var tags: [APIClient.Tag] = []
     internal(set) var isFetchingMetadata: Bool = false
 
+    /// Error message from the last metadata fetch attempt (nil if succeeded or not attempted).
+    internal(set) var metadataError: String?
+
     // MARK: - Upload parameters (set by UI)
 
     var selectedFolderID: String?
@@ -48,6 +51,7 @@ final class UploadManager: @unchecked Sendable {
         guard config.isServerConfigured else { return }
 
         isFetchingMetadata = true
+        metadataError = nil
         defer { isFetchingMetadata = false }
 
         let client = makeClient()
@@ -60,9 +64,21 @@ final class UploadManager: @unchecked Sendable {
             folders = f
             tags = t
             Self.logger.info("Fetched \(f.count) folders, \(t.count) tags")
+        } catch let error as APIClient.APIError {
+            Self.logger.warning("Failed to fetch metadata: \(error.localizedDescription)")
+            switch error {
+            case .httpError(401, _):
+                metadataError = "Invalid auth token. Check your token in Settings."
+            case .httpError(let code, let message):
+                metadataError = "Server error (HTTP \(code)): \(message)"
+            case .networkError(let detail):
+                metadataError = "Network error: \(detail)"
+            default:
+                metadataError = error.localizedDescription
+            }
         } catch {
             Self.logger.warning("Failed to fetch metadata: \(error.localizedDescription)")
-            // Non-fatal — user can still upload without folder/tag
+            metadataError = "Failed to load folders & tags: \(error.localizedDescription)"
         }
     }
 
@@ -102,6 +118,7 @@ final class UploadManager: @unchecked Sendable {
         title = ""
         selectedFolderID = nil
         selectedTagIDs = []
+        metadataError = nil
     }
 
     // MARK: - Private
