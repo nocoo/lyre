@@ -15,8 +15,8 @@ struct RecordingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if store.isScanning {
-                ProgressView("Scanning recordings...")
+            if !store.hasLoaded {
+                ProgressView("Loading recordings...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if store.recordings.isEmpty {
                 emptyState

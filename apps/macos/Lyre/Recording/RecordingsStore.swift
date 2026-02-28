@@ -48,6 +48,9 @@ final class RecordingsStore: @unchecked Sendable {
     /// Whether a scan is in progress.
     internal(set) var isScanning: Bool = false
 
+    /// Whether at least one scan has completed.
+    internal(set) var hasLoaded: Bool = false
+
     /// The directory to scan.
     private let directory: URL
 
@@ -131,7 +134,10 @@ final class RecordingsStore: @unchecked Sendable {
     /// Scan the output directory for M4A files and load metadata.
     func scan() async {
         isScanning = true
-        defer { isScanning = false }
+        defer {
+            isScanning = false
+            hasLoaded = true
+        }
 
         let fm = FileManager.default
 
