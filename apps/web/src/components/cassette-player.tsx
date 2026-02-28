@@ -54,6 +54,7 @@ export function CassettePlayer({
           src={COVER_URL}
           alt=""
           fill
+          sizes="(max-width: 768px) 100vw, 360px"
           className="object-cover"
           draggable={false}
           priority
