@@ -58,11 +58,11 @@ export function RecordingCard({ recording }: RecordingCardProps) {
       </div>
 
       {/* Tags */}
-      {recording.tags.length > 0 && (
+      {recording.colorTags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {recording.tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-[10px]">
-              {tag}
+          {recording.colorTags.map((tag) => (
+            <Badge key={tag.id} variant="secondary" className={`text-[10px] ${tag.bgClass} ${tag.textClass}`}>
+              {tag.name}
             </Badge>
           ))}
         </div>

@@ -11,7 +11,6 @@ import {
   toRecordingListItemCardVM,
   toRecordingsListVM,
   toTagVM,
-  toTagVMFromName,
   toFolderInfo,
   filterRecordings,
   sortRecordings,
@@ -202,9 +201,10 @@ describe("toRecordingCardVM", () => {
     expect(vm.status.label).toBe("Completed");
   });
 
-  test("maps tags", () => {
+  test("maps colorTags as empty for basic Recording (no resolvedTags)", () => {
     const vm = toRecordingCardVM(rec);
-    expect(vm.tags).toEqual(["meeting", "product", "quarterly"]);
+    // toRecordingCardVM wraps with resolvedTags: [], so colorTags is empty
+    expect(vm.colorTags).toEqual([]);
   });
 
   test("maps recordedAt when present", () => {
@@ -489,30 +489,6 @@ describe("toTagVM", () => {
   });
 });
 
-// ── toTagVMFromName ──
-
-describe("toTagVMFromName", () => {
-  test("creates a legacy tag VM with id prefix", () => {
-    const vm = toTagVMFromName("meeting", 0);
-    expect(vm.id).toBe("legacy-0");
-    expect(vm.name).toBe("meeting");
-  });
-
-  test("assigns color classes", () => {
-    const vm = toTagVMFromName("design", 1);
-    expect(vm.bgClass).toContain("bg-");
-    expect(vm.textClass).toContain("text-");
-  });
-
-  test("same name produces same color as toTagVM", () => {
-    const tag = MOCK_TAGS[0]!;
-    const vmFromTag = toTagVM(tag);
-    const vmFromName = toTagVMFromName(tag.name, 0);
-    expect(vmFromTag.bgClass).toBe(vmFromName.bgClass);
-    expect(vmFromTag.textClass).toBe(vmFromName.textClass);
-  });
-});
-
 // ── toFolderInfo ──
 
 describe("toFolderInfo", () => {
@@ -576,22 +552,20 @@ describe("toRecordingListItemCardVM", () => {
     expect(vm.aiSummary).toBe("");
   });
 
-  test("prefers resolvedTags over legacy tags for colorTags", () => {
+  test("maps resolvedTags to colorTags", () => {
     const vm = toRecordingListItemCardVM(item);
     expect(vm.colorTags.length).toBeGreaterThan(0);
-    // resolved tags should not have "legacy-" prefix
+    // All tags come from resolvedTags (normalized system)
     expect(vm.colorTags.every((t) => !t.id.startsWith("legacy-"))).toBe(true);
   });
 
-  test("falls back to legacy tags when resolvedTags is empty", () => {
+  test("returns empty colorTags when resolvedTags is empty", () => {
     const noResolved: RecordingListItem = {
       ...item,
       resolvedTags: [],
     };
     const vm = toRecordingListItemCardVM(noResolved);
-    // Should use legacy tags with "legacy-" prefix
-    expect(vm.colorTags.length).toBe(item.tags.length);
-    expect(vm.colorTags.every((t) => t.id.startsWith("legacy-"))).toBe(true);
+    expect(vm.colorTags).toEqual([]);
   });
 
   test("maps raw duration and fileSize", () => {

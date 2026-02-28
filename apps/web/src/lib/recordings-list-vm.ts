@@ -127,17 +127,6 @@ export function toTagVM(tag: Tag): TagVM {
   };
 }
 
-/** Convert legacy tag names to colorized view models (without resolved Tag objects) */
-export function toTagVMFromName(name: string, index: number): TagVM {
-  const color = getTagColor(name);
-  return {
-    id: `legacy-${index}`,
-    name,
-    bgClass: color.bg,
-    textClass: color.text,
-  };
-}
-
 // ── Folder info ──
 
 export interface FolderInfo {
@@ -169,8 +158,7 @@ export interface RecordingCardVM {
   sampleRate: string;
   status: StatusInfo;
   statusRaw: RecordingStatus;
-  tags: string[]; // legacy tag names
-  colorTags: TagVM[]; // colorized resolved tags (preferred) or legacy fallback
+  colorTags: TagVM[]; // colorized resolved tags
   folder: FolderInfo | null;
   aiSummary: string; // truncated for card display
   createdAt: string;
@@ -189,10 +177,7 @@ export function toRecordingCardVM(recording: Recording): RecordingCardVM {
 
 /** Convert a RecordingListItem (enriched) to card VM */
 export function toRecordingListItemCardVM(item: RecordingListItem): RecordingCardVM {
-  // Prefer resolved tags over legacy tag names
-  const colorTags = item.resolvedTags.length > 0
-    ? item.resolvedTags.map(toTagVM)
-    : item.tags.map(toTagVMFromName);
+  const colorTags = item.resolvedTags.map(toTagVM);
 
   return {
     id: item.id,
@@ -206,7 +191,6 @@ export function toRecordingListItemCardVM(item: RecordingListItem): RecordingCar
     sampleRate: formatSampleRate(item.sampleRate),
     status: getStatusInfo(item.status),
     statusRaw: item.status,
-    tags: item.tags,
     colorTags,
     folder: toFolderInfo(item.folder),
     aiSummary: item.aiSummary ?? "",
@@ -279,7 +263,6 @@ export function filterRecordings(
       (r) =>
         r.title.toLowerCase().includes(q) ||
         (r.description?.toLowerCase().includes(q) ?? false) ||
-        r.tags.some((t) => t.toLowerCase().includes(q)) ||
         (r.aiSummary?.toLowerCase().includes(q) ?? false),
     );
   }

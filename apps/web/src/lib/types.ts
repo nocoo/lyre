@@ -64,7 +64,6 @@ export interface Recording {
   format: string | null;
   sampleRate: number | null;
   ossKey: string;
-  tags: string[]; // legacy JSON tags (for backward compat)
   notes: string | null;
   aiSummary: string | null;
   recordedAt: number | null; // Unix ms

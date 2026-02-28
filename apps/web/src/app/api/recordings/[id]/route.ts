@@ -45,7 +45,6 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   const detail: RecordingDetail = {
     ...recording,
-    tags: recordingsRepo.parseTags(recording.tags),
     transcription,
     latestJob,
     folder: recording.folderId
@@ -76,7 +75,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const body = (await request.json()) as {
     title?: string;
     description?: string | null;
-    tags?: string[];
     notes?: string | null;
     folderId?: string | null;
     recordedAt?: number | null;
@@ -87,7 +85,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const updates: Parameters<typeof recordingsRepo.update>[1] = {};
   if (body.title !== undefined) updates.title = body.title;
   if (body.description !== undefined) updates.description = body.description;
-  if (body.tags !== undefined) updates.tags = body.tags;
   if (body.notes !== undefined) updates.notes = body.notes;
   if (body.folderId !== undefined) updates.folderId = body.folderId;
   if (body.recordedAt !== undefined) updates.recordedAt = body.recordedAt;
@@ -108,7 +105,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({
     ...updated,
-    tags: recordingsRepo.parseTags(updated.tags),
+    resolvedTags: tagsRepo.findTagsForRecording(id),
   });
 }
 

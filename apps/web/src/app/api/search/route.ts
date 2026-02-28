@@ -8,7 +8,7 @@ const MAX_RESULTS = 10;
 
 /**
  * Global search endpoint for command palette.
- * Searches recordings by title, description, aiSummary, and tags.
+ * Searches recordings by title, description, and aiSummary.
  * Returns lightweight results suitable for quick navigation.
  */
 export async function GET(request: NextRequest) {
@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
     description: row.description,
     status: row.status,
     aiSummary: row.aiSummary,
-    tags: recordingsRepo.parseTags(row.tags),
     folder: row.folderId ? folderMap.get(row.folderId) ?? null : null,
     resolvedTags: tagsRepo.findTagsForRecording(row.id),
     duration: row.duration,

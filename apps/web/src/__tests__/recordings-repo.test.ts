@@ -30,7 +30,6 @@ function makeRecording(
     format: "mp3",
     sampleRate: 44100,
     ossKey: "uploads/user-1/test.mp3",
-    tags: ["meeting", "demo"],
     status: "uploaded" as const,
     ...overrides,
   };
@@ -48,18 +47,8 @@ describe("recordingsRepo", () => {
       expect(rec.id).toBe("rec-1");
       expect(rec.title).toBe("Test Recording");
       expect(rec.status).toBe("uploaded");
-      expect(rec.tags).toBe('["meeting","demo"]');
+      expect(rec.tags).toBe("[]"); // legacy column always writes "[]"
       expect(rec.createdAt).toBeGreaterThan(0);
-    });
-
-    test("serializes tags as JSON", () => {
-      const rec = recordingsRepo.create(makeRecording({ tags: ["a", "b", "c"] }));
-      expect(rec.tags).toBe('["a","b","c"]');
-    });
-
-    test("handles empty tags", () => {
-      const rec = recordingsRepo.create(makeRecording({ tags: [] }));
-      expect(rec.tags).toBe("[]");
     });
 
     test("handles null optional fields", () => {
@@ -147,7 +136,6 @@ describe("recordingsRepo", () => {
           status: "completed",
           duration: 60,
           fileSize: 500,
-          tags: ["meeting"],
         }),
       );
       recordingsRepo.create(
@@ -157,7 +145,6 @@ describe("recordingsRepo", () => {
           status: "uploaded",
           duration: 120,
           fileSize: 1000,
-          tags: ["interview"],
         }),
       );
       recordingsRepo.create(
@@ -167,7 +154,6 @@ describe("recordingsRepo", () => {
           status: "completed",
           duration: 300,
           fileSize: 2000,
-          tags: ["podcast"],
         }),
       );
     });
@@ -191,13 +177,6 @@ describe("recordingsRepo", () => {
       });
       expect(result.total).toBe(1);
       expect(result.items[0]?.title).toBe("Alpha Meeting");
-    });
-
-    test("filters by query in tags", () => {
-      const result = recordingsRepo.findByUserId("user-1", {
-        query: "podcast",
-      });
-      expect(result.total).toBe(1);
     });
 
     test("sorts by title ascending", () => {
@@ -323,12 +302,6 @@ describe("recordingsRepo", () => {
       expect(updated?.status).toBe("transcribing");
     });
 
-    test("updates tags (serialized)", () => {
-      recordingsRepo.create(makeRecording());
-      const updated = recordingsRepo.update("rec-1", { tags: ["new-tag"] });
-      expect(updated?.tags).toBe('["new-tag"]');
-    });
-
     test("updates updatedAt", () => {
       const rec = recordingsRepo.create(makeRecording());
       const updated = recordingsRepo.update("rec-1", { title: "New" });
@@ -376,33 +349,6 @@ describe("recordingsRepo", () => {
 
     test("returns false when not found", () => {
       expect(recordingsRepo.delete("nope")).toBe(false);
-    });
-  });
-
-  describe("parseTags", () => {
-    test("parses valid JSON array", () => {
-      expect(recordingsRepo.parseTags('["a","b"]')).toEqual(["a", "b"]);
-    });
-
-    test("returns empty array for empty JSON array", () => {
-      expect(recordingsRepo.parseTags("[]")).toEqual([]);
-    });
-
-    test("returns empty array for invalid JSON", () => {
-      expect(recordingsRepo.parseTags("not json")).toEqual([]);
-    });
-
-    test("returns empty array for non-array JSON", () => {
-      expect(recordingsRepo.parseTags('{"a":1}')).toEqual([]);
-    });
-  });
-
-  describe("toDomain", () => {
-    test("adds parsedTags field", () => {
-      const rec = recordingsRepo.create(makeRecording({ tags: ["x", "y"] }));
-      const domain = recordingsRepo.toDomain(rec);
-      expect(domain.parsedTags).toEqual(["x", "y"]);
-      expect(domain.id).toBe(rec.id);
     });
   });
 

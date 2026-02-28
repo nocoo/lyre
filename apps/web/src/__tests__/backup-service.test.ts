@@ -49,7 +49,6 @@ function seedFullData(userId: string) {
     format: "mp3",
     sampleRate: 44100,
     ossKey: "uploads/user-1/rec-1/standup.mp3",
-    tags: ["meeting"],
     status: "completed",
     folderId: "f-1",
     notes: "Good discussion",
@@ -68,7 +67,6 @@ function seedFullData(userId: string) {
     format: "wav",
     sampleRate: 48000,
     ossKey: "uploads/user-1/rec-2/note.wav",
-    tags: [],
     status: "uploaded",
   });
 
@@ -320,7 +318,6 @@ describe("backup service", () => {
         format: "mp3",
         sampleRate: 44100,
         ossKey: "uploads/user-1/rec-notes/notes.mp3",
-        tags: [],
         status: "completed",
         notes: "These are my notes",
       });
@@ -444,7 +441,6 @@ describe("backup service", () => {
         format: "mp3",
         sampleRate: 44100,
         ossKey: "uploads/user-1/rec-1/test.mp3",
-        tags: [],
         status: "completed",
       });
 
@@ -510,7 +506,6 @@ describe("backup service", () => {
         format: "mp3",
         sampleRate: 44100,
         ossKey: "uploads/user-1/rec-1/test.mp3",
-        tags: [],
         status: "uploaded",
       });
 
@@ -620,7 +615,6 @@ describe("backup service", () => {
         format: "mp3",
         sampleRate: 44100,
         ossKey: "uploads/user-1/rec-1/test.mp3",
-        tags: [],
         status: "uploaded",
       });
 
@@ -687,7 +681,6 @@ describe("backup service", () => {
         format: "mp3",
         sampleRate: 44100,
         ossKey: "uploads/user-1/rec-1/test.mp3",
-        tags: [],
         status: "uploaded",
       });
 
@@ -999,7 +992,6 @@ describe("backup service", () => {
         format: "mp3",
         sampleRate: 44100,
         ossKey: "uploads/user-1/rec-1/test.mp3",
-        tags: [],
         status: "completed",
       });
       jobsRepo.create({
@@ -1050,7 +1042,6 @@ describe("backup service", () => {
         format: "mp3",
         sampleRate: 44100,
         ossKey: "uploads/user-1/rec-1/test.mp3",
-        tags: [],
         status: "completed",
       });
       jobsRepo.create({

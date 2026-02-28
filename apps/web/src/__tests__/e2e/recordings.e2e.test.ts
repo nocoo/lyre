@@ -13,7 +13,6 @@ interface Recording {
   format: string | null;
   ossKey: string;
   status: string;
-  tags: string[];
   notes: string | null;
   folderId: string | null;
   recordedAt: number | null;
@@ -147,7 +146,6 @@ describe("POST /api/recordings", () => {
     expect(body.title).toBe("New Recording");
     expect(body.description).toBe("Created in test");
     expect(body.status).toBe("uploaded");
-    expect(body.tags).toEqual(["test"]);
     expect(body.id).toBeTruthy();
 
     // Clean up — delete it
@@ -338,7 +336,6 @@ describe("PUT /api/recordings/[id]", () => {
       body: JSON.stringify({
         title: "Updated Standup",
         description: "Updated description",
-        tags: ["updated"],
       }),
     });
     expect(res.status).toBe(200);
@@ -346,7 +343,6 @@ describe("PUT /api/recordings/[id]", () => {
     const body = (await res.json()) as Recording;
     expect(body.title).toBe("Updated Standup");
     expect(body.description).toBe("Updated description");
-    expect(body.tags).toEqual(["updated"]);
 
     // Restore original title for other tests
     await fetch(`${BASE_URL}/api/recordings/${id}`, {
@@ -355,7 +351,6 @@ describe("PUT /api/recordings/[id]", () => {
       body: JSON.stringify({
         title: "Team Standup Monday",
         description: "Weekly standup recording",
-        tags: ["meeting", "standup"],
       }),
     });
   });
@@ -774,7 +769,6 @@ describe("GET /api/search", () => {
         id: string;
         title: string;
         status: string;
-        tags: string[];
         folder: Folder | null;
         resolvedTags: Tag[];
         duration: number | null;
@@ -786,7 +780,6 @@ describe("GET /api/search", () => {
     expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("title");
     expect(result).toHaveProperty("status");
-    expect(result).toHaveProperty("tags");
     expect(result).toHaveProperty("folder");
     expect(result).toHaveProperty("resolvedTags");
     expect(result).toHaveProperty("duration");

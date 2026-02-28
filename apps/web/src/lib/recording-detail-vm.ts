@@ -31,7 +31,6 @@ export interface RecordingMetadataVM {
   format: string;
   sampleRate: string;
   status: StatusInfo;
-  tags: string[];
   resolvedTags: Tag[];
   notes: string;
   folderName: string;
@@ -56,7 +55,6 @@ export function toRecordingMetadataVM(
     format: detail.format ?? "unknown",
     sampleRate: detail.sampleRate ? `${detail.sampleRate} Hz` : "—",
     status: getStatusInfo(detail.status),
-    tags: detail.tags,
     resolvedTags: detail.resolvedTags,
     notes: detail.notes ?? "",
     folderName: detail.folder?.name ?? "",

@@ -76,7 +76,6 @@ export async function GET(request: NextRequest) {
   // Convert DB rows to enriched list items (with folder + resolved tags)
   const recordings = items.map((row) => ({
     ...row,
-    tags: recordingsRepo.parseTags(row.tags),
     folder: row.folderId ? folderMap.get(row.folderId) ?? null : null,
     resolvedTags: tagsRepo.findTagsForRecording(row.id),
   }));
@@ -136,20 +135,23 @@ export async function POST(request: NextRequest) {
       format: body.format ?? null,
       sampleRate: body.sampleRate ?? null,
       ossKey: body.ossKey,
-      tags: body.tags ?? [],
       status: "uploaded",
       recordedAt: body.recordedAt ?? null,
       folderId: body.folderId ?? null,
     });
 
     // Write tag associations to the normalized join table
+    // tagIds takes priority; fall back to tags (macOS sends tag IDs in this field)
     const tagIds = body.tagIds ?? body.tags ?? [];
     if (tagIds.length > 0) {
       tagsRepo.setTagsForRecording(recording.id, tagIds);
     }
 
     return NextResponse.json(
-      { ...recording, tags: recordingsRepo.parseTags(recording.tags) },
+      {
+        ...recording,
+        resolvedTags: tagsRepo.findTagsForRecording(recording.id),
+      },
       { status: 201 },
     );
   } catch (error) {

@@ -20,7 +20,6 @@ interface SearchResult {
   description: string | null;
   status: string;
   aiSummary: string | null;
-  tags: string[];
   folder: { id: string; name: string; icon: string } | null;
   resolvedTags: { id: string; name: string }[];
   duration: number | null;
@@ -131,7 +130,7 @@ export function GlobalSearch() {
             {results.map((result) => (
               <CommandItem
                 key={result.id}
-                value={`${result.title} ${result.tags.join(" ")} ${result.aiSummary ?? ""}`}
+                value={`${result.title} ${result.resolvedTags.map(t => t.name).join(" ")} ${result.aiSummary ?? ""}`}
                 onSelect={() => handleSelect(result.id)}
                 className="gap-3 cursor-pointer"
               >
