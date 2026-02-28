@@ -8,6 +8,7 @@
 import { JobManager } from "./job-manager";
 import { getAsrProvider } from "./asr-provider";
 import { jobsRepo } from "@/db/repositories";
+import { broadcast } from "./job-event-hub";
 
 let instance: JobManager | null = null;
 
@@ -23,6 +24,9 @@ export function getJobManager(): JobManager {
     findActiveJobs: () => jobsRepo.findActive(),
     findJobById: (id) => jobsRepo.findById(id),
   });
+
+  // Wire hub as listener — broadcasts all job events to SSE clients
+  instance.onJobEvent(broadcast);
 
   instance.start();
   return instance;
