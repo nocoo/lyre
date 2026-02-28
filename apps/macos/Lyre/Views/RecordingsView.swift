@@ -67,16 +67,14 @@ struct RecordingsView: View {
             }
         }
         .sheet(item: $recordingToUpload) { recording in
-            if let manager = uploadManager {
-                UploadView(
-                    uploadManager: manager,
-                    recording: recording,
-                    onDismiss: {
-                        recordingToUpload = nil
-                        uploadManager?.reset()
-                    }
-                )
-            }
+            UploadView(
+                uploadManager: uploadManager ?? UploadManager(config: config),
+                recording: recording,
+                onDismiss: {
+                    recordingToUpload = nil
+                    uploadManager?.reset()
+                }
+            )
         }
     }
 
@@ -86,23 +84,16 @@ struct RecordingsView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .automatic) {
             if !selection.isEmpty {
-                HStack(spacing: 6) {
-                    Text("\(selection.count) selected")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Text("\(selection.count) selected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-                    Button(role: .destructive) {
-                        showBatchDeleteConfirm = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Delete \(selection.count) selected recordings")
+                Button(role: .destructive) {
+                    showBatchDeleteConfirm = true
+                } label: {
+                    Image(systemName: "trash")
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(.quaternary, in: Capsule())
+                .help("Delete \(selection.count) selected recordings")
             }
         }
     }
