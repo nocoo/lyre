@@ -86,16 +86,23 @@ struct RecordingsView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .automatic) {
             if !selection.isEmpty {
-                Text("\(selection.count) selected")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("\(selection.count) selected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                Button(role: .destructive) {
-                    showBatchDeleteConfirm = true
-                } label: {
-                    Label("Delete Selected", systemImage: "trash")
+                    Button(role: .destructive) {
+                        showBatchDeleteConfirm = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Delete \(selection.count) selected recordings")
                 }
-                .help("Delete \(selection.count) selected recordings")
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(.quaternary, in: Capsule())
             }
         }
     }
@@ -254,10 +261,14 @@ struct RecordingRow: View {
                 Divider()
                 Button("Delete", role: .destructive) { onDelete() }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .frame(width: 24)
         }
         .padding(.vertical, 4)
