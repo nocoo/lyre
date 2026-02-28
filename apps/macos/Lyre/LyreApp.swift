@@ -6,12 +6,22 @@ struct LyreApp: App {
     @State private var recorder = RecordingManager()
     @State private var config = AppConfig()
     @State private var recordingsStore: RecordingsStore?
+    @State private var selectedTab: MainWindowView.SidebarTab = .recordings
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         // Menu bar tray
         MenuBarExtra {
-            TrayMenu(recorder: recorder, config: config, onOpenWindow: { openWindow(id: "main") })
+            TrayMenu(
+                recorder: recorder,
+                config: config,
+                onOpenWindow: { openWindow(id: "main") },
+                onOpenPermissions: {
+                    selectedTab = .permissions
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            )
         } label: {
             TrayLabel(isRecording: recorder.state == .recording)
         }
@@ -21,7 +31,8 @@ struct LyreApp: App {
             MainWindowView(
                 recorder: recorder,
                 config: config,
-                recordingsStore: resolvedStore
+                recordingsStore: resolvedStore,
+                selectedTab: $selectedTab
             )
             .onChange(of: config.outputDirectory) { _, newDir in
                 recorder.outputDirectory = newDir
@@ -66,7 +77,7 @@ struct MainWindowView: View {
         case about
     }
 
-    @State private var selectedTab: SidebarTab = .recordings
+    @Binding var selectedTab: SidebarTab
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -96,6 +107,7 @@ struct TrayMenu: View {
     @Bindable var recorder: RecordingManager
     @Bindable var config: AppConfig
     var onOpenWindow: () -> Void
+    var onOpenPermissions: () -> Void
     @State private var elapsedTimer: Timer?
     @State private var elapsedDisplay: String = "00:00"
     @State private var hasCheckedPermissions = false
@@ -117,6 +129,12 @@ struct TrayMenu: View {
                 }
                 .keyboardShortcut("r")
                 .disabled(recorder.permissions.needsSetup)
+
+                if recorder.permissions.needsSetup {
+                    Button("Setup Permissions…") {
+                        onOpenPermissions()
+                    }
+                }
             }
 
             Divider()
@@ -139,12 +157,6 @@ struct TrayMenu: View {
                     nil,
                     inFileViewerRootedAtPath: recorder.outputDirectory.path
                 )
-            }
-
-            // Permissions
-            if recorder.permissions.needsSetup {
-                Divider()
-                PermissionsMenu(permissions: recorder.permissions)
             }
 
             Divider()
@@ -283,29 +295,6 @@ struct InputDeviceMenu: View {
         }
         .onAppear {
             recorder.capture.refreshDevices()
-        }
-    }
-}
-
-/// Permissions section shown when setup is needed.
-struct PermissionsMenu: View {
-    let permissions: PermissionManager
-
-    var body: some View {
-        if permissions.screenRecording != .granted {
-            Button("Grant Screen Recording Permission…") {
-                permissions.openScreenRecordingSettings()
-            }
-        }
-
-        if permissions.microphone != .granted {
-            Button("Grant Microphone Permission…") {
-                permissions.openMicrophoneSettings()
-            }
-        }
-
-        Button("Refresh Permissions") {
-            Task { await permissions.checkAll() }
         }
     }
 }
