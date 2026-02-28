@@ -66,6 +66,9 @@ final class AppConfig: @unchecked Sendable {
 
     /// Load configuration from disk + Keychain. Falls back to defaults if missing.
     func load() {
+        // Clean up Keychain entries from the old bundle ID (one-time, idempotent)
+        KeychainHelper.deleteLegacyService("com.lyre.app")
+
         // Load auth token from Keychain
         authToken = KeychainHelper.read(key: keychainKey) ?? ""
 

@@ -96,4 +96,13 @@ enum KeychainHelper {
         }
         return true
     }
+
+    /// Delete all Keychain items stored under a legacy service identifier.
+    static func deleteLegacyService(_ legacyService: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: legacyService,
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
 }
