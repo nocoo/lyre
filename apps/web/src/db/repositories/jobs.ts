@@ -5,7 +5,7 @@
  * Jobs track the async DashScope ASR processing status.
  */
 
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { db } from "../index";
 import { transcriptionJobs, type DbTranscriptionJob } from "../schema";
 import type { JobStatus } from "@/lib/types";
@@ -102,5 +102,17 @@ export const jobsRepo = {
       .where(eq(transcriptionJobs.recordingId, recordingId))
       .run() as unknown as { changes: number };
     return result.changes;
+  },
+
+  /** Find all jobs in non-terminal state (PENDING or RUNNING) */
+  findActive(): DbTranscriptionJob[] {
+    return db
+      .select()
+      .from(transcriptionJobs)
+      .where(
+        inArray(transcriptionJobs.status, ["PENDING", "RUNNING"]),
+      )
+      .orderBy(desc(transcriptionJobs.createdAt))
+      .all();
   },
 };
