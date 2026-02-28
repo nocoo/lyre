@@ -16,6 +16,7 @@ import { getCurrentUser } from "@/lib/api-auth";
 import { recordingsRepo, jobsRepo } from "@/db/repositories";
 import { presignGet } from "@/services/oss";
 import { getAsrProvider } from "@/services/asr-provider";
+import { getJobManager } from "@/services/job-manager-singleton";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,9 @@ export async function POST(_request: NextRequest, context: RouteContext) {
 
     // Update recording status to "transcribing"
     recordingsRepo.update(id, { status: "transcribing" });
+
+    // Register the job with the server-side JobManager for polling + SSE
+    getJobManager().track(job);
 
     return NextResponse.json(job, { status: 201 });
   } catch (error) {

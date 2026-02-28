@@ -30,6 +30,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSetBreadcrumbs } from "@/components/layout";
+import { useJobEvents } from "@/hooks/use-job-events";
 import {
   AudioPlayer,
   type AudioPlayerHandle,
@@ -229,74 +230,35 @@ function RecordingDetailContent({ id }: { id: string }) {
     void fetchPlayUrl();
   }, [id, detail?.ossKey]);
 
-  // ── Poll job status ──
-  // Uses visibilitychange to pause polling when tab is hidden
-  // and immediately re-poll when the user returns.
-  useEffect(() => {
-    if (!activeJobId) return;
+  // ── SSE-based job status updates ──
+  // The server-side JobManager polls the ASR provider and pushes events via SSE.
+  // We only subscribe when there's an active (non-terminal) job for this recording.
+  useJobEvents({
+    onEvent: useCallback(
+      async (event) => {
+        // Only react to events for this recording
+        if (event.recordingId !== id) return;
 
-    let timer: ReturnType<typeof setInterval> | null = null;
+        setPollStatus(event.status);
 
-    const pollJob = async () => {
-      try {
-        const res = await fetch(`/api/jobs/${activeJobId}`);
-        if (!res.ok) return;
-
-        const job = (await res.json()) as TranscriptionJob;
-        setPollStatus(job.status);
-
-        if (job.status === "SUCCEEDED" || job.status === "FAILED") {
-          // Stop polling
+        if (event.status === "SUCCEEDED" || event.status === "FAILED") {
           setActiveJobId(null);
-          // Refresh the full detail to get transcription data
           const data = await loadDetail();
 
           // If auto-summarize is enabled and summary isn't ready yet, poll for it
           if (
-            job.status === "SUCCEEDED" &&
+            event.status === "SUCCEEDED" &&
             autoSummarize &&
             !data?.aiSummary
           ) {
             setSummarizing(true);
           }
         }
-      } catch {
-        // Retry on next interval
-      }
-    };
-
-    const startPolling = () => {
-      if (timer) return;
-      void pollJob(); // Immediate poll
-      timer = setInterval(() => void pollJob(), POLL_INTERVAL_MS);
-    };
-
-    const stopPolling = () => {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-      }
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        startPolling(); // Re-poll immediately when user returns
-      } else {
-        stopPolling(); // Pause in background to save resources
-      }
-    };
-
-    // Start polling if tab is currently visible
-    if (document.visibilityState === "visible") {
-      startPolling();
-    }
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      stopPolling();
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [activeJobId, loadDetail, autoSummarize]);
+      },
+      [id, loadDetail, autoSummarize],
+    ),
+    enabled: !!activeJobId,
+  });
 
   // ── Poll for auto-generated summary ──
   // When summarizing=true but there's no active streaming (auto-summarize case),
