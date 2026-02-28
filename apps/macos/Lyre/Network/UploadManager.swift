@@ -4,8 +4,9 @@ import os
 /// Manages the 3-step upload flow: presign → OSS upload → create recording.
 ///
 /// Designed to be used as an `@Observable` state holder for the upload UI.
+@MainActor
 @Observable
-final class UploadManager: @unchecked Sendable {
+final class UploadManager {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "UploadManager")
 
     // MARK: - State

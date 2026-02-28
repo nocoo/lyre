@@ -3,6 +3,7 @@ import Foundation
 @testable import Lyre
 
 @Suite("UploadManager Tests")
+@MainActor
 struct UploadManagerTests {
 
     // MARK: - Helpers
