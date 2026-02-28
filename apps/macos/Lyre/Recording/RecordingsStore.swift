@@ -35,6 +35,9 @@ struct RecordingFile: Identifiable, Sendable {
 }
 
 /// Scans the output directory for M4A recording files and loads metadata.
+///
+/// Watches the directory for file system changes (create, delete, rename)
+/// and automatically re-scans with a short debounce to avoid excessive refreshes.
 @Observable
 final class RecordingsStore: @unchecked Sendable {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "RecordingsStore")
@@ -48,8 +51,79 @@ final class RecordingsStore: @unchecked Sendable {
     /// The directory to scan.
     private let directory: URL
 
+    /// File system event source for watching the directory.
+    private var directorySource: DispatchSourceFileSystemObject?
+
+    /// Debounce task for coalescing rapid file system events.
+    private var debounceTask: Task<Void, Never>?
+
+    /// Debounce interval for file system events.
+    private static let debounceInterval: Duration = .milliseconds(500)
+
     init(directory: URL) {
         self.directory = directory
+    }
+
+    deinit {
+        stopWatching()
+    }
+
+    // MARK: - Directory Watching
+
+    /// Start watching the output directory for file system changes.
+    ///
+    /// Uses `DispatchSource.makeFileSystemObjectSource` to get kernel-level
+    /// notifications when files are created, deleted, or renamed.
+    func startWatching() {
+        stopWatching()
+
+        let fm = FileManager.default
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let fd = open(directory.path, O_EVTONLY)
+        guard fd >= 0 else {
+            Self.logger.warning("Cannot open directory for watching: \(self.directory.path)")
+            return
+        }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .delete, .rename],
+            queue: .global(qos: .utility)
+        )
+
+        source.setEventHandler { [weak self] in
+            self?.scheduleScan()
+        }
+
+        source.setCancelHandler {
+            close(fd)
+        }
+
+        directorySource = source
+        source.resume()
+        Self.logger.info("Started watching directory: \(self.directory.lastPathComponent)")
+    }
+
+    /// Stop watching the directory.
+    func stopWatching() {
+        debounceTask?.cancel()
+        debounceTask = nil
+
+        if let source = directorySource {
+            source.cancel()
+            directorySource = nil
+        }
+    }
+
+    /// Schedule a debounced scan after a file system event.
+    private func scheduleScan() {
+        debounceTask?.cancel()
+        debounceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.debounceInterval)
+            guard !Task.isCancelled, let self else { return }
+            await self.scan()
+        }
     }
 
     // MARK: - Scanning

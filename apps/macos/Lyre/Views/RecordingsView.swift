@@ -27,9 +27,11 @@ struct RecordingsView: View {
         .frame(minWidth: 400, minHeight: 300)
         .toolbar { toolbarContent }
         .onAppear {
+            store.startWatching()
             Task { await store.scan() }
         }
         .onDisappear {
+            store.stopWatching()
             player.stop()
         }
         .alert("Delete Recording", isPresented: $showDeleteConfirm) {
