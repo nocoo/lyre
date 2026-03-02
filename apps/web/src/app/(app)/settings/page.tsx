@@ -22,6 +22,10 @@ import {
   Plug,
   RefreshCw,
   History,
+  Copy,
+  KeyRound,
+  Webhook,
+  RotateCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSetBreadcrumbs } from "@/components/layout";
@@ -1080,6 +1084,232 @@ function BackySection() {
   );
 }
 
+// ── Pull Webhook section ──
+
+function PullWebhookSection() {
+  const [loading, setLoading] = useState(true);
+  const [hasPullKey, setHasPullKey] = useState(false);
+  const [pullKey, setPullKey] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [copied, setCopied] = useState<"url" | "key" | null>(null);
+  const [hasPushConfig, setHasPushConfig] = useState(false);
+
+  const webhookUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/api/backy/pull`
+    : "/api/backy/pull";
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/settings/backy");
+        if (res.ok) {
+          const data = (await res.json()) as {
+            webhookUrl: string;
+            hasApiKey: boolean;
+            hasPullKey: boolean;
+            pullKey: string | null;
+          };
+          setHasPullKey(data.hasPullKey);
+          setPullKey(data.pullKey);
+          setHasPushConfig(!!data.webhookUrl && data.hasApiKey);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/settings/backy/pull-key", { method: "POST" });
+      if (res.ok) {
+        const data = (await res.json()) as { pullKey: string };
+        setPullKey(data.pullKey);
+        setHasPullKey(true);
+        toast.success(hasPullKey ? "Pull key regenerated" : "Pull key generated");
+      } else {
+        toast.error("Failed to generate pull key");
+      }
+    } catch {
+      toast.error("Failed to generate pull key");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleRevoke = async () => {
+    setRevoking(true);
+    try {
+      const res = await fetch("/api/settings/backy/pull-key", { method: "DELETE" });
+      if (res.ok) {
+        setPullKey(null);
+        setHasPullKey(false);
+        toast.success("Pull key revoked");
+      } else {
+        toast.error("Failed to revoke pull key");
+      }
+    } catch {
+      toast.error("Failed to revoke pull key");
+    } finally {
+      setRevoking(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, which: "url" | "key") => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
+          <Webhook className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-sm font-medium text-foreground">Pull Webhook</h2>
+          <p className="text-xs text-muted-foreground">
+            Allow Backy to trigger automatic backups via webhook.
+          </p>
+        </div>
+      </div>
+
+      {!hasPushConfig && (
+        <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 mb-3">
+          Pull requires Push configuration. Set up the Remote Backup section above first.
+        </div>
+      )}
+
+      {!hasPullKey ? (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Generate a webhook key to allow Backy to call this endpoint and trigger automatic backups.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleGenerate}
+            disabled={generating}
+          >
+            {generating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <KeyRound className="h-3.5 w-3.5" strokeWidth={1.5} />
+            )}
+            Generate Key
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Webhook URL */}
+          <div>
+            <Label className="text-xs text-muted-foreground">Webhook URL</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <code className="flex-1 rounded-md bg-secondary px-3 py-1.5 text-xs font-mono text-foreground truncate">
+                {webhookUrl}
+              </code>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(webhookUrl, "url")}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+                title="Copy URL"
+              >
+                {copied === "url" ? (
+                  <Check className="h-3.5 w-3.5 text-green-500" strokeWidth={1.5} />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Webhook Key */}
+          <div>
+            <Label className="text-xs text-muted-foreground">Webhook Key</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <code className="flex-1 rounded-md bg-secondary px-3 py-1.5 text-xs font-mono text-foreground truncate">
+                {pullKey}
+              </code>
+              <button
+                type="button"
+                onClick={() => pullKey && copyToClipboard(pullKey, "key")}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+                title="Copy key"
+              >
+                {copied === "key" ? (
+                  <Check className="h-3.5 w-3.5 text-green-500" strokeWidth={1.5} />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Usage hint */}
+          <div className="rounded-lg bg-secondary/50 p-3 text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground">Usage</p>
+            <p>Configure Backy to call this URL with the key in the <code className="bg-background px-1 rounded">X-Webhook-Key</code> header:</p>
+            <pre className="rounded bg-background p-2 font-mono text-[11px] overflow-x-auto">
+{`curl -X POST ${webhookUrl} \\
+  -H "X-Webhook-Key: <your-key>"`}
+            </pre>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              {generating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RotateCw className="h-3.5 w-3.5" strokeWidth={1.5} />
+              )}
+              Regenerate
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-destructive hover:text-destructive"
+              onClick={handleRevoke}
+              disabled={revoking}
+            >
+              {revoking ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+              )}
+              Revoke
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ──
 
 export default function SettingsGeneralPage() {
@@ -1097,6 +1327,7 @@ export default function SettingsGeneralPage() {
       <OrganizationSection />
       <BackupSection />
       <BackySection />
+      <PullWebhookSection />
     </div>
   );
 }
