@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/api-auth";
 import { settingsRepo } from "@/db/repositories";
 import {
   readBackySettings,
+  readPullKey,
   maskApiKey,
   getEnvironment,
 } from "@/services/backy";
@@ -21,11 +22,14 @@ export async function GET() {
   }
 
   const settings = readBackySettings(user.id);
+  const pullKey = readPullKey(user.id);
   return NextResponse.json({
     webhookUrl: settings.webhookUrl,
     apiKey: maskApiKey(settings.apiKey),
     hasApiKey: !!settings.apiKey,
     environment: getEnvironment(),
+    hasPullKey: !!pullKey,
+    pullKey: pullKey || null,
   });
 }
 
