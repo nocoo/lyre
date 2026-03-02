@@ -7,6 +7,11 @@ import {
   maskApiKey,
   getEnvironment,
   fetchBackyHistory,
+  generatePullKey,
+  readPullKey,
+  savePullKey,
+  deletePullKey,
+  findUserIdByPullKey,
   type BackyHistoryResponse,
 } from "@/services/backy";
 
@@ -273,6 +278,104 @@ describe("backy service", () => {
       expect(result.ok).toBe(true);
       expect(result.data?.total_backups).toBe(0);
       expect(result.data?.recent_backups).toEqual([]);
+    });
+  });
+
+  // ── generatePullKey ──
+
+  describe("generatePullKey", () => {
+    test("returns a 64-character hex string", () => {
+      const key = generatePullKey();
+      expect(key).toHaveLength(64);
+      expect(key).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    test("generates unique keys on each call", () => {
+      const keys = new Set(Array.from({ length: 10 }, () => generatePullKey()));
+      expect(keys.size).toBe(10);
+    });
+  });
+
+  // ── readPullKey / savePullKey / deletePullKey ──
+
+  describe("pull key CRUD", () => {
+    test("returns empty string when no pull key exists", () => {
+      expect(readPullKey("user-1")).toBe("");
+    });
+
+    test("saves and reads a pull key", () => {
+      savePullKey("user-1", "test-pull-key-abc");
+      expect(readPullKey("user-1")).toBe("test-pull-key-abc");
+    });
+
+    test("overwrites existing pull key on save", () => {
+      savePullKey("user-1", "key-v1");
+      savePullKey("user-1", "key-v2");
+      expect(readPullKey("user-1")).toBe("key-v2");
+    });
+
+    test("deletes a pull key and returns true", () => {
+      savePullKey("user-1", "key-to-delete");
+      const deleted = deletePullKey("user-1");
+      expect(deleted).toBe(true);
+      expect(readPullKey("user-1")).toBe("");
+    });
+
+    test("returns false when deleting non-existent key", () => {
+      const deleted = deletePullKey("user-1");
+      expect(deleted).toBe(false);
+    });
+
+    test("does not leak pull keys between users", () => {
+      usersRepo.create({
+        id: "user-2",
+        email: "bob@test.com",
+        name: "Bob",
+        avatarUrl: null,
+      });
+      savePullKey("user-1", "alice-key");
+      savePullKey("user-2", "bob-key");
+      expect(readPullKey("user-1")).toBe("alice-key");
+      expect(readPullKey("user-2")).toBe("bob-key");
+    });
+  });
+
+  // ── findUserIdByPullKey ──
+
+  describe("findUserIdByPullKey", () => {
+    test("returns null when no user has the key", () => {
+      expect(findUserIdByPullKey("nonexistent")).toBeNull();
+    });
+
+    test("returns userId for a valid pull key", () => {
+      savePullKey("user-1", "valid-pull-key");
+      expect(findUserIdByPullKey("valid-pull-key")).toBe("user-1");
+    });
+
+    test("returns null after key is deleted", () => {
+      savePullKey("user-1", "temp-key");
+      deletePullKey("user-1");
+      expect(findUserIdByPullKey("temp-key")).toBeNull();
+    });
+
+    test("returns correct user when multiple users have keys", () => {
+      usersRepo.create({
+        id: "user-2",
+        email: "bob@test.com",
+        name: "Bob",
+        avatarUrl: null,
+      });
+      savePullKey("user-1", "alice-key");
+      savePullKey("user-2", "bob-key");
+      expect(findUserIdByPullKey("alice-key")).toBe("user-1");
+      expect(findUserIdByPullKey("bob-key")).toBe("user-2");
+    });
+
+    test("returns null for old key after regeneration", () => {
+      savePullKey("user-1", "old-key");
+      savePullKey("user-1", "new-key");
+      expect(findUserIdByPullKey("old-key")).toBeNull();
+      expect(findUserIdByPullKey("new-key")).toBe("user-1");
     });
   });
 });

@@ -98,4 +98,43 @@ describe("settingsRepo", () => {
       expect(settingsRepo.deleteByUserId("nobody")).toBe(0);
     });
   });
+
+  describe("findByKeyAndValue", () => {
+    test("returns setting when key and value match", () => {
+      settingsRepo.upsert("user-1", "backy.pullKey", "secret-key-123");
+      const found = settingsRepo.findByKeyAndValue("backy.pullKey", "secret-key-123");
+      expect(found).toBeDefined();
+      expect(found!.userId).toBe("user-1");
+    });
+
+    test("returns undefined when key matches but value differs", () => {
+      settingsRepo.upsert("user-1", "backy.pullKey", "real-key");
+      expect(settingsRepo.findByKeyAndValue("backy.pullKey", "wrong-key")).toBeUndefined();
+    });
+
+    test("returns undefined when value matches but key differs", () => {
+      settingsRepo.upsert("user-1", "backy.apiKey", "some-value");
+      expect(settingsRepo.findByKeyAndValue("backy.pullKey", "some-value")).toBeUndefined();
+    });
+
+    test("returns undefined when no settings exist", () => {
+      expect(settingsRepo.findByKeyAndValue("backy.pullKey", "any")).toBeUndefined();
+    });
+
+    test("finds correct user among multiple users", () => {
+      usersRepo.create({
+        id: "user-2",
+        email: "bob@test.com",
+        name: "Bob",
+        avatarUrl: null,
+      });
+      settingsRepo.upsert("user-1", "backy.pullKey", "alice-key");
+      settingsRepo.upsert("user-2", "backy.pullKey", "bob-key");
+
+      const alice = settingsRepo.findByKeyAndValue("backy.pullKey", "alice-key");
+      expect(alice?.userId).toBe("user-1");
+      const bob = settingsRepo.findByKeyAndValue("backy.pullKey", "bob-key");
+      expect(bob?.userId).toBe("user-2");
+    });
+  });
 });
