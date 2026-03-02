@@ -66,4 +66,18 @@ export const settingsRepo = {
       .run() as unknown as { changes: number };
     return result.changes;
   },
+
+  /**
+   * Find a setting by key and value (reverse lookup).
+   *
+   * Used for token-based authentication where we need to find
+   * the owning user from a secret value (e.g. Backy Pull Key).
+   */
+  findByKeyAndValue(key: string, value: string): DbSetting | undefined {
+    return db
+      .select()
+      .from(settings)
+      .where(and(eq(settings.key, key), eq(settings.value, value)))
+      .get();
+  },
 };
