@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.5.5] - 2026-03-02
+
+### Added
+
+- Bidirectional Backy integration: Pull direction (Backy → Lyre webhook → auto-push backup)
+- `POST /api/backy/pull` webhook endpoint for Backy-triggered automatic backups (authenticated via `X-Webhook-Key` header)
+- `HEAD /api/backy/pull` health check endpoint for verifying pull key validity
+- Pull Key CRUD: `POST/DELETE /api/settings/backy/pull-key` for generating and revoking pull keys
+- `findByKeyAndValue()` method on `settingsRepo` for reverse-lookup (pull key → userId)
+- Pull Webhook Settings UI card: generate/regenerate/revoke key, copy webhook URL/key, curl example
+- E2E tests for pull key CRUD and pull webhook endpoints (12 new tests)
+- Unit tests for pull key service functions and `findByKeyAndValue` (18 new tests)
+- Pull webhook documentation in `docs/04-backy.md` with full API reference and architecture diagrams
+
+### Changed
+
+- `GET /api/settings/backy` response now includes `hasPullKey` and `pullKey` fields
+- Backy docs updated to reflect bidirectional architecture (Push + Pull)
+
 ## [v1.5.4] - 2026-02-28
 
 ### Added
