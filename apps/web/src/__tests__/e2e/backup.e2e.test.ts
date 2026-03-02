@@ -190,3 +190,219 @@ describe("backy settings API", () => {
     });
   });
 });
+
+describe("backy pull key API", () => {
+  describe("POST /api/settings/backy/pull-key", () => {
+    test("generates a new pull key", async () => {
+      const res = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.pullKey).toBeDefined();
+      expect(typeof body.pullKey).toBe("string");
+      expect(body.pullKey.length).toBe(64); // 32 bytes hex
+    });
+
+    test("regenerate returns a different key", async () => {
+      const res1 = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      const body1 = await res1.json();
+
+      const res2 = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      const body2 = await res2.json();
+
+      expect(body1.pullKey).not.toBe(body2.pullKey);
+    });
+  });
+
+  describe("DELETE /api/settings/backy/pull-key", () => {
+    test("revokes an existing pull key", async () => {
+      // Generate first
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+
+      // Revoke
+      const res = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "DELETE",
+      });
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+    });
+
+    test("returns 400 when no pull key exists", async () => {
+      // Ensure no key — delete twice
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "DELETE",
+      });
+
+      const res = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "DELETE",
+      });
+      expect(res.status).toBe(400);
+
+      const body = await res.json();
+      expect(body.error).toContain("No pull key");
+    });
+  });
+
+  describe("GET /api/settings/backy (pull key info)", () => {
+    test("includes hasPullKey and pullKey in response", async () => {
+      // Generate a pull key
+      const genRes = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      const { pullKey } = await genRes.json();
+
+      // GET backy settings should include pull key info
+      const res = await fetch(`${BASE_URL}/api/settings/backy`);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.hasPullKey).toBe(true);
+      expect(body.pullKey).toBe(pullKey);
+
+      // Cleanup
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "DELETE",
+      });
+    });
+
+    test("hasPullKey is false when no key exists", async () => {
+      // Ensure no pull key
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "DELETE",
+      });
+
+      const res = await fetch(`${BASE_URL}/api/settings/backy`);
+      const body = await res.json();
+      expect(body.hasPullKey).toBe(false);
+      expect(body.pullKey).toBeNull();
+    });
+  });
+});
+
+describe("backy pull webhook", () => {
+  describe("HEAD /api/backy/pull", () => {
+    test("returns 401 without X-Webhook-Key header", async () => {
+      const res = await fetch(`${BASE_URL}/api/backy/pull`, {
+        method: "HEAD",
+      });
+      expect(res.status).toBe(401);
+    });
+
+    test("returns 401 with invalid key", async () => {
+      const res = await fetch(`${BASE_URL}/api/backy/pull`, {
+        method: "HEAD",
+        headers: { "X-Webhook-Key": "invalid-key-does-not-exist" },
+      });
+      expect(res.status).toBe(401);
+    });
+
+    test("returns 200 with valid key", async () => {
+      // Generate a pull key
+      const genRes = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      const { pullKey } = await genRes.json();
+
+      const res = await fetch(`${BASE_URL}/api/backy/pull`, {
+        method: "HEAD",
+        headers: { "X-Webhook-Key": pullKey },
+      });
+      expect(res.status).toBe(200);
+
+      // Cleanup
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "DELETE",
+      });
+    });
+  });
+
+  describe("POST /api/backy/pull", () => {
+    test("returns 401 without X-Webhook-Key header", async () => {
+      const res = await fetch(`${BASE_URL}/api/backy/pull`, {
+        method: "POST",
+      });
+      expect(res.status).toBe(401);
+
+      const body = await res.json();
+      expect(body.error).toContain("Missing X-Webhook-Key");
+    });
+
+    test("returns 401 with invalid key", async () => {
+      const res = await fetch(`${BASE_URL}/api/backy/pull`, {
+        method: "POST",
+        headers: { "X-Webhook-Key": "bogus-key" },
+      });
+      expect(res.status).toBe(401);
+
+      const body = await res.json();
+      expect(body.error).toContain("Invalid webhook key");
+    });
+
+    test("returns 422 when push config is not set", async () => {
+      // Clear push config
+      await fetch(`${BASE_URL}/api/settings/backy`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ webhookUrl: "", apiKey: "" }),
+      });
+
+      // Generate pull key
+      const genRes = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      const { pullKey } = await genRes.json();
+
+      const res = await fetch(`${BASE_URL}/api/backy/pull`, {
+        method: "POST",
+        headers: { "X-Webhook-Key": pullKey },
+      });
+      expect(res.status).toBe(422);
+
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+      expect(body.error).toContain("Push configuration not set");
+
+      // Cleanup
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "DELETE",
+      });
+    });
+
+    test("returns 401 after key is revoked", async () => {
+      // Generate then revoke
+      const genRes = await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "POST",
+      });
+      const { pullKey } = await genRes.json();
+
+      await fetch(`${BASE_URL}/api/settings/backy/pull-key`, {
+        method: "DELETE",
+      });
+
+      const res = await fetch(`${BASE_URL}/api/backy/pull`, {
+        method: "POST",
+        headers: { "X-Webhook-Key": pullKey },
+      });
+      expect(res.status).toBe(401);
+
+      const body = await res.json();
+      expect(body.error).toContain("Invalid webhook key");
+    });
+  });
+});
