@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cn, hashString, getAvatarColor } from "@/lib/utils";
+import { cn, getAvatarColor } from "@/lib/utils";
 
 describe("cn utility", () => {
   test("merges class names", () => {
@@ -23,24 +23,6 @@ describe("cn utility", () => {
 
   test("handles undefined and null", () => {
     expect(cn("foo", undefined, null, "bar")).toBe("foo bar");
-  });
-});
-
-describe("hashString", () => {
-  test("returns a non-negative number", () => {
-    expect(hashString("hello")).toBeGreaterThanOrEqual(0);
-  });
-
-  test("returns same hash for same input", () => {
-    expect(hashString("test")).toBe(hashString("test"));
-  });
-
-  test("returns different hash for different input", () => {
-    expect(hashString("alice")).not.toBe(hashString("bob"));
-  });
-
-  test("handles empty string", () => {
-    expect(hashString("")).toBe(0);
   });
 });
 

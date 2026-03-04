@@ -6,6 +6,11 @@
  *   using the "soft" pattern: `bg-{color}-500/15 text-{color}-600`.
  */
 
+import { hashString } from "@/lib/utils";
+
+// Re-export so existing consumers (`badge-colors.test.ts`, etc.) keep working.
+export { hashString } from "@/lib/utils";
+
 // ── Soft color palette for tags ──
 
 export interface TagColor {
@@ -34,18 +39,6 @@ const TAG_PALETTE: TagColor[] = [
   { bg: "bg-lime-500/15", text: "text-lime-600 dark:text-lime-400" },
   { bg: "bg-fuchsia-500/15", text: "text-fuchsia-600 dark:text-fuchsia-400" },
 ];
-
-/**
- * Hash a string to a stable numeric index.
- * Handles Unicode (including CJK characters) via charCodeAt.
- */
-export function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-}
 
 /** Get a stable color from the palette for a given tag name. */
 export function getTagColor(name: string): TagColor {
