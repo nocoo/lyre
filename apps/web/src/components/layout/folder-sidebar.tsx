@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isRecordingsPath } from "@/lib/sidebar-nav";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -321,7 +322,7 @@ export function FolderSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const folderParam = searchParams.get("folder");
-  const isRecordingsPage = pathname.startsWith("/recordings");
+  const isRecordingsPage = isRecordingsPath(pathname);
 
   const [folders, setFolders] = useState<Folder[]>([]);
 
@@ -497,7 +498,7 @@ export function FolderSidebarCollapsed() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const folderParam = searchParams.get("folder");
-  const isRecordingsPage = pathname.startsWith("/recordings");
+  const isRecordingsPage = isRecordingsPath(pathname);
 
   const [folders, setFolders] = useState<Folder[]>([]);
 

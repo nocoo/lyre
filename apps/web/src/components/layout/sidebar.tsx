@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { cn, getAvatarColor } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/version";
+import {
+  isNavItemActive,
+  isRecordingsPath,
+  isSettingsPath,
+} from "@/lib/sidebar-nav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -100,8 +105,8 @@ export function Sidebar() {
   const userImage = session?.user?.image;
   const userInitial = userName[0] ?? "?";
 
-  const isRecordingsPage = pathname.startsWith("/recordings");
-  const isSettingsPage = pathname.startsWith("/settings");
+  const isRecordingsPage = isRecordingsPath(pathname);
+  const isSettingsPage = isSettingsPath(pathname);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -221,9 +226,7 @@ export function Sidebar() {
 
               {/* Settings icons */}
               {settingsItems.map((item) => {
-                const isActive = item.exact
-                  ? pathname === item.href
-                  : pathname.startsWith(item.href);
+                const isActive = isNavItemActive(item, pathname);
                 return (
                   <Tooltip key={item.href}>
                     <TooltipTrigger asChild>
@@ -365,9 +368,7 @@ export function Sidebar() {
               {/* Settings group */}
               <NavGroupSection label="Settings" defaultOpen={isSettingsPage}>
                 {settingsItems.map((item) => {
-                  const isActive = item.exact
-                    ? pathname === item.href
-                    : pathname.startsWith(item.href);
+                  const isActive = isNavItemActive(item, pathname);
                   return (
                     <Link
                       key={item.href}
