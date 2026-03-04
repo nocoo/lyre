@@ -1,9 +1,6 @@
 import { describe, expect, test, beforeEach, mock } from "bun:test";
-
-/**
- * Test theme toggle pure logic.
- * We extract and test the core theme functions with minimal DOM mocking.
- */
+import { getStoredTheme, getSystemTheme, cycleTheme } from "@/lib/theme-utils";
+import type { Theme } from "@/lib/theme-utils";
 
 // Minimal localStorage mock
 let store: Record<string, string> = {};
@@ -44,27 +41,6 @@ beforeEach(() => {
     documentElement: { classList: { toggle: mock(() => {}) } },
   };
 });
-
-// Re-implement theme functions to test logic (same as theme-toggle.tsx)
-type Theme = "light" | "dark" | "system";
-
-function getStoredTheme(): Theme {
-  if (typeof window === "undefined") return "system";
-  return (localStorage.getItem("theme") as Theme) || "system";
-}
-
-function getSystemTheme(): "light" | "dark" {
-  if (typeof window === "undefined") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
-function cycleTheme(current: Theme): Theme {
-  if (current === "system") return "light";
-  if (current === "light") return "dark";
-  return "system";
-}
 
 describe("getStoredTheme", () => {
   test("returns 'system' when nothing stored", () => {
