@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { MATCHER_PATTERN } from "@/proxy";
 
 /**
  * Test the proxy matcher regex to ensure correct path filtering.
- * The matcher is defined in src/proxy.ts config.matcher.
+ * The regex is derived from the exported MATCHER_PATTERN constant
+ * so the test stays in sync with the source of truth.
  */
-const MATCHER_REGEX = /^\/(?!_next\/static|_next\/image|favicon\.ico|.*\.png$|.*\.ico$|.*\.svg$|api\/(?!auth)).*$/;
+const MATCHER_REGEX = new RegExp(`^${MATCHER_PATTERN}$`);
 
 describe("proxy matcher", () => {
   test("matches root path", () => {

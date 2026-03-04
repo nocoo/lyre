@@ -51,9 +51,13 @@ export function proxy(request: NextRequest) {
   return authHandler(request, {} as never);
 }
 
+/** Exclusion pattern used by the proxy route matcher. Exported for testing. */
+export const MATCHER_PATTERN =
+  "/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.ico$|.*\\.svg$|api/(?!auth)).*)";
+
 export const config = {
   matcher: [
     // Match all paths except static files and API routes (except auth)
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.ico$|.*\\.svg$|api/(?!auth)).*)",
+    MATCHER_PATTERN,
   ],
 };
