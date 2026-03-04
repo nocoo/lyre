@@ -403,56 +403,36 @@ describe("paginateRecordings", () => {
 // ── formatAudioFormat ──
 
 describe("formatAudioFormat", () => {
-  test("returns dash for null", () => {
+  test("returns dash for null or empty", () => {
     expect(formatAudioFormat(null)).toBe("—");
-  });
-
-  test("returns dash for empty string", () => {
     expect(formatAudioFormat("")).toBe("—");
   });
 
-  test("uppercases mp3", () => {
-    expect(formatAudioFormat("mp3")).toBe("MP3");
-  });
-
-  test("uppercases wav", () => {
-    expect(formatAudioFormat("wav")).toBe("WAV");
-  });
-
-  test("uppercases mixed case", () => {
-    expect(formatAudioFormat("Flac")).toBe("FLAC");
+  test.each([
+    ["mp3", "MP3"],
+    ["wav", "WAV"],
+    ["Flac", "FLAC"],
+  ])("uppercases %s to %s", (input, expected) => {
+    expect(formatAudioFormat(input)).toBe(expected);
   });
 });
 
 // ── formatSampleRate ──
 
 describe("formatSampleRate", () => {
-  test("returns dash for null", () => {
+  test("returns dash for null, 0, or negative", () => {
     expect(formatSampleRate(null)).toBe("—");
-  });
-
-  test("returns dash for 0", () => {
     expect(formatSampleRate(0)).toBe("—");
-  });
-
-  test("returns dash for negative", () => {
     expect(formatSampleRate(-100)).toBe("—");
   });
 
-  test("formats Hz for small values", () => {
-    expect(formatSampleRate(500)).toBe("500 Hz");
-  });
-
-  test("formats kHz for 44100", () => {
-    expect(formatSampleRate(44100)).toBe("44.1 kHz");
-  });
-
-  test("formats kHz for 48000 (whole number)", () => {
-    expect(formatSampleRate(48000)).toBe("48 kHz");
-  });
-
-  test("formats kHz for 16000", () => {
-    expect(formatSampleRate(16000)).toBe("16 kHz");
+  test.each([
+    [500, "500 Hz"],
+    [44100, "44.1 kHz"],
+    [48000, "48 kHz"],
+    [16000, "16 kHz"],
+  ])("formats %d as %s", (input, expected) => {
+    expect(formatSampleRate(input)).toBe(expected);
   });
 });
 
