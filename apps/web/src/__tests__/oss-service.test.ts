@@ -195,25 +195,9 @@ describe("deleteObject", () => {
     expect(result).toBe(true);
   });
 
-  test("returns false on 403 Forbidden", async () => {
+  test.each([403, 404, 500])("returns false on HTTP %d", async (status) => {
     globalThis.fetch = mock(() =>
-      Promise.resolve(new Response("Forbidden", { status: 403 })),
-    );
-    const result = await deleteObject("key.mp3", TEST_CONFIG);
-    expect(result).toBe(false);
-  });
-
-  test("returns false on 404 Not Found", async () => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(new Response("Not Found", { status: 404 })),
-    );
-    const result = await deleteObject("key.mp3", TEST_CONFIG);
-    expect(result).toBe(false);
-  });
-
-  test("returns false on 500 Server Error", async () => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(new Response("Error", { status: 500 })),
+      Promise.resolve(new Response("Error", { status })),
     );
     const result = await deleteObject("key.mp3", TEST_CONFIG);
     expect(result).toBe(false);
