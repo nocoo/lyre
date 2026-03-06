@@ -40,6 +40,32 @@ All notable changes to this project will be documented in this file.
 
 - Added missing `sizes` prop to cover `Image` in cassette player to improve page performance
 
+## [v1.5.3] - 2026-02-28
+
+### Changed
+
+- Migrated tag system from legacy JSON column (`recordings.tags`) to normalized `recording_tags` join table across all layers (API, repository, UI)
+- Native macOS app rewritten from Tauri/Rust to pure Swift/SwiftUI (`MenuBarExtra` menu bar app)
+- Audio encoding extracted into dedicated `AudioEncoder` class (AVAssetWriter M4A/AAC)
+- Auth token storage migrated from plaintext JSON to macOS Keychain
+- Upload uses streaming file transfer instead of loading entire recording into memory
+
+### Added
+
+- macOS app: file system watcher for auto-refreshing recordings list
+- macOS app: multi-select batch delete in recordings view
+- macOS app: input device memory persisted across app restarts
+- macOS app: metadata fetch error surfacing in upload sheet UI
+- macOS app: CoreAudio listener for auto-refreshing device list on hardware changes
+
+### Fixed
+
+- Tag associations now written to `recording_tags` join table on recording creation
+- `@MainActor` added to `UploadManager` for safe UI state updates
+- Audio mixer max buffer size cap to prevent unbounded memory growth
+- Encoder finalization on stream error to prevent file corruption
+- GLM model updated from `glm-4.5` to `glm-4.7`
+
 ## [v1.5.2] - 2026-02-23
 
 ### Added
