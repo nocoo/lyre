@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.6.0] - 2026-03-06
+
+### Changed
+
+- Upgrade React and React DOM from 19.2.3 to 19.2.4 (DoS mitigations for Server Actions/Components)
+- Upgrade AI SDK: `ai` 6.0.97→6.0.116, `@ai-sdk/anthropic` 3.0.46→3.0.58, `@ai-sdk/openai` 3.0.30→3.0.41
+- Upgrade Tailwind CSS and PostCSS plugin from 4.2.0 to 4.2.1
+- Upgrade lucide-react from ^0.575.0 to ^0.577.0
+- Upgrade ESLint 9.39.2→9.39.3, @types/bun 1.3.9→1.3.10, @types/node 20.19.33→20.19.37
+
+### Improved
+
+- Extract theme pure functions to `theme-utils.ts` for better testability
+- Extract sidebar nav utilities and rewrite tests to use real imports
+- Deduplicate `hashString`, keep single source in `utils.ts`
+- Export matcher pattern from `proxy.ts` so tests import real source
+- Consolidate unit tests with `test.each` for better maintainability
+
+### Fixed
+
+- Keep `config.matcher` as static literal for Next.js build compatibility
+
+### Docs
+
+- Update CLAUDE.md: web tech stack, project structure, macOS structure with test counts
+- Update README with monorepo structure, AI/charts stack, and new features
+- Add missing v1.5.3 changelog entry
+
 ## [v1.5.5] - 2026-03-02
 
 ### Added
