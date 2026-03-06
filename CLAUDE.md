@@ -41,8 +41,12 @@ lyre/
 - **UI**: shadcn/ui + Radix UI + Tailwind CSS v4 (utility classes only, no CSS modules)
 - **Icons**: `lucide-react` (the only icon library — do not introduce others)
 - **Auth**: NextAuth v5 + Google OAuth with email allowlist
+- **AI**: Vercel AI SDK (`ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic`) for multi-provider LLM summarization
 - **Storage**: Aliyun OSS (zero-SDK, custom V1 signature)
 - **ASR**: Aliyun DashScope (`qwen3-asr-flash-filetrans`)
+- **Charts**: Recharts (dashboard visualizations)
+- **Theming**: `next-themes` (dark/light mode)
+- **Markdown**: `react-markdown` + `remark-gfm` (AI summary rendering)
 - **Path alias**: `@/*` → `./src/*` (relative to `apps/web/`)
 
 ### macOS App (apps/macos)
