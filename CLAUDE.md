@@ -54,7 +54,7 @@ lyre/
 - **Framework**: SwiftUI (`MenuBarExtra`) + AppKit glue
 - **Language**: Swift 6 (strict concurrency)
 - **Minimum macOS**: 15.0 (full ScreenCaptureKit support)
-- **Audio**: ScreenCaptureKit (system + mic) → AudioMixer → AVAssetWriter (M4A/AAC)
+- **Audio**: ScreenCaptureKit (system + mic) → AudioMixer → AudioEncoder (AVAssetWriter M4A/AAC)
 - **Build System**: xcodegen (`project.yml`) → Xcode project → `xcodebuild`
 - **Networking**: URLSession (async/await)
 - **Features**: Meeting recording (mic + system audio), upload to Lyre server, input device memory
@@ -227,7 +227,8 @@ apps/macos/
 │   │   ├── PermissionManager.swift
 │   │   ├── AudioCaptureManager.swift
 │   │   ├── AudioMixer.swift
-│   │   └── RecordingManager.swift  ← State machine + AVAssetWriter encoding
+│   │   ├── AudioEncoder.swift      ← AVAssetWriter M4A/AAC encoding
+│   │   └── RecordingManager.swift  ← State machine, orchestrates capture + encoder
 │   ├── Recording/
 │   │   └── RecordingsStore.swift   ← File scanning, metadata, bulk delete
 │   ├── Network/
@@ -242,18 +243,20 @@ apps/macos/
 │   │   ├── AboutView.swift         ← Version, GitHub links
 │   │   └── PermissionGuideView.swift ← Step-by-step onboarding
 │   └── Utilities/
-│       └── AudioPlayerManager.swift ← AVAudioPlayer wrapper
+│       ├── AudioPlayerManager.swift ← AVAudioPlayer wrapper
+│       └── KeychainHelper.swift     ← Keychain read/write/delete for auth token
 └── LyreTests/
     ├── SmokeTests.swift            ← 1 test
     ├── PermissionManagerTests.swift ← 4 tests
-    ├── AudioMixerTests.swift       ← 20 tests
-    ├── AudioCaptureManagerTests.swift ← 12 tests
-    ├── RecordingManagerTests.swift  ← 12 tests
+    ├── AudioMixerTests.swift       ← 27 tests
+    ├── AudioCaptureManagerTests.swift ← 14 tests
+    ├── AudioEncoderTests.swift     ← 16 tests
+    ├── RecordingManagerTests.swift  ← 10 tests
     ├── RecordingsStoreTests.swift   ← 10 tests
     ├── AppConfigTests.swift         ← 11 tests
     ├── KeychainHelperTests.swift    ← 9 tests
     ├── APIClientTests.swift         ← 15 tests
-    ├── UploadManagerTests.swift     ← 6 tests
+    ├── UploadManagerTests.swift     ← 8 tests
     └── RecordingE2ETests.swift      ← 3 E2E tests
 ```
 
