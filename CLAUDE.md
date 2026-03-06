@@ -145,22 +145,69 @@ Version is managed from the **root `package.json`** as the single source of trut
 
 ```
 src/
-├── app/              # Next.js App Router pages & API routes
-│   ├── api/          # REST endpoints (recordings, jobs, transcriptions, live, etc.)
-│   ├── login/        # OAuth login page
-│   ├── recordings/   # Recording list & detail pages
-│   └── settings/     # App settings page
-├── components/       # React components
-│   ├── layout/       # App shell, sidebar, breadcrumbs
-│   ├── ui/           # shadcn/ui primitives
+├── auth.ts             # NextAuth v5 config (Google OAuth, email allowlist)
+├── proxy.ts            # Next.js 16 proxy convention (auth guard, E2E bypass)
+├── app/                # Next.js App Router pages & API routes
+│   ├── api/            # REST endpoints (see API Routes section below)
+│   ├── (app)/          # Route group: authenticated app pages
+│   │   ├── page.tsx                    # Dashboard (charts, stats)
+│   │   ├── recordings/page.tsx         # Recording list (search, filter, sort)
+│   │   ├── recordings/[id]/page.tsx    # Recording detail (player, transcript, summary)
+│   │   ├── settings/page.tsx           # General settings
+│   │   ├── settings/ai/page.tsx        # AI provider configuration
+│   │   ├── settings/storage/page.tsx   # OSS storage settings
+│   │   └── settings/tokens/page.tsx    # Device token management
+│   └── login/          # OAuth login page
+├── components/         # React components
+│   ├── layout/         # App shell, sidebar, breadcrumbs, folder sidebar, contexts
+│   ├── ui/             # shadcn/ui primitives (22 components)
+│   ├── ai-settings.tsx
 │   ├── audio-player.tsx
+│   ├── auth-provider.tsx
+│   ├── cassette-player.tsx
+│   ├── device-tokens.tsx
+│   ├── global-search.tsx
+│   ├── loading-screen.tsx
+│   ├── oss-storage.tsx
+│   ├── recording-card.tsx
+│   ├── recording-list-item.tsx
+│   ├── recording-tile-card.tsx
 │   ├── transcript-viewer.tsx
 │   └── upload-dialog.tsx
-├── db/               # Drizzle schema & repository layer
-├── services/         # OSS & ASR service layer
-├── hooks/            # React hooks
-├── lib/              # Types, utils, view models, version
-└── __tests__/        # Unit tests & E2E tests
+├── db/                 # Drizzle schema & repository layer
+│   ├── schema.ts       # 9 tables (users, recordings, folders, tags, etc.)
+│   ├── index.ts        # DB connection (Bun/Node dual runtime, lazy proxy)
+│   └── repositories/   # 8 repos (users, recordings, jobs, transcriptions,
+│                        #   settings, folders, tags, device-tokens)
+├── services/           # Backend service layer
+│   ├── ai.ts           # LLM summarization (Vercel AI SDK, multi-provider)
+│   ├── asr.ts          # ASR orchestration (submit + poll)
+│   ├── asr-provider.ts # ASR provider abstraction (DashScope / mock)
+│   ├── backup.ts       # Database backup export/import
+│   ├── backy.ts        # Backy remote backup integration
+│   ├── job-event-hub.ts      # SSE fan-out hub for job status
+│   ├── job-manager.ts        # Server-side job polling engine
+│   ├── job-manager-singleton.ts
+│   ├── job-processor.ts      # ASR job processing logic
+│   └── oss.ts          # Aliyun OSS (V1 signature, presign, upload, delete)
+├── hooks/              # React hooks
+│   ├── use-job-events.ts   # SSE hook for real-time job updates
+│   └── use-mobile.ts       # Mobile viewport detection
+├── lib/                # Types, utils, view models, version
+│   ├── api-auth.ts          # API auth helper (session + device token)
+│   ├── audio-player-vm.ts   # Audio player view model
+│   ├── badge-colors.ts      # Badge color assignment
+│   ├── dashboard-vm.ts      # Dashboard view model
+│   ├── mock-data.ts         # Mock data for dev/testing
+│   ├── palette.ts           # Color palette definitions
+│   ├── recording-detail-vm.ts
+│   ├── recordings-list-vm.ts
+│   ├── sidebar-nav.ts       # Sidebar navigation items
+│   ├── theme-utils.ts       # Theme utilities
+│   ├── types.ts             # Shared TypeScript types
+│   ├── utils.ts             # General utilities (cn, etc.)
+│   └── version.ts           # App version export
+└── __tests__/          # Unit tests (30) & E2E tests (9)
 ```
 
 ## Project Structure (apps/macos/)
