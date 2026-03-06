@@ -25,13 +25,17 @@
 ## ✨ Features
 
 - 🎙️ **Audio Upload** — Direct-to-OSS presigned upload with progress tracking (up to 500 MB)
-- 📝 **ASR Transcription** — Powered by Aliyun DashScope, async job with real-time status polling
+- 📝 **ASR Transcription** — Powered by Aliyun DashScope, async job with real-time SSE status updates
+- 🤖 **AI Summaries** — Multi-provider LLM summarization (OpenAI, Anthropic) with streaming markdown
 - 🎵 **Audio Player** — Custom player with play/pause, skip, variable speed, and progress seeking
 - 💬 **Transcript Viewer** — Sentence view synced to audio playback, full-text view, one-click copy
 - 🔤 **Word-Level Karaoke** — Lazy-loaded word timestamps, clickable words for seeking, real-time highlighting
-- 🔍 **Recording Management** — Full CRUD, search, status filter, pagination, and sorting
+- 🔍 **Recording Management** — Full CRUD, search, folders, tags, status filter, pagination, and sorting
+- 📊 **Dashboard** — Charts and statistics for recording activity overview
 - 🔒 **Google OAuth** — Email allowlist-based access control with reverse proxy support
 - 🗄️ **Local SQLite** — All data stored locally via Drizzle ORM, zero external database dependency
+- 💾 **Remote Backup** — Bidirectional Backy integration (push + pull webhook)
+- 🖥️ **macOS App** — Native Swift/SwiftUI menu bar app for meeting recording (mic + system audio)
 - 🐳 **Docker Ready** — Multi-stage Dockerfile optimized for Railway deployment
 
 ## 🚀 Quick Start
@@ -71,28 +75,25 @@ Open your browser 👉 [http://localhost:7025](http://localhost:7025)
 
 ```
 lyre/
-├── 📂 database/                  # SQLite database files (gitignored)
-├── 📂 public/                    # Static assets (logos, favicons)
-├── 📂 scripts/                   # Seed, coverage, E2E runner
-├── 📂 src/
-│   ├── 📂 app/                   # Next.js App Router pages & API routes
-│   │   ├── 📂 api/               # REST API endpoints
-│   │   ├── login/                # OAuth login page
-│   │   ├── recordings/           # Recording list & detail pages
-│   │   └── settings/             # App settings page
-│   ├── 📂 components/            # React components
-│   │   ├── 📂 layout/            # App shell, sidebar, breadcrumbs
-│   │   ├── 📂 ui/                # shadcn/ui primitives
-│   │   ├── audio-player.tsx      # Custom audio player
-│   │   ├── transcript-viewer.tsx # Transcript display & karaoke
-│   │   └── upload-dialog.tsx     # Audio upload with progress
-│   ├── 📂 db/                    # Schema & repositories (Drizzle ORM)
-│   ├── 📂 services/              # OSS & ASR service layer
-│   ├── 📂 lib/                   # Types, utils, view models
-│   └── 📂 __tests__/             # Unit tests & E2E tests
-├── Dockerfile                    # Multi-stage Docker build (Bun)
-├── drizzle.config.ts             # Drizzle ORM configuration
-└── next.config.ts                # Next.js configuration
+├── 📂 apps/
+│   ├── 📂 web/                    # Next.js web app (@lyre/web)
+│   │   ├── 📂 src/
+│   │   │   ├── 📂 app/            # App Router pages & API routes
+│   │   │   ├── 📂 components/     # React components (layout, ui, features)
+│   │   │   ├── 📂 db/             # Schema & repositories (Drizzle ORM)
+│   │   │   ├── 📂 services/       # Backend services (AI, ASR, OSS, backup)
+│   │   │   ├── 📂 hooks/          # React hooks (SSE, mobile detection)
+│   │   │   ├── 📂 lib/            # Types, utils, view models
+│   │   │   └── 📂 __tests__/      # Unit tests & E2E tests
+│   │   ├── 📂 scripts/            # Seed, coverage, E2E runner
+│   │   ├── 📂 database/           # SQLite database files (gitignored)
+│   │   └── 📂 public/             # Static assets (logos, favicons)
+│   └── 📂 macos/                  # Native Swift/SwiftUI menu bar app
+│       ├── 📂 Lyre/               # Swift source code
+│       └── 📂 LyreTests/          # Unit + E2E tests (Swift Testing)
+├── 📂 packages/                   # Shared packages placeholder
+├── Dockerfile                     # Multi-stage Docker build (Bun)
+└── package.json                   # Root workspace config
 ```
 
 ## 🛠️ Tech Stack
@@ -105,8 +106,10 @@ lyre/
 | 🗄️ Database | SQLite + Drizzle ORM |
 | 🎨 UI | shadcn/ui + Radix UI + Tailwind CSS v4 |
 | 🔐 Auth | NextAuth v5 + Google OAuth |
+| 🤖 AI | Vercel AI SDK (OpenAI + Anthropic) |
 | ☁️ Storage | Aliyun OSS (zero-SDK, custom V1 signature) |
 | 🗣️ ASR | Aliyun DashScope (`qwen3-asr-flash-filetrans`) |
+| 📊 Charts | Recharts (dashboard visualizations) |
 | 🐳 Deploy | Docker (multi-stage, Bun runtime) → Railway |
 
 ## 📋 Common Commands
