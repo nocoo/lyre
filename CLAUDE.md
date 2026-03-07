@@ -59,7 +59,7 @@ lyre/
 - **Networking**: URLSession (async/await)
 - **Features**: Meeting recording (mic + system audio), upload to Lyre server, input device memory
 - **Testing**: Swift Testing framework (`xcodebuild test`), SwiftLint (lint)
-- **Code Signing**: Apple Development certificate (Team ID `93WWLTN9XU`)
+- **Code Signing**: Apple Development + Automatic signing (Team ID `93WWLTN9XU`)
 
 ## Key Commands
 

@@ -160,7 +160,7 @@ SwiftUI views replacing the Next.js static frontend.
 | 4.4  | Dead code       | Remove unused fields, fix force-unwraps  |
 | 4.5  | SwiftLint       | Config + 0 production violations         |
 | 4.6  | Batch delete    | Multi-select in RecordingsView           |
-| 4.7  | Code signing    | Apple Development cert for TCC persistence |
+| 4.7  | Code signing    | Apple Development + Automatic signing for TCC persistence |
 | 4.8  | Full test suite | 84 tests, 0 lint violations              |
 
 ## Testing Strategy (3-Layer)
@@ -202,7 +202,7 @@ SwiftUI views replacing the Next.js static frontend.
 - [x] Phase 3.3: MainWindowView updated to pass config to RecordingsView
 - [x] APIClient made injectable (URLSession param) for unit testing with MockURLProtocol
 - [x] Unit tests: APIClient (15 tests) + UploadManager (6 tests) — 84 total tests
-- [x] Code signing fix: switched from ad-hoc (`-`) to Apple Development certificate (Team ID 93WWLTN9XU)
+- [x] Code signing fix: switched from ad-hoc (`-`) to Apple Development with Automatic signing (Team ID 93WWLTN9XU)
 - [x] LyreTests target signing: added matching CODE_SIGN_IDENTITY, CODE_SIGN_STYLE, DEVELOPMENT_TEAM
 - [x] Verified TCC permissions persist across rebuilds (Team ID + Bundle ID matching)
 - [x] All 84 tests passing (81 unit + 3 E2E with known issues)
@@ -217,7 +217,7 @@ SwiftUI views replacing the Next.js static frontend.
 - [x] Phase 4.5: Created .swiftlint.yml, refactored performUpload into 3 step methods
 - [x] Phase 4.5: 0 production violations, 0 serious violations across all code
 - [x] Phase 4.6: Multi-select batch delete in RecordingsView (Set<URL> selection, toolbar, confirmation)
-- [x] Phase 4.7: Code signing — Apple Development certificate (Team ID 93WWLTN9XU) for both targets
+- [x] Phase 4.7: Code signing — Apple Development + Automatic signing (Team ID 93WWLTN9XU) for both targets
 - [x] Phase 4.7: TCC permissions persist across rebuilds (Team ID + Bundle ID matching)
 - [x] Phase 4.8: 84 tests total — all passing, 0 lint errors
 
