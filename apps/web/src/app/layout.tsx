@@ -16,20 +16,15 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXTAUTH_URL || "http://localhost:7025",
+  ),
   title: {
     default: "Lyre - Audio Transcription Manager",
     template: "%s - Lyre",
   },
   description:
     "Upload, transcribe, and explore your audio recordings with word-level precision. Powered by ASR with karaoke playback, full-text search, and smart organization.",
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
-    ],
-    apple: "/apple-touch-icon.png",
-  },
   openGraph: {
     title: "Lyre - Audio Transcription Manager",
     description:
