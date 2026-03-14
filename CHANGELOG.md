@@ -42,7 +42,7 @@ All notable changes to this project will be documented in this file.
 - Pull Webhook Settings UI card: generate/regenerate/revoke key, copy webhook URL/key, curl example
 - E2E tests for pull key CRUD and pull webhook endpoints (12 new tests)
 - Unit tests for pull key service functions and `findByKeyAndValue` (18 new tests)
-- Pull webhook documentation in `docs/04-backy.md` with full API reference and architecture diagrams
+- Pull webhook documentation in `docs/02-backy.md` with full API reference and architecture diagrams
 
 ### Changed
 
@@ -103,7 +103,7 @@ All notable changes to this project will be documented in this file.
 - `fetchBackyHistory()` service function with full error handling (HTTP errors, network failures)
 - Auto-refresh: history loads on page mount when configured, and refreshes after successful push
 - Manual refresh button for remote backup history
-- Backy integration docs (`docs/04-backy.md`): webhook API reference, architecture, and integration guide
+- Backy integration docs (`docs/02-backy.md`): webhook API reference, architecture, and integration guide
 
 ### Changed
 
