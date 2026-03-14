@@ -56,6 +56,8 @@ cp apps/web/.env.example apps/web/.env.local
 You'll need API keys from **Google Cloud** (OAuth) and **Aliyun** (OSS + ASR).
 
 > 📖 **[Deployment Guide](docs/01-deployment.md)** — Step-by-step instructions for obtaining all API keys, configuring each service, and deploying to production.
+>
+> 📚 **[All Documentation](docs/README.md)** — Full docs index including deployment, backup integration, and archived planning docs.
 
 ### 3️⃣ Initialize Database
 
