@@ -79,8 +79,8 @@ def generate_og_image(img: Image.Image) -> Image.Image:
 
 def main():
     root = Path(__file__).parent.parent
-    public = root / "public"
-    app_dir = root / "src" / "app"
+    public = root / "apps" / "web" / "public"
+    app_dir = root / "apps" / "web" / "src" / "app"
     public.mkdir(exist_ok=True)
 
     # Load source image
