@@ -146,12 +146,12 @@ export function RecordingTileCard({
           }
         }}
         className={cn(
-          "group flex flex-col rounded-xl border bg-card p-4 transition-colors cursor-pointer h-full",
+          "group flex flex-col rounded-card bg-secondary p-4 transition-colors cursor-pointer h-full",
           selected
-            ? "border-primary bg-primary/5"
+            ? "ring-1 ring-primary bg-primary/5"
             : isFailed
-              ? "border-destructive/30 hover:bg-accent/50"
-              : "border-border hover:bg-accent/50",
+              ? "ring-1 ring-destructive/30 hover:bg-accent/50"
+              : "hover:bg-accent/50",
         )}
       >
         {content}
@@ -163,8 +163,8 @@ export function RecordingTileCard({
     <Link
       href={`/recordings/${recording.id}`}
       className={cn(
-        "group flex flex-col rounded-xl border bg-card p-4 transition-colors hover:bg-accent/50 h-full",
-        isFailed ? "border-destructive/30" : "border-border",
+        "group flex flex-col rounded-card bg-secondary p-4 transition-colors hover:bg-accent/50 h-full",
+        isFailed ? "ring-1 ring-destructive/30" : "",
       )}
     >
       {content}

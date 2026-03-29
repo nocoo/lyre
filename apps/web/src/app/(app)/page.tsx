@@ -22,7 +22,6 @@ import {
   Database,
   FileWarning,
   Files,
-  Loader2,
 } from "lucide-react";
 import {
   Card,
@@ -30,6 +29,7 @@ import {
   CardTitle,
   CardContent,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { chart, chartAxis, CHART_COLORS } from "@/lib/palette";
 
 /** Safe chart color accessor (falls back to first color on out-of-bounds). */
@@ -62,7 +62,7 @@ function ChartTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-widget border border-border bg-card px-3 py-2 shadow-sm">
+    <div className="rounded-widget bg-popover px-3 py-2 shadow-sm">
       {label && (
         <p className="mb-1 text-xs text-muted-foreground">{label}</p>
       )}
@@ -683,8 +683,31 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="space-y-8">
+        {/* Section header skeleton */}
+        <div className="flex items-start gap-3">
+          <Skeleton className="h-9 w-9 rounded-lg" />
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-56" />
+          </div>
+        </div>
+        {/* Stat cards skeleton */}
+        <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-card bg-secondary p-4 md:p-5 space-y-2">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-7 w-16" />
+            </div>
+          ))}
+        </div>
+        {/* Chart row skeleton */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Skeleton className="h-[280px] rounded-card" />
+          </div>
+          <Skeleton className="h-[280px] rounded-card" />
+        </div>
       </div>
     );
   }

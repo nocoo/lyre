@@ -22,6 +22,7 @@ import { RecordingTileCard } from "@/components/recording-tile-card";
 import { UploadDialog } from "@/components/upload-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -432,12 +433,19 @@ function RecordingsPageInner() {
               <p className="mb-1.5 text-xs font-medium text-muted-foreground">
                 Sort by
               </p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sort options">
                 {SORT_OPTIONS.map((opt) => (
                   <Badge
                     key={opt.value}
                     variant={sortField === opt.value ? "default" : "secondary"}
                     className="cursor-pointer gap-1"
+                    role="button"
+                    aria-pressed={sortField === opt.value}
+                    aria-label={
+                      sortField === opt.value
+                        ? `Sort by ${opt.label}, ${sortDirection === "asc" ? "ascending" : "descending"}`
+                        : `Sort by ${opt.label}`
+                    }
                     onClick={() => handleSortToggle(opt.value)}
                   >
                     {opt.label}
@@ -483,7 +491,45 @@ function RecordingsPageInner() {
         </div>
 
         {/* Recording list/grid */}
-        {listVM.isEmpty && !loading ? (
+        {loading && listVM.isEmpty ? (
+          viewMode === "list" ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-card bg-secondary p-4">
+                  <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-3/5" />
+                    <Skeleton className="h-3 w-24" />
+                    <div className="flex gap-3">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-3 w-14" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex flex-col rounded-card bg-secondary p-4 h-[180px]">
+                  <div className="flex items-center justify-between mb-3">
+                    <Skeleton className="h-9 w-9 rounded-lg" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-3/4 mb-2" />
+                  <Skeleton className="h-3 w-full mb-1" />
+                  <Skeleton className="h-3 w-2/3" />
+                  <div className="flex-1" />
+                  <div className="flex gap-3 mt-2">
+                    <Skeleton className="h-3 w-14" />
+                    <Skeleton className="h-3 w-14" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : listVM.isEmpty && !loading ? (
           <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
             <Mic className="h-12 w-12 mb-3" strokeWidth={1} />
             <p className="text-sm">No recordings found</p>
@@ -495,26 +541,36 @@ function RecordingsPageInner() {
           </div>
         ) : viewMode === "list" ? (
           <div className="space-y-2">
-            {listVM.cards.map((card) => (
-              <RecordingListItem
+            {listVM.cards.map((card, i) => (
+              <div
                 key={card.id}
-                recording={card}
-                selectable={manageMode}
-                selected={selectedIds.has(card.id)}
-                onToggleSelect={toggleSelect}
-              />
+                className="animate-fade-up"
+                style={{ animationDelay: `${i * 50}ms` }}
+              >
+                <RecordingListItem
+                  recording={card}
+                  selectable={manageMode}
+                  selected={selectedIds.has(card.id)}
+                  onToggleSelect={toggleSelect}
+                />
+              </div>
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {listVM.cards.map((card) => (
-              <RecordingTileCard
+            {listVM.cards.map((card, i) => (
+              <div
                 key={card.id}
-                recording={card}
-                selectable={manageMode}
-                selected={selectedIds.has(card.id)}
-                onToggleSelect={toggleSelect}
-              />
+                className="animate-fade-up"
+                style={{ animationDelay: `${i * 50}ms` }}
+              >
+                <RecordingTileCard
+                  recording={card}
+                  selectable={manageMode}
+                  selected={selectedIds.has(card.id)}
+                  onToggleSelect={toggleSelect}
+                />
+              </div>
             ))}
           </div>
         )}

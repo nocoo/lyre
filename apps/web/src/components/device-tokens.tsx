@@ -126,7 +126,7 @@ export function DeviceTokensSection() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="rounded-card bg-secondary p-5">
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
@@ -135,7 +135,7 @@ export function DeviceTokensSection() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-card bg-secondary p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">

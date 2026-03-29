@@ -344,7 +344,7 @@ function OrganizationSection() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-5 lg:col-span-2">
+      <div className="rounded-card bg-secondary p-5 lg:col-span-2">
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
@@ -353,7 +353,7 @@ function OrganizationSection() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-card bg-secondary p-5">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
           <FolderOpen className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
@@ -505,7 +505,7 @@ function BackupSection() {
   const busy = exporting || importing;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-card bg-secondary p-5">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
           <Database className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
@@ -793,7 +793,7 @@ function BackySection() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="rounded-card bg-secondary p-5">
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
@@ -802,7 +802,7 @@ function BackySection() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-card bg-secondary p-5">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
           <CloudUpload className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
@@ -1169,7 +1169,7 @@ function PullWebhookSection() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="rounded-card bg-secondary p-5">
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
@@ -1178,7 +1178,7 @@ function PullWebhookSection() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-card bg-secondary p-5">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
           <Webhook className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />

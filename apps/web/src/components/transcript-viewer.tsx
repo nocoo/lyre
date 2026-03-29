@@ -51,7 +51,7 @@ export function TranscriptViewer({
   );
 
   return (
-    <div className="rounded-xl border border-border bg-card">
+    <div className="rounded-card bg-secondary">
       {/* Tab header */}
       <TranscriptTabs
         sentenceCount={transcription.sentenceCount}
@@ -81,7 +81,7 @@ export function TranscriptFullText({
   transcription: TranscriptionVM;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card">
+    <div className="rounded-card bg-secondary">
       <TranscriptTabs
         sentenceCount={transcription.sentenceCount}
         wordCount={transcription.wordCount}

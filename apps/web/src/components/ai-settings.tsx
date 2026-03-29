@@ -187,7 +187,7 @@ export function AiSettingsSection() {
 
   if (!loaded) {
     return (
-      <div className="rounded-xl border border-border bg-card p-5">
+      <div className="rounded-card bg-secondary p-5">
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
@@ -196,7 +196,7 @@ export function AiSettingsSection() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-card bg-secondary p-5">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
           <Bot className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />

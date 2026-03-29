@@ -11,7 +11,7 @@ export function RecordingCard({ recording }: RecordingCardProps) {
   return (
     <Link
       href={`/recordings/${recording.id}`}
-      className="group block rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent/50"
+      className="group block rounded-card bg-secondary p-4 transition-colors hover:bg-accent/50"
     >
       {/* Header: icon + title + status */}
       <div className="flex items-start gap-3">

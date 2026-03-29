@@ -122,10 +122,10 @@ function SummaryCard({
   return (
     <div
       className={cn(
-        "rounded-lg border p-3",
-        variant === "warning" && "border-amber-500/30 bg-amber-500/5",
-        variant === "success" && "border-green-500/30 bg-green-500/5",
-        variant === "default" && "border-border bg-card",
+        "rounded-lg p-3",
+        variant === "warning" && "border border-amber-500/30 bg-amber-500/5",
+        variant === "success" && "border border-green-500/30 bg-green-500/5",
+        variant === "default" && "bg-secondary",
       )}
     >
       <p className="text-xs text-muted-foreground">{label}</p>
@@ -479,7 +479,7 @@ export function OssStorageSection() {
 
   if (loading && !data) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8">
+      <div className="rounded-card bg-secondary p-8">
         <div className="flex flex-col items-center justify-center gap-3">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
@@ -634,7 +634,7 @@ export function OssStorageSection() {
         )}
 
         {data.users.length === 0 && data.unlinkedResults.length === 0 && (
-          <div className="rounded-lg border border-border bg-card p-8 text-center">
+          <div className="rounded-lg bg-secondary p-8 text-center">
             <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" strokeWidth={1.5} />
             <p className="text-sm text-muted-foreground">
               OSS storage is empty.

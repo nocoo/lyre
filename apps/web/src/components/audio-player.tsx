@@ -182,7 +182,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(
     const isEmbedded = variant === "embedded";
 
     return (
-      <div className={isEmbedded ? "flex-1 min-h-0" : "rounded-xl border border-border bg-card p-4"}>
+      <div className={isEmbedded ? "flex-1 min-h-0" : "rounded-card bg-secondary p-4"}>
         {/* Hidden audio element */}
         <audio
           ref={audioRef}

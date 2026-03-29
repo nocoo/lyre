@@ -678,7 +678,7 @@ function RecordingDetailContent({ id }: { id: string }) {
       {/* ── Row 1: Player + Metadata (2/3) | Properties (1/3) ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="rounded-xl border border-border bg-card p-4 h-full flex flex-col gap-4">
+          <div className="rounded-card bg-secondary p-4 h-full flex flex-col gap-4">
             <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Play className="h-3.5 w-3.5" strokeWidth={1.5} />
               Playback &amp; File Info
@@ -771,7 +771,7 @@ function RecordingDetailContent({ id }: { id: string }) {
       {vm.hasTranscription && vm.transcription && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <div className="rounded-xl border border-border bg-card p-4 h-full">
+            <div className="rounded-card bg-secondary p-4 h-full">
               <div className="flex items-center justify-between mb-3">
                 <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -937,7 +937,7 @@ function TranscribingCard({ status }: { status: string | null }) {
         : "Submitting";
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
+    <div className="flex items-center gap-3 rounded-card bg-secondary p-4">
       <Loader2
         className="h-5 w-5 animate-spin text-muted-foreground"
         strokeWidth={1.5}
@@ -992,7 +992,7 @@ function JobInfoCard({
   estimatedCost: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 h-full">
+    <div className="rounded-card bg-secondary p-4 h-full">
       <p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-muted-foreground">
         <Cpu className="h-3.5 w-3.5" strokeWidth={1.5} />
         Job Details
@@ -1041,7 +1041,7 @@ function AiSummaryCard({
   onGenerate: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 h-full">
+    <div className="rounded-card bg-secondary p-4 h-full">
       <div className="flex items-center justify-between mb-3">
         <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -1124,7 +1124,7 @@ function AiInfoCard({
   model: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 h-full">
+    <div className="rounded-card bg-secondary p-4 h-full">
       <p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-muted-foreground">
         <Settings className="h-3.5 w-3.5" strokeWidth={1.5} />
         AI Configuration
@@ -1213,7 +1213,7 @@ function EditableProperties({
   const selectedFolder = allFolders.find((f) => f.id === selectedFolderId);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 h-full space-y-4">
+    <div className="rounded-card bg-secondary p-4 h-full space-y-4">
       <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
         Properties

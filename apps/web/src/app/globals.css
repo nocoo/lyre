@@ -101,6 +101,7 @@
   /* Animations */
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-fade-up: fade-up 0.4s ease-out both;
 }
 
 @keyframes accordion-down {
@@ -111,6 +112,11 @@
 @keyframes accordion-up {
   from { height: var(--radix-accordion-content-height); }
   to { height: 0; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /*
@@ -312,4 +318,8 @@
  */
 @utility font-display {
   font-family: var(--font-dm-sans), "DM Sans", system-ui, sans-serif;
+}
+
+@utility animate-fade-up {
+  animation: fade-up 0.4s ease-out both;
 }
