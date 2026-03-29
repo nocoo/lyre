@@ -56,13 +56,13 @@ function NavGroupSection({
     <Collapsible open={open} onOpenChange={setOpen}>
       <div className="px-3 mt-2">
         <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2.5">
-          <span className="text-sm font-normal text-muted-foreground">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
             {label}
           </span>
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center">
             <ChevronUp
               className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
                 !open && "rotate-180",
               )}
               strokeWidth={1.5}
