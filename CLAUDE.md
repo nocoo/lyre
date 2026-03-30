@@ -66,11 +66,11 @@ lyre/
 All commands run from the **repository root**. Root `package.json` proxies them via `bun run --cwd apps/web`.
 
 ```bash
-bun dev                # Start web dev server (port 7025)
+bun dev                # Start web dev server (port 7016)
 bun run build          # Web production build
 bun run test           # Run web unit tests
 bun run test:coverage  # Run web tests with coverage check
-bun run test:e2e       # Run web E2E tests (port 17025, independent DB)
+bun run test:e2e       # Run web E2E tests (port 17016, independent DB)
 bun run lint           # Run ESLint (web)
 bun run db:push        # Apply schema to database
 bun run db:studio      # Open Drizzle Studio
@@ -96,7 +96,7 @@ All code (web + macOS) must pass UT + lint before commit. Coverage, build, and E
 
 ## E2E Test Infrastructure
 
-- **Port**: E2E server runs on port **17025** (dev/prod uses 7025)
+- **Port**: E2E server runs on port **17016** (dev/prod uses 7016)
 - **Auth bypass**: `PLAYWRIGHT=1` env var skips login/auth in E2E. Set automatically by the runner script.
 - **Database**: Each E2E run uses an independent SQLite DB (auto-created, isolated from dev data)
 - **ASR mock**: The runner unsets `DASHSCOPE_API_KEY` to force mock ASR mode

@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
  * Also tests the settings-related API endpoints.
  */
 
-const BASE_URL = `http://localhost:${process.env.E2E_PORT || "17025"}`;
+const BASE_URL = `http://localhost:${process.env.E2E_PORT || "17016"}`;
 
 describe("settings pages", () => {
   describe("GET /settings (General)", () => {

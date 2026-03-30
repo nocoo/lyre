@@ -17,7 +17,7 @@ results stored in local SQLite.
 | UI             | shadcn/ui + Tailwind v4 + basalt    |
 | Testing        | bun:test (UT) + ESLint + E2E (HTTP) |
 | Deployment     | Railway + Docker                    |
-| Dev Port       | 7025 (dev), 7026 (E2E)             |
+| Dev Port       | 7016 (dev), 17016 (E2E)            |
 
 ## Architecture
 

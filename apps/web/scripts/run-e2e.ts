@@ -5,7 +5,7 @@
  * This script:
  * 1. Loads .env.e2e for test credentials (AI keys, etc.)
  * 2. Creates and seeds E2E database
- * 3. Starts dev server on dedicated port (17025) with PLAYWRIGHT=1
+ * 3. Starts dev server on dedicated port (17016) with PLAYWRIGHT=1
  * 4. Runs E2E tests
  * 5. Cleans up
  *
@@ -17,7 +17,7 @@ import { spawn, type Subprocess } from "bun";
 import { existsSync, unlinkSync, rmSync, readFileSync } from "fs";
 import { resolve } from "path";
 
-const E2E_PORT = "17025";
+const E2E_PORT = "17016";
 const E2E_DB_FILE = "database/lyre.e2e.db";
 const E2E_DIST_DIR = ".next-e2e";
 

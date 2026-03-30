@@ -17,7 +17,7 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXTAUTH_URL || "http://localhost:7025",
+    process.env.NEXTAUTH_URL || "http://localhost:7016",
   ),
   title: {
     default: "Lyre - Audio Transcription Manager",

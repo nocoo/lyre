@@ -71,7 +71,7 @@ bun run db:push
 bun dev
 ```
 
-Open your browser 👉 [http://localhost:7025](http://localhost:7025)
+Open your browser 👉 [http://localhost:7016](http://localhost:7016)
 
 ## 📁 Project Structure
 
@@ -118,7 +118,7 @@ lyre/
 
 | Command | Description |
 |---|---|
-| `bun dev` | Start development server (port 7025) |
+| `bun dev` | Start development server (port 7016) |
 | `bun run build` | Production build |
 | `bun run lint` | Run ESLint |
 | `bun run test` | Run unit tests |
@@ -154,7 +154,7 @@ bun run db:studio
 docker build -t lyre .
 
 # Run with environment variables
-docker run -p 7025:7025 \
+docker run -p 7016:7016 \
   -v lyre-data:/data \
   -e LYRE_DB=/data/lyre.db \
   -e GOOGLE_CLIENT_ID=... \

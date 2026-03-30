@@ -29,7 +29,7 @@ Lyre uses Google OAuth for authentication with an email allowlist for access con
 
 | Environment | Redirect URI |
 |---|---|
-| Local dev | `http://localhost:7025/api/auth/callback/google` |
+| Local dev | `http://localhost:7016/api/auth/callback/google` |
 | Production | `https://your-domain.com/api/auth/callback/google` |
 
 7. Copy the **Client ID** and **Client Secret**
@@ -129,7 +129,7 @@ In the OSS Console, go to your bucket → **Access Control → Cross-Origin Reso
 
 | Field | Value |
 |---|---|
-| Allowed Origins | `http://localhost:7025`, `https://your-domain.com` |
+| Allowed Origins | `http://localhost:7016`, `https://your-domain.com` |
 | Allowed Methods | `GET, PUT, HEAD` |
 | Allowed Headers | `*` |
 | Expose Headers | `ETag` |
@@ -220,7 +220,7 @@ bun run db:push
 bun dev
 ```
 
-Open [http://localhost:7025](http://localhost:7025) and sign in with a Google account listed in `ALLOWED_EMAILS`.
+Open [http://localhost:7016](http://localhost:7016) and sign in with a Google account listed in `ALLOWED_EMAILS`.
 
 ## 8. Deploy with Docker
 
@@ -231,7 +231,7 @@ Lyre ships with a multi-stage Dockerfile optimized for production.
 ```bash
 docker build -t lyre .
 
-docker run -p 7025:7025 \
+docker run -p 7016:7016 \
   -v lyre-data:/data \
   -e LYRE_DB=/data/lyre.db \
   -e NODE_ENV=production \
