@@ -1,10 +1,6 @@
 [allowlist]
 description = "Test mock API keys"
-
-[[allowlist.regexes]]
-description = "E2E test API key fixture"
-regex = '''e2e-test-api-key-12345'''
-
-[[allowlist.regexes]]
-description = "Mock sk-test key in tests"
-regex = '''sk-tes.*7890'''
+regexes = [
+  '''e2e-test-api-key-12345''',
+  '''sk-tes.*7890''',
+]
