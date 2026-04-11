@@ -10,7 +10,7 @@
     },
     "apps/web": {
       "name": "@lyre/web",
-      "version": "1.5.5",
+      "version": "1.6.4",
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.58",
         "@ai-sdk/openai": "^3.0.41",
