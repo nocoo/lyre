@@ -23,38 +23,37 @@ describe("GET /api/live", () => {
     expect(body.version.length).toBeGreaterThan(0);
   });
 
-  test("returns a numeric timestamp close to now", async () => {
-    const before = Date.now();
+  test("returns an ISO8601 timestamp", async () => {
+    const before = new Date().toISOString();
     const body = await GET().json();
-    const after = Date.now();
+    const after = new Date().toISOString();
 
-    expect(typeof body.timestamp).toBe("number");
-    expect(body.timestamp).toBeGreaterThanOrEqual(before);
-    expect(body.timestamp).toBeLessThanOrEqual(after);
+    expect(typeof body.timestamp).toBe("string");
+    expect(body.timestamp >= before).toBe(true);
+    expect(body.timestamp <= after).toBe(true);
+    // Validate ISO8601 format
+    expect(new Date(body.timestamp).toISOString()).toBe(body.timestamp);
   });
 
   test("returns a non-negative integer uptime", async () => {
     const body = await GET().json();
     expect(typeof body.uptime).toBe("number");
     expect(body.uptime).toBeGreaterThanOrEqual(0);
-    expect(body.uptime).toBe(Math.round(body.uptime));
+    expect(body.uptime).toBe(Math.floor(body.uptime));
   });
 
-  test("returns db.connected as true", async () => {
+  test("returns database.connected as true", async () => {
     const body = await GET().json();
-    expect(body.db).toBeDefined();
-    expect(body.db.connected).toBe(true);
+    expect(body.database).toBeDefined();
+    expect(body.database.connected).toBe(true);
   });
 
   test("sets Cache-Control to no-store", async () => {
     const response = GET();
-    expect(response.headers.get("cache-control")).toBe(
-      "no-store, no-cache, must-revalidate",
-    );
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   test("does not require authentication", async () => {
-    // No auth mocks set up — if auth were required this would fail
     const response = GET();
     expect(response.status).toBe(200);
   });
@@ -71,7 +70,7 @@ describe("GET /api/live", () => {
     expect(body).toHaveProperty("component");
     expect(body).toHaveProperty("timestamp");
     expect(body).toHaveProperty("uptime");
-    expect(body).toHaveProperty("db");
+    expect(body).toHaveProperty("database");
   });
 });
 
@@ -84,26 +83,24 @@ describe("checkHealth", () => {
 
     const body = await response.json();
     expect(body.status).toBe("ok");
-    expect(body.db.connected).toBe(true);
+    expect(body.database.connected).toBe(true);
   });
 
   test("includes version, timestamp, uptime, and component on success", async () => {
-    const before = Date.now();
+    const before = new Date().toISOString();
     const body = await checkHealth(() => {}).json();
-    const after = Date.now();
+    const after = new Date().toISOString();
 
     expect(typeof body.version).toBe("string");
     expect(body.component).toBe("lyre");
-    expect(body.timestamp).toBeGreaterThanOrEqual(before);
-    expect(body.timestamp).toBeLessThanOrEqual(after);
+    expect(body.timestamp >= before).toBe(true);
+    expect(body.timestamp <= after).toBe(true);
     expect(typeof body.uptime).toBe("number");
   });
 
   test("sets no-cache headers on success", () => {
     const response = checkHealth(() => {});
-    expect(response.headers.get("cache-control")).toBe(
-      "no-store, no-cache, must-revalidate",
-    );
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   // ── Error path ──
@@ -117,41 +114,41 @@ describe("checkHealth", () => {
 
     const body = await response.json();
     expect(body.status).toBe("error");
-    expect(body.reason).toContain("database unreachable");
-    expect(body.reason).toContain("SQLITE_CANTOPEN");
+    expect(body.database.connected).toBe(false);
+    expect(body.database.error).toContain("SQLITE_CANTOPEN");
   });
 
   test("returns 503 with generic message when probe throws a non-Error", async () => {
     const response = checkHealth(() => {
-      throw "string error"; // not an Error instance
+      throw "string error";
     });
 
     expect(response.status).toBe(503);
 
     const body = await response.json();
     expect(body.status).toBe("error");
-    expect(body.reason).toContain("unexpected database failure");
+    expect(body.database.connected).toBe(false);
+    expect(body.database.error).toContain("unexpected database failure");
   });
 
-  test("error response includes timestamp", async () => {
-    const before = Date.now();
+  test("error response includes timestamp as ISO8601", async () => {
+    const before = new Date().toISOString();
     const body = await checkHealth(() => {
       throw new Error("fail");
     }).json();
-    const after = Date.now();
+    const after = new Date().toISOString();
 
-    expect(body.timestamp).toBeGreaterThanOrEqual(before);
-    expect(body.timestamp).toBeLessThanOrEqual(after);
+    expect(body.timestamp >= before).toBe(true);
+    expect(body.timestamp <= after).toBe(true);
   });
 
-  test("error response does not contain the word ok", async () => {
+  test("error response sanitizes the word ok", async () => {
     const body = await checkHealth(() => {
-      throw new Error("something went wrong");
+      throw new Error("ok connection ok failed");
     }).json();
 
-    const serialized = JSON.stringify(body).toLowerCase();
-    // "ok" must not appear as a value anywhere in the error response
-    expect(serialized).not.toContain('"ok"');
+    expect(body.database.error).not.toMatch(/\bok\b/i);
+    expect(body.database.error).toContain("***");
   });
 
   test("error response sets no-cache headers", () => {
@@ -159,25 +156,23 @@ describe("checkHealth", () => {
       throw new Error("disk I/O error");
     });
 
-    expect(response.headers.get("cache-control")).toBe(
-      "no-store, no-cache, must-revalidate",
-    );
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
-  test("error response does not include db.connected field", async () => {
+  test("error response includes version and uptime", async () => {
     const body = await checkHealth(() => {
       throw new Error("connection lost");
     }).json();
 
-    expect(body.db).toBeUndefined();
+    expect(typeof body.version).toBe("string");
+    expect(typeof body.uptime).toBe("number");
   });
 
-  test("error response does not include version or uptime", async () => {
+  test("error response includes component", async () => {
     const body = await checkHealth(() => {
       throw new Error("broken");
     }).json();
 
-    expect(body.version).toBeUndefined();
-    expect(body.uptime).toBeUndefined();
+    expect(body.component).toBe("lyre");
   });
 });
