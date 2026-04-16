@@ -16,7 +16,8 @@
     "test:e2e": "bun run --cwd apps/web test:e2e",
     "db:push": "bun run --cwd apps/web db:push",
     "db:studio": "bun run --cwd apps/web db:studio",
-    "prepare": "husky"
+    "prepare": "husky",
+    "release": "bun run scripts/release.ts"
   },
   "devDependencies": {
     "husky": "^9.1.7"
