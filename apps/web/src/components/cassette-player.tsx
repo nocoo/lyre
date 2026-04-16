@@ -111,7 +111,7 @@ export function CassettePlayer({
             <button
               className={`
                 flex h-10 w-10 items-center justify-center rounded-full
-                border-2 border-foreground/20 bg-foreground text-background shadow-md
+                border-2 border-foreground/20 bg-foreground text-background
                 transition-all duration-150
                 hover:scale-105 hover:shadow-lg active:scale-90 active:shadow-sm
                 ${isPlaying ? "ring-2 ring-foreground/20 ring-offset-2 ring-offset-secondary" : ""}
