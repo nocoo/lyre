@@ -102,7 +102,7 @@ export function RecordingTileCard({
 
       {/* Metadata badges */}
       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1 tabular-nums">
           <Clock className="h-3 w-3" strokeWidth={1.5} />
           {recording.duration}
         </span>
