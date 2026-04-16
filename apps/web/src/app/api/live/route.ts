@@ -39,6 +39,7 @@ export function checkHealth(probeDb: () => void) {
     return respond({
       status: "ok",
       version: APP_VERSION,
+      component: "lyre",
       timestamp,
       uptime,
       db: { connected: true },
