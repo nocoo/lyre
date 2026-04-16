@@ -62,7 +62,7 @@ function ChartTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-widget bg-popover px-3 py-2 shadow-sm">
+    <div className="rounded-widget bg-popover px-3 py-2">
       {label && (
         <p className="mb-1 text-xs text-muted-foreground">{label}</p>
       )}

@@ -85,7 +85,7 @@ export function RecordingListItem({
               {recording.folder.name}
             </span>
           )}
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 tabular-nums">
             <Clock className="h-3 w-3" strokeWidth={1.5} />
             {recording.duration}
           </span>

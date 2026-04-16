@@ -311,7 +311,7 @@ export function UploadDialog({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="border-input hover:bg-accent hover:text-accent-foreground flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors"
+                className="border-border hover:bg-accent hover:text-accent-foreground flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors"
               >
                 <Upload className="text-muted-foreground h-6 w-6" />
                 <span className="text-muted-foreground text-sm">
@@ -319,7 +319,7 @@ export function UploadDialog({
                 </span>
               </button>
             ) : (
-              <div className="border-input flex items-center gap-3 rounded-lg border p-3">
+              <div className="border-border flex items-center gap-3 rounded-lg border p-3">
                 <FileAudio className="text-primary h-8 w-8 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{file.name}</p>

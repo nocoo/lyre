@@ -320,6 +320,14 @@
   font-family: var(--font-dm-sans), "DM Sans", system-ui, sans-serif;
 }
 
+@utility rounded-card {
+  border-radius: var(--radius-card);
+}
+
+@utility rounded-widget {
+  border-radius: var(--radius-widget);
+}
+
 @utility animate-fade-up {
   animation: fade-up 0.4s ease-out both;
 }
