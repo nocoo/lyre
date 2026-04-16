@@ -102,7 +102,3 @@ reason = "Indirect: picomatch via micromatch/tinyglobby"
 [[IgnoredVulns]]
 id = "GHSA-c2c7-rcm5-vvqj"
 reason = "Indirect: picomatch via micromatch/tinyglobby"
-
-[[IgnoredVulns]]
-id = "GHSA-458j-xx4x-4375"
-reason = "Indirect: hono via shadcn (devDependency)"
