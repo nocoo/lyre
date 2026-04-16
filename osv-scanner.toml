@@ -30,48 +30,7 @@ reason = "Indirect: minimatch via eslint"
 id = "GHSA-7r86-cg39-jmmj"
 reason = "Indirect: minimatch via eslint"
 
-# hono 4.12.0 via shadcn/@modelcontextprotocol/sdk (devDependency)
-[[IgnoredVulns]]
-id = "GHSA-26pp-8wgv-hjvm"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-5pq2-9x2x-5p6w"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-p6xx-57qc-3wxr"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-q5qw-h33p-qvwr"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-r5rp-j6wh-rvv4"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-v8w9-8mx6-g223"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-wmmm-f939-6g9c"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-xf4j-xp2r-rqqx"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-xh87-mx6m-69f3"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-[[IgnoredVulns]]
-id = "GHSA-xpcf-pg52-r92g"
-reason = "Indirect: hono via shadcn (devDependency)"
-
-# @hono/node-server 1.19.9 via shadcn/@modelcontextprotocol/sdk (devDependency)
+# @hono/node-server 1.19.9 via shadcn/@modelcontextprotocol/sdk (devDependency, not fixed by hono upgrade)
 [[IgnoredVulns]]
 id = "GHSA-92pp-h63x-v22m"
 reason = "Indirect: @hono/node-server via shadcn (devDependency)"
