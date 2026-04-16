@@ -59,10 +59,16 @@ describe("GET /api/live", () => {
     expect(response.status).toBe(200);
   });
 
+  test("returns component as lyre", async () => {
+    const body = await GET().json();
+    expect(body.component).toBe("lyre");
+  });
+
   test("response contains all expected top-level keys", async () => {
     const body = await GET().json();
     expect(body).toHaveProperty("status");
     expect(body).toHaveProperty("version");
+    expect(body).toHaveProperty("component");
     expect(body).toHaveProperty("timestamp");
     expect(body).toHaveProperty("uptime");
     expect(body).toHaveProperty("db");
@@ -81,12 +87,13 @@ describe("checkHealth", () => {
     expect(body.db.connected).toBe(true);
   });
 
-  test("includes version, timestamp, and uptime on success", async () => {
+  test("includes version, timestamp, uptime, and component on success", async () => {
     const before = Date.now();
     const body = await checkHealth(() => {}).json();
     const after = Date.now();
 
     expect(typeof body.version).toBe("string");
+    expect(body.component).toBe("lyre");
     expect(body.timestamp).toBeGreaterThanOrEqual(before);
     expect(body.timestamp).toBeLessThanOrEqual(after);
     expect(typeof body.uptime).toBe("number");
