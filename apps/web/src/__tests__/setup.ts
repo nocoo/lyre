@@ -11,7 +11,6 @@ import { mock } from "bun:test";
 // Default behavior: return no session. Individual tests override
 // `globalThis.__mockAuthSession` to control this.
 declare global {
-  // eslint-disable-next-line no-var
   var __mockAuthSession:
     | { user?: { email?: string; name?: string; image?: string } }
     | null
