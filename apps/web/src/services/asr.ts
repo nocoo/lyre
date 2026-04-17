@@ -407,7 +407,8 @@ async function safeFetch(
     }
 
     const lines = output.trimEnd().split("\n");
-    const statusCode = parseInt(lines.pop()!, 10);
+    const statusLine = lines.pop() ?? "0";
+    const statusCode = parseInt(statusLine, 10);
     const body = lines.join("\n");
     return { status: statusCode, body };
   }

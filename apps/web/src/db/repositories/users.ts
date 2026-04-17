@@ -65,10 +65,14 @@ export const usersRepo = {
   }): DbUser {
     const existing = this.findByEmail(data.email);
     if (existing) {
-      return this.update(existing.id, {
+      const updated = this.update(existing.id, {
         name: data.name,
         avatarUrl: data.avatarUrl,
-      })!;
+      });
+      if (!updated) {
+        throw new Error(`User ${existing.id} disappeared after update`);
+      }
+      return updated;
     }
     return this.create(data);
   },

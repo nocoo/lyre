@@ -37,7 +37,7 @@ export function progressToTime(progress: number, duration: number): number {
 export function cyclePlaybackSpeed(current: PlaybackSpeed): PlaybackSpeed {
   const idx = PLAYBACK_SPEEDS.indexOf(current);
   const nextIdx = (idx + 1) % PLAYBACK_SPEEDS.length;
-  return PLAYBACK_SPEEDS[nextIdx]!;
+  return PLAYBACK_SPEEDS[nextIdx] ?? current;
 }
 
 /** Format playback speed for display (e.g. 1 → "1×", 1.5 → "1.5×") */

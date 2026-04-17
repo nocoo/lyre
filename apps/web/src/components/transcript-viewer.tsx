@@ -359,8 +359,9 @@ function useWordData(recordingId: string) {
 
   const fetchWords = useCallback(async () => {
     // Already cached in module-level cache
-    if (wordDataCache.has(recordingId)) {
-      setWordsBySentence(wordDataCache.get(recordingId)!);
+    const cached = wordDataCache.get(recordingId);
+    if (cached) {
+      setWordsBySentence(cached);
       return;
     }
 

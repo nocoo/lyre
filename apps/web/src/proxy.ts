@@ -63,4 +63,4 @@ export const config = {
  * Must be a separate const (not inlined into config.matcher) because
  * Next.js requires config.matcher entries to be static string literals.
  */
-export const MATCHER_PATTERN = config.matcher[0]!;
+export const MATCHER_PATTERN = config.matcher[0] ?? "";
