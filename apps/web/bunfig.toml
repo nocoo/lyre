@@ -1,0 +1,8 @@
+[test]
+coveragePathIgnorePatterns = [
+  "src/app/**",
+  "src/components/**",
+  "src/hooks/**",
+  "src/__tests__/**",
+]
+coverageSkipTestFiles = true
