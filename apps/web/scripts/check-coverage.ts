@@ -5,40 +5,19 @@
  * Runs unit tests with coverage and fails if coverage falls below threshold.
  */
 
-const THRESHOLD = 90; // Minimum line coverage percentage
+const THRESHOLD = 95; // Minimum line coverage percentage
 
 async function main() {
   console.log("Running unit tests with coverage...\n");
 
-  // Run tests with coverage (same file list as `bun run test`)
+  // Discover all test files under src/__tests__/. Using a glob keeps
+  // the list in sync automatically as new tests are added.
+  const glob = new Bun.Glob("src/__tests__/*.test.ts");
+  const testFiles = Array.from(glob.scanSync(".")).sort();
+
+  // Run tests with coverage
   const proc = Bun.spawn(
-    [
-      "bun",
-      "test",
-      "src/__tests__/utils.test.ts",
-      "src/__tests__/proxy-matcher.test.ts",
-      "src/__tests__/theme.test.ts",
-      "src/__tests__/recordings-list-vm.test.ts",
-      "src/__tests__/recording-detail-vm.test.ts",
-      "src/__tests__/audio-player-vm.test.ts",
-      "src/__tests__/users-repo.test.ts",
-      "src/__tests__/recordings-repo.test.ts",
-      "src/__tests__/jobs-repo.test.ts",
-      "src/__tests__/transcriptions-repo.test.ts",
-      "src/__tests__/settings-repo.test.ts",
-      "src/__tests__/oss-service.test.ts",
-      "src/__tests__/db-utils.test.ts",
-      "src/__tests__/asr-service.test.ts",
-      "src/__tests__/device-tokens-repo.test.ts",
-      "src/__tests__/api-auth.test.ts",
-      "src/__tests__/folders-repo.test.ts",
-      "src/__tests__/tags-repo.test.ts",
-      "src/__tests__/ai-service.test.ts",
-      "src/__tests__/sidebar-nav.test.ts",
-      "src/__tests__/backup-service.test.ts",
-      "src/__tests__/backy-service.test.ts",
-      "--coverage",
-    ],
+    ["bun", "test", ...testFiles, "--coverage"],
     {
       stdout: "pipe",
       stderr: "pipe",
