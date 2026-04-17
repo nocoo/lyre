@@ -7,9 +7,14 @@ import { deviceTokensRepo } from "@/db/repositories/device-tokens";
 // ── Mocks ──────────────────────────────────────────────────────────
 
 let mockAuthorizationHeader: string | null = null;
-let mockAuthSession: {
-  user?: { email?: string; name?: string; image?: string };
-} | null = null;
+
+type MockSession =
+  | { user?: { email?: string; name?: string; image?: string } }
+  | null;
+
+function setSession(session: MockSession): void {
+  globalThis.__mockAuthSession = session;
+}
 
 // Mock next/headers — headers() returns a Headers-like object
 mock.module("next/headers", () => ({
@@ -21,9 +26,24 @@ mock.module("next/headers", () => ({
   }),
 }));
 
-// Mock @/auth — auth() returns the mock session
+// Mock @/auth — reads from globalThis.__mockAuthSession so this mock
+// plays nicely with other test files that drive the same global
+// (e.g. proxy.test.ts). Supports both call shapes: `await auth()` and
+// `auth((req) => ...)` (NextAuth's middleware-style wrapper).
 mock.module("@/auth", () => ({
-  auth: async () => mockAuthSession,
+  auth: (arg?: unknown) => {
+    if (typeof arg === "function") {
+      const handler = arg as (req: unknown) => unknown;
+      return (req: unknown) => {
+        (req as { auth: unknown }).auth =
+          (globalThis.__mockAuthSession as MockSession) ?? null;
+        return handler(req);
+      };
+    }
+    return Promise.resolve(
+      (globalThis.__mockAuthSession as MockSession) ?? null,
+    );
+  },
 }));
 
 // Type-safe env helpers (NODE_ENV is typed as readonly in @types/bun)
@@ -60,7 +80,7 @@ describe("getCurrentUser", () => {
   beforeEach(() => {
     resetDb();
     mockAuthorizationHeader = null;
-    mockAuthSession = null;
+    setSession(null);
     delete env.PLAYWRIGHT;
   });
 
@@ -176,9 +196,9 @@ describe("getCurrentUser", () => {
     env.NODE_ENV = "test";
 
     // Set up a valid session that would succeed
-    mockAuthSession = {
+    setSession({
       user: { email: "session@test.com", name: "Session User" },
-    };
+    });
 
     // But also provide an invalid bearer token
     mockAuthorizationHeader = "Bearer bad-token";
@@ -194,13 +214,13 @@ describe("getCurrentUser", () => {
   test("authenticates via NextAuth session", async () => {
     env.NODE_ENV = "test";
 
-    mockAuthSession = {
+    setSession({
       user: {
         email: "session@test.com",
         name: "Session User",
         image: "https://example.com/avatar.jpg",
       },
-    };
+    });
 
     const user = await callGetCurrentUser();
     expect(user).not.toBeNull();
@@ -212,9 +232,9 @@ describe("getCurrentUser", () => {
   test("creates user from session on first login", async () => {
     env.NODE_ENV = "test";
 
-    mockAuthSession = {
+    setSession({
       user: { email: "new@test.com", name: "New User" },
-    };
+    });
 
     const user = await callGetCurrentUser();
     expect(user).not.toBeNull();
@@ -228,9 +248,9 @@ describe("getCurrentUser", () => {
   test("generates stable user ID from email", async () => {
     env.NODE_ENV = "test";
 
-    mockAuthSession = {
+    setSession({
       user: { email: "stable@test.com", name: "Stable" },
-    };
+    });
 
     const user1 = await callGetCurrentUser();
     const user2 = await callGetCurrentUser();
@@ -243,7 +263,7 @@ describe("getCurrentUser", () => {
   test("returns null when session has no email", async () => {
     env.NODE_ENV = "test";
 
-    mockAuthSession = { user: { name: "No Email" } };
+    setSession({ user: { name: "No Email" } });
 
     const user = await callGetCurrentUser();
     expect(user).toBeNull();
@@ -252,7 +272,7 @@ describe("getCurrentUser", () => {
   test("returns null when session is null", async () => {
     env.NODE_ENV = "test";
 
-    mockAuthSession = null;
+    setSession(null);
 
     const user = await callGetCurrentUser();
     expect(user).toBeNull();
@@ -261,7 +281,7 @@ describe("getCurrentUser", () => {
   test("returns null when session.user is undefined", async () => {
     env.NODE_ENV = "test";
 
-    mockAuthSession = {};
+    setSession({});
 
     const user = await callGetCurrentUser();
     expect(user).toBeNull();
@@ -270,9 +290,9 @@ describe("getCurrentUser", () => {
   test("handles missing name and image in session gracefully", async () => {
     env.NODE_ENV = "test";
 
-    mockAuthSession = {
+    setSession({
       user: { email: "minimal@test.com" },
-    };
+    });
 
     const user = await callGetCurrentUser();
     expect(user).not.toBeNull();
