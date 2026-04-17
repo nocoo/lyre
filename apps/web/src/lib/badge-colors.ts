@@ -42,5 +42,7 @@ const TAG_PALETTE: TagColor[] = [
 
 /** Get a stable color from the palette for a given tag name. */
 export function getTagColor(name: string): TagColor {
-  return TAG_PALETTE[hashString(name) % TAG_PALETTE.length]!;
+  const color = TAG_PALETTE[hashString(name) % TAG_PALETTE.length];
+  // TAG_PALETTE is non-empty, so this branch is unreachable — but satisfies strict null checks.
+  return color ?? { bg: "bg-blue-500/15", text: "text-blue-600 dark:text-blue-400" };
 }

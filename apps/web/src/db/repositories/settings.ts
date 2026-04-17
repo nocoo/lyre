@@ -37,7 +37,11 @@ export const settingsRepo = {
         .set({ value, updatedAt: Date.now() })
         .where(and(eq(settings.userId, userId), eq(settings.key, key)))
         .run();
-      return this.findByKey(userId, key)!;
+      const updated = this.findByKey(userId, key);
+      if (!updated) {
+        throw new Error(`Setting ${key} disappeared after update`);
+      }
+      return updated;
     }
     return db
       .insert(settings)

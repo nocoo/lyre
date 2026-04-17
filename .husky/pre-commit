@@ -1,5 +1,5 @@
-# Web: unit tests + lint
-bun run test && bun run lint
+# Web: G1 (typecheck + lint-staged) + L1 (unit tests)
+bun run typecheck && bunx lint-staged && bun run test
 
 # macOS: unit tests + lint
 cd apps/macos && \

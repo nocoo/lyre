@@ -35,5 +35,8 @@
   },
   "overrides": {
     "hono": "^4.12.14"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": ["eslint --max-warnings=0"]
   }
 }

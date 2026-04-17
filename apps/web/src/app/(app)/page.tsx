@@ -34,7 +34,7 @@ import { chart, chartAxis, CHART_COLORS } from "@/lib/palette";
 
 /** Safe chart color accessor (falls back to first color on out-of-bounds). */
 function chartColor(index: number): string {
-  return CHART_COLORS[index] ?? CHART_COLORS[0]!;
+  return CHART_COLORS[index] ?? CHART_COLORS[0] ?? "#000";
 }
 import {
   type DashboardData,

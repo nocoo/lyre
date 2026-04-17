@@ -251,10 +251,14 @@ export async function listObjects(
       /<Contents>\s*<Key>([^<]+)<\/Key>\s*<LastModified>([^<]+)<\/LastModified>[\s\S]*?<Size>(\d+)<\/Size>[\s\S]*?<\/Contents>/g;
     let match: RegExpExecArray | null;
     while ((match = contentsRegex.exec(xml)) !== null) {
+      const key = match[1];
+      const lastModified = match[2];
+      const sizeStr = match[3];
+      if (!key || !lastModified || !sizeStr) continue;
       all.push({
-        key: match[1]!,
-        size: parseInt(match[3]!, 10),
-        lastModified: match[2]!,
+        key,
+        size: parseInt(sizeStr, 10),
+        lastModified,
       });
     }
 

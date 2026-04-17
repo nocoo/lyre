@@ -149,8 +149,8 @@ export function findActiveSentenceIndex(
 ): number {
   const currentMs = currentTimeSeconds * 1000;
   for (let i = 0; i < sentences.length; i++) {
-    const s = sentences[i]!;
-    if (currentMs >= s.beginTimeMs && currentMs < s.endTimeMs) {
+    const s = sentences[i];
+    if (s && currentMs >= s.beginTimeMs && currentMs < s.endTimeMs) {
       return i;
     }
   }
@@ -268,15 +268,16 @@ export function findActiveWordIndex(
 ): number {
   const currentMs = currentTimeSeconds * 1000;
   for (let i = 0; i < words.length; i++) {
-    const w = words[i]!;
-    if (currentMs >= w.beginTimeMs && currentMs < w.endTimeMs) {
+    const w = words[i];
+    if (w && currentMs >= w.beginTimeMs && currentMs < w.endTimeMs) {
       return i;
     }
   }
   // If between words or past last word but within sentence, find nearest
   // This handles words with begin_time === end_time (instantaneous)
   for (let i = 0; i < words.length; i++) {
-    const w = words[i]!;
+    const w = words[i];
+    if (!w) continue;
     const next = words[i + 1];
     if (w.beginTimeMs === w.endTimeMs && currentMs >= w.beginTimeMs) {
       // Instantaneous word — active if current time is at or past it
