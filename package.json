@@ -17,7 +17,8 @@
     "db:push": "bun run --cwd apps/web db:push",
     "db:studio": "bun run --cwd apps/web db:studio",
     "prepare": "husky",
-    "release": "bun run scripts/release.ts"
+    "release": "bun run scripts/release.ts",
+    "typecheck": "bun run --cwd apps/web tsc --noEmit"
   },
   "devDependencies": {
     "husky": "^9.1.7"
