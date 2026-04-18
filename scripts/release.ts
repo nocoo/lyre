@@ -57,6 +57,26 @@ function writeJson(path: string, data: Record<string, unknown>): void {
   writeFileSync(path, JSON.stringify(data, null, 2) + "\n");
 }
 
+/**
+ * Abort if the working tree has uncommitted changes.
+ * Prevents accidentally bundling unrelated files into a release commit.
+ */
+function ensureCleanWorkingTree(): void {
+  const status = execSync("git status --porcelain", {
+    cwd: PROJECT_ROOT,
+    encoding: "utf-8",
+  }).trim();
+
+  if (status) {
+    console.error("\n❌ Working tree is dirty. Commit or stash changes before releasing.\n");
+    console.error("Uncommitted files:");
+    for (const line of status.split("\n")) {
+      console.error(`   ${line}`);
+    }
+    process.exit(1);
+  }
+}
+
 function bumpVersion(current: string, bump: string): string {
   // If bump looks like an explicit semver, return it directly
   if (/^\d+\.\d+\.\d+/.test(bump)) return bump;
@@ -176,6 +196,11 @@ function main(): void {
   const newVersion = bumpVersion(currentVersion, bumpArg);
 
   console.log(`\n📦 Release: v${currentVersion} → v${newVersion}${dryRun ? " (dry-run)" : ""}\n`);
+
+  // 0. Pre-flight: ensure clean working tree
+  if (!dryRun) {
+    ensureCleanWorkingTree();
+  }
 
   // 1. Bump version in root package.json
   console.log("1️⃣  Bumping versions...");
