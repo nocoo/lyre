@@ -9,7 +9,7 @@ import { getCurrentUser } from "@/lib/api-auth";
 import { settingsRepo } from "@/db/repositories";
 import {
   resolveAiConfig,
-  createAiClient,
+  createAiModel,
   type AiProvider,
   type SdkType,
 } from "@/services/ai";
@@ -44,14 +44,14 @@ export async function POST() {
       provider: provider as AiProvider,
       apiKey,
       model,
-      baseURL: baseURL || undefined,
-      sdkType: (sdkType || undefined) as SdkType | undefined,
+      ...(baseURL ? { baseURL } : {}),
+      ...(sdkType ? { sdkType: sdkType as SdkType } : {}),
     });
 
-    const client = createAiClient(config);
+    const client = createAiModel(config);
 
     const { text } = await generateText({
-      model: client(config.model),
+      model: client,
       prompt: "Reply with exactly: OK",
       maxOutputTokens: 10,
     });

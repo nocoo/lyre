@@ -225,7 +225,7 @@ export function AiSettingsSection() {
               const label =
                 id === "custom"
                   ? CUSTOM_PROVIDER_INFO.label
-                  : AI_PROVIDERS[id].label;
+                  : (AI_PROVIDERS[id]?.label ?? id);
               return (
                 <option key={id} value={id}>
                   {label}
