@@ -68,23 +68,6 @@ function createMockEventSource(url: string): MockEventSource {
 // and manually run setup/cleanup.
 
 let currentEffectCleanup: (() => void) | null | undefined = null;
-let _currentEffectDeps: unknown[] | null = null;
-
-/** Simulates React.useEffect for a single effect */
-function simulateUseEffect(effect: () => (() => void) | void, deps: unknown[]) {
-  _currentEffectDeps = deps;
-  const cleanup = effect();
-  currentEffectCleanup = cleanup ?? null;
-}
-
-/** Simulates React.useRef */
-function simulateUseRef<T>(initial: T): { current: T } {
-  return { current: initial };
-}
-
-// Patch React module imports (hook uses useEffect and useRef from react)
-const _origUseEffect = simulateUseEffect;
-const _origUseRef = simulateUseRef;
 
 // ── Tests ──
 
@@ -125,9 +108,7 @@ describe("useJobEvents", () => {
 
     if (!enabled) return;
 
-    const eventSource = new (globalThis as unknown as { EventSource: typeof createMockEventSource }).EventSource(
-      "/api/jobs/events",
-    );
+    const eventSource = createMockEventSource("/api/jobs/events");
 
     const handler = (e: MessageEvent) => {
       try {
@@ -189,8 +170,8 @@ describe("useJobEvents", () => {
     lastEventSource!._emit("job-update", JSON.stringify(e2));
 
     expect(callbacks).toHaveLength(2);
-    expect(callbacks[0].status).toBe("RUNNING");
-    expect(callbacks[1].status).toBe("SUCCEEDED");
+    expect(callbacks[0]!.status).toBe("RUNNING");
+    expect(callbacks[1]!.status).toBe("SUCCEEDED");
   });
 
   test("warns on malformed event data", () => {
