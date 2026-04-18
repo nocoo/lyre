@@ -43,9 +43,9 @@ describe("proxy", () => {
     }
   });
 
-  async function callProxy(req: FakeReq) {
+  async function callProxy(req: FakeReq): Promise<Response> {
     const { proxy } = await import("@/proxy");
-    return proxy(req as never);
+    return proxy(req as never) as Response;
   }
 
   test("allows /api/auth routes without redirect", async () => {
