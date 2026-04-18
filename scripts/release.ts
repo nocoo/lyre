@@ -28,6 +28,7 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 const PROJECT_ROOT = pathResolve(import.meta.dirname as string, "..");
 const PACKAGE_JSON = pathResolve(PROJECT_ROOT, "package.json");
 const CHANGELOG = pathResolve(PROJECT_ROOT, "CHANGELOG.md");
+const MACOS_PROJECT_YML = pathResolve(PROJECT_ROOT, "apps/macos/project.yml");
 
 // Workspace package.json files to keep in sync
 const WORKSPACE_PACKAGES = [
@@ -71,6 +72,41 @@ function bumpVersion(current: string, bump: string): string {
     default:
       throw new Error(`Unknown bump type: ${bump}`);
   }
+}
+
+/**
+ * Update MARKETING_VERSION in apps/macos/project.yml
+ * Uses regex replacement to preserve YAML structure
+ */
+function updateMacosVersion(newVersion: string, dryRun: boolean): void {
+  if (!existsSync(MACOS_PROJECT_YML)) {
+    console.log("   [skip] apps/macos/project.yml not found");
+    return;
+  }
+
+  const content = readFileSync(MACOS_PROJECT_YML, "utf-8");
+  const versionMatch = content.match(/MARKETING_VERSION:\s*"([^"]+)"/);
+  const currentVersion = versionMatch?.[1] ?? "unknown";
+
+  console.log(`   apps/macos/project.yml: ${currentVersion} → ${newVersion}`);
+
+  if (!dryRun) {
+    const updated = content.replace(
+      /MARKETING_VERSION:\s*"[^"]+"/,
+      `MARKETING_VERSION: "${newVersion}"`,
+    );
+    writeFileSync(MACOS_PROJECT_YML, updated);
+  }
+}
+
+/**
+ * Regenerate Xcode project from project.yml
+ */
+function regenerateXcodeProject(dryRun: boolean): void {
+  if (!existsSync(MACOS_PROJECT_YML)) return;
+
+  const macosDir = pathResolve(PROJECT_ROOT, "apps/macos");
+  run("xcodegen generate", { dryRun, cwd: macosDir });
 }
 
 // ---------------------------------------------------------------------------
@@ -158,12 +194,19 @@ function main(): void {
     }
   }
 
-  // 2. Sync lockfile
-  console.log("\n2️⃣  Syncing lockfile...");
+  // Bump macOS app version
+  updateMacosVersion(newVersion, dryRun);
+
+  // 2. Regenerate Xcode project
+  console.log("\n2️⃣  Regenerating Xcode project...");
+  regenerateXcodeProject(dryRun);
+
+  // 3. Sync lockfile
+  console.log("\n3️⃣  Syncing lockfile...");
   run("bun install", { dryRun });
 
-  // 3. Generate changelog
-  console.log("\n3️⃣  Generating CHANGELOG...");
+  // 4. Generate changelog
+  console.log("\n4️⃣  Generating CHANGELOG...");
   const changelogEntry = generateChangelog(newVersion, dryRun);
   if (changelogEntry) {
     console.log(changelogEntry);
@@ -171,19 +214,19 @@ function main(): void {
     console.log("   No commits found since last tag.");
   }
 
-  // 4. Commit and tag
-  console.log("4️⃣  Committing and tagging...");
+  // 5. Commit and tag
+  console.log("5️⃣  Committing and tagging...");
   run("git add -A", { dryRun });
   run(`git commit -m "release: v${newVersion}"`, { dryRun });
   run(`git tag v${newVersion}`, { dryRun });
 
-  // 5. Push
-  console.log("\n5️⃣  Pushing...");
+  // 6. Push
+  console.log("\n6️⃣  Pushing...");
   run("git push", { dryRun });
   run("git push --tags", { dryRun });
 
-  // 6. GitHub release
-  console.log("\n6️⃣  Creating GitHub release...");
+  // 7. GitHub release
+  console.log("\n7️⃣  Creating GitHub release...");
   const releaseNotes = changelogEntry || `Release v${newVersion}`;
   const notesFile = `/tmp/lyre-release-notes-${newVersion}.md`;
   if (!dryRun) {
