@@ -117,6 +117,16 @@ async function main() {
       DASHSCOPE_API_KEY: "",
       // Skip archiving raw ASR results to OSS in E2E
       SKIP_OSS_ARCHIVE: "1",
+      // Dummy OSS credentials for presigned URL generation in E2E.
+      // presignPut/presignGet are pure URL builders (no network call), so
+      // any non-empty values let them produce signed URLs the tests can assert on.
+      OSS_ACCESS_KEY_ID: process.env.OSS_ACCESS_KEY_ID || "e2e-dummy-key-id",
+      OSS_ACCESS_KEY_SECRET:
+        process.env.OSS_ACCESS_KEY_SECRET || "e2e-dummy-key-secret",
+      OSS_REGION: process.env.OSS_REGION || "oss-cn-beijing",
+      OSS_ENDPOINT:
+        process.env.OSS_ENDPOINT || "https://oss-cn-beijing.aliyuncs.com",
+      OSS_BUCKET: process.env.OSS_BUCKET || "lyre-e2e",
     },
     stdout: "pipe",
     stderr: "pipe",
