@@ -17,7 +17,7 @@ import {
 } from "@/db/repositories";
 import {
   resolveAiConfig,
-  createAiClient,
+  createAiModel,
   buildSummaryPrompt,
   type AiProvider,
   type SdkType,
@@ -74,15 +74,15 @@ export async function POST(_request: Request, context: RouteContext) {
       provider: provider as AiProvider,
       apiKey,
       model,
-      baseURL: baseURL || undefined,
-      sdkType: (sdkType || undefined) as SdkType | undefined,
+      ...(baseURL ? { baseURL } : {}),
+      ...(sdkType ? { sdkType: sdkType as SdkType } : {}),
     });
 
-    const client = createAiClient(config);
+    const client = createAiModel(config);
     const prompt = buildSummaryPrompt(transcription.fullText);
 
     const result = streamText({
-      model: client(config.model),
+      model: client,
       prompt,
       maxOutputTokens: 2048,
       onFinish({ text }) {

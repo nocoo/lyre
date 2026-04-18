@@ -16,8 +16,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.58",
-    "@ai-sdk/openai": "^3.0.41",
+    "@nocoo/next-ai": "^0.2.1",
     "@radix-ui/react-collapsible": "^1.1.12",
     "ai": "^6.0.116",
     "better-sqlite3": "^12.6.2",

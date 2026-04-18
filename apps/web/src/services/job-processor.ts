@@ -24,7 +24,7 @@ import { parseTranscriptionResult } from "@/services/asr";
 import { presignPut, makeResultKey } from "@/services/oss";
 import {
   resolveAiConfig,
-  createAiClient,
+  createAiModel,
   buildSummaryPrompt,
   type AiProvider,
   type SdkType,
@@ -204,15 +204,15 @@ async function autoSummarize(
     provider: provider as AiProvider,
     apiKey,
     model,
-    baseURL: baseURL || undefined,
-    sdkType: (sdkType || undefined) as SdkType | undefined,
+    ...(baseURL ? { baseURL } : {}),
+    ...(sdkType ? { sdkType: sdkType as SdkType } : {}),
   });
 
-  const client = createAiClient(config);
+  const client = createAiModel(config);
   const prompt = buildSummaryPrompt(fullText);
 
   const { text } = await generateText({
-    model: client(config.model),
+    model: client,
     prompt,
     maxOutputTokens: 2048,
   });
