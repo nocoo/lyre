@@ -1,5 +1,73 @@
 # Changelog
 
+## v1.6.5 (2026-04-18)
+
+### 🚀 Features
+
+- feat(deps): add @nocoo/next-ai, remove redundant AI SDK deps (7a6f2ff)
+- feat(web): upgrade /api/live to surety standard (9c16297)
+- feat(scripts): add automated release script (8a49f8a)
+- feat(api): add component field to /api/live health check (c0eccac)
+- feat(tokens): add rounded-card and rounded-widget utility classes (3a916c2)
+
+### 🐛 Bug Fixes
+
+- fix(scripts): add clean-tree check to release script (7de2607)
+- fix(test): resolve TS errors in backy-service.test.ts (6354a48)
+- fix(test): resolve TS errors in theme.test.ts (178c8ec)
+- fix(test): resolve TS errors in proxy.test.ts (126e700)
+- fix(test): resolve TS errors in oss-service.test.ts (7d0c6f7)
+- fix(test): resolve TS errors in use-job-events.test.ts (75dd004)
+- fix(test): resolve TS errors in jobs-repo.test.ts (5c83515)
+- fix(test): resolve TS errors in job-processor.test.ts (3c8bd17)
+- fix(test): resolve TS errors in job-manager.test.ts (9cf6ec4)
+- fix(scripts): sync macOS version in release script (a3b0d72)
+- fix(lint): remove unused eslint-disable directive in setup.ts (65f9d47)
+- fix(deps): override hono to >=4.12.14 — fix GHSA-458j-xx4x-4375 (ffbf96e)
+- fix(ui): skeleton use bg-secondary instead of bg-muted (f796e1d)
+- fix(ui): add tabular-nums to duration displays in recording cards (f4cace6)
+- fix(ui): remove shadow from non-overlay components (518750a)
+- fix(components): replace border-input anti-pattern in app components (336c52d)
+- fix(ui): replace anti-pattern tokens in base components (0cf8a95)
+- fix(ci): 迁移到 base-ci@v2026，禁用 L2 E2E (4af4118)
+- fix(deps): update next, path-to-regexp, picomatch (49219d7)
+- fix(deps): update vulnerable deps + add osv-scanner.toml (511b54b)
+- fix: resolve B-4 content page UI violations (93f5011)
+- fix: dashboard group labels, chevron size, and breadcrumb aria per basalt B-2 spec (b09793a)
+- fix: login page layout, github link, and aria-hidden per basalt spec (7eb62e1)
+- fix: update stale doc paths in CHANGELOG.md (ab76ebd)
+- fix: align logo assets with single-source pipeline convention (21f465f)
+
+### 📝 Other Changes
+
+- ci: enable typecheck in CI workflow (11dc40f)
+- test(ai): update ai-service tests for next-ai migration (50799aa)
+- refactor(ai): update consumers to use createAiModel from next-ai (80de230)
+- refactor(ai): migrate services/ai.ts to use @nocoo/next-ai (79388c3)
+- ci: enable L2 API E2E tests (ba5e003)
+- chore(coverage): auto-discover test files and raise threshold to 95% (ffefc2f)
+- test(proxy): add unit tests covering auth routing and redirect URL construction (0e6e40b)
+- test: add bunfig.toml to scope coverage to unit-tested modules (5f50e48)
+- chore(g1): add typecheck script (fad1697)
+- chore: remove stale hono CVE ignores from osv-scanner.toml (51787e1)
+- Revert "chore(security): ignore GHSA-458j-xx4x-4375 hono indirect via shadcn" (cc6a1ee)
+- chore(security): ignore GHSA-458j-xx4x-4375 hono indirect via shadcn (4c8e119)
+- chore(quality): 6DQ G1 — add --max-warnings=0 to lint (#1) (41ee14f)
+- ci: migrate to nocoo/base-ci@v2026 (f0248d5)
+- ci: fix .gitleaks.toml format — use flat regex list (e82ff23)
+- ci: add .gitleaks.toml to allowlist test mock keys (6ad9373)
+- ci: add GitHub Actions CI workflow (ccfabda)
+- chore: migrate dev port 7025 → 7016 (23a549e)
+- chore: bump version to 1.6.3 (dfe4487)
+- refactor: move logo assets to project root per basalt B-3 spec (8226a99)
+- chore: bump version to 1.6.2 (c0d0b2a)
+- docs: add docs index link to README (d284cde)
+- docs: add docs/README.md index (2a8b87a)
+- docs: renumber active docs (03→01, 04→02) (0c55332)
+- chore: archive stale planning docs (3e86c17)
+- docs: clarify apple development signing (2e17a3a)
+
+
 All notable changes to this project will be documented in this file.
 
 ## [v1.6.0] - 2026-03-06

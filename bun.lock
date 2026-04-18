@@ -20,7 +20,7 @@
     },
     "apps/web": {
       "name": "@lyre/web",
-      "version": "1.6.4",
+      "version": "1.6.5",
       "dependencies": {
         "@nocoo/next-ai": "^0.2.1",
         "@radix-ui/react-collapsible": "^1.1.12",
