@@ -261,7 +261,6 @@
 				};
 			};
 			buildConfigurationList = AA30B441B317B7E8374845E4 /* Build configuration list for PBXProject "Lyre" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -271,6 +270,7 @@
 			mainGroup = AEBEEB30DBC0B7DD33C34954;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = B9C019BFD3771961AE9415FA /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -419,7 +419,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.6.4;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.hexly.lyre;
 				PRODUCT_NAME = Lyre;
 				SDKROOT = macosx;
@@ -526,7 +526,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.6.4;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.hexly.lyre;
 				PRODUCT_NAME = Lyre;
 				SDKROOT = macosx;

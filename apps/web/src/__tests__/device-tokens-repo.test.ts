@@ -138,7 +138,7 @@ describe("deviceTokensRepo", () => {
       });
       const tokens = deviceTokensRepo.findByUserId("user-1");
       expect(tokens).toHaveLength(1);
-      expect(tokens[0].name).toBe("Alice Device");
+      expect(tokens[0]!.name).toBe("Alice Device");
     });
   });
 

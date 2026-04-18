@@ -29,7 +29,6 @@ function seedRecording(id = "rec-1", status: "uploaded" | "transcribing" = "tran
     format: "mp3",
     sampleRate: 44100,
     ossKey: `uploads/${id}.mp3`,
-    tags: [],
     status,
   });
 }
@@ -245,8 +244,8 @@ describe("JobManager", () => {
 
       await waitFor(() => events.length > 0);
 
-      expect(events[0].status).toBe("SUCCEEDED");
-      expect(events[0].previousStatus).toBe("RUNNING");
+      expect(events[0]!.status).toBe("SUCCEEDED");
+      expect(events[0]!.previousStatus).toBe("RUNNING");
     });
 
     test("does not emit when status is unchanged", async () => {
