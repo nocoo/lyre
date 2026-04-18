@@ -182,7 +182,7 @@ describe("deleteObject", () => {
   test("returns true on 204 No Content", async () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 204 })),
-    );
+    ) as unknown as typeof fetch;
     const result = await deleteObject("uploads/u/r/test.mp3", TEST_CONFIG);
     expect(result).toBe(true);
   });
@@ -190,7 +190,7 @@ describe("deleteObject", () => {
   test("returns true on 200 OK", async () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 200 })),
-    );
+    ) as unknown as typeof fetch;
     const result = await deleteObject("key.mp3", TEST_CONFIG);
     expect(result).toBe(true);
   });
@@ -198,7 +198,7 @@ describe("deleteObject", () => {
   test.each([403, 404, 500])("returns false on HTTP %d", async (status) => {
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response("Error", { status })),
-    );
+    ) as unknown as typeof fetch;
     const result = await deleteObject("key.mp3", TEST_CONFIG);
     expect(result).toBe(false);
   });
@@ -210,7 +210,7 @@ describe("deleteObject", () => {
       capturedUrl = url;
       capturedInit = init;
       return Promise.resolve(new Response(null, { status: 204 }));
-    });
+    }) as unknown as typeof fetch;
 
     await deleteObject("uploads/u/r/test.mp3", TEST_CONFIG);
 
@@ -228,12 +228,12 @@ describe("deleteObject", () => {
     globalThis.fetch = mock((_url: string, init?: RequestInit) => {
       capturedInit = init;
       return Promise.resolve(new Response(null, { status: 204 }));
-    });
+    }) as unknown as typeof fetch;
 
     await deleteObject("key.mp3", TEST_CONFIG);
 
     const headers = capturedInit?.headers as Record<string, string>;
-    const sig = headers.Authorization.replace("OSS test-key-id:", "");
+    const sig = headers.Authorization!.replace("OSS test-key-id:", "");
     expect(sig).toMatch(/^[A-Za-z0-9+/=]+$/);
   });
 });
@@ -269,9 +269,19 @@ describe("getConfig (env var validation)", () => {
   afterEach(() => {
     for (const key of envKeys) {
       if (savedEnv[key] === undefined) {
-        delete process.env[key];
+        if (key === "NODE_ENV") {
+          // @ts-expect-error -- assigning to readonly NODE_ENV for test
+          delete process.env[key];
+        } else {
+          delete process.env[key];
+        }
       } else {
-        process.env[key] = savedEnv[key];
+        if (key === "NODE_ENV") {
+          // @ts-expect-error -- assigning to readonly NODE_ENV for test
+          process.env[key] = savedEnv[key];
+        } else {
+          process.env[key] = savedEnv[key];
+        }
       }
     }
   });
@@ -303,6 +313,7 @@ describe("getConfig (env var validation)", () => {
 
   test("auto-resolves bucket when OSS_BUCKET is not set (dev)", () => {
     delete process.env.OSS_BUCKET;
+    // @ts-expect-error -- assigning to readonly NODE_ENV for test
     delete process.env.NODE_ENV;
     const url = presignPut("key.mp3", "audio/mpeg");
     expect(url).toContain(`https://${BUCKET_DEV}.oss-cn-beijing.aliyuncs.com/`);
@@ -310,6 +321,7 @@ describe("getConfig (env var validation)", () => {
 
   test("auto-resolves bucket when OSS_BUCKET is not set (production)", () => {
     delete process.env.OSS_BUCKET;
+    // @ts-expect-error -- assigning to readonly NODE_ENV for test
     process.env.NODE_ENV = "production";
     const url = presignPut("key.mp3", "audio/mpeg");
     expect(url).toContain(`https://${BUCKET_PROD}.oss-cn-beijing.aliyuncs.com/`);
@@ -345,15 +357,15 @@ describe("listObjects", () => {
 
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(xml, { status: 200 })),
-    );
+    ) as unknown as typeof fetch;
 
     const objects = await listObjects("uploads/", TEST_CONFIG);
     expect(objects).toHaveLength(2);
-    expect(objects[0].key).toBe("uploads/user1/rec1/audio.wav");
-    expect(objects[0].size).toBe(1048576);
-    expect(objects[0].lastModified).toBe("2026-01-15T10:30:00.000Z");
-    expect(objects[1].key).toBe("uploads/user1/rec2/audio.mp3");
-    expect(objects[1].size).toBe(524288);
+    expect(objects[0]!.key).toBe("uploads/user1/rec1/audio.wav");
+    expect(objects[0]!.size).toBe(1048576);
+    expect(objects[0]!.lastModified).toBe("2026-01-15T10:30:00.000Z");
+    expect(objects[1]!.key).toBe("uploads/user1/rec2/audio.mp3");
+    expect(objects[1]!.size).toBe(524288);
   });
 
   test("returns empty array for empty bucket", async () => {
@@ -364,7 +376,7 @@ describe("listObjects", () => {
 
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(xml, { status: 200 })),
-    );
+    ) as unknown as typeof fetch;
 
     const objects = await listObjects("uploads/", TEST_CONFIG);
     expect(objects).toHaveLength(0);
@@ -399,13 +411,13 @@ describe("listObjects", () => {
       callCount++;
       const body = callCount === 1 ? page1 : page2;
       return Promise.resolve(new Response(body, { status: 200 }));
-    });
+    }) as unknown as typeof fetch;
 
     const objects = await listObjects("uploads/", TEST_CONFIG);
     expect(objects).toHaveLength(2);
     expect(callCount).toBe(2);
-    expect(objects[0].size).toBe(100);
-    expect(objects[1].size).toBe(200);
+    expect(objects[0]!.size).toBe(100);
+    expect(objects[1]!.size).toBe(200);
   });
 
   test("sends correct Authorization header", async () => {
@@ -414,7 +426,7 @@ describe("listObjects", () => {
     globalThis.fetch = mock((_url: string, init?: RequestInit) => {
       capturedInit = init;
       return Promise.resolve(new Response(xml, { status: 200 }));
-    });
+    }) as unknown as typeof fetch;
 
     await listObjects("uploads/", TEST_CONFIG);
 
@@ -429,7 +441,7 @@ describe("listObjects", () => {
     globalThis.fetch = mock((url: string) => {
       capturedUrl = url;
       return Promise.resolve(new Response(xml, { status: 200 }));
-    });
+    }) as unknown as typeof fetch;
 
     await listObjects("results/", TEST_CONFIG);
 
@@ -441,7 +453,7 @@ describe("listObjects", () => {
   test("throws on non-OK response", async () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response("Forbidden", { status: 403, statusText: "Forbidden" })),
-    );
+    ) as unknown as typeof fetch;
 
     expect(listObjects("uploads/", TEST_CONFIG)).rejects.toThrow(
       "OSS listObjects failed: 403 Forbidden",
@@ -482,7 +494,7 @@ describe("deleteObjects", () => {
         capturedBody = buf.toString("utf8");
       }
       return new Response(responseXml, { status: 200 });
-    });
+    }) as unknown as typeof fetch;
 
     const result = await deleteObjects(
       ["uploads/u/r1/a.wav", "uploads/u/r2/b.wav"],
@@ -509,7 +521,7 @@ describe("deleteObjects", () => {
         capturedBody = (init.body as Buffer).toString("utf8");
       }
       return new Response(responseXml, { status: 200 });
-    });
+    }) as unknown as typeof fetch;
 
     await deleteObjects(["test&<>file.wav"], TEST_CONFIG);
 
@@ -519,7 +531,7 @@ describe("deleteObjects", () => {
   test("handles failed batch gracefully", async () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response("Error", { status: 500 })),
-    );
+    ) as unknown as typeof fetch;
 
     const result = await deleteObjects(["key1", "key2"], TEST_CONFIG);
     expect(result).toBe(0);
@@ -544,8 +556,10 @@ describe("resolveBucket", () => {
       process.env.OSS_BUCKET = savedBucket;
     }
     if (savedNodeEnv === undefined) {
+      // @ts-expect-error -- assigning to readonly NODE_ENV for test
       delete process.env.NODE_ENV;
     } else {
+      // @ts-expect-error -- assigning to readonly NODE_ENV for test
       process.env.NODE_ENV = savedNodeEnv;
     }
   });
@@ -557,30 +571,35 @@ describe("resolveBucket", () => {
 
   test("explicit OSS_BUCKET overrides NODE_ENV", () => {
     process.env.OSS_BUCKET = "override";
+    // @ts-expect-error -- assigning to readonly NODE_ENV for test
     process.env.NODE_ENV = "production";
     expect(resolveBucket()).toBe("override");
   });
 
   test("returns prod bucket when NODE_ENV=production and no OSS_BUCKET", () => {
     delete process.env.OSS_BUCKET;
+    // @ts-expect-error -- assigning to readonly NODE_ENV for test
     process.env.NODE_ENV = "production";
     expect(resolveBucket()).toBe(BUCKET_PROD);
   });
 
   test("returns dev bucket when NODE_ENV=development and no OSS_BUCKET", () => {
     delete process.env.OSS_BUCKET;
+    // @ts-expect-error -- assigning to readonly NODE_ENV for test
     process.env.NODE_ENV = "development";
     expect(resolveBucket()).toBe(BUCKET_DEV);
   });
 
   test("returns dev bucket when NODE_ENV=test and no OSS_BUCKET", () => {
     delete process.env.OSS_BUCKET;
+    // @ts-expect-error -- assigning to readonly NODE_ENV for test
     process.env.NODE_ENV = "test";
     expect(resolveBucket()).toBe(BUCKET_DEV);
   });
 
   test("returns dev bucket when NODE_ENV is undefined and no OSS_BUCKET", () => {
     delete process.env.OSS_BUCKET;
+    // @ts-expect-error -- assigning to readonly NODE_ENV for test
     delete process.env.NODE_ENV;
     expect(resolveBucket()).toBe(BUCKET_DEV);
   });

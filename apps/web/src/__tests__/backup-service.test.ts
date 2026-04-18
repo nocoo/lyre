@@ -1210,7 +1210,7 @@ describe("pushBackupToBacky", () => {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await pushBackupToBacky(user, testCredentials);
 
@@ -1268,7 +1268,7 @@ describe("pushBackupToBacky", () => {
         status: 429,
         headers: { "Content-Type": "application/json" },
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await pushBackupToBacky(user, testCredentials);
 
@@ -1288,7 +1288,7 @@ describe("pushBackupToBacky", () => {
         status: 500,
         headers: { "Content-Type": "text/plain" },
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await pushBackupToBacky(user, testCredentials);
 
@@ -1308,7 +1308,7 @@ describe("pushBackupToBacky", () => {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await pushBackupToBacky(user, testCredentials);
 
@@ -1329,7 +1329,7 @@ describe("pushBackupToBacky", () => {
 
     globalThis.fetch = mock(async () => {
       throw new Error("getaddrinfo ENOTFOUND backy.example.com");
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await pushBackupToBacky(user, testCredentials);
 
@@ -1348,7 +1348,7 @@ describe("pushBackupToBacky", () => {
 
     globalThis.fetch = mock(async () => {
       throw "connection timeout";
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await pushBackupToBacky(user, testCredentials);
 
