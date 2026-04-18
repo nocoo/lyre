@@ -13,7 +13,7 @@ jobs:
     with:
       pre-command: "bun run build"
       test-command: "bun run test:coverage"
-      typecheck-command: "true"
+      typecheck-command: "bun run typecheck"
       enable-l2: "true"
       l2-command: "bun run --cwd apps/web test:e2e"
     secrets: inherit
