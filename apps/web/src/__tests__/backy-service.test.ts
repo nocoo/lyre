@@ -61,26 +61,26 @@ describe("backy service", () => {
     const originalEnv = process.env.NODE_ENV;
 
     afterEach(() => {
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, string | undefined>).NODE_ENV = originalEnv;
     });
 
     test("returns 'dev' when NODE_ENV is not production", () => {
-      process.env.NODE_ENV = "development";
+      (process.env as Record<string, string | undefined>).NODE_ENV = "development";
       expect(getEnvironment()).toBe("dev");
     });
 
     test("returns 'dev' when NODE_ENV is test", () => {
-      process.env.NODE_ENV = "test";
+      (process.env as Record<string, string | undefined>).NODE_ENV = "test";
       expect(getEnvironment()).toBe("dev");
     });
 
     test("returns 'prod' when NODE_ENV is production", () => {
-      process.env.NODE_ENV = "production";
+      (process.env as Record<string, string | undefined>).NODE_ENV = "production";
       expect(getEnvironment()).toBe("prod");
     });
 
     test("returns 'dev' when NODE_ENV is undefined", () => {
-      delete process.env.NODE_ENV;
+      (process.env as Record<string, string | undefined>).NODE_ENV = undefined;
       expect(getEnvironment()).toBe("dev");
     });
   });
@@ -190,7 +190,7 @@ describe("backy service", () => {
           headers: { "Content-Type": "application/json" },
         })),
       );
-      globalThis.fetch = fetchMock as typeof fetch;
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
 
       const result = await fetchBackyHistory(credentials);
 
@@ -201,10 +201,12 @@ describe("backy service", () => {
 
       // Verify fetch was called with correct args
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      const [url, opts] = fetchMock.mock.calls[0];
+      const call = fetchMock.mock.calls[0] as [string, RequestInit] | undefined;
+      expect(call).toBeDefined();
+      const [url, opts] = call!;
       expect(url).toBe(credentials.webhookUrl);
-      expect((opts as RequestInit).method).toBe("GET");
-      expect((opts as RequestInit).headers).toEqual({
+      expect(opts.method).toBe("GET");
+      expect(opts.headers).toEqual({
         Authorization: "Bearer test-api-key",
       });
     });
@@ -212,7 +214,7 @@ describe("backy service", () => {
     test("returns error on non-ok HTTP response", async () => {
       globalThis.fetch = mock(() =>
         Promise.resolve(new Response("Forbidden", { status: 403 })),
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchBackyHistory(credentials);
 
@@ -225,7 +227,7 @@ describe("backy service", () => {
     test("returns HTTP status as error when body is empty", async () => {
       globalThis.fetch = mock(() =>
         Promise.resolve(new Response("", { status: 500 })),
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchBackyHistory(credentials);
 
@@ -237,7 +239,7 @@ describe("backy service", () => {
     test("returns error on network failure", async () => {
       globalThis.fetch = mock(() =>
         Promise.reject(new Error("ECONNREFUSED")),
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchBackyHistory(credentials);
 
@@ -250,7 +252,7 @@ describe("backy service", () => {
     test("handles non-Error thrown from fetch", async () => {
       globalThis.fetch = mock(() =>
         Promise.reject("string error"),
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchBackyHistory(credentials);
 
@@ -271,7 +273,7 @@ describe("backy service", () => {
           status: 200,
           headers: { "Content-Type": "application/json" },
         })),
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchBackyHistory(credentials);
 
