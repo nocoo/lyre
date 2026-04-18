@@ -13,16 +13,28 @@ const mockLocalStorage = {
   removeItem: (key: string) => {
     delete store[key];
   },
+  clear: () => {
+    store = {};
+  },
+  key: (index: number) => Object.keys(store)[index] ?? null,
+  get length() {
+    return Object.keys(store).length;
+  },
 };
 
 // Minimal matchMedia mock
 let prefersDark = false;
-const mockMatchMedia = (query: string) => ({
-  matches: query === "(prefers-color-scheme: dark)" ? prefersDark : false,
-  media: query,
-  addEventListener: mock(() => {}),
-  removeEventListener: mock(() => {}),
-});
+const mockMatchMedia = (query: string): MediaQueryList =>
+  ({
+    matches: query === "(prefers-color-scheme: dark)" ? prefersDark : false,
+    media: query,
+    addEventListener: mock(() => {}),
+    removeEventListener: mock(() => {}),
+    addListener: mock(() => {}),
+    removeListener: mock(() => {}),
+    onchange: null,
+    dispatchEvent: () => true,
+  }) as unknown as MediaQueryList;
 
 // Set up global mocks
 beforeEach(() => {
@@ -34,12 +46,10 @@ beforeEach(() => {
     matchMedia: mockMatchMedia,
     dispatchEvent: mock(() => true),
   };
-  // @ts-expect-error -- minimal mock for testing
   globalThis.localStorage = mockLocalStorage;
-  // @ts-expect-error -- minimal mock for testing
   globalThis.document = {
-    documentElement: { classList: { toggle: mock(() => {}) } },
-  };
+    documentElement: { classList: { toggle: mock(() => true) } },
+  } as unknown as Document;
 });
 
 describe("getStoredTheme", () => {
