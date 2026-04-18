@@ -1,8 +1,9 @@
 /**
  * AI service tests.
  *
- * Tests the AI provider configuration, client creation, and summary generation.
- * Covers both built-in providers and the "custom" provider type.
+ * Tests the lyre-specific helpers in services/ai (provider re-export shape +
+ * summary prompt logic). The provider registry, config resolution, and client
+ * creation are owned by `@nocoo/next-ai` and tested in that package.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -12,20 +13,20 @@ import {
   CUSTOM_PROVIDER_INFO,
   getProviderConfig,
   isValidProvider,
-  resolveAiConfig,
-  createAiClient,
   generateSummary,
   buildSummaryPrompt,
-  type AiProvider,
-  type AiConfig,
 } from "@/services/ai";
 
-describe("AI_PROVIDERS", () => {
-  test("has 4 built-in providers", () => {
-    expect(Object.keys(AI_PROVIDERS)).toHaveLength(4);
+describe("AI_PROVIDERS (re-exported registry)", () => {
+  test("contains the expected built-in providers", () => {
+    const ids = Object.keys(AI_PROVIDERS);
+    expect(ids).toContain("anthropic");
+    expect(ids).toContain("glm");
+    expect(ids).toContain("minimax");
+    expect(ids).toContain("aihubmix");
   });
 
-  test("each provider has id, label, baseURL, sdkType, models, defaultModel", () => {
+  test("each provider info has required fields", () => {
     for (const [id, p] of Object.entries(AI_PROVIDERS)) {
       expect(id).toBe(p.id);
       expect(p.label).toBeTruthy();
@@ -37,34 +38,6 @@ describe("AI_PROVIDERS", () => {
       expect(p.models).toContain(p.defaultModel);
     }
   });
-
-  test("contains expected provider ids", () => {
-    const ids = Object.keys(AI_PROVIDERS);
-    expect(ids).toContain("anthropic");
-    expect(ids).toContain("glm");
-    expect(ids).toContain("minimax");
-    expect(ids).toContain("aihubmix");
-  });
-
-  test("anthropic, minimax, glm use anthropic sdkType", () => {
-    expect(AI_PROVIDERS.anthropic.sdkType).toBe("anthropic");
-    expect(AI_PROVIDERS.minimax.sdkType).toBe("anthropic");
-    expect(AI_PROVIDERS.glm.sdkType).toBe("anthropic");
-  });
-
-  test("aihubmix uses openai sdkType", () => {
-    expect(AI_PROVIDERS.aihubmix.sdkType).toBe("openai");
-  });
-
-  test("providers have updated models", () => {
-    expect(AI_PROVIDERS.anthropic.models).toContain("claude-sonnet-4-20250514");
-    expect(AI_PROVIDERS.minimax.models).toContain("MiniMax-M2.5");
-    expect(AI_PROVIDERS.minimax.models).toContain("MiniMax-M2.1");
-    expect(AI_PROVIDERS.glm.models).toContain("glm-5");
-    expect(AI_PROVIDERS.glm.models).toContain("glm-4.7");
-    expect(AI_PROVIDERS.aihubmix.models).toContain("gpt-4o-mini");
-    expect(AI_PROVIDERS.aihubmix.models).toContain("gpt-5-nano");
-  });
 });
 
 describe("ALL_PROVIDER_IDS", () => {
@@ -74,7 +47,6 @@ describe("ALL_PROVIDER_IDS", () => {
     expect(ALL_PROVIDER_IDS).toContain("glm");
     expect(ALL_PROVIDER_IDS).toContain("aihubmix");
     expect(ALL_PROVIDER_IDS).toContain("custom");
-    expect(ALL_PROVIDER_IDS).toHaveLength(5);
   });
 });
 
@@ -88,14 +60,11 @@ describe("CUSTOM_PROVIDER_INFO", () => {
 });
 
 describe("isValidProvider", () => {
-  test("returns true for built-in providers", () => {
+  test("returns true for built-in providers and custom", () => {
     expect(isValidProvider("anthropic")).toBe(true);
     expect(isValidProvider("glm")).toBe(true);
     expect(isValidProvider("minimax")).toBe(true);
     expect(isValidProvider("aihubmix")).toBe(true);
-  });
-
-  test("returns true for custom", () => {
     expect(isValidProvider("custom")).toBe(true);
   });
 
@@ -118,172 +87,8 @@ describe("getProviderConfig", () => {
     expect(getProviderConfig("custom")).toBeUndefined();
   });
 
-  test("returns undefined for invalid provider", () => {
-    expect(getProviderConfig("invalid" as AiProvider)).toBeUndefined();
-  });
-});
-
-describe("resolveAiConfig", () => {
-  test("uses provider defaults when model is empty", () => {
-    const config = resolveAiConfig({
-      provider: "anthropic",
-      apiKey: "sk-test",
-      model: "",
-    });
-    expect(config.baseURL).toBe("https://api.anthropic.com/v1");
-    expect(config.model).toBe(AI_PROVIDERS.anthropic.defaultModel);
-    expect(config.apiKey).toBe("sk-test");
-    expect(config.sdkType).toBe("anthropic");
-  });
-
-  test("uses custom model when provided", () => {
-    const config = resolveAiConfig({
-      provider: "anthropic",
-      apiKey: "sk-test",
-      model: "claude-3-haiku-20240307",
-    });
-    expect(config.model).toBe("claude-3-haiku-20240307");
-  });
-
-  test("resolves different providers correctly", () => {
-    const glm = resolveAiConfig({ provider: "glm", apiKey: "k", model: "" });
-    expect(glm.baseURL).toBe("https://open.bigmodel.cn/api/anthropic/v1");
-    expect(glm.sdkType).toBe("anthropic");
-
-    const mm = resolveAiConfig({ provider: "minimax", apiKey: "k", model: "" });
-    expect(mm.baseURL).toBe("https://api.minimaxi.com/anthropic/v1");
-    expect(mm.sdkType).toBe("anthropic");
-
-    const hub = resolveAiConfig({ provider: "aihubmix", apiKey: "k", model: "" });
-    expect(hub.baseURL).toBe("https://aihubmix.com/v1");
-    expect(hub.sdkType).toBe("openai");
-  });
-
-  test("resolves custom provider with all fields", () => {
-    const config = resolveAiConfig({
-      provider: "custom",
-      apiKey: "sk-custom",
-      model: "my-model",
-      baseURL: "https://my-api.example.com/v1",
-      sdkType: "openai",
-    });
-    expect(config.provider).toBe("custom");
-    expect(config.baseURL).toBe("https://my-api.example.com/v1");
-    expect(config.model).toBe("my-model");
-    expect(config.sdkType).toBe("openai");
-    expect(config.apiKey).toBe("sk-custom");
-  });
-
-  test("resolves custom provider with anthropic sdkType", () => {
-    const config = resolveAiConfig({
-      provider: "custom",
-      apiKey: "sk-custom",
-      model: "my-model",
-      baseURL: "https://my-api.example.com/v1",
-      sdkType: "anthropic",
-    });
-    expect(config.sdkType).toBe("anthropic");
-  });
-
-  test("throws when provider is unknown", () => {
-    expect(() =>
-      resolveAiConfig({ provider: "bad" as AiProvider, apiKey: "k", model: "" }),
-    ).toThrow("Unknown AI provider");
-  });
-
-  test("throws when apiKey is empty", () => {
-    expect(() =>
-      resolveAiConfig({ provider: "anthropic", apiKey: "", model: "" }),
-    ).toThrow("API key is required");
-  });
-
-  test("throws when custom provider missing baseURL", () => {
-    expect(() =>
-      resolveAiConfig({
-        provider: "custom",
-        apiKey: "k",
-        model: "m",
-        sdkType: "openai",
-      }),
-    ).toThrow("Base URL is required");
-  });
-
-  test("throws when custom provider missing sdkType", () => {
-    expect(() =>
-      resolveAiConfig({
-        provider: "custom",
-        apiKey: "k",
-        model: "m",
-        baseURL: "https://example.com",
-      }),
-    ).toThrow("SDK type is required");
-  });
-
-  test("throws when custom provider missing model", () => {
-    expect(() =>
-      resolveAiConfig({
-        provider: "custom",
-        apiKey: "k",
-        model: "",
-        baseURL: "https://example.com",
-        sdkType: "openai",
-      }),
-    ).toThrow("Model is required");
-  });
-});
-
-describe("createAiClient", () => {
-  test("creates an anthropic provider instance", () => {
-    const config: AiConfig = {
-      provider: "anthropic",
-      baseURL: "https://api.anthropic.com/v1",
-      apiKey: "sk-test",
-      model: "claude-sonnet-4-20250514",
-      sdkType: "anthropic",
-    };
-    const client = createAiClient(config);
-    expect(client).toBeDefined();
-    // The client is a function that creates model references
-    expect(typeof client).toBe("function");
-  });
-
-  test("creates an openai provider instance", () => {
-    const config: AiConfig = {
-      provider: "aihubmix",
-      baseURL: "https://aihubmix.com/v1",
-      apiKey: "sk-test",
-      model: "gpt-4o-mini",
-      sdkType: "openai",
-    };
-    const client = createAiClient(config);
-    expect(client).toBeDefined();
-    expect(typeof client).toBe("function");
-  });
-
-  test("creates client for custom provider with openai sdkType", () => {
-    const config: AiConfig = {
-      provider: "custom",
-      baseURL: "https://my-api.example.com/v1",
-      apiKey: "sk-test",
-      model: "my-model",
-      sdkType: "openai",
-    };
-    const client = createAiClient(config);
-    expect(client).toBeDefined();
-    expect(typeof client).toBe("function");
-  });
-
-  test("creates client for custom provider with anthropic sdkType", () => {
-    const config: AiConfig = {
-      provider: "custom",
-      baseURL: "https://my-api.example.com/v1",
-      apiKey: "sk-test",
-      model: "my-model",
-      sdkType: "anthropic",
-    };
-    const client = createAiClient(config);
-    expect(client).toBeDefined();
-    expect(typeof client).toBe("function");
+  test("returns undefined for unknown provider", () => {
+    expect(getProviderConfig("invalid")).toBeUndefined();
   });
 });
 
