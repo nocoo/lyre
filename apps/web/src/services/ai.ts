@@ -1,187 +1,64 @@
 /**
- * AI service module.
+ * AI service module — delegates to @nocoo/next-ai for provider/config/client.
  *
- * Provides LLM-powered summarization via configurable AI providers.
- * Supports both OpenAI and Anthropic SDK protocols through Vercel AI SDK.
- * Includes built-in providers (Anthropic, MiniMax, GLM, AIHubMix) and a
- * "custom" provider where users supply their own base URL and SDK type.
+ * Provider registry, config resolution, and client/model creation all live in
+ * `@nocoo/next-ai`. This module re-exports the public surface for backward
+ * compatibility and adds lyre-specific summary prompt helpers.
  */
 
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
+import {
+  AiProviderRegistry,
+  CUSTOM_PROVIDER_INFO as NEXT_AI_CUSTOM_PROVIDER_INFO,
+  type AiProviderInfo,
+} from "@nocoo/next-ai";
 
-// ── Provider registry ──
+// ── Re-exports from @nocoo/next-ai ──
 
-export type SdkType = "anthropic" | "openai";
+export {
+  AiProviderRegistry,
+  isValidProvider,
+  resolveAiConfig,
+  type SdkType,
+  type AiProviderInfo,
+  type AiConfig,
+  type AiSettingsInput,
+} from "@nocoo/next-ai";
 
-export type AiProvider = "anthropic" | "minimax" | "glm" | "aihubmix" | "custom";
-
-export interface AiProviderInfo {
-  id: AiProvider;
-  label: string;
-  baseURL: string;
-  sdkType: SdkType;
-  models: string[];
-  defaultModel: string;
-}
-
-export const AI_PROVIDERS: Record<Exclude<AiProvider, "custom">, AiProviderInfo> = {
-  anthropic: {
-    id: "anthropic",
-    label: "Anthropic",
-    baseURL: "https://api.anthropic.com/v1",
-    sdkType: "anthropic",
-    models: ["claude-sonnet-4-20250514"],
-    defaultModel: "claude-sonnet-4-20250514",
-  },
-  minimax: {
-    id: "minimax",
-    label: "MiniMax",
-    baseURL: "https://api.minimaxi.com/anthropic/v1",
-    sdkType: "anthropic",
-    models: ["MiniMax-M2.5", "MiniMax-M2.1"],
-    defaultModel: "MiniMax-M2.5",
-  },
-  glm: {
-    id: "glm",
-    label: "GLM (Zhipu)",
-    baseURL: "https://open.bigmodel.cn/api/anthropic/v1",
-    sdkType: "anthropic",
-    models: ["glm-5", "glm-4.7"],
-    defaultModel: "glm-5",
-  },
-  aihubmix: {
-    id: "aihubmix",
-    label: "AIHubMix",
-    baseURL: "https://aihubmix.com/v1",
-    sdkType: "openai",
-    models: ["gpt-4o-mini", "gpt-5-nano"],
-    defaultModel: "gpt-4o-mini",
-  },
-};
-
-/** All valid provider IDs (including "custom"). */
-export const ALL_PROVIDER_IDS: AiProvider[] = [
-  ...Object.keys(AI_PROVIDERS) as Exclude<AiProvider, "custom">[],
-  "custom",
-];
+export { createAiModel } from "@nocoo/next-ai/server";
 
 /**
- * Custom provider sentinel — used when provider === "custom".
- * baseURL and sdkType are supplied by user settings at runtime.
+ * Backward-compatible alias. lyre originally typed providers as a string union;
+ * next-ai's registry is dynamic so providers are plain strings.
  */
-export const CUSTOM_PROVIDER_INFO: Omit<AiProviderInfo, "baseURL" | "sdkType"> = {
-  id: "custom",
-  label: "Custom",
-  models: [],
-  defaultModel: "",
-};
+export type AiProvider = string;
 
-// ── Config resolution ──
+// ── Compatibility shims for the old static `AI_PROVIDERS` record ──
 
-export interface AiConfig {
-  provider: AiProvider;
-  baseURL: string;
-  apiKey: string;
-  model: string;
-  sdkType: SdkType;
-}
+const defaultRegistry = new AiProviderRegistry();
 
-/** User-facing settings (stored in DB). */
-export interface AiSettingsInput {
-  provider: AiProvider;
-  apiKey: string;
-  model: string; // empty = use provider default
-  /** Only used when provider === "custom" */
-  baseURL?: string | undefined;
-  /** Only used when provider === "custom" */
-  sdkType?: SdkType | undefined;
-}
+/** Built-in providers keyed by id (excludes "custom"). */
+export const AI_PROVIDERS: Record<string, AiProviderInfo> = Object.fromEntries(
+  defaultRegistry.getAll().map((p) => [p.id, p]),
+);
+
+/** All valid provider IDs (built-ins plus "custom"). */
+export const ALL_PROVIDER_IDS: string[] = defaultRegistry.getAllIds();
+
+/** Custom provider sentinel (no baseURL/sdkType — supplied at runtime). */
+export const CUSTOM_PROVIDER_INFO = NEXT_AI_CUSTOM_PROVIDER_INFO;
 
 /**
- * Look up a built-in provider's static config.
+ * Look up a built-in provider's static config. Returns undefined for "custom"
+ * or unknown providers, matching the previous lyre behaviour.
  */
 export function getProviderConfig(
-  providerId: AiProvider,
+  providerId: string,
 ): AiProviderInfo | undefined {
   if (providerId === "custom") return undefined;
-  return AI_PROVIDERS[providerId];
+  return defaultRegistry.get(providerId);
 }
 
-/**
- * Check if a provider ID is valid (built-in or custom).
- */
-export function isValidProvider(id: string): id is AiProvider {
-  return ALL_PROVIDER_IDS.includes(id as AiProvider);
-}
-
-/**
- * Resolve user settings into a complete AiConfig.
- * Fills in baseURL, sdkType, and default model from the provider registry.
- * For "custom" provider, baseURL and sdkType must be supplied in the input.
- */
-export function resolveAiConfig(input: AiSettingsInput): AiConfig {
-  if (!input.apiKey) {
-    throw new Error("API key is required");
-  }
-
-  if (input.provider === "custom") {
-    if (!input.baseURL) {
-      throw new Error("Base URL is required for custom provider");
-    }
-    if (!input.sdkType) {
-      throw new Error("SDK type is required for custom provider");
-    }
-    if (!input.model) {
-      throw new Error("Model is required for custom provider");
-    }
-    return {
-      provider: "custom",
-      baseURL: input.baseURL,
-      apiKey: input.apiKey,
-      model: input.model,
-      sdkType: input.sdkType,
-    };
-  }
-
-  const info = getProviderConfig(input.provider);
-  if (!info) {
-    throw new Error(`Unknown AI provider: ${input.provider}`);
-  }
-
-  return {
-    provider: input.provider,
-    baseURL: info.baseURL,
-    apiKey: input.apiKey,
-    model: input.model || info.defaultModel,
-    sdkType: info.sdkType,
-  };
-}
-
-// ── Client creation ──
-
-/**
- * Create a Vercel AI SDK provider instance based on sdkType.
- * Returns a function that creates model references: `client(modelId)`.
- *
- * When sdkType is "anthropic", uses @ai-sdk/anthropic.
- * When sdkType is "openai", uses @ai-sdk/openai.
- * Both return the same calling convention: `client(modelId) → LanguageModelV2`.
- */
-export function createAiClient(config: AiConfig) {
-  if (config.sdkType === "openai") {
-    return createOpenAI({
-      baseURL: config.baseURL,
-      apiKey: config.apiKey,
-    });
-  }
-  return createAnthropic({
-    baseURL: config.baseURL,
-    apiKey: config.apiKey,
-  });
-}
-
-// ── Summary generation ──
+// ── Summary generation (lyre-specific) ──
 
 const SUMMARY_PROMPT = `Summarize the following transcript concisely in the same language as the transcript.
 
@@ -189,9 +66,7 @@ const SUMMARY_PROMPT = `Summarize the following transcript concisely in the same
 {transcript}
 </transcript>`;
 
-/**
- * Build the summary prompt from a transcript.
- */
+/** Build the summary prompt from a transcript. */
 export function buildSummaryPrompt(transcript: string): string {
   if (!transcript.trim()) {
     throw new Error("Transcript is empty");
