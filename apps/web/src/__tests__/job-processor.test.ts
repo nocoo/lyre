@@ -30,7 +30,6 @@ function seedRecording(overrides?: Partial<Parameters<typeof recordingsRepo.crea
     format: "mp3",
     sampleRate: 44100,
     ossKey: "uploads/test.mp3",
-    tags: [],
     status: "transcribing",
     ...overrides,
   });

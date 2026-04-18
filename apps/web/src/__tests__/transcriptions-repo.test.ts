@@ -43,7 +43,6 @@ function seedJobAndRecording() {
     format: "mp3",
     sampleRate: 44100,
     ossKey: "uploads/test.mp3",
-    tags: [],
     status: "completed",
   });
   jobsRepo.create({

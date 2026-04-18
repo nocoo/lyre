@@ -429,7 +429,7 @@ describe("createRealAsrProvider", () => {
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const provider = createRealAsrProvider("sk-test-api-key");
     const result = await provider.submit("https://oss.example.com/audio.mp3");
@@ -459,7 +459,7 @@ describe("createRealAsrProvider", () => {
   test("submit throws on non-ok response", async () => {
     globalThis.fetch = mock(async () => {
       return new Response("Unauthorized", { status: 401 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const provider = createRealAsrProvider("bad-key");
     await expect(
@@ -483,7 +483,7 @@ describe("createRealAsrProvider", () => {
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const provider = createRealAsrProvider("sk-test-key");
     const result = await provider.poll("task-123");
@@ -498,7 +498,7 @@ describe("createRealAsrProvider", () => {
   test("poll throws on non-ok response", async () => {
     globalThis.fetch = mock(async () => {
       return new Response("Not Found", { status: 404 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const provider = createRealAsrProvider("sk-test-key");
     await expect(provider.poll("bad-task-id")).rejects.toThrow(
@@ -521,7 +521,7 @@ describe("createRealAsrProvider", () => {
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const provider = createRealAsrProvider("sk-test-key");
     const result = await provider.fetchResult(
@@ -539,7 +539,7 @@ describe("createRealAsrProvider", () => {
   test("fetchResult throws on non-ok response", async () => {
     globalThis.fetch = mock(async () => {
       return new Response("Expired", { status: 403 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const provider = createRealAsrProvider("sk-test-key");
     await expect(
