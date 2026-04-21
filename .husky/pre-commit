@@ -1,3 +1,14 @@
+# pre-commit: L1 (Unit tests) + G1 (Lint) + G2a (Secrets)
+set -e
+
+# G2a: Secrets scanning (must run before any other check)
+if command -v gitleaks &>/dev/null; then
+  gitleaks protect --staged --no-banner
+else
+  echo "❌ gitleaks not installed — install: brew install gitleaks" >&2
+  exit 1
+fi
+
 # Web: unit tests + lint
 bun run test && bun run lint
 
