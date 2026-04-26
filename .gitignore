@@ -52,3 +52,4 @@ DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 default.profraw
+packages/api/scripts/d1-spike/node_modules/

@@ -381,7 +381,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 
 > 完全照抄 backy Wave 1 + Wave 2 的方法论。在 lyre 上对应的动作：
 
-#### B.0 — D1 兼容性 spike（**前置 gate，先于 B.1**）
+#### B.0 — D1 兼容性 spike（**前置 gate，先于 B.1**）  ✅ 2026-04-26
 
 > 把 D1 dialect 切换从"风险说明"提升为 Wave B 的**显式前置验收**。任何 spike
 > 没过的项必须在文档里固化解法，否则不允许进入 B.1 大规模搬迁。
@@ -405,9 +405,18 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 
 **spike-findings 表（实施时回填）**：
 
+实施位置：`packages/api/scripts/d1-spike/spike.test.ts`（10 个用例全绿，2026-04-26）。
+
 | # | 问题 | 现实现 | D1 行为 | 解法 |
 |---|---|---|---|---|
-| 1 | （TBD） | | | |
+| 1 | `.returning()` on INSERT/UPDATE | repos/*：直接 `.insert(...).returning().get()` | ✅ drizzle-orm/d1 原生支持，行为同 better-sqlite3（含 `.returning({ id, name })` 子集）；spike 中 3 个 case 全绿 | **无需 fallback**。沿用现有 `.returning()` 调用 |
+| 2 | `db.transaction(callback)` 多语句事务 | repos/recordings.ts (×2)、repos/tags.ts、services/backup.ts | ❌ **D1 拒绝 BEGIN**，错误 `Failed query: begin` —— D1 HTTP 绑定无 interactive transaction 原语 | **改写为 `db.batch([stmt1, stmt2, ...])`**：原子性由 D1 内部保证，任一 statement 失败整批 rollback。但 batch 不允许"读中间结果再分支"——好在 lyre 4 处用法都是"无条件 delete + insert"或"循环 delete"，全部可声明式重写。**B.2 实施时**逐个改写：<br>• `recordings.deleteCascade` → batch([del transcriptions, del jobs, del tags, del recordings])<br>• `recordings.deleteBatch` → 外层 for-loop 收集 statement 数组再一次 batch<br>• `tags.setTagsForRecording` → batch([del recordingTags, ...inserts])<br>• `services/backup.ts.import` → 把整个 import 流程拆成"先收集 statements，再 batch"，对存在性判断改为 INSERT OR REPLACE / UPDATE WHERE 二选一（spike 已验证非 mixed 状态）|
+| 3 | join + where + order + limit | repos/recordings.ts、search route | ✅ 标准 drizzle builder dialect 透明；spike 跑通 leftJoin + where + orderBy + limit，结果与 better-sqlite3 一致 | 无需调整 |
+| 4 | `integer({mode:"timestamp"})` / `integer` ms 时间戳 | schema 全表 `created_at` / `recorded_at` 等 | ✅ D1 = SQLite，integer 列存读 `1_700_000_000_123` 完全一致 | 无需调整 |
+| 5 | drizzle-kit generate 出的 init SQL apply | `packages/api/scripts/d1-spike/migrations/0000_grey_silver_surfer.sql` | ✅ Miniflare D1 `db.exec()` 按 `--> statement-breakpoint` 切分后逐条执行通过 | Wave E 数据迁移用相同切分方式 + `wrangler d1 execute --file=` |
+| 6 | FK 约束默认状态 | spike 中 batch rollback 测试观察到 `[0, 2]` 两种合法终态 | D1 默认 `PRAGMA foreign_keys` 关闭，FK 不会阻断写入 | Wave E 初始化时显式 `PRAGMA foreign_keys=ON`（在 init.sql 头部），保持与 better-sqlite3 一致行为；B.2 实施前在文档化处补 `--> statement-breakpoint`-aware 的初始化脚本 |
+
+**Gate 状态**：✅ 全部有解法 → 进入 B.1。
 
 #### B.1 — Contracts 抽离（client-safe types 先行，仅前置 1 个文件即可解锁 UI）
 

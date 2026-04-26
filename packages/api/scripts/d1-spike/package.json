@@ -1,0 +1,20 @@
+{
+  "name": "lyre-d1-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test spike.test.ts",
+    "generate": "drizzle-kit generate --dialect=sqlite --schema=./schema.ts --out=./migrations"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251220.0",
+    "@miniflare/d1": "^2.14.4",
+    "better-sqlite3": "^12.2.0",
+    "drizzle-kit": "^0.31.10",
+    "miniflare": "^3.20241218.0"
+  }
+}
