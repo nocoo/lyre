@@ -9,7 +9,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["@cloudflare/workers-types"]
+    "types": ["@cloudflare/workers-types", "@types/bun", "node"]
   },
   "include": ["src"]
 }

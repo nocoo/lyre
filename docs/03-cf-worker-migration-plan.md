@@ -550,7 +550,7 @@ import `next/*`。
 - `bun test packages/api/scripts/d1-spike/repo-async.test.ts` 重新跑：把"全部 broken"断言反过来，证明 await 后全部 OK ✅（40/40 promise）
 - legacy 行为零回归 ✅（packages/api 127 tests pass）
 
-#### Wave C.1 — Worker 装配  ⬜
+#### Wave C.1 — Worker 装配  ✅
 
 1. `apps/api/wrangler.toml`：`compatibility_flags = ["nodejs_compat"]`、`[[d1_databases]] binding = "DB"`、`[[r2_buckets]]` 不需要（OSS 是阿里云，HTTP fetch）、`[triggers] crons = ["* * * * *"]`、`[assets] directory = "./static" run_worker_first = ["/api/*"] not_found_handling = "single-page-application"`、`[env.test]` 设 `E2E_SKIP_AUTH = "true"` 与 test D1 binding。
 2. Hono app（`apps/api/src/index.ts`）：装 `secureHeaders` + `runtimeContext` + `accessAuth` + `bearerAuth`，挂所有 routes。
