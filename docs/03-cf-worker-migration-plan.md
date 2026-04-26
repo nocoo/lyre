@@ -515,8 +515,17 @@ import `next/*`。
 - ✅ Repo 工厂化：`makeUsersRepo(db)`、`makeRecordingsRepo(db)` 等 8 个 + `makeRepos(db)` 聚合；保留旧 `usersRepo` 别名 = `makeUsersRepo(globalDb)`（2026-04-26）
 - ✅ Handler 层切 `ctx.db`：`packages/api/src/handlers/*` 全部 11 个文件；`api-auth.ts` 也改造为接收 `db: LyreDb`，legacy adapter 注入（2026-04-26）
 - ✅ Service 层接 `db?: LyreDb`：`job-processor.ts`（`pollJob`、`autoSummarize`）、`backy.ts`（`readBackySettings`/`readPullKey`/`savePullKey`/`deletePullKey`/`findUserIdByPullKey`）、`backup.ts`（`exportBackup`/`importBackup`/`pushBackupToBacky`）；optional 参数兼容 legacy 单例与测试（2026-04-26）
-- ⬜ Worker 入口（Wave C）用 `openD1Db(env.DB)` 注入，验证 D1 整体可跑通
+- ✅ D1 repo 实测：`packages/api/scripts/d1-spike/repo-async.test.ts`，对 8 个 repo 共 40 个方法逐一探测 D1 dialect 行为，结论 **40/40 全部需要 async 化重写**（2026-04-26）
+- ⬜ Worker 入口（Wave C）用 `openD1Db(env.DB)` 注入；进入前**必须**先执行 Wave C.0 repo async 化（见下）
 - ⬜ legacy 单例下线（Wave E）
+
+**B.6.b.4 spike-findings 表**（实施位置：`packages/api/scripts/d1-spike/repo-async.test.ts`，10 个用例全绿）
+
+| 行为类 | 数量 | 表现 | Wave C 处置 |
+|---|---|---|---|
+| `promise` | 33 | `.get()` / `.all()` / `.returning().get()` 链返回 Promise，sync 调用方拿不到值 | 方法签名改 `async`，链尾加 `await` |
+| `silent-wrong` | 5 | `.run() as { changes: number }` → `.changes` 在 Promise 上是 `undefined`，`undefined > 0 === false`，**沉默地永远报告 "什么都没删除"**；命中 `users.delete`/`folders.delete`/`recordings.delete`/`settings.delete`/`deviceTokens.deleteByIdAndUser`/`transcriptions.deleteByRecordingId` | 方法改 async，`const result = await ...; return result.meta.changes > 0`（D1 `.run()` 返回结构是 `{ success, meta: { changes } }`，与 better-sqlite3 不同） |
+| `throw` | 2 | `.all().map(...)`/`.then(rows => ...)` 链：因为 `.all()` 是 Promise，立刻在它上面调 `.map` 抛 `is not a function`；命中 `tags.findTagIdsForRecording`/`tags.findTagsForRecording` | 同上 async 化；`.run() as { changes: number }` 同样需要适配 D1 返回结构 |
 
 #### Wave B 验收（全部完成）：
 - B.0 spike-findings 全部有解法
@@ -526,6 +535,22 @@ import `next/*`。
 - ESLint `no-restricted-imports` 阻止 UI 端 import `@lyre/api/services/*` 或 `@lyre/api/handlers/*`
 
 ### Wave C — `apps/api` Worker 装配  ⬜
+
+#### Wave C.0 — Repo / service 层 async 化（前置 gate）  ⬜
+
+来自 B.6.b.4 实测：当前 8 个 repo 共 40 个方法在 D1 dialect 下全部不能跑（细节见上方 spike-findings 表）。Wave C 装配 worker 前，先把 repo + 受影响的 service / handler 改 async：
+
+1. **8 个 repo 全部 async 化**：每个方法改 `async`，链尾 `await`，写入方法读 `result.meta.changes`（D1）—— 但 better-sqlite3 没 `meta` 字段；解法是引入 `LyreDb` 上的统一 `runResult` helper，由 driver 适配（sqlite driver 走 `result.changes`，d1 driver 走 `result.meta.changes`），repo 调 `helper.changes(result)`。
+2. **handlers**（11 个文件）→ 所有 `repos.xxx.findById(...)` 等 41 个 sync 调用点加 `await`，handler 函数已经是 async 没问题。
+3. **services**（`backup.ts`、`backy.ts`、`job-processor.ts`、`job-manager.ts`）→ 同步调用 repo 的地方加 `await`；`backup.importBackup` 的 `db.transaction` 改 `db.batch([...])`（B.0 spike finding #2）。
+4. **legacy adapter** 不受影响：legacy 仍跑 better-sqlite3，sync API 在 await 下表现为立即 resolve 的 Promise，行为不变。
+5. 跑 `bun run api:test` + `bun run legacy:test` + `bun run legacy:test:e2e` 全绿。
+
+**验收**：
+- `bun test packages/api/scripts/d1-spike/repo-async.test.ts` 重新跑：把"全部 broken"断言反过来，证明 await 后全部 OK
+- legacy 行为零回归
+
+#### Wave C.1 — Worker 装配  ⬜
 
 1. `apps/api/wrangler.toml`：`compatibility_flags = ["nodejs_compat"]`、`[[d1_databases]] binding = "DB"`、`[[r2_buckets]]` 不需要（OSS 是阿里云，HTTP fetch）、`[triggers] crons = ["* * * * *"]`、`[assets] directory = "./static" run_worker_first = ["/api/*"] not_found_handling = "single-page-application"`、`[env.test]` 设 `E2E_SKIP_AUTH = "true"` 与 test D1 binding。
 2. Hono app（`apps/api/src/index.ts`）：装 `secureHeaders` + `runtimeContext` + `accessAuth` + `bearerAuth`，挂所有 routes。
