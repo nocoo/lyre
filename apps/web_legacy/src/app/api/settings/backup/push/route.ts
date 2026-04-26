@@ -7,9 +7,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { pushBackupToBacky } from "@/services/backup";
-import { readBackySettings } from "@/services/backy";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { pushBackupToBacky } from "@lyre/api/services/backup";
+import { readBackySettings } from "@lyre/api/services/backy";
 
 export const dynamic = "force-dynamic";
 

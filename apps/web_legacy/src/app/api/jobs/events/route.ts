@@ -18,9 +18,9 @@
  * server-side polling is running.
  */
 
-import { getCurrentUser } from "@/lib/api-auth";
-import { getJobManager } from "@/services/job-manager-singleton";
-import { addClient } from "@/services/job-event-hub";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { getJobManager } from "@lyre/api/services/job-manager-singleton";
+import { addClient } from "@lyre/api/services/job-event-hub";
 
 export const dynamic = "force-dynamic";
 

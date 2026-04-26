@@ -24,7 +24,7 @@ import {
   MOCK_TAGS,
   MOCK_FOLDERS,
 } from "@/lib/mock-data";
-import type { RecordingListItem, PaginatedResponse } from "@/lib/types";
+import type { RecordingListItem, PaginatedResponse } from "@lyre/api/lib/types";
 
 // ── formatFileSize ──
 

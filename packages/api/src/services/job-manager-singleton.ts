@@ -7,7 +7,7 @@
 
 import { JobManager } from "./job-manager";
 import { getAsrProvider } from "./asr-provider";
-import { jobsRepo } from "@/db/repositories";
+import { jobsRepo } from "../db/repositories";
 import { broadcast } from "./job-event-hub";
 
 let instance: JobManager | null = null;

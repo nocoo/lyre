@@ -3,8 +3,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { deviceTokensRepo } from "@/db/repositories";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { deviceTokensRepo } from "@lyre/api/db/repositories";
 
 export const dynamic = "force-dynamic";
 

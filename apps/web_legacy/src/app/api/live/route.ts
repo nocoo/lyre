@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { APP_VERSION } from "@/lib/version";
-import { db } from "@/db/index";
+import { db } from "@lyre/api/db";
 import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";

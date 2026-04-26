@@ -1,11 +1,11 @@
 import { describe, expect, test, beforeEach } from "bun:test";
-import { resetDb } from "@/db/index";
-import { usersRepo } from "@/db/repositories/users";
-import { recordingsRepo } from "@/db/repositories/recordings";
-import { jobsRepo } from "@/db/repositories/jobs";
-import { transcriptionsRepo } from "@/db/repositories/transcriptions";
-import { pollJob } from "@/services/job-processor";
-import type { AsrProvider, AsrPollResponse, AsrTranscriptionResult } from "@/services/asr";
+import { resetDb } from "@lyre/api/db";
+import { usersRepo } from "@lyre/api/db/repositories/users";
+import { recordingsRepo } from "@lyre/api/db/repositories/recordings";
+import { jobsRepo } from "@lyre/api/db/repositories/jobs";
+import { transcriptionsRepo } from "@lyre/api/db/repositories/transcriptions";
+import { pollJob } from "@lyre/api/services/job-processor";
+import type { AsrProvider, AsrPollResponse, AsrTranscriptionResult } from "@lyre/api/services/asr";
 
 // ── Test helpers ──
 

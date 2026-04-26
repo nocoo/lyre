@@ -1,8 +1,8 @@
 import { describe, expect, test, beforeEach } from "bun:test";
 import { createHash } from "crypto";
-import { resetDb } from "@/db/index";
-import { usersRepo } from "@/db/repositories/users";
-import { deviceTokensRepo } from "@/db/repositories/device-tokens";
+import { resetDb } from "@lyre/api/db";
+import { usersRepo } from "@lyre/api/db/repositories/users";
+import { deviceTokensRepo } from "@lyre/api/db/repositories/device-tokens";
 
 function seedUser() {
   usersRepo.create({

@@ -22,7 +22,7 @@ import {
   isNavItemActive,
   isRecordingsPath,
   isSettingsPath,
-} from "@/lib/sidebar-nav";
+} from "@lyre/api/lib/sidebar-nav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {

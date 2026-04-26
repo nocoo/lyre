@@ -9,12 +9,12 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { usersRepo } from "@/db/repositories";
+import { usersRepo } from "@lyre/api/db/repositories";
 import {
   findUserIdByPullKey,
   readBackySettings,
-} from "@/services/backy";
-import { pushBackupToBacky } from "@/services/backup";
+} from "@lyre/api/services/backy";
+import { pushBackupToBacky } from "@lyre/api/services/backup";
 
 export const dynamic = "force-dynamic";
 

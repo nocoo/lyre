@@ -15,7 +15,7 @@ import {
   isValidProvider,
   generateSummary,
   buildSummaryPrompt,
-} from "@/services/ai";
+} from "@lyre/api/services/ai";
 
 describe("AI_PROVIDERS (re-exported registry)", () => {
   test("contains the expected built-in providers", () => {

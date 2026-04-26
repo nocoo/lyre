@@ -7,8 +7,8 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { presignPut, makeUploadKey } from "@/services/oss";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { presignPut, makeUploadKey } from "@lyre/api/services/oss";
 
 export const dynamic = "force-dynamic";
 

@@ -6,13 +6,13 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { listObjects, type OssObject } from "@/services/oss";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { listObjects, type OssObject } from "@lyre/api/services/oss";
 import {
   usersRepo,
   recordingsRepo,
   jobsRepo,
-} from "@/db/repositories";
+} from "@lyre/api/db/repositories";
 
 export const dynamic = "force-dynamic";
 

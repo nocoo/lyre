@@ -430,7 +430,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 3. UI 端 `apps/web_legacy/src/components/ai-settings.tsx` 等改为 import `@lyre/api/contracts/ai`
 4. ESLint `no-restricted-imports` 规则加到 web_legacy，禁止从 `@lyre/api`（顶层）/ `@lyre/api/services/*` / `@lyre/api/handlers/*` 导入到 components/pages
 
-#### B.2 — 物理迁移 lib/services/db 到 packages/api（保持行为不变）
+#### B.2 — 物理迁移 lib/services/db 到 packages/api（保持行为不变）  ✅ 2026-04-26
 
 `git mv` 以下文件到 `packages/api/src/lib/`：
 - `db/{schema,index}.ts` + `db/repositories/*`

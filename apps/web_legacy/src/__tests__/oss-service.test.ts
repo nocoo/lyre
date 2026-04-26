@@ -12,7 +12,7 @@ import {
   BUCKET_PROD,
   BUCKET_DEV,
   type OssConfig,
-} from "@/services/oss";
+} from "@lyre/api/services/oss";
 
 const TEST_CONFIG: OssConfig = {
   accessKeyId: "test-key-id",

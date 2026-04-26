@@ -6,9 +6,9 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { recordingsRepo } from "@/db/repositories";
-import { presignGet } from "@/services/oss";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { recordingsRepo } from "@lyre/api/db/repositories";
+import { presignGet } from "@lyre/api/services/oss";
 
 export const dynamic = "force-dynamic";
 

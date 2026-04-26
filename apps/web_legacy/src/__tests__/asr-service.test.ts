@@ -4,7 +4,7 @@ import {
   createMockAsrProvider,
   createRealAsrProvider,
   type AsrTranscriptionResult,
-} from "@/services/asr";
+} from "@lyre/api/services/asr";
 
 // ── parseTranscriptionResult ──
 

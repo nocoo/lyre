@@ -6,9 +6,9 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { deviceTokensRepo } from "@/db/repositories";
-import { hashToken } from "@/lib/api-auth";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { deviceTokensRepo } from "@lyre/api/db/repositories";
+import { hashToken } from "@lyre/api/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 

@@ -24,7 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isRecordingsPath } from "@/lib/sidebar-nav";
+import { isRecordingsPath } from "@lyre/api/lib/sidebar-nav";
 import {
   DropdownMenu,
   DropdownMenuContent,

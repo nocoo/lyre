@@ -30,7 +30,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { chart, chartAxis, CHART_COLORS } from "@/lib/palette";
+import { chart, chartAxis, CHART_COLORS } from "@lyre/api/lib/palette";
 
 /** Safe chart color accessor (falls back to first color on out-of-bounds). */
 function chartColor(index: number): string {

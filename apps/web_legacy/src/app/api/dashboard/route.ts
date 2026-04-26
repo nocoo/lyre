@@ -9,10 +9,10 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { recordingsRepo, jobsRepo } from "@/db/repositories";
-import { listObjects } from "@/services/oss";
-import type { RecordingStatus } from "@/lib/types";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { recordingsRepo, jobsRepo } from "@lyre/api/db/repositories";
+import { listObjects } from "@lyre/api/services/oss";
+import type { RecordingStatus } from "@lyre/api/lib/types";
 
 export const dynamic = "force-dynamic";
 

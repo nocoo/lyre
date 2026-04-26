@@ -17,13 +17,13 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { recordingsRepo, jobsRepo } from "@/db/repositories";
-import { presignGet, makeResultKey } from "@/services/oss";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { recordingsRepo, jobsRepo } from "@lyre/api/db/repositories";
+import { presignGet, makeResultKey } from "@lyre/api/services/oss";
 import type {
   AsrTranscriptionResult,
   AsrTranscriptionWord,
-} from "@/services/asr";
+} from "@lyre/api/services/asr";
 
 export const dynamic = "force-dynamic";
 

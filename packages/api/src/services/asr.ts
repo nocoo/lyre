@@ -17,7 +17,7 @@
  * data is stored in the database.
  */
 
-import type { TranscriptionSentence } from "@/lib/types";
+import type { TranscriptionSentence } from "../lib/types";
 
 // ── DashScope API response types ──
 

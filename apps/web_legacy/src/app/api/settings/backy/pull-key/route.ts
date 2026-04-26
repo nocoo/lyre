@@ -7,13 +7,13 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
 import {
   generatePullKey,
   readPullKey,
   savePullKey,
   deletePullKey,
-} from "@/services/backy";
+} from "@lyre/api/services/backy";
 
 export const dynamic = "force-dynamic";
 

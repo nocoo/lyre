@@ -8,7 +8,7 @@
 import { eq, desc } from "drizzle-orm";
 import { db } from "../index";
 import { recordings, transcriptions, transcriptionJobs, recordingTags, type DbRecording } from "../schema";
-import type { RecordingStatus } from "@/lib/types";
+import type { RecordingStatus } from "../../lib/types";
 
 export const recordingsRepo = {
   findAll(userId: string): DbRecording[] {

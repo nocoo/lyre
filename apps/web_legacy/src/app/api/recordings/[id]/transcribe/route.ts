@@ -12,11 +12,11 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { recordingsRepo, jobsRepo } from "@/db/repositories";
-import { presignGet } from "@/services/oss";
-import { getAsrProvider } from "@/services/asr-provider";
-import { getJobManager } from "@/services/job-manager-singleton";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { recordingsRepo, jobsRepo } from "@lyre/api/db/repositories";
+import { presignGet } from "@lyre/api/services/oss";
+import { getAsrProvider } from "@lyre/api/services/asr-provider";
+import { getJobManager } from "@lyre/api/services/job-manager-singleton";
 
 export const dynamic = "force-dynamic";
 

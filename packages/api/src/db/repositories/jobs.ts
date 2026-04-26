@@ -8,7 +8,7 @@
 import { eq, desc, inArray } from "drizzle-orm";
 import { db } from "../index";
 import { transcriptionJobs, type DbTranscriptionJob } from "../schema";
-import type { JobStatus } from "@/lib/types";
+import type { JobStatus } from "../../lib/types";
 
 export const jobsRepo = {
   findById(id: string): DbTranscriptionJob | undefined {

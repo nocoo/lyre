@@ -15,7 +15,7 @@ import {
   ASR_MODEL,
 } from "@/lib/recording-detail-vm";
 import { MOCK_RECORDING_DETAILS } from "@/lib/mock-data";
-import type { RecordingDetail, TranscriptionSentence } from "@/lib/types";
+import type { RecordingDetail, TranscriptionSentence } from "@lyre/api/lib/types";
 
 // Get mock details by status
 const completedDetail = MOCK_RECORDING_DETAILS.find(

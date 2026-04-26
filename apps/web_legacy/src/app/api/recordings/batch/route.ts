@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { recordingsRepo, jobsRepo } from "@/db/repositories";
-import { deleteObject, listObjects, deleteObjects } from "@/services/oss";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { recordingsRepo, jobsRepo } from "@lyre/api/db/repositories";
+import { deleteObject, listObjects, deleteObjects } from "@lyre/api/services/oss";
 
 export const dynamic = "force-dynamic";
 

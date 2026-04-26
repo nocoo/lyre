@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach } from "bun:test";
-import { resetDb } from "@/db/index";
-import { usersRepo } from "@/db/repositories/users";
+import { resetDb } from "@lyre/api/db";
+import { usersRepo } from "@lyre/api/db/repositories/users";
 
 // Helper to create a test user
 function makeUser(overrides?: Partial<Parameters<typeof usersRepo.create>[0]>) {

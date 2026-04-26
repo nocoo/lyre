@@ -18,20 +18,20 @@ import {
   recordingsRepo,
   transcriptionsRepo,
   settingsRepo,
-} from "@/db/repositories";
-import type { AsrProvider } from "@/services/asr";
-import { parseTranscriptionResult } from "@/services/asr";
-import { presignPut, makeResultKey } from "@/services/oss";
+} from "../db/repositories";
+import type { AsrProvider } from "./asr";
+import { parseTranscriptionResult } from "./asr";
+import { presignPut, makeResultKey } from "./oss";
 import {
   resolveAiConfig,
   createAiModel,
   buildSummaryPrompt,
   type AiProvider,
   type SdkType,
-} from "@/services/ai";
+} from "./ai";
 import { generateText } from "ai";
-import type { DbTranscriptionJob } from "@/db/schema";
-import type { JobStatus } from "@/lib/types";
+import type { DbTranscriptionJob } from "../db/schema";
+import type { JobStatus } from "../lib/types";
 
 // ── Types ──
 

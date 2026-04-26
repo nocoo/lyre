@@ -4,14 +4,14 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { settingsRepo } from "@/db/repositories";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { settingsRepo } from "@lyre/api/db/repositories";
 import {
   readBackySettings,
   readPullKey,
   maskApiKey,
   getEnvironment,
-} from "@/services/backy";
+} from "@lyre/api/services/backy";
 
 export const dynamic = "force-dynamic";
 

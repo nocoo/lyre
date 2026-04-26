@@ -1,8 +1,8 @@
 import { describe, expect, test, beforeEach, afterEach, mock } from "bun:test";
 import { createHash } from "crypto";
-import { resetDb } from "@/db/index";
-import { usersRepo } from "@/db/repositories/users";
-import { deviceTokensRepo } from "@/db/repositories/device-tokens";
+import { resetDb } from "@lyre/api/db";
+import { usersRepo } from "@lyre/api/db/repositories/users";
+import { deviceTokensRepo } from "@lyre/api/db/repositories/device-tokens";
 
 // ── Mocks ──────────────────────────────────────────────────────────
 
@@ -26,25 +26,10 @@ mock.module("next/headers", () => ({
   }),
 }));
 
-// Mock @/auth — reads from globalThis.__mockAuthSession so this mock
-// plays nicely with other test files that drive the same global
-// (e.g. proxy.test.ts). Supports both call shapes: `await auth()` and
-// `auth((req) => ...)` (NextAuth's middleware-style wrapper).
-mock.module("@/auth", () => ({
-  auth: (arg?: unknown) => {
-    if (typeof arg === "function") {
-      const handler = arg as (req: unknown) => unknown;
-      return (req: unknown) => {
-        (req as { auth: unknown }).auth =
-          (globalThis.__mockAuthSession as MockSession) ?? null;
-        return handler(req);
-      };
-    }
-    return Promise.resolve(
-      (globalThis.__mockAuthSession as MockSession) ?? null,
-    );
-  },
-}));
+// Note: `@lyre/api/lib/api-auth` reads sessions via the provider injected
+// in src/__tests__/setup.ts (preload) — that provider reads from
+// globalThis.__mockAuthSession, so setSession() below drives auth outcomes
+// for both this file and proxy.test.ts uniformly.
 
 // Type-safe env helpers (NODE_ENV is typed as readonly in @types/bun)
 const env = process.env as Record<string, string | undefined>;
@@ -94,7 +79,7 @@ describe("getCurrentUser", () => {
   });
 
   async function callGetCurrentUser() {
-    const { getCurrentUser } = await import("@/lib/api-auth");
+    const { getCurrentUser } = await import("@lyre/api/lib/api-auth");
     return getCurrentUser();
   }
 

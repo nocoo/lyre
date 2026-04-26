@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { recordingsRepo, foldersRepo, tagsRepo } from "@/db/repositories";
-import type { RecordingStatus } from "@/lib/types";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { recordingsRepo, foldersRepo, tagsRepo } from "@lyre/api/db/repositories";
+import type { RecordingStatus } from "@lyre/api/lib/types";
 
 export const dynamic = "force-dynamic";
 

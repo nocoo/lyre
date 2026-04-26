@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach } from "bun:test";
-import { resetDb } from "@/db/index";
+import { resetDb } from "@lyre/api/db";
 import { GET, checkHealth } from "@/app/api/live/route";
 
 describe("GET /api/live", () => {

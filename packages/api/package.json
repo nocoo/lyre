@@ -6,12 +6,32 @@
   "exports": {
     "./contracts/ai": "./src/contracts/ai.ts",
     "./contracts/jobs": "./src/contracts/jobs.ts",
-    "./contracts/recordings": "./src/contracts/recordings.ts"
+    "./contracts/recordings": "./src/contracts/recordings.ts",
+    "./db": "./src/db/index.ts",
+    "./db/schema": "./src/db/schema.ts",
+    "./db/repositories": "./src/db/repositories/index.ts",
+    "./db/repositories/*": "./src/db/repositories/*.ts",
+    "./services/*": "./src/services/*.ts",
+    "./lib/api-auth": "./src/lib/api-auth.ts",
+    "./lib/types": "./src/lib/types.ts",
+    "./lib/palette": "./src/lib/palette.ts",
+    "./lib/sidebar-nav": "./src/lib/sidebar-nav.ts",
+    "./lib/version": "./src/lib/version.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@nocoo/next-ai": "^0.2.1"
+    "@nocoo/next-ai": "^0.2.1",
+    "ai": "^6.0.116",
+    "better-sqlite3": "^12.6.2",
+    "drizzle-orm": "^0.45.1",
+    "next": "^16.2.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "^1.3.10",
+    "@types/node": "^20.19.37",
+    "typescript": "^5.9.3"
   }
 }

@@ -4,9 +4,9 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { settingsRepo } from "@/db/repositories";
-import { isValidProvider, type AiProvider, type SdkType } from "@/services/ai";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { settingsRepo } from "@lyre/api/db/repositories";
+import { isValidProvider, type AiProvider, type SdkType } from "@lyre/api/services/ai";
 
 export const dynamic = "force-dynamic";
 

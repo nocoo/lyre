@@ -13,7 +13,7 @@
  */
 
 import { randomBytes } from "crypto";
-import { settingsRepo } from "@/db/repositories";
+import { settingsRepo } from "../db/repositories";
 
 // ── Types ──
 

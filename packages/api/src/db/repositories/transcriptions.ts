@@ -8,7 +8,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "../index";
 import { transcriptions, type DbTranscription } from "../schema";
-import type { TranscriptionSentence } from "@/lib/types";
+import type { TranscriptionSentence } from "../../lib/types";
 
 /** Parse sentences JSON string to array */
 function parseSentences(sentencesJson: string): TranscriptionSentence[] {

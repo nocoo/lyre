@@ -7,6 +7,7 @@
  * `@/auth`) at file-evaluation time, and Bun caches module resolutions.
  */
 import { mock } from "bun:test";
+import { setAuthSessionProvider } from "@lyre/api/lib/api-auth";
 
 // Default behavior: return no session. Individual tests override
 // `globalThis.__mockAuthSession` to control this.
@@ -34,3 +35,9 @@ mock.module("@/auth", () => ({
     return Promise.resolve(globalThis.__mockAuthSession ?? null);
   },
 }));
+
+// Also register the same mock session provider with @lyre/api/lib/api-auth.
+// The moved api-auth helper no longer imports @/auth directly; the host
+// app injects the provider at startup. Tests do the same here so any test
+// that ends up calling getCurrentUser sees the mocked session.
+setAuthSessionProvider(async () => globalThis.__mockAuthSession ?? null);

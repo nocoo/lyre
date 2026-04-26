@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, test, beforeEach, afterEach, mock } from "bun:test";
-import type { JobEvent } from "@/services/job-manager";
+import type { JobEvent } from "@lyre/api/services/job-manager";
 
 // ── Mock EventSource ──
 

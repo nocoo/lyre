@@ -9,19 +9,19 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
 import {
   recordingsRepo,
   transcriptionsRepo,
   settingsRepo,
-} from "@/db/repositories";
+} from "@lyre/api/db/repositories";
 import {
   resolveAiConfig,
   createAiModel,
   buildSummaryPrompt,
   type AiProvider,
   type SdkType,
-} from "@/services/ai";
+} from "@lyre/api/services/ai";
 import { streamText } from "ai";
 
 export const dynamic = "force-dynamic";

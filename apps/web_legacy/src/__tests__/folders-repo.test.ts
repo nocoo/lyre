@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach } from "bun:test";
-import { resetDb } from "@/db/index";
-import { usersRepo } from "@/db/repositories/users";
-import { foldersRepo } from "@/db/repositories/folders";
+import { resetDb } from "@lyre/api/db";
+import { usersRepo } from "@lyre/api/db/repositories/users";
+import { foldersRepo } from "@lyre/api/db/repositories/folders";
 
 function seedUser() {
   return usersRepo.create({

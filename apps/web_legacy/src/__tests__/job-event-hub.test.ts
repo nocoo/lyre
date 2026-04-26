@@ -5,8 +5,8 @@ import {
   heartbeat,
   clientCount,
   resetHub,
-} from "@/services/job-event-hub";
-import type { JobEvent } from "@/services/job-manager";
+} from "@lyre/api/services/job-event-hub";
+import type { JobEvent } from "@lyre/api/services/job-manager";
 
 // ── Helpers ──
 

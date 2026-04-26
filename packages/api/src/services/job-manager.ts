@@ -18,10 +18,10 @@
  * - No module-level side effects — must be explicitly started
  */
 
-import type { AsrProvider } from "@/services/asr";
-import type { DbTranscriptionJob } from "@/db/schema";
+import type { AsrProvider } from "./asr";
+import type { DbTranscriptionJob } from "../db/schema";
 import type { JobEvent } from "@lyre/api/contracts/jobs";
-import { pollJob } from "@/services/job-processor";
+import { pollJob } from "./job-processor";
 
 // ── Types ──
 

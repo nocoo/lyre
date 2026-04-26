@@ -1,10 +1,10 @@
 import { describe, expect, test, beforeEach } from "bun:test";
-import { resetDb } from "@/db/index";
-import { usersRepo } from "@/db/repositories/users";
-import { recordingsRepo } from "@/db/repositories/recordings";
-import { jobsRepo } from "@/db/repositories/jobs";
-import { transcriptionsRepo } from "@/db/repositories/transcriptions";
-import { foldersRepo } from "@/db/repositories/folders";
+import { resetDb } from "@lyre/api/db";
+import { usersRepo } from "@lyre/api/db/repositories/users";
+import { recordingsRepo } from "@lyre/api/db/repositories/recordings";
+import { jobsRepo } from "@lyre/api/db/repositories/jobs";
+import { transcriptionsRepo } from "@lyre/api/db/repositories/transcriptions";
+import { foldersRepo } from "@lyre/api/db/repositories/folders";
 
 // Seed a user (recordings have FK to users)
 function seedUser() {

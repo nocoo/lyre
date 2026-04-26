@@ -6,8 +6,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { readBackySettings, fetchBackyHistory } from "@/services/backy";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { readBackySettings, fetchBackyHistory } from "@lyre/api/services/backy";
 
 export const dynamic = "force-dynamic";
 

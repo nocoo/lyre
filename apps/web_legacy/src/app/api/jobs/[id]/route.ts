@@ -8,10 +8,10 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
-import { jobsRepo, recordingsRepo } from "@/db/repositories";
-import { getAsrProvider } from "@/services/asr-provider";
-import { pollJob } from "@/services/job-processor";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { jobsRepo, recordingsRepo } from "@lyre/api/db/repositories";
+import { getAsrProvider } from "@lyre/api/services/asr-provider";
+import { pollJob } from "@lyre/api/services/job-processor";
 
 export const dynamic = "force-dynamic";
 

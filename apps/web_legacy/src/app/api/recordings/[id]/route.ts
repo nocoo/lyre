@@ -1,14 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/api-auth";
+import { getCurrentUser } from "@lyre/api/lib/api-auth";
 import {
   recordingsRepo,
   transcriptionsRepo,
   jobsRepo,
   foldersRepo,
   tagsRepo,
-} from "@/db/repositories";
-import { deleteObject, listObjects, deleteObjects } from "@/services/oss";
-import type { RecordingDetail, TranscriptionSentence } from "@/lib/types";
+} from "@lyre/api/db/repositories";
+import { deleteObject, listObjects, deleteObjects } from "@lyre/api/services/oss";
+import type { RecordingDetail, TranscriptionSentence } from "@lyre/api/lib/types";
 
 export const dynamic = "force-dynamic";
 

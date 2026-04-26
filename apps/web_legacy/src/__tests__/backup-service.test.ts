@@ -6,22 +6,22 @@
  */
 
 import { describe, expect, test, beforeEach, afterEach, mock } from "bun:test";
-import { resetDb } from "@/db/index";
-import { usersRepo } from "@/db/repositories/users";
-import { foldersRepo } from "@/db/repositories/folders";
-import { tagsRepo } from "@/db/repositories/tags";
-import { recordingsRepo } from "@/db/repositories/recordings";
-import { jobsRepo } from "@/db/repositories/jobs";
-import { transcriptionsRepo } from "@/db/repositories/transcriptions";
-import { deviceTokensRepo } from "@/db/repositories/device-tokens";
-import { settingsRepo } from "@/db/repositories/settings";
+import { resetDb } from "@lyre/api/db";
+import { usersRepo } from "@lyre/api/db/repositories/users";
+import { foldersRepo } from "@lyre/api/db/repositories/folders";
+import { tagsRepo } from "@lyre/api/db/repositories/tags";
+import { recordingsRepo } from "@lyre/api/db/repositories/recordings";
+import { jobsRepo } from "@lyre/api/db/repositories/jobs";
+import { transcriptionsRepo } from "@lyre/api/db/repositories/transcriptions";
+import { deviceTokensRepo } from "@lyre/api/db/repositories/device-tokens";
+import { settingsRepo } from "@lyre/api/db/repositories/settings";
 import {
   exportBackup,
   importBackup,
   validateBackup,
   pushBackupToBacky,
   type BackupData,
-} from "@/services/backup";
+} from "@lyre/api/services/backup";
 
 // ── Helpers ──
 

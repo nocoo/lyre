@@ -5,7 +5,7 @@ import {
   isSettingsPath,
   isAllRecordingsActive,
   type NavItem,
-} from "@/lib/sidebar-nav";
+} from "@lyre/api/lib/sidebar-nav";
 
 /**
  * Tests for sidebar navigation utility functions.

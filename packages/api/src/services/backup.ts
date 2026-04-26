@@ -5,7 +5,7 @@
  * Separated from the API route for testability.
  */
 
-import { db } from "@/db/index";
+import { db } from "../db";
 import {
   foldersRepo,
   tagsRepo,
@@ -14,7 +14,7 @@ import {
   transcriptionsRepo,
   deviceTokensRepo,
   settingsRepo,
-} from "@/db/repositories";
+} from "../db/repositories";
 import {
   folders,
   tags,
@@ -24,12 +24,12 @@ import {
   recordingTags,
   deviceTokens,
   settings,
-} from "@/db/schema";
-import type { DbUser } from "@/db/schema";
+} from "../db/schema";
+import type { DbUser } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { APP_VERSION } from "@/lib/version";
-import type { BackyCredentials } from "@/services/backy";
-import { getEnvironment } from "@/services/backy";
+import { APP_VERSION } from "../lib/version";
+import type { BackyCredentials } from "./backy";
+import { getEnvironment } from "./backy";
 
 // ── Backup format ──
 
@@ -537,7 +537,7 @@ export function importBackup(
 
 // ── Push to Backy ──
 
-export type { BackyCredentials } from "@/services/backy";
+export type { BackyCredentials } from "./backy";
 
 export interface BackyPushResult {
   ok: boolean;

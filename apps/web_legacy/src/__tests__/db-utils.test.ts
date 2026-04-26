@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { existsSync, rmdirSync } from "fs";
-import { resolveDbPath, ensureDir } from "@/db/index";
+import { resolveDbPath, ensureDir } from "@lyre/api/db";
 
 describe("resolveDbPath", () => {
   let savedLyreDb: string | undefined;

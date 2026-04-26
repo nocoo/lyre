@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import { setAuthSessionProvider } from "@lyre/api/lib/api-auth";
 
 // Get allowed emails from environment variable
 const allowedEmails = (process.env.ALLOWED_EMAILS ?? "")
@@ -93,3 +94,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
+
+// Wire the @lyre/api auth helper to this app's NextAuth singleton.
+setAuthSessionProvider(auth);
