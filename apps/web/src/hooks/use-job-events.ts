@@ -60,12 +60,14 @@ export function useJobEvents({
     const tick = async () => {
       try {
         let items: JobItem[];
+        let isListMode = false;
         if (jobId) {
           const job = await apiJson<JobItem>(
             `/api/jobs/${encodeURIComponent(jobId)}`,
           );
           items = [job];
         } else {
+          isListMode = !recordingId;
           const path = recordingId
             ? `/api/jobs?recordingId=${encodeURIComponent(recordingId)}`
             : `/api/jobs`;
@@ -73,7 +75,9 @@ export function useJobEvents({
           items = data.items ?? [];
         }
         if (cancelled) return;
+        const currentIds = new Set<string>();
         for (const job of items) {
+          currentIds.add(job.id);
           const prev = seen.get(job.id);
           if (prev !== job.status) {
             seen.set(job.id, job.status);
@@ -82,6 +86,33 @@ export function useJobEvents({
               recordingId: job.recordingId,
               status: job.status,
             } as JobEvent);
+          }
+        }
+        // List mode (`GET /api/jobs`) only returns PENDING/RUNNING. When a
+        // previously-seen job disappears, the cron tick has flipped it to a
+        // terminal status — fetch the job once to discover SUCCEEDED vs
+        // FAILED, then emit the missed terminal event.
+        if (isListMode) {
+          for (const [id, prevStatus] of seen) {
+            if (currentIds.has(id)) continue;
+            if (prevStatus === "SUCCEEDED" || prevStatus === "FAILED") {
+              seen.delete(id);
+              continue;
+            }
+            try {
+              const job = await apiJson<JobItem>(
+                `/api/jobs/${encodeURIComponent(id)}`,
+              );
+              if (cancelled) return;
+              seen.set(job.id, job.status);
+              callbackRef.current({
+                jobId: job.id,
+                recordingId: job.recordingId,
+                status: job.status,
+              } as JobEvent);
+            } catch {
+              seen.delete(id);
+            }
           }
         }
       } catch (err) {
