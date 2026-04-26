@@ -1,36 +1,22 @@
 /**
- * GET /api/recordings/[id]/play-url
- *
- * Generate a fresh presigned GET URL for audio playback.
- * The URL expires in 1 hour.
+ * GET /api/recordings/[id]/play-url — Presigned GET URL for audio playback.
  */
 
-import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
-import { recordingsRepo } from "@lyre/api/db/repositories";
-import { presignGet } from "@lyre/api/services/oss";
+import type { NextRequest } from "next/server";
+import {
+  buildContext,
+  toNextResponse,
+  unauthorized401,
+} from "@/lib/handler-adapter";
+import { playUrlHandler } from "@lyre/api/handlers/recordings";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function GET(request: NextRequest, context: RouteContext) {
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
   const { id } = await context.params;
-  const recording = recordingsRepo.findById(id);
-
-  if (!recording || recording.userId !== user.id) {
-    return NextResponse.json(
-      { error: "Recording not found" },
-      { status: 404 },
-    );
-  }
-
-  const playUrl = presignGet(recording.ossKey);
-
-  return NextResponse.json({ playUrl });
+  return toNextResponse(playUrlHandler(ctx, id));
 }

@@ -7,6 +7,7 @@
  */
 
 import { createHmac } from "crypto";
+import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
 
 // ── Config ──
 
@@ -31,18 +32,22 @@ export const BUCKET_DEV = "lyre-dev";
  * - production → "lyre"
  * - everything else (development, test, undefined) → "lyre-dev"
  */
-export function resolveBucket(): string {
-  const explicit = process.env.OSS_BUCKET;
+// optional for back-compat with legacy tests; always pass ctx.env from handlers
+export function resolveBucket(env?: LyreEnv): string {
+  const e = env ?? loadEnvFromProcess();
+  const explicit = e.OSS_BUCKET;
   if (explicit) return explicit;
-  return process.env.NODE_ENV === "production" ? BUCKET_PROD : BUCKET_DEV;
+  return e.NODE_ENV === "production" ? BUCKET_PROD : BUCKET_DEV;
 }
 
-function getConfig(): OssConfig {
-  const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
-  const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET;
-  const bucket = resolveBucket();
-  const region = process.env.OSS_REGION;
-  const endpoint = process.env.OSS_ENDPOINT;
+// optional for back-compat with legacy tests; always pass ctx.env from handlers
+function getConfig(env?: LyreEnv): OssConfig {
+  const e = env ?? loadEnvFromProcess();
+  const accessKeyId = e.OSS_ACCESS_KEY_ID;
+  const accessKeySecret = e.OSS_ACCESS_KEY_SECRET;
+  const bucket = resolveBucket(e);
+  const region = e.OSS_REGION;
+  const endpoint = e.OSS_ENDPOINT;
 
   if (!accessKeyId || !accessKeySecret || !region || !endpoint) {
     throw new Error(
@@ -124,8 +129,9 @@ export function presignPut(
   contentType: string,
   expiresInSec: number = 900,
   config?: OssConfig,
+  env?: LyreEnv,
 ): string {
-  const cfg = config ?? getConfig();
+  const cfg = config ?? getConfig(env);
   const expires = Math.floor(Date.now() / 1000) + expiresInSec;
   const resource = `/${cfg.bucket}/${key}`;
 
@@ -159,8 +165,9 @@ export function presignGet(
   expiresInSec: number = 3600,
   responseOverrides?: Record<string, string>,
   config?: OssConfig,
+  env?: LyreEnv,
 ): string {
-  const cfg = config ?? getConfig();
+  const cfg = config ?? getConfig(env);
   const expires = Math.floor(Date.now() / 1000) + expiresInSec;
 
   // Build canonical resource — must include response override params for V1 signature
@@ -210,8 +217,9 @@ export interface OssObject {
 export async function listObjects(
   prefix: string,
   config?: OssConfig,
+  env?: LyreEnv,
 ): Promise<OssObject[]> {
-  const cfg = config ?? getConfig();
+  const cfg = config ?? getConfig(env);
   const all: OssObject[] = [];
   let marker = "";
   let hasMore = true;
@@ -286,9 +294,10 @@ export async function listObjects(
 export async function deleteObjects(
   keys: string[],
   config?: OssConfig,
+  env?: LyreEnv,
 ): Promise<number> {
   if (keys.length === 0) return 0;
-  const cfg = config ?? getConfig();
+  const cfg = config ?? getConfig(env);
   let totalDeleted = 0;
 
   // Process in batches of 1000 (OSS limit)
@@ -368,8 +377,9 @@ async function computeMd5(data: Buffer): Promise<string> {
 export async function deleteObject(
   key: string,
   config?: OssConfig,
+  env?: LyreEnv,
 ): Promise<boolean> {
-  const cfg = config ?? getConfig();
+  const cfg = config ?? getConfig(env);
   const date = new Date().toUTCString();
   const resource = `/${cfg.bucket}/${key}`;
 

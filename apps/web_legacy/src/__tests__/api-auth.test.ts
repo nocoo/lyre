@@ -79,7 +79,7 @@ describe("getCurrentUser", () => {
   });
 
   async function callGetCurrentUser() {
-    const { getCurrentUser } = await import("@lyre/api/lib/api-auth");
+    const { getCurrentUser } = await import("@/lib/api-auth-legacy");
     return getCurrentUser();
   }
 

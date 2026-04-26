@@ -10,7 +10,7 @@ import type {
   TranscriptionSentence,
   TranscriptionJob,
   Tag,
-} from "./types";
+} from "@lyre/api/lib/types";
 import {
   formatFileSize,
   formatDuration,

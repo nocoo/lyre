@@ -16,10 +16,15 @@
     "./lib/types": "./src/lib/types.ts",
     "./lib/palette": "./src/lib/palette.ts",
     "./lib/sidebar-nav": "./src/lib/sidebar-nav.ts",
-    "./lib/version": "./src/lib/version.ts"
+    "./lib/version": "./src/lib/version.ts",
+    "./runtime/env": "./src/runtime/env.ts",
+    "./runtime/context": "./src/runtime/context.ts",
+    "./handlers/*": "./src/handlers/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:coverage": "bun scripts/check-coverage.ts"
   },
   "dependencies": {
     "@nocoo/next-ai": "^0.2.1",

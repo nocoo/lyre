@@ -1,22 +1,27 @@
 /**
- * Auth helper for API routes.
+ * Auth helper for API routes — framework-agnostic.
  *
  * Supports two authentication methods:
- * 1. NextAuth session (cookie-based, for web browser)
- * 2. Bearer token (for programmatic access, e.g. macOS app)
+ * 1. NextAuth session (cookie-based, for web browser) — resolved via the
+ *    host-app-injected provider.
+ * 2. Bearer token (for programmatic access, e.g. macOS app) — read from
+ *    the request's `Authorization` header.
  *
- * Bearer tokens are hashed with SHA-256 and looked up in device_tokens table.
+ * Bearer tokens are hashed with SHA-256 and looked up in `device_tokens`.
  *
- * Note: the NextAuth `auth()` function lives in the host app (apps/web_legacy)
- * because it is wired to that app's NextAuth singleton. The host app must
- * call `setAuthSessionProvider(auth)` once at startup so this helper can
- * resolve the session without a hard import on the host.
+ * The host app must call `setAuthSessionProvider(auth)` once at startup
+ * so this helper can resolve sessions without a hard dependency on
+ * `next-auth` or `next/headers`.
+ *
+ * **No `next/*` import here.** Legacy callers that previously relied
+ * on the implicit `headers()` resolution should use the wrapper at
+ * `apps/web_legacy/src/lib/api-auth-legacy.ts`.
  */
 
 import { createHash } from "crypto";
-import { headers } from "next/headers";
 import { usersRepo, deviceTokensRepo } from "../db/repositories";
 import type { DbUser } from "../db/schema";
+import type { LyreEnv } from "../runtime/env";
 
 type AuthSession = {
   user?: { email?: string | null; name?: string | null; image?: string | null } | null;
@@ -39,6 +44,13 @@ export function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
+export interface GetCurrentUserOptions {
+  /** Request headers — used to extract the Bearer token. */
+  headers: Headers;
+  /** Strongly-typed env snapshot — controls Playwright bypass branch. */
+  env: LyreEnv;
+}
+
 /**
  * Get the current authenticated user from session or Bearer token.
  *
@@ -46,12 +58,13 @@ export function hashToken(raw: string): string {
  *
  * @returns The DB user, or null if not authenticated.
  */
-export async function getCurrentUser(): Promise<DbUser | null> {
-  // In E2E/Playwright mode, skip auth and use a test user
-  if (
-    process.env.PLAYWRIGHT === "1" &&
-    process.env.NODE_ENV !== "production"
-  ) {
+export async function getCurrentUser(
+  opts: GetCurrentUserOptions,
+): Promise<DbUser | null> {
+  const { headers, env } = opts;
+
+  // In E2E/Playwright mode, skip auth and use a test user.
+  if (env.PLAYWRIGHT === "1" && env.NODE_ENV !== "production") {
     return usersRepo.upsertByEmail({
       id: "e2e-test-user",
       email: "e2e@test.com",
@@ -60,26 +73,24 @@ export async function getCurrentUser(): Promise<DbUser | null> {
     });
   }
 
-  // Check for Bearer token in Authorization header
-  const hdrs = await headers();
-  const authorization = hdrs.get("authorization");
+  // Check for Bearer token in Authorization header.
+  const authorization = headers.get("authorization");
   if (authorization?.startsWith("Bearer ")) {
     const rawToken = authorization.slice(7);
     if (rawToken) {
       const hash = hashToken(rawToken);
       const tokenRecord = deviceTokensRepo.findByHash(hash);
       if (tokenRecord) {
-        // Update last-used timestamp (fire-and-forget)
+        // Update last-used timestamp (fire-and-forget).
         deviceTokensRepo.touchLastUsed(tokenRecord.id);
-        // Resolve the user
         return usersRepo.findById(tokenRecord.userId) ?? null;
       }
-      // Invalid token — fall through to return null (don't try session)
+      // Invalid token — fall through to return null (don't try session).
       return null;
     }
   }
 
-  // Fall back to NextAuth session (resolved via injected provider)
+  // Fall back to NextAuth session (resolved via injected provider).
   if (!authSessionProvider) return null;
   const session = await authSessionProvider();
   if (!session?.user?.email) return null;
@@ -88,7 +99,7 @@ export async function getCurrentUser(): Promise<DbUser | null> {
   const name = session.user.name ?? null;
   const avatarUrl = session.user.image ?? null;
 
-  // Generate a stable user ID from email
+  // Generate a stable user ID from email.
   const id = `user-${Buffer.from(email).toString("base64url")}`;
 
   return usersRepo.upsertByEmail({ id, email, name, avatarUrl });

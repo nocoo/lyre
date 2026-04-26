@@ -12,7 +12,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { getCurrentUser } from "@/lib/api-auth-legacy";
 import { recordingsRepo, jobsRepo } from "@lyre/api/db/repositories";
 import { presignGet } from "@lyre/api/services/oss";
 import { getAsrProvider } from "@lyre/api/services/asr-provider";

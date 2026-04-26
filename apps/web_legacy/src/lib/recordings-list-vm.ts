@@ -12,7 +12,7 @@ import type {
   PaginatedResponse,
   Tag,
   Folder,
-} from "./types";
+} from "@lyre/api/lib/types";
 
 // ── Formatting helpers ──
 

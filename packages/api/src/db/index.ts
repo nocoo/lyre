@@ -12,6 +12,7 @@
 import { existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import * as schema from "./schema";
+import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
 
 // ── Types ──
 
@@ -27,8 +28,10 @@ let dbInstance: DbInstance | null = null;
 const DEFAULT_DB_PATH = "database/lyre.db";
 
 /** Resolve the database file path from env or default */
-export function resolveDbPath(): string {
-  const envPath = process.env.LYRE_DB;
+// optional for back-compat with legacy tests; always pass ctx.env from handlers
+export function resolveDbPath(env?: LyreEnv): string {
+  const e = env ?? loadEnvFromProcess();
+  const envPath = e.LYRE_DB;
   if (envPath) return envPath;
   return DEFAULT_DB_PATH;
 }
@@ -175,10 +178,10 @@ function openAndInit(dbPath: string): DbInstance {
 
 // ── Test database ──
 
-function isTestEnv(): boolean {
-  return (
-    process.env.NODE_ENV === "test" || process.env.BUN_ENV === "test"
-  );
+// optional for back-compat with legacy tests; always pass ctx.env from handlers
+function isTestEnv(env?: LyreEnv): boolean {
+  const e = env ?? loadEnvFromProcess();
+  return e.NODE_ENV === "test" || e.BUN_ENV === "test";
 }
 
 function createTestDb(): void {
@@ -197,8 +200,10 @@ function getDb(): DbInstance {
 
 // ── Reset (for E2E tests) ──
 
-export function resetDb(): void {
-  if (!isTestEnv() && process.env.PLAYWRIGHT !== "1") {
+// optional for back-compat with legacy tests; always pass ctx.env from handlers
+export function resetDb(env?: LyreEnv): void {
+  const e = env ?? loadEnvFromProcess();
+  if (!isTestEnv(e) && e.PLAYWRIGHT !== "1") {
     throw new Error("resetDb() can only be called in test environments");
   }
 

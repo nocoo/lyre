@@ -6,7 +6,7 @@
  */
 
 import { formatFileSize, formatDuration } from "./recordings-list-vm";
-import type { RecordingStatus } from "./types";
+import type { RecordingStatus } from "@lyre/api/lib/types";
 
 // ── API response types ──
 

@@ -30,6 +30,7 @@ import { eq, and } from "drizzle-orm";
 import { APP_VERSION } from "../lib/version";
 import type { BackyCredentials } from "./backy";
 import { getEnvironment } from "./backy";
+import type { LyreEnv } from "../runtime/env";
 
 // ── Backup format ──
 
@@ -571,12 +572,14 @@ export interface BackyPushResult {
 export async function pushBackupToBacky(
   user: DbUser,
   credentials: BackyCredentials,
+  // optional for back-compat with legacy tests; always pass ctx.env from handlers
+  env?: LyreEnv,
 ): Promise<BackyPushResult> {
   const start = Date.now();
   const backup = exportBackup(user);
   const json = JSON.stringify(backup, null, 2);
 
-  const environment = getEnvironment();
+  const environment = getEnvironment(env);
 
   const date = new Date().toISOString().slice(0, 10);
   const stats = [

@@ -3,62 +3,32 @@
  * DELETE /api/folders/[id] — Delete a folder
  */
 
-import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
-import { foldersRepo } from "@lyre/api/db/repositories";
+import type { NextRequest } from "next/server";
+import {
+  buildContext,
+  toNextResponse,
+  unauthorized401,
+} from "@/lib/handler-adapter";
+import {
+  updateFolderHandler,
+  deleteFolderHandler,
+} from "@lyre/api/handlers/folders";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
   const { id } = await context.params;
-  const folder = foldersRepo.findByIdAndUser(id, user.id);
-
-  if (!folder) {
-    return NextResponse.json({ error: "Folder not found" }, { status: 404 });
-  }
-
-  const body = (await request.json()) as {
-    name?: string;
-    icon?: string;
-  };
-
-  const updates: Parameters<typeof foldersRepo.update>[1] = {};
-  if (body.name !== undefined) updates.name = body.name.trim();
-  if (body.icon !== undefined) updates.icon = body.icon.trim();
-
-  const updated = foldersRepo.update(id, updates);
-
-  if (!updated) {
-    return NextResponse.json(
-      { error: "Failed to update folder" },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json(updated);
+  const body = (await request.json()) as { name?: string; icon?: string };
+  return toNextResponse(updateFolderHandler(ctx, id, body));
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
   const { id } = await context.params;
-  const folder = foldersRepo.findByIdAndUser(id, user.id);
-
-  if (!folder) {
-    return NextResponse.json({ error: "Folder not found" }, { status: 404 });
-  }
-
-  foldersRepo.delete(id);
-
-  return NextResponse.json({ deleted: true });
+  return toNextResponse(deleteFolderHandler(ctx, id));
 }

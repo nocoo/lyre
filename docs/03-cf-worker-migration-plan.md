@@ -448,7 +448,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 
 > ⚠️ 这是整个迁移最大的工作量。但因为 legacy 不切 dialect，复杂度集中在 worker 一侧 + spike 验证 query 兼容性。
 
-#### B.3 — 抽 handlers 出来（去 Next 依赖）
+#### B.3 — 抽 handlers 出来（去 Next 依赖）  ✅ 2026-04-26
 
 照 backy `HandlerResponse` 协议（`json | bytes | empty | text` 四分支；**SSE 不需要新增 stream 分支**，因为决策 3 + 决策 8 — 新 worker 不实现 SSE 端点）。
 

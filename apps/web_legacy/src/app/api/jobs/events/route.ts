@@ -18,7 +18,7 @@
  * server-side polling is running.
  */
 
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { getCurrentUser } from "@/lib/api-auth-legacy";
 import { getJobManager } from "@lyre/api/services/job-manager-singleton";
 import { addClient } from "@lyre/api/services/job-event-hub";
 

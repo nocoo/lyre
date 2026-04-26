@@ -14,6 +14,7 @@
 
 import { randomBytes } from "crypto";
 import { settingsRepo } from "../db/repositories";
+import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
 
 // ── Types ──
 
@@ -56,8 +57,10 @@ export function maskApiKey(key: string): string {
 }
 
 /** Return "prod" or "dev" based on NODE_ENV. */
-export function getEnvironment(): "prod" | "dev" {
-  return process.env.NODE_ENV === "production" ? "prod" : "dev";
+// optional for back-compat with legacy tests; always pass ctx.env from handlers
+export function getEnvironment(env?: LyreEnv): "prod" | "dev" {
+  const e = env ?? loadEnvFromProcess();
+  return e.NODE_ENV === "production" ? "prod" : "dev";
 }
 
 // ── Settings read ──

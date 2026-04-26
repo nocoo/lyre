@@ -12,7 +12,7 @@ import type {
   TranscriptionSentence,
   Tag,
   Folder,
-} from "./types";
+} from "@lyre/api/lib/types";
 
 const NOW = 1740000000000; // ~2025-02-19 in ms
 const DAY = 86_400_000;

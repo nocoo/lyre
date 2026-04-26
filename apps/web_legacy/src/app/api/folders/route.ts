@@ -3,44 +3,28 @@
  * POST /api/folders — Create a new folder
  */
 
-import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
-import { foldersRepo } from "@lyre/api/db/repositories";
+import type { NextRequest } from "next/server";
+import {
+  buildContext,
+  toNextResponse,
+  unauthorized401,
+} from "@/lib/handler-adapter";
+import {
+  listFoldersHandler,
+  createFolderHandler,
+} from "@lyre/api/handlers/folders";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const folders = foldersRepo.findByUserId(user.id);
-  return NextResponse.json({ items: folders });
+export async function GET(request: NextRequest) {
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
+  return toNextResponse(listFoldersHandler(ctx));
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
   const body = (await request.json()) as { name?: string; icon?: string };
-
-  if (!body.name?.trim()) {
-    return NextResponse.json(
-      { error: "Missing required field: name" },
-      { status: 400 },
-    );
-  }
-
-  const trimmedIcon = body.icon?.trim();
-  const folder = foldersRepo.create({
-    id: crypto.randomUUID(),
-    userId: user.id,
-    name: body.name.trim(),
-    ...(trimmedIcon ? { icon: trimmedIcon } : {}),
-  });
-
-  return NextResponse.json(folder, { status: 201 });
+  return toNextResponse(createFolderHandler(ctx, body));
 }

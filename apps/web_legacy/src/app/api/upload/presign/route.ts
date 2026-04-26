@@ -1,52 +1,24 @@
 /**
- * POST /api/upload/presign
- *
- * Generate a presigned PUT URL for direct client-side upload to OSS.
- * Client sends: { fileName, contentType, recordingId? }
- * Server returns: { uploadUrl, ossKey, recordingId }
+ * POST /api/upload/presign — Generate presigned PUT URL for direct OSS upload.
  */
 
-import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
-import { presignPut, makeUploadKey } from "@lyre/api/services/oss";
+import type { NextRequest } from "next/server";
+import {
+  buildContext,
+  toNextResponse,
+  unauthorized401,
+} from "@/lib/handler-adapter";
+import { presignUploadHandler } from "@lyre/api/handlers/upload";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
   const body = (await request.json()) as {
     fileName?: string;
     contentType?: string;
     recordingId?: string;
   };
-
-  if (!body.fileName || !body.contentType) {
-    return NextResponse.json(
-      { error: "Missing required fields: fileName, contentType" },
-      { status: 400 },
-    );
-  }
-
-  // Only allow audio MIME types
-  if (!body.contentType.startsWith("audio/")) {
-    return NextResponse.json(
-      { error: "Only audio files are allowed" },
-      { status: 400 },
-    );
-  }
-
-  const recordingId = body.recordingId ?? crypto.randomUUID();
-  const ossKey = makeUploadKey(user.id, recordingId, body.fileName);
-
-  const uploadUrl = presignPut(ossKey, body.contentType);
-
-  return NextResponse.json({
-    uploadUrl,
-    ossKey,
-    recordingId,
-  });
+  return toNextResponse(presignUploadHandler(ctx, body));
 }

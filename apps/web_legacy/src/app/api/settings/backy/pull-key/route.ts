@@ -1,57 +1,29 @@
 /**
  * POST   /api/settings/backy/pull-key — Generate a new pull key
  * DELETE /api/settings/backy/pull-key — Revoke the pull key
- *
- * The pull key authenticates incoming webhook calls from Backy
- * to trigger automatic backup pushes (Pull direction).
  */
 
-import { NextResponse } from "next/server";
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import type { NextRequest } from "next/server";
 import {
-  generatePullKey,
-  readPullKey,
-  savePullKey,
-  deletePullKey,
-} from "@lyre/api/services/backy";
+  buildContext,
+  toNextResponse,
+  unauthorized401,
+} from "@/lib/handler-adapter";
+import {
+  generatePullKeyHandler,
+  deletePullKeyHandler,
+} from "@lyre/api/handlers/settings-backy";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Generate (or regenerate) a pull key.
- *
- * If a key already exists it is replaced — callers must update
- * their Backy configuration with the new key.
- */
-export async function POST() {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const key = generatePullKey();
-  savePullKey(user.id, key);
-
-  return NextResponse.json({ pullKey: key });
+export async function POST(request: NextRequest) {
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
+  return toNextResponse(generatePullKeyHandler(ctx));
 }
 
-/**
- * Revoke the pull key, disabling Pull webhook access.
- */
-export async function DELETE() {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const had = readPullKey(user.id);
-  if (!had) {
-    return NextResponse.json(
-      { error: "No pull key configured" },
-      { status: 400 },
-    );
-  }
-
-  deletePullKey(user.id);
-  return NextResponse.json({ ok: true });
+export async function DELETE(request: NextRequest) {
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
+  return toNextResponse(deletePullKeyHandler(ctx));
 }

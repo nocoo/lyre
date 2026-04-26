@@ -32,6 +32,7 @@ import {
 import { generateText } from "ai";
 import type { DbTranscriptionJob } from "../db/schema";
 import type { JobStatus } from "../lib/types";
+import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
 
 // ── Types ──
 
@@ -52,10 +53,13 @@ export interface JobPollResult {
  * Returns the updated job and whether its status changed.
  * Throws on unrecoverable ASR provider errors (caller should handle).
  */
+// optional for back-compat with legacy tests; always pass ctx.env from handlers
 export async function pollJob(
   job: DbTranscriptionJob,
   provider: AsrProvider,
+  env?: LyreEnv,
 ): Promise<JobPollResult> {
+  const e = env ?? loadEnvFromProcess();
   // Already terminal — nothing to do
   if (job.status === "SUCCEEDED" || job.status === "FAILED") {
     return { job, previousStatus: null, changed: false };
@@ -105,7 +109,7 @@ export async function pollJob(
       });
 
       // Archive raw result to OSS (best-effort)
-      archiveRawResult(job.id, rawResult).catch((err) => {
+      archiveRawResult(job.id, rawResult, e).catch((err) => {
         console.warn("Failed to archive raw ASR result to OSS:", err);
       });
 
@@ -157,14 +161,15 @@ export async function pollJob(
 async function archiveRawResult(
   jobId: string,
   rawResult: unknown,
+  env: LyreEnv,
 ): Promise<void> {
-  if (process.env.SKIP_OSS_ARCHIVE === "1") return;
+  if (env.SKIP_OSS_ARCHIVE === "1") return;
 
   const key = makeResultKey(jobId, "transcription.json");
   const body = JSON.stringify(rawResult);
   const contentType = "application/json";
 
-  const uploadUrl = presignPut(key, contentType, 900);
+  const uploadUrl = presignPut(key, contentType, 900, undefined, env);
 
   const response = await fetch(uploadUrl, {
     method: "PUT",

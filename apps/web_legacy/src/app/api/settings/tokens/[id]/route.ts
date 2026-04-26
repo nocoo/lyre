@@ -1,28 +1,23 @@
 /**
- * DELETE /api/settings/tokens/[id] — Revoke (delete) a device token
+ * DELETE /api/settings/tokens/[id] — Revoke a device token
  */
 
-import { NextResponse } from "next/server";
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
-import { deviceTokensRepo } from "@lyre/api/db/repositories";
+import type { NextRequest } from "next/server";
+import {
+  buildContext,
+  toNextResponse,
+  unauthorized401,
+} from "@/lib/handler-adapter";
+import { deleteTokenHandler } from "@lyre/api/handlers/settings-tokens";
 
 export const dynamic = "force-dynamic";
 
 export async function DELETE(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  const { ctx, unauthorized } = await buildContext(request);
+  if (unauthorized) return unauthorized401();
   const { id } = await params;
-
-  const deleted = deviceTokensRepo.deleteByIdAndUser(id, user.id);
-  if (!deleted) {
-    return NextResponse.json({ error: "Token not found" }, { status: 404 });
-  }
-
-  return NextResponse.json({ deleted: true });
+  return toNextResponse(deleteTokenHandler(ctx, id));
 }

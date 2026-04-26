@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@lyre/api/lib/api-auth";
+import { getCurrentUser } from "@/lib/api-auth-legacy";
 import {
   recordingsRepo,
   transcriptionsRepo,
