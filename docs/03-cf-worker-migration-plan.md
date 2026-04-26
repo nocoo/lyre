@@ -377,7 +377,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 
 **验收**：根 `bun install` 成功；`bun run legacy:test` + `bun run legacy:test:e2e` 全绿；`apps/web_legacy/database/lyre.db` 路径仍工作。
 
-### Wave B — 抽离 `@lyre/api` 包  ⬜
+### Wave B — 抽离 `@lyre/api` 包  ✅ 2026-04-26
 
 > 完全照抄 backy Wave 1 + Wave 2 的方法论。在 lyre 上对应的动作：
 
@@ -492,7 +492,7 @@ import `next/*`。
 - `packages/api/eslint.config.mjs`（tseslint strict，无 Next/React）
 - 根 `package.json` fan-out `lint` / `typecheck` / `test` / `test:coverage` 到三个 workspace（web_legacy + api + packages/api）
 
-#### B.5 — JobManager 收尾（**不删**，仅准备 cron handler）
+#### B.5 — JobManager 收尾（**不删**，仅准备 cron handler）  ✅ 2026-04-26
 
 按决策点 8 锁定的"保留 legacy SSE，新 worker 不挂"策略：
 - ❌ **不**删除 `services/job-manager*.ts`、`services/job-event-hub.ts`、`hooks/use-job-events.ts`、`/api/jobs/events/route.ts` —— legacy `apps/web_legacy` 期间继续依赖这些跑 SSE

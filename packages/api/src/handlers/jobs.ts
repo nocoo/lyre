@@ -45,3 +45,45 @@ export async function getJobHandler(
     );
   }
 }
+
+export interface CronTickResult {
+  scanned: number;
+  changed: number;
+  failed: number;
+  errors: Array<{ jobId: string; message: string }>;
+}
+
+/**
+ * Cron tick: poll all active (PENDING/RUNNING) ASR jobs once.
+ *
+ * Replaces the legacy in-process JobManager singleton on the new worker
+ * (decision 8 — A+C hybrid). Wired into the worker's `scheduled()` export
+ * so Cloudflare Cron Triggers drive ASR polling. Legacy `JobManager` keeps
+ * running in the Next.js process until Wave E.
+ */
+export async function cronTickHandler(
+  ctx: RuntimeContext,
+): Promise<CronTickResult> {
+  const provider = getAsrProvider(ctx.env);
+  const active = jobsRepo.findActive();
+  const result: CronTickResult = {
+    scanned: active.length,
+    changed: 0,
+    failed: 0,
+    errors: [],
+  };
+
+  for (const job of active) {
+    try {
+      const out = await pollJob(job, provider, ctx.env);
+      if (out.changed) result.changed += 1;
+    } catch (error) {
+      result.failed += 1;
+      result.errors.push({
+        jobId: job.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return result;
+}
