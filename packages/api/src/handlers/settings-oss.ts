@@ -2,11 +2,7 @@
  * Handlers for `/api/settings/oss` and `/api/settings/oss/cleanup`.
  */
 
-import {
-  usersRepo,
-  recordingsRepo,
-  jobsRepo,
-} from "../db/repositories";
+import { makeRepos } from "../db/repositories";
 import { listObjects, deleteObjects, type OssObject } from "../services/oss";
 import type { RuntimeContext } from "../runtime/context";
 import {
@@ -68,19 +64,20 @@ export async function ossScanHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
+  const { users, recordings, jobs } = makeRepos(ctx.db);
   const [uploadObjects, resultObjects] = await Promise.all([
     listObjects("uploads/", undefined, ctx.env),
     listObjects("results/", undefined, ctx.env),
   ]);
-  const allUsers = usersRepo.findAll();
+  const allUsers = users.findAll();
   const userMap = new Map(allUsers.map((u) => [u.id, u]));
   const jobUserMap = new Map<string, string>();
   const recordingIdSet = new Set<string>();
   for (const u of allUsers) {
-    const recs = recordingsRepo.findAll(u.id);
+    const recs = recordings.findAll(u.id);
     for (const rec of recs) {
       recordingIdSet.add(rec.id);
-      for (const job of jobsRepo.findByRecordingId(rec.id)) {
+      for (const job of jobs.findByRecordingId(rec.id)) {
         jobUserMap.set(job.id, u.id);
       }
     }
@@ -108,10 +105,10 @@ export async function ossScanHandler(
         key: o.key,
         size: o.size,
         lastModified: o.lastModified,
-        hasDbRecord: jobsRepo.findById(jobId) !== undefined,
+        hasDbRecord: jobs.findById(jobId) !== undefined,
       })),
       totalSize: objects.reduce((s, o) => s + o.size, 0),
-      hasDbRecord: jobsRepo.findById(jobId) !== undefined,
+      hasDbRecord: jobs.findById(jobId) !== undefined,
     };
     const userId = jobUserMap.get(jobId);
     if (userId) {
@@ -250,6 +247,7 @@ export async function ossCleanupHandler(
   body: OssCleanupInput,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
+  const { recordings, jobs } = makeRepos(ctx.db);
   const { keys } = body;
   if (!Array.isArray(keys) || keys.length === 0) {
     return badRequest("keys must be a non-empty array");
@@ -271,7 +269,7 @@ export async function ossCleanupHandler(
         continue;
       }
       const recordingId = parts[2]!;
-      if (recordingsRepo.findById(recordingId)) skipped.push(key);
+      if (recordings.findById(recordingId)) skipped.push(key);
       else confirmedOrphans.push(key);
     } else if (key.startsWith("results/")) {
       const parts = key.split("/");
@@ -280,7 +278,7 @@ export async function ossCleanupHandler(
         continue;
       }
       const jobId = parts[1]!;
-      if (jobsRepo.findById(jobId)) skipped.push(key);
+      if (jobs.findById(jobId)) skipped.push(key);
       else confirmedOrphans.push(key);
     } else {
       skipped.push(key);

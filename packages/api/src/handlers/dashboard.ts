@@ -5,7 +5,7 @@
  * all objects (slower). Both are returned in a single response.
  */
 
-import { recordingsRepo, jobsRepo } from "../db/repositories";
+import { makeRepos } from "../db/repositories";
 import { listObjects } from "../services/oss";
 import type { RecordingStatus } from "../lib/types";
 import type { RuntimeContext } from "../runtime/context";
@@ -91,7 +91,8 @@ export async function dashboardHandler(
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const userId = ctx.user.id;
-  const allRecordings = recordingsRepo.findAll(userId);
+  const { recordings, jobs } = makeRepos(ctx.db);
+  const allRecordings = recordings.findAll(userId);
 
   const statusCounts: Record<RecordingStatus, number> = {
     uploaded: 0,
@@ -161,7 +162,7 @@ export async function dashboardHandler(
   const recordingIdSet = new Set(allRecordings.map((r) => r.id));
   const userJobIdSet = new Set<string>();
   for (const rec of allRecordings) {
-    for (const job of jobsRepo.findByRecordingId(rec.id)) {
+    for (const job of jobs.findByRecordingId(rec.id)) {
       userJobIdSet.add(job.id);
     }
   }
@@ -201,7 +202,7 @@ export async function dashboardHandler(
     if (!userJobIdSet.has(jobId)) continue;
     resultTotalFiles++;
     resultTotalSize += obj.size;
-    const job = jobsRepo.findById(jobId);
+    const job = jobs.findById(jobId);
     if (!job) {
       resultOrphanFiles++;
       resultOrphanSize += obj.size;

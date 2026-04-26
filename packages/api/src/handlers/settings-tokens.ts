@@ -2,7 +2,7 @@
  * Handlers for `/api/settings/tokens` and `/api/settings/tokens/[id]`.
  */
 
-import { deviceTokensRepo } from "../db/repositories";
+import { makeRepos } from "../db/repositories";
 import { hashToken } from "../lib/api-auth";
 import type { RuntimeContext } from "../runtime/context";
 import {
@@ -15,7 +15,8 @@ import {
 
 export function listTokensHandler(ctx: RuntimeContext): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const tokens = deviceTokensRepo.findByUserId(ctx.user.id);
+  const { deviceTokens } = makeRepos(ctx.db);
+  const tokens = deviceTokens.findByUserId(ctx.user.id);
   const items = tokens.map((t) => ({
     id: t.id,
     name: t.name,
@@ -35,11 +36,12 @@ export function createTokenHandler(
   if (name.length > 100) {
     return badRequest("Token name must be 100 characters or less");
   }
+  const { deviceTokens } = makeRepos(ctx.db);
   const rawBytes = crypto.getRandomValues(new Uint8Array(48));
   const rawToken = `lyre_${Buffer.from(rawBytes).toString("base64url")}`;
   const tokenHash = hashToken(rawToken);
   const id = crypto.randomUUID();
-  const record = deviceTokensRepo.create({
+  const record = deviceTokens.create({
     id,
     userId: ctx.user.id,
     name,
@@ -61,7 +63,8 @@ export function deleteTokenHandler(
   id: string,
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const deleted = deviceTokensRepo.deleteByIdAndUser(id, ctx.user.id);
+  const { deviceTokens } = makeRepos(ctx.db);
+  const deleted = deviceTokens.deleteByIdAndUser(id, ctx.user.id);
   if (!deleted) return notFound("Token not found");
   return json({ deleted: true });
 }

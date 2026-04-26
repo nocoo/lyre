@@ -5,7 +5,7 @@
  * (decision 8 — kept on legacy until Wave E).
  */
 
-import { jobsRepo, recordingsRepo } from "../db/repositories";
+import { makeRepos } from "../db/repositories";
 import { getAsrProvider } from "../services/asr-provider";
 import { pollJob } from "../services/job-processor";
 import type { RuntimeContext } from "../runtime/context";
@@ -22,10 +22,11 @@ export async function getJobHandler(
   id: string,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const job = jobsRepo.findById(id);
+  const { jobs, recordings } = makeRepos(ctx.db);
+  const job = jobs.findById(id);
   if (!job) return notFound("Job not found");
 
-  const recording = recordingsRepo.findById(job.recordingId);
+  const recording = recordings.findById(job.recordingId);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Job not found");
   }
@@ -65,7 +66,8 @@ export async function cronTickHandler(
   ctx: RuntimeContext,
 ): Promise<CronTickResult> {
   const provider = getAsrProvider(ctx.env);
-  const active = jobsRepo.findActive();
+  const { jobs } = makeRepos(ctx.db);
+  const active = jobs.findActive();
   const result: CronTickResult = {
     scanned: active.length,
     changed: 0,

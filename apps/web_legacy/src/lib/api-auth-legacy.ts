@@ -18,6 +18,7 @@ import {
   setAuthSessionProvider,
 } from "@lyre/api/lib/api-auth";
 import { loadEnvFromProcess } from "@lyre/api/runtime/env";
+import { db as legacyDb } from "@lyre/api/db";
 import type { DbUser } from "@lyre/api/db/schema";
 
 export { hashToken, setAuthSessionProvider };
@@ -29,5 +30,6 @@ export async function getCurrentUser(): Promise<DbUser | null> {
   return getCurrentUserCore({
     headers: hdrs as unknown as Headers,
     env: loadEnvFromProcess(),
+    db: legacyDb,
   });
 }

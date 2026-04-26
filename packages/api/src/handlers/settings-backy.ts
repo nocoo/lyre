@@ -4,7 +4,7 @@
  * and the public `/api/backy/pull` webhook.
  */
 
-import { settingsRepo, usersRepo } from "../db/repositories";
+import { makeRepos } from "../db/repositories";
 import {
   readBackySettings,
   readPullKey,
@@ -45,11 +45,12 @@ export function updateBackySettingsHandler(
   body: { webhookUrl?: string; apiKey?: string },
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
+  const { settings } = makeRepos(ctx.db);
   if (body.webhookUrl !== undefined) {
-    settingsRepo.upsert(ctx.user.id, "backy.webhookUrl", body.webhookUrl);
+    settings.upsert(ctx.user.id, "backy.webhookUrl", body.webhookUrl);
   }
   if (body.apiKey !== undefined) {
-    settingsRepo.upsert(ctx.user.id, "backy.apiKey", body.apiKey);
+    settings.upsert(ctx.user.id, "backy.apiKey", body.apiKey);
   }
   const updated = readBackySettings(ctx.user.id);
   return json({
@@ -181,7 +182,7 @@ export async function backyPullPostHandler(
       422,
     );
   }
-  const user = usersRepo.findById(userId);
+  const user = makeRepos(ctx.db).users.findById(userId);
   if (!user) {
     return json({ ok: false, error: "User not found" }, 401);
   }

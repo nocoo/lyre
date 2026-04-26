@@ -2,7 +2,7 @@
  * Handlers for `/api/folders` — folder CRUD.
  */
 
-import { foldersRepo } from "../db/repositories";
+import { makeRepos } from "../db/repositories";
 import type { RuntimeContext } from "../runtime/context";
 import {
   json,
@@ -14,8 +14,8 @@ import {
 
 export function listFoldersHandler(ctx: RuntimeContext): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const folders = foldersRepo.findByUserId(ctx.user.id);
-  return json({ items: folders });
+  const { folders } = makeRepos(ctx.db);
+  return json({ items: folders.findByUserId(ctx.user.id) });
 }
 
 export function createFolderHandler(
@@ -26,8 +26,9 @@ export function createFolderHandler(
   if (!body.name?.trim()) {
     return badRequest("Missing required field: name");
   }
+  const { folders } = makeRepos(ctx.db);
   const trimmedIcon = body.icon?.trim();
-  const folder = foldersRepo.create({
+  const folder = folders.create({
     id: crypto.randomUUID(),
     userId: ctx.user.id,
     name: body.name.trim(),
@@ -41,7 +42,8 @@ export function getFolderHandler(
   id: string,
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const folder = foldersRepo.findByIdAndUser(id, ctx.user.id);
+  const { folders } = makeRepos(ctx.db);
+  const folder = folders.findByIdAndUser(id, ctx.user.id);
   if (!folder) return notFound("Folder not found");
   return json(folder);
 }
@@ -52,13 +54,14 @@ export function updateFolderHandler(
   body: { name?: string; icon?: string },
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const existing = foldersRepo.findByIdAndUser(id, ctx.user.id);
+  const { folders } = makeRepos(ctx.db);
+  const existing = folders.findByIdAndUser(id, ctx.user.id);
   if (!existing) return notFound("Folder not found");
 
-  const updates: Parameters<typeof foldersRepo.update>[1] = {};
+  const updates: Parameters<typeof folders.update>[1] = {};
   if (body.name !== undefined) updates.name = body.name.trim();
   if (body.icon !== undefined) updates.icon = body.icon.trim();
-  const updated = foldersRepo.update(id, updates);
+  const updated = folders.update(id, updates);
   if (!updated) return json({ error: "Failed to update folder" }, 500);
   return json(updated);
 }
@@ -68,8 +71,9 @@ export function deleteFolderHandler(
   id: string,
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const existing = foldersRepo.findByIdAndUser(id, ctx.user.id);
+  const { folders } = makeRepos(ctx.db);
+  const existing = folders.findByIdAndUser(id, ctx.user.id);
   if (!existing) return notFound("Folder not found");
-  foldersRepo.delete(id);
+  folders.delete(id);
   return json({ deleted: true });
 }

@@ -71,7 +71,7 @@ export async function buildContext(
 ): Promise<{ ctx: RuntimeContext; unauthorized: boolean }> {
   const env: LyreEnv = loadEnvFromProcess();
   const headers = request.headers;
-  const user = await getCurrentUser({ headers, env });
+  const user = await getCurrentUser({ headers, env, db: legacyDb });
   const requireAuth = opts.requireAuth ?? true;
   return {
     ctx: { env, db: legacyDb, user, headers },

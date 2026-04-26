@@ -19,7 +19,8 @@
  */
 
 import { createHash } from "crypto";
-import { usersRepo, deviceTokensRepo } from "../db/repositories";
+import { makeUsersRepo, makeDeviceTokensRepo } from "../db/repositories";
+import type { LyreDb } from "../db/types";
 import type { DbUser } from "../db/schema";
 import type { LyreEnv } from "../runtime/env";
 
@@ -49,6 +50,8 @@ export interface GetCurrentUserOptions {
   headers: Headers;
   /** Strongly-typed env snapshot — controls Playwright bypass branch. */
   env: LyreEnv;
+  /** Per-request DB handle — Wave B.6.b removes the global singleton. */
+  db: LyreDb;
 }
 
 /**
@@ -61,7 +64,9 @@ export interface GetCurrentUserOptions {
 export async function getCurrentUser(
   opts: GetCurrentUserOptions,
 ): Promise<DbUser | null> {
-  const { headers, env } = opts;
+  const { headers, env, db } = opts;
+  const usersRepo = makeUsersRepo(db);
+  const deviceTokensRepo = makeDeviceTokensRepo(db);
 
   // In E2E/Playwright mode, skip auth and use a test user.
   if (env.PLAYWRIGHT === "1" && env.NODE_ENV !== "production") {

@@ -9,13 +9,7 @@
  *   not in plan). Their route files remain as thin direct implementations.
  */
 
-import {
-  recordingsRepo,
-  transcriptionsRepo,
-  jobsRepo,
-  foldersRepo,
-  tagsRepo,
-} from "../db/repositories";
+import { makeRepos, type RecordingsRepo } from "../db/repositories";
 import {
   presignGet,
   deleteObject,
@@ -90,7 +84,8 @@ export function listRecordingsHandler(
   const filterStatus = status === "all" ? undefined : (status as RecordingStatus);
   const filterQuery = input.query || undefined;
 
-  const opts: Parameters<typeof recordingsRepo.findByUserId>[1] = {
+  const repos = makeRepos(ctx.db);
+  const opts: Parameters<RecordingsRepo["findByUserId"]>[1] = {
     sortBy,
     sortDir,
     page,
@@ -104,18 +99,18 @@ export function listRecordingsHandler(
     opts.folderId = input.folderId;
   }
 
-  const { items, total } = recordingsRepo.findByUserId(ctx.user.id, opts);
-  const userFolders = foldersRepo.findByUserId(ctx.user.id);
+  const { items, total } = repos.recordings.findByUserId(ctx.user.id, opts);
+  const userFolders = repos.folders.findByUserId(ctx.user.id);
   const folderMap = new Map(userFolders.map((f) => [f.id, f]));
 
-  const recordings = items.map((row) => ({
+  const mapped = items.map((row) => ({
     ...row,
     folder: row.folderId ? folderMap.get(row.folderId) ?? null : null,
-    resolvedTags: tagsRepo.findTagsForRecording(row.id),
+    resolvedTags: repos.tags.findTagsForRecording(row.id),
   }));
 
   const totalPages = Math.ceil(total / pageSize);
-  return json({ items: recordings, total, page, pageSize, totalPages });
+  return json({ items: mapped, total, page, pageSize, totalPages });
 }
 
 export interface CreateRecordingInput {
@@ -143,8 +138,9 @@ export function createRecordingHandler(
     return badRequest("Missing required fields: title, fileName, ossKey");
   }
   const id = body.id ?? crypto.randomUUID();
+  const repos = makeRepos(ctx.db);
   try {
-    const recording = recordingsRepo.create({
+    const recording = repos.recordings.create({
       id,
       userId: ctx.user.id,
       title: body.title,
@@ -161,12 +157,12 @@ export function createRecordingHandler(
     });
     const tagIds = body.tagIds ?? body.tags ?? [];
     if (tagIds.length > 0) {
-      tagsRepo.setTagsForRecording(recording.id, tagIds);
+      repos.tags.setTagsForRecording(recording.id, tagIds);
     }
     return json(
       {
         ...recording,
-        resolvedTags: tagsRepo.findTagsForRecording(recording.id),
+        resolvedTags: repos.tags.findTagsForRecording(recording.id),
       },
       201,
     );
@@ -181,16 +177,17 @@ export function getRecordingHandler(
   id: string,
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const recording = recordingsRepo.findById(id);
+  const repos = makeRepos(ctx.db);
+  const recording = repos.recordings.findById(id);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
-  const dbTranscription = transcriptionsRepo.findByRecordingId(id);
-  const latestJob = jobsRepo.findLatestByRecordingId(id) ?? null;
+  const dbTranscription = repos.transcriptions.findByRecordingId(id);
+  const latestJob = repos.jobs.findLatestByRecordingId(id) ?? null;
   const transcription = dbTranscription
     ? {
         ...dbTranscription,
-        sentences: transcriptionsRepo.parseSentences(
+        sentences: repos.transcriptions.parseSentences(
           dbTranscription.sentences,
         ) as TranscriptionSentence[],
       }
@@ -200,9 +197,9 @@ export function getRecordingHandler(
     transcription,
     latestJob,
     folder: recording.folderId
-      ? foldersRepo.findById(recording.folderId) ?? null
+      ? repos.folders.findById(recording.folderId) ?? null
       : null,
-    resolvedTags: tagsRepo.findTagsForRecording(id),
+    resolvedTags: repos.tags.findTagsForRecording(id),
   };
   return json(detail);
 }
@@ -222,23 +219,24 @@ export function updateRecordingHandler(
   body: UpdateRecordingInput,
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const existing = recordingsRepo.findById(id);
+  const repos = makeRepos(ctx.db);
+  const existing = repos.recordings.findById(id);
   if (!existing || existing.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
-  const updates: Parameters<typeof recordingsRepo.update>[1] = {};
+  const updates: Parameters<RecordingsRepo["update"]>[1] = {};
   if (body.title !== undefined) updates.title = body.title;
   if (body.description !== undefined) updates.description = body.description;
   if (body.notes !== undefined) updates.notes = body.notes;
   if (body.folderId !== undefined) updates.folderId = body.folderId;
   if (body.recordedAt !== undefined) updates.recordedAt = body.recordedAt;
 
-  const updated = recordingsRepo.update(id, updates);
+  const updated = repos.recordings.update(id, updates);
   if (!updated) return serverError("Failed to update recording");
   if (body.tagIds !== undefined) {
-    tagsRepo.setTagsForRecording(id, body.tagIds);
+    repos.tags.setTagsForRecording(id, body.tagIds);
   }
-  return json({ ...updated, resolvedTags: tagsRepo.findTagsForRecording(id) });
+  return json({ ...updated, resolvedTags: repos.tags.findTagsForRecording(id) });
 }
 
 /**
@@ -251,14 +249,15 @@ export async function deleteRecordingHandler(
   id: string,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const existing = recordingsRepo.findById(id);
+  const repos = makeRepos(ctx.db);
+  const existing = repos.recordings.findById(id);
   if (!existing || existing.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
-  const jobs = jobsRepo.findByRecordingId(id);
-  const jobIds = jobs.map((j) => j.id);
+  const recordingJobs = repos.jobs.findByRecordingId(id);
+  const jobIds = recordingJobs.map((j) => j.id);
 
-  recordingsRepo.deleteCascade(id);
+  repos.recordings.deleteCascade(id);
 
   if (existing.ossKey) {
     deleteObject(existing.ossKey, undefined, ctx.env).catch(() => {
@@ -287,22 +286,23 @@ export async function batchDeleteRecordingsHandler(
   if (ids.length > MAX_BATCH_SIZE) {
     return badRequest(`Batch size exceeds maximum of ${MAX_BATCH_SIZE}`);
   }
+  const repos = makeRepos(ctx.db);
   const ownedIds: string[] = [];
   const ossKeys: string[] = [];
   const jobIds: string[] = [];
   for (const id of ids) {
-    const rec = recordingsRepo.findById(id);
+    const rec = repos.recordings.findById(id);
     if (rec && rec.userId === ctx.user.id) {
       ownedIds.push(id);
       if (rec.ossKey) ossKeys.push(rec.ossKey);
-      for (const job of jobsRepo.findByRecordingId(id)) {
+      for (const job of repos.jobs.findByRecordingId(id)) {
         jobIds.push(job.id);
       }
     }
   }
   if (ownedIds.length === 0) return json({ deleted: 0 });
 
-  const deleted = recordingsRepo.deleteCascadeMany(ownedIds);
+  const deleted = repos.recordings.deleteCascadeMany(ownedIds);
   for (const key of ossKeys) {
     deleteObject(key, undefined, ctx.env).catch(() => {
       console.warn(`Failed to delete OSS object: ${key}`);
@@ -335,7 +335,8 @@ export function playUrlHandler(
   id: string,
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const recording = recordingsRepo.findById(id);
+  const { recordings } = makeRepos(ctx.db);
+  const recording = recordings.findById(id);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
@@ -348,7 +349,8 @@ export function downloadUrlHandler(
   id: string,
 ): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const recording = recordingsRepo.findById(id);
+  const { recordings } = makeRepos(ctx.db);
+  const recording = recordings.findById(id);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
@@ -374,11 +376,12 @@ export async function wordsHandler(
   id: string,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const recording = recordingsRepo.findById(id);
+  const { recordings, jobs } = makeRepos(ctx.db);
+  const recording = recordings.findById(id);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
-  const job = jobsRepo.findLatestByRecordingId(id);
+  const job = jobs.findLatestByRecordingId(id);
   if (!job || job.status !== "SUCCEEDED") {
     return notFound("No completed transcription found");
   }

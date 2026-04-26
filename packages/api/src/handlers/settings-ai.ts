@@ -3,7 +3,7 @@
  */
 
 import { generateText } from "ai";
-import { settingsRepo } from "../db/repositories";
+import { makeRepos, type SettingsRepo } from "../db/repositories";
 import {
   isValidProvider,
   resolveAiConfig,
@@ -28,8 +28,8 @@ interface AiSettings {
   sdkType: SdkType | "";
 }
 
-function readAiSettings(userId: string): AiSettings {
-  const all = settingsRepo.findByUserId(userId);
+function readAiSettings(settings: SettingsRepo, userId: string): AiSettings {
+  const all = settings.findByUserId(userId);
   const map = new Map(all.map((s) => [s.key, s.value]));
   return {
     provider: (map.get("ai.provider") ?? "") as AiProvider | "",
@@ -48,11 +48,12 @@ function maskApiKey(key: string): string {
 
 export function getAiSettingsHandler(ctx: RuntimeContext): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const settings = readAiSettings(ctx.user.id);
+  const { settings } = makeRepos(ctx.db);
+  const aiSettings = readAiSettings(settings, ctx.user.id);
   return json({
-    ...settings,
-    apiKey: maskApiKey(settings.apiKey),
-    hasApiKey: !!settings.apiKey,
+    ...aiSettings,
+    apiKey: maskApiKey(aiSettings.apiKey),
+    hasApiKey: !!aiSettings.apiKey,
   });
 }
 
@@ -81,20 +82,21 @@ export function updateAiSettingsHandler(
     }
   }
   const userId = ctx.user.id;
+  const { settings } = makeRepos(ctx.db);
   if (body.provider !== undefined)
-    settingsRepo.upsert(userId, "ai.provider", body.provider);
+    settings.upsert(userId, "ai.provider", body.provider);
   if (body.apiKey !== undefined)
-    settingsRepo.upsert(userId, "ai.apiKey", body.apiKey);
+    settings.upsert(userId, "ai.apiKey", body.apiKey);
   if (body.model !== undefined)
-    settingsRepo.upsert(userId, "ai.model", body.model);
+    settings.upsert(userId, "ai.model", body.model);
   if (body.autoSummarize !== undefined)
-    settingsRepo.upsert(userId, "ai.autoSummarize", String(body.autoSummarize));
+    settings.upsert(userId, "ai.autoSummarize", String(body.autoSummarize));
   if (body.baseURL !== undefined)
-    settingsRepo.upsert(userId, "ai.baseURL", body.baseURL);
+    settings.upsert(userId, "ai.baseURL", body.baseURL);
   if (body.sdkType !== undefined)
-    settingsRepo.upsert(userId, "ai.sdkType", body.sdkType);
+    settings.upsert(userId, "ai.sdkType", body.sdkType);
 
-  const updated = readAiSettings(userId);
+  const updated = readAiSettings(settings, userId);
   return json({
     ...updated,
     apiKey: maskApiKey(updated.apiKey),
@@ -106,7 +108,8 @@ export async function testAiSettingsHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const all = settingsRepo.findByUserId(ctx.user.id);
+  const { settings } = makeRepos(ctx.db);
+  const all = settings.findByUserId(ctx.user.id);
   const map = new Map(all.map((s) => [s.key, s.value]));
   const provider = map.get("ai.provider") ?? "";
   const apiKey = map.get("ai.apiKey") ?? "";
