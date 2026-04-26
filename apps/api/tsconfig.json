@@ -8,8 +8,8 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
-    "noEmit": true
+    "noEmit": true,
+    "types": ["@cloudflare/workers-types"]
   },
   "include": ["src"]
 }

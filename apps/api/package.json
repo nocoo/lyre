@@ -1,0 +1,9 @@
+{
+  "name": "@lyre/api-worker",
+  "version": "1.6.5",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "placeholder": "echo 'Wave C: Hono Worker — not yet scaffolded'"
+  }
+}

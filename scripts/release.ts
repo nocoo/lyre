@@ -32,7 +32,7 @@ const MACOS_PROJECT_YML = pathResolve(PROJECT_ROOT, "apps/macos/project.yml");
 
 // Workspace package.json files to keep in sync
 const WORKSPACE_PACKAGES = [
-  pathResolve(PROJECT_ROOT, "apps/web/package.json"),
+  pathResolve(PROJECT_ROOT, "apps/web_legacy/package.json"),
 ].filter((p) => existsSync(p));
 
 // ---------------------------------------------------------------------------

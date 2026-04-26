@@ -1,0 +1,14 @@
+{
+  "name": "@lyre/api",
+  "version": "1.6.5",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./contracts/*": "./src/contracts/*.ts",
+    "./services/*": "./src/services/*.ts",
+    "./handlers/*": "./src/handlers/*.ts"
+  },
+  "scripts": {
+    "placeholder": "echo 'Wave B: @lyre/api — not yet populated'"
+  }
+}

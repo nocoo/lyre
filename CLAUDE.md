@@ -2,9 +2,17 @@
 
 Audio recording management and transcription platform with word-level karaoke playback.
 
+> **🚧 Migration in progress** — see `docs/03-cf-worker-migration-plan.md`.
+> Legacy Next.js app lives in `apps/web_legacy/` (FROZEN, bug fixes only). New
+> work goes into `apps/web/` (Vite SPA), `apps/api/` (Hono Worker), or
+> `packages/api/` (`@lyre/api`). Root scripts (`bun dev`/`build`/`test`/...)
+> currently alias to `legacy:*` and target `apps/web_legacy/`.
+
 ## Monorepo Structure
 
-Bun native workspaces monorepo. All web app code lives in `apps/web/`.
+Bun native workspaces monorepo. Legacy Next.js app lives in `apps/web_legacy/`
+during the CF Worker migration; new packages are being scaffolded under
+`apps/web/`, `apps/api/`, `packages/api/`.
 
 ```
 lyre/

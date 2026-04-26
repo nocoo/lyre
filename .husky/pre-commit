@@ -9,8 +9,10 @@ else
   exit 1
 fi
 
-# Web: unit tests + lint
-bun run test && bun run lint
+# Web (legacy): unit tests + lint
+# During the CF Worker migration (docs/03-cf-worker-migration-plan.md) only
+# legacy paths run here. Add new-package hooks once apps/web + apps/api ship.
+bun run legacy:test && bun run legacy:lint
 
 # macOS: unit tests + lint
 cd apps/macos && \
