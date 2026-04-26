@@ -22,6 +22,11 @@ import { getCurrentUser } from "@lyre/api/lib/api-auth";
 import { loadEnvFromProcess, type LyreEnv } from "@lyre/api/runtime/env";
 import type { RuntimeContext } from "@lyre/api/runtime/context";
 import type { HandlerResponse } from "@lyre/api/handlers/http";
+// Side-effect import: registers the NextAuth session provider before any
+// request hits buildContext(). Without this, /api/* routes that don't import
+// `@/auth` themselves would see `getCurrentUser()` return null on every
+// cookie-based session and 401 logged-in browser requests.
+import "./bootstrap-auth";
 
 /** Convert a framework-agnostic HandlerResponse into a NextResponse. */
 export function toNextResponse(result: HandlerResponse): Response {
