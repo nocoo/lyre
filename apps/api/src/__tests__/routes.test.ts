@@ -72,6 +72,33 @@ describe("worker routes — happy path", () => {
     expect(res.status).toBe(200);
   });
 
+  test("GET /api/jobs returns 200 list when authed", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const app = buildAppWithCtx(ctx);
+    const res = await app.request("/api/jobs");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: unknown[] };
+    expect(Array.isArray(body.items)).toBe(true);
+  });
+
+  test("DELETE /api/recordings/batch returns 200 when authed", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const app = buildAppWithCtx(ctx);
+    const res = await app.request("/api/recordings/batch", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids: ["nope"] }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("HEAD /api/backy/pull is mounted (401 without pull-key)", async () => {
+    const ctx = setupAnonCtx();
+    const app = buildAppWithCtx(ctx);
+    const res = await app.request("/api/backy/pull", { method: "HEAD" });
+    expect(res.status).not.toBe(404);
+  });
+
   test("unknown route returns 404", async () => {
     const { ctx } = await setupAuthedCtx();
     const app = buildAppWithCtx(ctx);
@@ -120,6 +147,22 @@ describe("worker routes — auth gates", () => {
     const ctx = setupAnonCtx();
     const app = buildAppWithCtx(ctx);
     const res = await app.request("/api/jobs/some-id");
+    expect(res.status).toBe(401);
+  });
+
+  test("GET /api/jobs returns 401 when no user", async () => {
+    const ctx = setupAnonCtx();
+    const app = buildAppWithCtx(ctx);
+    const res = await app.request("/api/jobs");
+    expect(res.status).toBe(401);
+  });
+
+  test("POST /api/recordings/:id/transcribe returns 401 when no user", async () => {
+    const ctx = setupAnonCtx();
+    const app = buildAppWithCtx(ctx);
+    const res = await app.request("/api/recordings/abc/transcribe", {
+      method: "POST",
+    });
     expect(res.status).toBe(401);
   });
 

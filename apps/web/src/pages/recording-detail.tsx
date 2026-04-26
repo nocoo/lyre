@@ -257,6 +257,7 @@ function RecordingDetailContent({ id }: { id: string }) {
       },
       [id, loadDetail, autoSummarize],
     ),
+    jobId: activeJobId,
     enabled: !!activeJobId,
   });
 

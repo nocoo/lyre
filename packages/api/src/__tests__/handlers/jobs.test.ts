@@ -3,7 +3,11 @@
  */
 
 import { afterEach, describe, expect, it } from "bun:test";
-import { cronTickHandler, getJobHandler } from "../../handlers/jobs";
+import {
+  cronTickHandler,
+  getJobHandler,
+  listJobsHandler,
+} from "../../handlers/jobs";
 import { jobsRepo, recordingsRepo } from "../../db/repositories";
 import {
   resetAsrProvider,
@@ -21,6 +25,83 @@ describe("getJobHandler", () => {
     const { ctx } = await setupAuthedCtx();
     const res = await getJobHandler(ctx, "no-such-job");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("listJobsHandler", () => {
+  it("401 anon", async () => {
+    const res = await listJobsHandler(setupAnonCtx());
+    expect(res.status).toBe(401);
+  });
+  it("returns empty list when user has no recordings", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await listJobsHandler(ctx);
+    expect(res.status).toBe(200);
+    if (res.kind !== "json") throw new Error();
+    expect(res.body).toEqual({ items: [] });
+  });
+  it("returns empty list when filtering by recording owned by another user", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await listJobsHandler(ctx, "no-such-recording");
+    expect(res.status).toBe(200);
+    if (res.kind !== "json") throw new Error();
+    expect(res.body).toEqual({ items: [] });
+  });
+  it("filters by recordingId for the owning user", async () => {
+    const { ctx, user } = await setupAuthedCtx();
+    const rec = await recordingsRepo.create({
+      id: "r1",
+      userId: user.id,
+      title: "t",
+      description: null,
+      fileName: "f.m4a",
+      fileSize: null,
+      duration: null,
+      format: null,
+      sampleRate: null,
+      ossKey: "k",
+      status: "transcribing",
+    });
+    await jobsRepo.create({
+      id: "j1",
+      recordingId: rec.id,
+      taskId: "tk1",
+      requestId: null,
+      status: "PENDING",
+    });
+    const res = await listJobsHandler(ctx, rec.id);
+    expect(res.status).toBe(200);
+    if (res.kind !== "json") throw new Error();
+    const body = res.body as { items: Array<{ id: string }> };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.id).toBe("j1");
+  });
+  it("returns active jobs across user's recordings when no filter", async () => {
+    const { ctx, user } = await setupAuthedCtx();
+    const rec = await recordingsRepo.create({
+      id: "r2",
+      userId: user.id,
+      title: "t",
+      description: null,
+      fileName: "f.m4a",
+      fileSize: null,
+      duration: null,
+      format: null,
+      sampleRate: null,
+      ossKey: "k",
+      status: "transcribing",
+    });
+    await jobsRepo.create({
+      id: "ja",
+      recordingId: rec.id,
+      taskId: "tka",
+      requestId: null,
+      status: "RUNNING",
+    });
+    const res = await listJobsHandler(ctx);
+    if (res.kind !== "json") throw new Error();
+    const body = res.body as { items: Array<{ id: string }> };
+    expect(body.items.map((i) => i.id)).toContain("ja");
   });
 });
 

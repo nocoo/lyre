@@ -440,7 +440,7 @@ function BackupSection() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch("/api/settings/backup");
+      const res = await fetch("/api/settings/backup/export");
       if (!res.ok) {
         toast.error("Failed to export data");
         return;
@@ -478,7 +478,7 @@ function BackupSection() {
         return;
       }
 
-      const res = await fetch("/api/settings/backup", {
+      const res = await fetch("/api/settings/backup/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parsed),

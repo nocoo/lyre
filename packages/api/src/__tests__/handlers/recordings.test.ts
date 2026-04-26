@@ -13,13 +13,19 @@ import {
   playUrlHandler,
   downloadUrlHandler,
   wordsHandler,
+  transcribeRecordingHandler,
 } from "../../handlers/recordings";
 import {
   makeCtx,
   setupAnonCtx,
   setupAuthedCtx,
 } from "../_fixtures/runtime-context";
-import { jobsRepo } from "../../db/repositories";
+import { jobsRepo, recordingsRepo } from "../../db/repositories";
+import {
+  resetAsrProvider,
+  setAsrProvider,
+} from "../../services/asr-provider";
+import type { AsrProvider } from "../../services/asr";
 
 function withMockedFetch<T>(
   impl: (url: string, init?: RequestInit) => Promise<Response>,
@@ -361,5 +367,108 @@ describe("batch delete with owned recording", () => {
     expect(res.status).toBe(200);
     if (res.kind !== "json") throw new Error();
     expect((res.body as { deleted: number }).deleted).toBe(1);
+  });
+});
+
+describe("transcribeRecordingHandler", () => {
+  it("401 anon", async () => {
+    const res = await transcribeRecordingHandler(setupAnonCtx(), "x");
+    expect(res.status).toBe(401);
+  });
+  it("404 unknown recording", async () => {
+    const { ctx, user } = await setupAuthedCtx();
+    const env = makeCtx(user, { env: ossEnv }).env;
+    const res = await transcribeRecordingHandler(
+      { ...ctx, env },
+      "no-such-recording",
+    );
+    expect(res.status).toBe(404);
+  });
+  it("404 when recording belongs to another user", async () => {
+    const { user: owner } = await setupAuthedCtx();
+    const rec = await recordingsRepo.create({
+      id: "r-other",
+      userId: owner.id,
+      title: "t",
+      description: null,
+      fileName: "f.m4a",
+      fileSize: null,
+      duration: null,
+      format: null,
+      sampleRate: null,
+      ossKey: "uploads/o/r/x.m4a",
+      status: "uploaded",
+    });
+    const intruder = makeCtx({
+      ...owner,
+      id: "intruder",
+      email: "intruder@example.com",
+    });
+    const res = await transcribeRecordingHandler(intruder, rec.id);
+    expect(res.status).toBe(404);
+  });
+  it("409 when already transcribing", async () => {
+    const { user } = await setupAuthedCtx();
+    const ctxWithOss = makeCtx(user, { env: ossEnv });
+    const rec = await recordingsRepo.create({
+      id: "r-busy",
+      userId: user.id,
+      title: "t",
+      description: null,
+      fileName: "f.m4a",
+      fileSize: null,
+      duration: null,
+      format: null,
+      sampleRate: null,
+      ossKey: "uploads/u/r/x.m4a",
+      status: "transcribing",
+    });
+    const res = await transcribeRecordingHandler(ctxWithOss, rec.id);
+    expect(res.status).toBe(409);
+  });
+  it("creates job and flips status to transcribing", async () => {
+    const mock: AsrProvider = {
+      submit: async () => ({
+        request_id: "rq-1",
+        output: { task_id: "task-1", task_status: "PENDING" },
+      }),
+      poll: async () => ({
+        request_id: "rq-1",
+        output: { task_id: "task-1", task_status: "RUNNING" },
+      }),
+      fetchResult: async () => ({
+        file_url: "u",
+        audio_info: { format: "m4a", sample_rate: 16000 },
+        transcripts: [],
+      }),
+    };
+    setAsrProvider(mock);
+    try {
+      const { user } = await setupAuthedCtx();
+      const ctx = makeCtx(user, { env: ossEnv });
+      const rec = await recordingsRepo.create({
+        id: "r-go",
+        userId: user.id,
+        title: "t",
+        description: null,
+        fileName: "f.m4a",
+        fileSize: null,
+        duration: null,
+        format: null,
+        sampleRate: null,
+        ossKey: "uploads/u/r/x.m4a",
+        status: "uploaded",
+      });
+      const res = await transcribeRecordingHandler(ctx, rec.id);
+      expect(res.status).toBe(201);
+      if (res.kind !== "json") throw new Error();
+      const job = res.body as { recordingId: string; taskId: string };
+      expect(job.recordingId).toBe(rec.id);
+      expect(job.taskId).toBe("task-1");
+      const after = await recordingsRepo.findById(rec.id);
+      expect(after?.status).toBe("transcribing");
+    } finally {
+      resetAsrProvider();
+    }
   });
 });

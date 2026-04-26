@@ -25,6 +25,7 @@ import { settingsBackup } from "../routes/settings/backup";
 import { settingsBacky } from "../routes/settings/backy";
 import { settingsOss } from "../routes/settings/oss";
 import { settingsTokens } from "../routes/settings/tokens";
+import { backy } from "../routes/backy";
 
 export function buildAppWithCtx(ctx: RuntimeContext) {
   const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -46,6 +47,7 @@ export function buildAppWithCtx(ctx: RuntimeContext) {
   app.route("/api/settings/backy", settingsBacky);
   app.route("/api/settings/oss", settingsOss);
   app.route("/api/settings/tokens", settingsTokens);
+  app.route("/api/backy", backy);
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   return app;
 }

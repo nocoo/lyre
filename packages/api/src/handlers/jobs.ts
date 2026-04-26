@@ -17,6 +17,39 @@ import {
   type HandlerResponse,
 } from "./http";
 
+/**
+ * List jobs scoped to the current user.
+ *
+ * If `recordingId` is provided, returns jobs for that recording (after
+ * verifying ownership). Otherwise returns all currently-active jobs that
+ * belong to recordings owned by the user. Used by the SPA's polling hook
+ * (decision 8 — `useJobEvents` polls instead of SSE).
+ */
+export async function listJobsHandler(
+  ctx: RuntimeContext,
+  recordingId?: string | null,
+): Promise<HandlerResponse> {
+  if (!ctx.user) return unauthorized();
+  const { jobs, recordings } = makeRepos(ctx.db);
+  if (recordingId) {
+    const recording = await recordings.findById(recordingId);
+    if (!recording || recording.userId !== ctx.user.id) {
+      return json({ items: [] });
+    }
+    const items = await jobs.findByRecordingId(recordingId);
+    return json({ items });
+  }
+  const active = await jobs.findActive();
+  const ownedItems = [];
+  for (const job of active) {
+    const rec = await recordings.findById(job.recordingId);
+    if (rec && rec.userId === ctx.user.id) {
+      ownedItems.push(job);
+    }
+  }
+  return json({ items: ownedItems });
+}
+
 export async function getJobHandler(
   ctx: RuntimeContext,
   id: string,

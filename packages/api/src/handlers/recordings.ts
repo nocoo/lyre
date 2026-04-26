@@ -2,11 +2,15 @@
  * Handlers for `/api/recordings` and its sub-routes.
  *
  * Notes:
- * - The `transcribe` and `summarize` sub-routes are NOT extracted as
- *   handlers — `transcribe` depends on the legacy `JobManager` singleton
- *   (kept until Wave E per decision 8) and `summarize` returns a streaming
- *   text response (would need a `stream` branch in HandlerResponse, also
- *   not in plan). Their route files remain as thin direct implementations.
+ * - The `summarize` sub-route is NOT extracted as a handler — it returns
+ *   a streaming text response (would need a `stream` branch in
+ *   HandlerResponse). Its route stays as a thin direct implementation in
+ *   the host app (Worker route file / legacy Next.js route).
+ * - `transcribeRecordingHandler` submits the ASR job and persists it but
+ *   does NOT track via any in-process JobManager. On the new Worker the
+ *   Cron Trigger drives polling (decision 8); on legacy Next.js the route
+ *   wrapper still calls `getJobManager().track(job)` after the handler
+ *   returns.
  */
 
 import { makeRepos, type RecordingsRepo } from "../db/repositories";
@@ -17,6 +21,7 @@ import {
   deleteObjects,
   makeResultKey,
 } from "../services/oss";
+import { getAsrProvider } from "../services/asr-provider";
 import type {
   RecordingDetail,
   RecordingStatus,
@@ -414,5 +419,57 @@ export async function wordsHandler(
     return json({ sentences });
   } catch {
     return serverError("Failed to load word data");
+  }
+}
+
+/**
+ * Submit an ASR transcription job for a recording.
+ *
+ * Returns the persisted job (HTTP 201). The caller is responsible for
+ * driving polling: the new Worker relies on Cron Triggers
+ * (`cronTickHandler`); the legacy Next.js route wrapper still calls
+ * `getJobManager().track(job)` after this handler returns.
+ */
+export async function transcribeRecordingHandler(
+  ctx: RuntimeContext,
+  id: string,
+): Promise<HandlerResponse> {
+  if (!ctx.user) return unauthorized();
+  const repos = makeRepos(ctx.db);
+  const recording = await repos.recordings.findById(id);
+  if (!recording || recording.userId !== ctx.user.id) {
+    return notFound("Recording not found");
+  }
+  if (recording.status === "transcribing") {
+    return json(
+      { error: "Recording is already being transcribed" },
+      409,
+    );
+  }
+
+  try {
+    const audioUrl = presignGet(
+      recording.ossKey,
+      3600,
+      undefined,
+      undefined,
+      ctx.env,
+    );
+    const provider = getAsrProvider(ctx.env);
+    const submitResult = await provider.submit(audioUrl);
+    const job = await repos.jobs.create({
+      id: crypto.randomUUID(),
+      recordingId: id,
+      taskId: submitResult.output.task_id,
+      requestId: submitResult.request_id,
+      status: submitResult.output.task_status,
+    });
+    await repos.recordings.update(id, { status: "transcribing" });
+    return json(job, 201);
+  } catch (error) {
+    console.error("Failed to submit ASR job:", error);
+    return serverError(
+      `Failed to submit transcription job: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   }
 }

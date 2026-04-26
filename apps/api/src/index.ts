@@ -39,6 +39,7 @@ import { settingsBackup } from "./routes/settings/backup";
 import { settingsBacky } from "./routes/settings/backy";
 import { settingsOss } from "./routes/settings/oss";
 import { settingsTokens } from "./routes/settings/tokens";
+import { backy } from "./routes/backy";
 
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -61,6 +62,7 @@ app.route("/api/settings/backup", settingsBackup);
 app.route("/api/settings/backy", settingsBacky);
 app.route("/api/settings/oss", settingsOss);
 app.route("/api/settings/tokens", settingsTokens);
+app.route("/api/backy", backy);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 

@@ -42,10 +42,16 @@ settingsBacky.delete("/pull-key", async (c) =>
   toResponse(c, await deletePullKeyHandler(c.get("runtime"))),
 );
 
-settingsBacky.on("HEAD", "/pull", async (c) =>
-  toResponse(c, await backyPullHeadHandler(c.get("runtime"))),
-);
-
-settingsBacky.post("/pull", async (c) =>
-  toResponse(c, await backyPullPostHandler(c.get("runtime"))),
-);
+// HEAD + POST share `/pull`; Hono's `.on(["HEAD"], ...)` does not survive
+// `app.route()` mounting (HEAD is normally derived from GET), so dispatch
+// by method inside a single `.all()` handler.
+settingsBacky.all("/pull", async (c) => {
+  const method = c.req.method;
+  if (method === "HEAD") {
+    return toResponse(c, await backyPullHeadHandler(c.get("runtime")));
+  }
+  if (method === "POST") {
+    return toResponse(c, await backyPullPostHandler(c.get("runtime")));
+  }
+  return c.json({ error: "Method not allowed" }, 405);
+});

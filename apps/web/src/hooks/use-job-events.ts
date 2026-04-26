@@ -1,16 +1,14 @@
 /**
  * useJobEvents — polling-based replacement for the legacy SSE hook.
  *
- * Per Wave D of the CF Worker migration, the SPA does not consume SSE.
- * This hook polls `/api/jobs/active` (or a single job, see below) on an
- * interval while `enabled` is true and fires `onEvent` whenever a job's
- * status changes since the last tick.
+ * Per Wave D of the CF Worker migration (decision 8), the SPA does not
+ * consume SSE. This hook polls on an interval while `enabled` is true and
+ * fires `onEvent` whenever a job's status changes since the last tick.
  *
- * To minimise blast radius vs. the legacy SSE shape, we keep the same
- * `{ onEvent, enabled }` surface. The polled endpoint is a thin GET to
- * `/api/jobs?recordingId=...` — but since the only known caller filters
- * by `recordingId`, we expose the optional `recordingId` so the hook can
- * narrow the request.
+ * Three modes (mutually exclusive — pass at most one):
+ * - `jobId`        → poll `GET /api/jobs/:id` (preferred when known)
+ * - `recordingId`  → poll `GET /api/jobs?recordingId=...`
+ * - neither        → poll `GET /api/jobs` (all of the user's active jobs)
  */
 
 import { useEffect, useRef } from "react";
@@ -22,19 +20,28 @@ export interface UseJobEventsOptions {
   onEvent: (event: JobEvent) => void;
   /** Whether to poll. Defaults to true. */
   enabled?: boolean;
-  /** Restrict polling to a single recording's active jobs. */
+  /** Poll a single known job. Highest precedence. */
+  jobId?: string | null;
+  /** Restrict polling to a single recording's jobs. */
   recordingId?: string;
   /** Poll interval in ms. Defaults to 5s. */
   intervalMs?: number;
 }
 
+interface JobItem {
+  id: string;
+  recordingId: string;
+  status: string;
+}
+
 interface JobsListResponse {
-  items: Array<{ id: string; recordingId: string; status: string }>;
+  items: JobItem[];
 }
 
 export function useJobEvents({
   onEvent,
   enabled = true,
+  jobId,
   recordingId,
   intervalMs = 5000,
 }: UseJobEventsOptions) {
@@ -52,12 +59,21 @@ export function useJobEvents({
 
     const tick = async () => {
       try {
-        const path = recordingId
-          ? `/api/jobs?recordingId=${encodeURIComponent(recordingId)}`
-          : `/api/jobs`;
-        const data = await apiJson<JobsListResponse>(path);
+        let items: JobItem[];
+        if (jobId) {
+          const job = await apiJson<JobItem>(
+            `/api/jobs/${encodeURIComponent(jobId)}`,
+          );
+          items = [job];
+        } else {
+          const path = recordingId
+            ? `/api/jobs?recordingId=${encodeURIComponent(recordingId)}`
+            : `/api/jobs`;
+          const data = await apiJson<JobsListResponse>(path);
+          items = data.items ?? [];
+        }
         if (cancelled) return;
-        for (const job of data.items ?? []) {
+        for (const job of items) {
           const prev = seen.get(job.id);
           if (prev !== job.status) {
             seen.set(job.id, job.status);
@@ -69,7 +85,6 @@ export function useJobEvents({
           }
         }
       } catch (err) {
-        // 401 already triggers reload via api layer; swallow other errors.
         if (err instanceof ApiError && err.status === 401) return;
       }
     };
@@ -83,5 +98,5 @@ export function useJobEvents({
       cancelled = true;
       clearInterval(handle);
     };
-  }, [enabled, recordingId, intervalMs]);
+  }, [enabled, jobId, recordingId, intervalMs]);
 }

@@ -373,7 +373,7 @@ export function OssStorageSection() {
     setLoading(true);
     setSelectedKeys(new Set());
     try {
-      const res = await fetch("/api/settings/oss");
+      const res = await fetch("/api/settings/oss/scan", { method: "POST" });
       if (!res.ok) throw new Error("Failed to scan OSS");
       const result = (await res.json()) as OssScanResult;
       setData(result);
