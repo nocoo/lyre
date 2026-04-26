@@ -4,8 +4,8 @@ import { resetDb } from "@lyre/api/db";
 import { usersRepo } from "@lyre/api/db/repositories/users";
 import { deviceTokensRepo } from "@lyre/api/db/repositories/device-tokens";
 
-function seedUser() {
-  usersRepo.create({
+async function seedUser() {
+  await usersRepo.create({
     id: "user-1",
     email: "alice@test.com",
     name: "Alice",
@@ -18,15 +18,15 @@ function hashToken(raw: string): string {
 }
 
 describe("deviceTokensRepo", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
-    seedUser();
+    await seedUser();
   });
 
   describe("create", () => {
-    test("creates a new token record", () => {
+    test("creates a new token record", async () => {
       const hash = hashToken("test-token-raw");
-      const token = deviceTokensRepo.create({
+      const token = await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "MacBook Pro",
@@ -40,182 +40,182 @@ describe("deviceTokensRepo", () => {
       expect(token.createdAt).toBeGreaterThan(0);
     });
 
-    test("rejects duplicate token hash", () => {
+    test("rejects duplicate token hash", async () => {
       const hash = hashToken("same-token");
-      deviceTokensRepo.create({
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "Device A",
         tokenHash: hash,
       });
-      expect(() =>
+      await expect(
         deviceTokensRepo.create({
           id: "tok-2",
           userId: "user-1",
           name: "Device B",
           tokenHash: hash,
         }),
-      ).toThrow();
+      ).rejects.toThrow();
     });
   });
 
   describe("findByHash", () => {
-    test("returns token when hash matches", () => {
+    test("returns token when hash matches", async () => {
       const hash = hashToken("lookup-token");
-      deviceTokensRepo.create({
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "My Mac",
         tokenHash: hash,
       });
-      const found = deviceTokensRepo.findByHash(hash);
+      const found = await deviceTokensRepo.findByHash(hash);
       expect(found?.id).toBe("tok-1");
       expect(found?.name).toBe("My Mac");
     });
 
-    test("returns undefined for unknown hash", () => {
-      expect(deviceTokensRepo.findByHash("nonexistent")).toBeUndefined();
+    test("returns undefined for unknown hash", async () => {
+      expect(await deviceTokensRepo.findByHash("nonexistent")).toBeUndefined();
     });
   });
 
   describe("findById", () => {
-    test("returns token when found", () => {
-      deviceTokensRepo.create({
+    test("returns token when found", async () => {
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "Device",
         tokenHash: hashToken("t1"),
       });
-      const found = deviceTokensRepo.findById("tok-1");
+      const found = await deviceTokensRepo.findById("tok-1");
       expect(found?.name).toBe("Device");
     });
 
-    test("returns undefined for unknown id", () => {
-      expect(deviceTokensRepo.findById("nope")).toBeUndefined();
+    test("returns undefined for unknown id", async () => {
+      expect(await deviceTokensRepo.findById("nope")).toBeUndefined();
     });
   });
 
   describe("findByUserId", () => {
-    test("returns all tokens for a user", () => {
-      deviceTokensRepo.create({
+    test("returns all tokens for a user", async () => {
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "Device A",
         tokenHash: hashToken("a"),
       });
-      deviceTokensRepo.create({
+      await deviceTokensRepo.create({
         id: "tok-2",
         userId: "user-1",
         name: "Device B",
         tokenHash: hashToken("b"),
       });
-      const tokens = deviceTokensRepo.findByUserId("user-1");
+      const tokens = await deviceTokensRepo.findByUserId("user-1");
       expect(tokens).toHaveLength(2);
     });
 
-    test("returns empty for unknown user", () => {
-      expect(deviceTokensRepo.findByUserId("nobody")).toEqual([]);
+    test("returns empty for unknown user", async () => {
+      expect(await deviceTokensRepo.findByUserId("nobody")).toEqual([]);
     });
 
-    test("does not return tokens from other users", () => {
-      usersRepo.create({
+    test("does not return tokens from other users", async () => {
+      await usersRepo.create({
         id: "user-2",
         email: "bob@test.com",
         name: "Bob",
         avatarUrl: null,
       });
-      deviceTokensRepo.create({
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "Alice Device",
         tokenHash: hashToken("alice"),
       });
-      deviceTokensRepo.create({
+      await deviceTokensRepo.create({
         id: "tok-2",
         userId: "user-2",
         name: "Bob Device",
         tokenHash: hashToken("bob"),
       });
-      const tokens = deviceTokensRepo.findByUserId("user-1");
+      const tokens = await deviceTokensRepo.findByUserId("user-1");
       expect(tokens).toHaveLength(1);
       expect(tokens[0]!.name).toBe("Alice Device");
     });
   });
 
   describe("touchLastUsed", () => {
-    test("updates lastUsedAt timestamp", () => {
-      deviceTokensRepo.create({
+    test("updates lastUsedAt timestamp", async () => {
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "Device",
         tokenHash: hashToken("t"),
       });
-      const before = deviceTokensRepo.findById("tok-1");
+      const before = await deviceTokensRepo.findById("tok-1");
       expect(before?.lastUsedAt).toBeNull();
 
-      deviceTokensRepo.touchLastUsed("tok-1");
+      await deviceTokensRepo.touchLastUsed("tok-1");
 
-      const after = deviceTokensRepo.findById("tok-1");
+      const after = await deviceTokensRepo.findById("tok-1");
       expect(after?.lastUsedAt).toBeGreaterThan(0);
     });
   });
 
   describe("deleteByIdAndUser", () => {
-    test("deletes token owned by user", () => {
-      deviceTokensRepo.create({
+    test("deletes token owned by user", async () => {
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "Device",
         tokenHash: hashToken("t"),
       });
-      expect(deviceTokensRepo.deleteByIdAndUser("tok-1", "user-1")).toBe(true);
-      expect(deviceTokensRepo.findById("tok-1")).toBeUndefined();
+      expect(await deviceTokensRepo.deleteByIdAndUser("tok-1", "user-1")).toBe(true);
+      expect(await deviceTokensRepo.findById("tok-1")).toBeUndefined();
     });
 
-    test("does not delete token owned by another user", () => {
-      usersRepo.create({
+    test("does not delete token owned by another user", async () => {
+      await usersRepo.create({
         id: "user-2",
         email: "bob@test.com",
         name: "Bob",
         avatarUrl: null,
       });
-      deviceTokensRepo.create({
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-2",
         name: "Bob Device",
         tokenHash: hashToken("bob"),
       });
       // user-1 tries to delete user-2's token
-      expect(deviceTokensRepo.deleteByIdAndUser("tok-1", "user-1")).toBe(false);
-      expect(deviceTokensRepo.findById("tok-1")).toBeDefined();
+      expect(await deviceTokensRepo.deleteByIdAndUser("tok-1", "user-1")).toBe(false);
+      expect(await deviceTokensRepo.findById("tok-1")).toBeDefined();
     });
 
-    test("returns false for nonexistent token", () => {
-      expect(deviceTokensRepo.deleteByIdAndUser("nope", "user-1")).toBe(false);
+    test("returns false for nonexistent token", async () => {
+      expect(await deviceTokensRepo.deleteByIdAndUser("nope", "user-1")).toBe(false);
     });
   });
 
   describe("deleteByUserId", () => {
-    test("deletes all tokens for user", () => {
-      deviceTokensRepo.create({
+    test("deletes all tokens for user", async () => {
+      await deviceTokensRepo.create({
         id: "tok-1",
         userId: "user-1",
         name: "A",
         tokenHash: hashToken("a"),
       });
-      deviceTokensRepo.create({
+      await deviceTokensRepo.create({
         id: "tok-2",
         userId: "user-1",
         name: "B",
         tokenHash: hashToken("b"),
       });
-      const deleted = deviceTokensRepo.deleteByUserId("user-1");
+      const deleted = await deviceTokensRepo.deleteByUserId("user-1");
       expect(deleted).toBe(2);
-      expect(deviceTokensRepo.findByUserId("user-1")).toEqual([]);
+      expect(await deviceTokensRepo.findByUserId("user-1")).toEqual([]);
     });
 
-    test("returns 0 when no tokens for user", () => {
-      expect(deviceTokensRepo.deleteByUserId("nobody")).toBe(0);
+    test("returns 0 when no tokens for user", async () => {
+      expect(await deviceTokensRepo.deleteByUserId("nobody")).toBe(0);
     });
   });
 });

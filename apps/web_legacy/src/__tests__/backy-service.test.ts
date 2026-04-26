@@ -15,8 +15,8 @@ import {
   type BackyHistoryResponse,
 } from "@lyre/api/services/backy";
 
-function seedUser() {
-  usersRepo.create({
+async function seedUser() {
+  await usersRepo.create({
     id: "user-1",
     email: "alice@test.com",
     name: "Alice",
@@ -25,32 +25,32 @@ function seedUser() {
 }
 
 describe("backy service", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
-    seedUser();
+    await seedUser();
   });
 
   // ── maskApiKey ──
 
   describe("maskApiKey", () => {
-    test("masks all but last 4 characters", () => {
+    test("masks all but last 4 characters", async () => {
       expect(maskApiKey("sk-1234567890abcdef")).toBe("***************cdef");
     });
 
-    test("returns empty string for empty input", () => {
+    test("returns empty string for empty input", async () => {
       expect(maskApiKey("")).toBe("");
     });
 
-    test("returns key as-is when 4 characters or fewer", () => {
+    test("returns key as-is when 4 characters or fewer", async () => {
       expect(maskApiKey("abcd")).toBe("abcd");
       expect(maskApiKey("abc")).toBe("abc");
     });
 
-    test("handles exactly 5 characters", () => {
+    test("handles exactly 5 characters", async () => {
       expect(maskApiKey("12345")).toBe("*2345");
     });
 
-    test("handles single character", () => {
+    test("handles single character", async () => {
       expect(maskApiKey("x")).toBe("x");
     });
   });
@@ -60,26 +60,26 @@ describe("backy service", () => {
   describe("getEnvironment", () => {
     const originalEnv = process.env.NODE_ENV;
 
-    afterEach(() => {
+    afterEach(async () => {
       (process.env as Record<string, string | undefined>).NODE_ENV = originalEnv;
     });
 
-    test("returns 'dev' when NODE_ENV is not production", () => {
+    test("returns 'dev' when NODE_ENV is not production", async () => {
       (process.env as Record<string, string | undefined>).NODE_ENV = "development";
       expect(getEnvironment()).toBe("dev");
     });
 
-    test("returns 'dev' when NODE_ENV is test", () => {
+    test("returns 'dev' when NODE_ENV is test", async () => {
       (process.env as Record<string, string | undefined>).NODE_ENV = "test";
       expect(getEnvironment()).toBe("dev");
     });
 
-    test("returns 'prod' when NODE_ENV is production", () => {
+    test("returns 'prod' when NODE_ENV is production", async () => {
       (process.env as Record<string, string | undefined>).NODE_ENV = "production";
       expect(getEnvironment()).toBe("prod");
     });
 
-    test("returns 'dev' when NODE_ENV is undefined", () => {
+    test("returns 'dev' when NODE_ENV is undefined", async () => {
       (process.env as Record<string, string | undefined>).NODE_ENV = undefined;
       expect(getEnvironment()).toBe("dev");
     });
@@ -88,61 +88,61 @@ describe("backy service", () => {
   // ── readBackySettings ──
 
   describe("readBackySettings", () => {
-    test("returns empty strings when no settings exist", () => {
-      const result = readBackySettings("user-1");
+    test("returns empty strings when no settings exist", async () => {
+      const result = await readBackySettings("user-1");
       expect(result).toEqual({ webhookUrl: "", apiKey: "" });
     });
 
-    test("reads webhook URL from settings", () => {
-      settingsRepo.upsert("user-1", "backy.webhookUrl", "https://backy.example.com/webhook");
-      const result = readBackySettings("user-1");
+    test("reads webhook URL from settings", async () => {
+      await settingsRepo.upsert("user-1", "backy.webhookUrl", "https://backy.example.com/webhook");
+      const result = await readBackySettings("user-1");
       expect(result.webhookUrl).toBe("https://backy.example.com/webhook");
       expect(result.apiKey).toBe("");
     });
 
-    test("reads API key from settings", () => {
-      settingsRepo.upsert("user-1", "backy.apiKey", "sk-test-key-123");
-      const result = readBackySettings("user-1");
+    test("reads API key from settings", async () => {
+      await settingsRepo.upsert("user-1", "backy.apiKey", "sk-test-key-123");
+      const result = await readBackySettings("user-1");
       expect(result.webhookUrl).toBe("");
       expect(result.apiKey).toBe("sk-test-key-123");
     });
 
-    test("reads both settings together", () => {
-      settingsRepo.upsert("user-1", "backy.webhookUrl", "https://backy.example.com/webhook");
-      settingsRepo.upsert("user-1", "backy.apiKey", "sk-test-key-123");
-      const result = readBackySettings("user-1");
+    test("reads both settings together", async () => {
+      await settingsRepo.upsert("user-1", "backy.webhookUrl", "https://backy.example.com/webhook");
+      await settingsRepo.upsert("user-1", "backy.apiKey", "sk-test-key-123");
+      const result = await readBackySettings("user-1");
       expect(result).toEqual({
         webhookUrl: "https://backy.example.com/webhook",
         apiKey: "sk-test-key-123",
       });
     });
 
-    test("does not leak settings from other users", () => {
-      usersRepo.create({
+    test("does not leak settings from other users", async () => {
+      await usersRepo.create({
         id: "user-2",
         email: "bob@test.com",
         name: "Bob",
         avatarUrl: null,
       });
-      settingsRepo.upsert("user-2", "backy.webhookUrl", "https://bob.example.com/webhook");
-      settingsRepo.upsert("user-2", "backy.apiKey", "sk-bob-key");
+      await settingsRepo.upsert("user-2", "backy.webhookUrl", "https://bob.example.com/webhook");
+      await settingsRepo.upsert("user-2", "backy.apiKey", "sk-bob-key");
 
-      const result = readBackySettings("user-1");
+      const result = await readBackySettings("user-1");
       expect(result).toEqual({ webhookUrl: "", apiKey: "" });
     });
 
-    test("ignores non-backy settings", () => {
-      settingsRepo.upsert("user-1", "ai.baseURL", "https://api.example.com");
-      settingsRepo.upsert("user-1", "backy.webhookUrl", "https://backy.example.com/webhook");
-      const result = readBackySettings("user-1");
+    test("ignores non-backy settings", async () => {
+      await settingsRepo.upsert("user-1", "ai.baseURL", "https://api.example.com");
+      await settingsRepo.upsert("user-1", "backy.webhookUrl", "https://backy.example.com/webhook");
+      const result = await readBackySettings("user-1");
       expect(result.webhookUrl).toBe("https://backy.example.com/webhook");
       expect(result.apiKey).toBe("");
     });
 
-    test("returns updated values after upsert", () => {
-      settingsRepo.upsert("user-1", "backy.webhookUrl", "https://old.example.com");
-      settingsRepo.upsert("user-1", "backy.webhookUrl", "https://new.example.com");
-      const result = readBackySettings("user-1");
+    test("returns updated values after upsert", async () => {
+      await settingsRepo.upsert("user-1", "backy.webhookUrl", "https://old.example.com");
+      await settingsRepo.upsert("user-1", "backy.webhookUrl", "https://new.example.com");
+      const result = await readBackySettings("user-1");
       expect(result.webhookUrl).toBe("https://new.example.com");
     });
   });
@@ -179,7 +179,7 @@ describe("backy service", () => {
       ],
     };
 
-    afterEach(() => {
+    afterEach(async () => {
       mock.restore();
     });
 
@@ -286,13 +286,13 @@ describe("backy service", () => {
   // ── generatePullKey ──
 
   describe("generatePullKey", () => {
-    test("returns a 64-character hex string", () => {
+    test("returns a 64-character hex string", async () => {
       const key = generatePullKey();
       expect(key).toHaveLength(64);
       expect(key).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    test("generates unique keys on each call", () => {
+    test("generates unique keys on each call", async () => {
       const keys = new Set(Array.from({ length: 10 }, () => generatePullKey()));
       expect(keys.size).toBe(10);
     });
@@ -301,83 +301,83 @@ describe("backy service", () => {
   // ── readPullKey / savePullKey / deletePullKey ──
 
   describe("pull key CRUD", () => {
-    test("returns empty string when no pull key exists", () => {
-      expect(readPullKey("user-1")).toBe("");
+    test("returns empty string when no pull key exists", async () => {
+      expect(await readPullKey("user-1")).toBe("");
     });
 
-    test("saves and reads a pull key", () => {
-      savePullKey("user-1", "test-pull-key-abc");
-      expect(readPullKey("user-1")).toBe("test-pull-key-abc");
+    test("saves and reads a pull key", async () => {
+      await savePullKey("user-1", "test-pull-key-abc");
+      expect(await readPullKey("user-1")).toBe("test-pull-key-abc");
     });
 
-    test("overwrites existing pull key on save", () => {
-      savePullKey("user-1", "key-v1");
-      savePullKey("user-1", "key-v2");
-      expect(readPullKey("user-1")).toBe("key-v2");
+    test("overwrites existing pull key on save", async () => {
+      await savePullKey("user-1", "key-v1");
+      await savePullKey("user-1", "key-v2");
+      expect(await readPullKey("user-1")).toBe("key-v2");
     });
 
-    test("deletes a pull key and returns true", () => {
-      savePullKey("user-1", "key-to-delete");
-      const deleted = deletePullKey("user-1");
+    test("deletes a pull key and returns true", async () => {
+      await savePullKey("user-1", "key-to-delete");
+      const deleted = await deletePullKey("user-1");
       expect(deleted).toBe(true);
-      expect(readPullKey("user-1")).toBe("");
+      expect(await readPullKey("user-1")).toBe("");
     });
 
-    test("returns false when deleting non-existent key", () => {
-      const deleted = deletePullKey("user-1");
+    test("returns false when deleting non-existent key", async () => {
+      const deleted = await deletePullKey("user-1");
       expect(deleted).toBe(false);
     });
 
-    test("does not leak pull keys between users", () => {
-      usersRepo.create({
+    test("does not leak pull keys between users", async () => {
+      await usersRepo.create({
         id: "user-2",
         email: "bob@test.com",
         name: "Bob",
         avatarUrl: null,
       });
-      savePullKey("user-1", "alice-key");
-      savePullKey("user-2", "bob-key");
-      expect(readPullKey("user-1")).toBe("alice-key");
-      expect(readPullKey("user-2")).toBe("bob-key");
+      await savePullKey("user-1", "alice-key");
+      await savePullKey("user-2", "bob-key");
+      expect(await readPullKey("user-1")).toBe("alice-key");
+      expect(await readPullKey("user-2")).toBe("bob-key");
     });
   });
 
   // ── findUserIdByPullKey ──
 
   describe("findUserIdByPullKey", () => {
-    test("returns null when no user has the key", () => {
-      expect(findUserIdByPullKey("nonexistent")).toBeNull();
+    test("returns null when no user has the key", async () => {
+      expect(await findUserIdByPullKey("nonexistent")).toBeNull();
     });
 
-    test("returns userId for a valid pull key", () => {
-      savePullKey("user-1", "valid-pull-key");
-      expect(findUserIdByPullKey("valid-pull-key")).toBe("user-1");
+    test("returns userId for a valid pull key", async () => {
+      await savePullKey("user-1", "valid-pull-key");
+      expect(await findUserIdByPullKey("valid-pull-key")).toBe("user-1");
     });
 
-    test("returns null after key is deleted", () => {
-      savePullKey("user-1", "temp-key");
-      deletePullKey("user-1");
-      expect(findUserIdByPullKey("temp-key")).toBeNull();
+    test("returns null after key is deleted", async () => {
+      await savePullKey("user-1", "temp-key");
+      await deletePullKey("user-1");
+      expect(await findUserIdByPullKey("temp-key")).toBeNull();
     });
 
-    test("returns correct user when multiple users have keys", () => {
-      usersRepo.create({
+    test("returns correct user when multiple users have keys", async () => {
+      await usersRepo.create({
         id: "user-2",
         email: "bob@test.com",
         name: "Bob",
         avatarUrl: null,
       });
-      savePullKey("user-1", "alice-key");
-      savePullKey("user-2", "bob-key");
-      expect(findUserIdByPullKey("alice-key")).toBe("user-1");
-      expect(findUserIdByPullKey("bob-key")).toBe("user-2");
+      await savePullKey("user-1", "alice-key");
+      await savePullKey("user-2", "bob-key");
+      expect(await findUserIdByPullKey("alice-key")).toBe("user-1");
+      expect(await findUserIdByPullKey("bob-key")).toBe("user-2");
     });
 
-    test("returns null for old key after regeneration", () => {
-      savePullKey("user-1", "old-key");
-      savePullKey("user-1", "new-key");
-      expect(findUserIdByPullKey("old-key")).toBeNull();
-      expect(findUserIdByPullKey("new-key")).toBe("user-1");
+    test("returns null for old key after regeneration", async () => {
+      await savePullKey("user-1", "old-key");
+      await savePullKey("user-1", "new-key");
+      expect(await findUserIdByPullKey("old-key")).toBeNull();
+      expect(await findUserIdByPullKey("new-key")).toBe("user-1");
     });
   });
 });

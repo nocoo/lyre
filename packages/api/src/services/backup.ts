@@ -22,6 +22,7 @@ import {
   makeDeviceTokensRepo,
   makeSettingsRepo,
 } from "../db/repositories";
+import { runBatch } from "../db/drivers/batch";
 import {
   folders,
   tags,
@@ -157,7 +158,10 @@ export function validateBackup(data: unknown): string | null {
 
 // ── Export ──
 
-export function exportBackup(user: DbUser, db?: LyreDb): BackupData {
+export async function exportBackup(
+  user: DbUser,
+  db?: LyreDb,
+): Promise<BackupData> {
   const folders_ = db ? makeFoldersRepo(db) : foldersRepo;
   const tags_ = db ? makeTagsRepo(db) : tagsRepo;
   const recordings_ = db ? makeRecordingsRepo(db) : recordingsRepo;
@@ -166,18 +170,18 @@ export function exportBackup(user: DbUser, db?: LyreDb): BackupData {
   const deviceTokens_ = db ? makeDeviceTokensRepo(db) : deviceTokensRepo;
   const settings_ = db ? makeSettingsRepo(db) : settingsRepo;
 
-  const userFolders = folders_.findByUserId(user.id);
-  const userTags = tags_.findByUserId(user.id);
-  const userRecordings = recordings_.findAll(user.id);
-  const userDeviceTokens = deviceTokens_.findByUserId(user.id);
-  const userSettings = settings_.findByUserId(user.id);
+  const userFolders = await folders_.findByUserId(user.id);
+  const userTags = await tags_.findByUserId(user.id);
+  const userRecordings = await recordings_.findAll(user.id);
+  const userDeviceTokens = await deviceTokens_.findByUserId(user.id);
+  const userSettings = await settings_.findByUserId(user.id);
 
   const allJobs: BackupData["transcriptionJobs"] = [];
   const allTranscriptions: BackupData["transcriptions"] = [];
   const allRecordingTags: BackupData["recordingTags"] = [];
 
   for (const rec of userRecordings) {
-    const jobs = jobs_.findByRecordingId(rec.id);
+    const jobs = await jobs_.findByRecordingId(rec.id);
     for (const job of jobs) {
       allJobs.push({
         id: job.id,
@@ -195,7 +199,7 @@ export function exportBackup(user: DbUser, db?: LyreDb): BackupData {
       });
     }
 
-    const transcription = transcriptions_.findByRecordingId(rec.id);
+    const transcription = await transcriptions_.findByRecordingId(rec.id);
     if (transcription) {
       allTranscriptions.push({
         id: transcription.id,
@@ -209,7 +213,7 @@ export function exportBackup(user: DbUser, db?: LyreDb): BackupData {
       });
     }
 
-    const tagIds = tags_.findTagIdsForRecording(rec.id);
+    const tagIds = await tags_.findTagIdsForRecording(rec.id);
     for (const tagId of tagIds) {
       allRecordingTags.push({ recordingId: rec.id, tagId });
     }
@@ -295,11 +299,11 @@ export interface ImportCounts {
   settings: number;
 }
 
-export function importBackup(
+export async function importBackup(
   userId: string,
   backup: BackupData,
   dbArg?: LyreDb,
-): ImportCounts {
+): Promise<ImportCounts> {
   const db = (dbArg ?? defaultDb) as typeof defaultDb;
   const folders_ = dbArg ? makeFoldersRepo(dbArg) : foldersRepo;
   const tags_ = dbArg ? makeTagsRepo(dbArg) : tagsRepo;
@@ -320,82 +324,117 @@ export function importBackup(
     settings: 0,
   };
 
-  db.transaction((tx: typeof db) => {
+  // Pre-resolve all existence checks; D1 batch has no interactive reads.
+  const folderExists = new Map<string, boolean>();
+  for (const f of backup.folders) {
+    folderExists.set(f.id, !!(await folders_.findByIdAndUser(f.id, userId)));
+  }
+  const tagExists = new Map<string, boolean>();
+  for (const t of backup.tags) {
+    tagExists.set(t.id, !!(await tags_.findByIdAndUser(t.id, userId)));
+  }
+  const recordingExists = new Map<string, boolean>();
+  for (const r of backup.recordings) {
+    recordingExists.set(r.id, !!(await recordings_.findById(r.id)));
+  }
+  const jobExists = new Map<string, boolean>();
+  for (const j of backup.transcriptionJobs) {
+    jobExists.set(j.id, !!(await jobs_.findById(j.id)));
+  }
+  const transcriptionExists = new Map<string, boolean>();
+  for (const t of backup.transcriptions) {
+    transcriptionExists.set(t.id, !!(await transcriptions_.findById(t.id)));
+  }
+  const tokenExists = new Map<string, boolean>();
+  for (const dt of backup.deviceTokens) {
+    tokenExists.set(dt.id, !!(await deviceTokens_.findById(dt.id)));
+  }
+  const settingExists = new Map<string, boolean>();
+  for (const s of backup.settings) {
+    settingExists.set(s.key, !!(await settings_.findByKey(userId, s.key)));
+  }
+
+  await runBatch(db, (h) => {
+    const stmts: ReturnType<typeof h.insert>[] = [];
+
     // 1. Folders
     for (const f of backup.folders) {
-      const existing = folders_.findByIdAndUser(f.id, userId);
-      if (existing) {
-        tx.update(folders)
-          .set({
-            name: f.name,
-            icon: f.icon,
-            updatedAt: f.updatedAt,
-          })
-          .where(eq(folders.id, f.id))
-          .run();
+      if (folderExists.get(f.id)) {
+        stmts.push(
+          h
+            .update(folders)
+            .set({
+              name: f.name,
+              icon: f.icon,
+              updatedAt: f.updatedAt,
+            })
+            .where(eq(folders.id, f.id)) as unknown as ReturnType<typeof h.insert>,
+        );
       } else {
-        tx.insert(folders)
-          .values({
+        stmts.push(
+          h.insert(folders).values({
             id: f.id,
             userId,
             name: f.name,
             icon: f.icon,
             createdAt: f.createdAt,
             updatedAt: f.updatedAt,
-          })
-          .run();
+          }),
+        );
       }
       counts.folders++;
     }
 
     // 2. Tags
     for (const t of backup.tags) {
-      const existing = tags_.findByIdAndUser(t.id, userId);
-      if (existing) {
-        tx.update(tags)
-          .set({ name: t.name })
-          .where(eq(tags.id, t.id))
-          .run();
+      if (tagExists.get(t.id)) {
+        stmts.push(
+          h
+            .update(tags)
+            .set({ name: t.name })
+            .where(eq(tags.id, t.id)) as unknown as ReturnType<typeof h.insert>,
+        );
       } else {
-        tx.insert(tags)
-          .values({
+        stmts.push(
+          h.insert(tags).values({
             id: t.id,
             userId,
             name: t.name,
             createdAt: t.createdAt,
-          })
-          .run();
+          }),
+        );
       }
       counts.tags++;
     }
 
     // 3. Recordings
     for (const r of backup.recordings) {
-      const existing = recordings_.findById(r.id);
-      if (existing) {
-        tx.update(recordings)
-          .set({
-            folderId: r.folderId,
-            title: r.title,
-            description: r.description,
-            fileName: r.fileName,
-            fileSize: r.fileSize,
-            duration: r.duration,
-            format: r.format,
-            sampleRate: r.sampleRate,
-            ossKey: r.ossKey,
-            tags: r.tags,
-            notes: r.notes,
-            aiSummary: r.aiSummary,
-            recordedAt: r.recordedAt,
-            status: r.status,
-            updatedAt: r.updatedAt,
-          })
-          .where(eq(recordings.id, r.id))
-          .run();
+      if (recordingExists.get(r.id)) {
+        stmts.push(
+          h
+            .update(recordings)
+            .set({
+              folderId: r.folderId,
+              title: r.title,
+              description: r.description,
+              fileName: r.fileName,
+              fileSize: r.fileSize,
+              duration: r.duration,
+              format: r.format,
+              sampleRate: r.sampleRate,
+              ossKey: r.ossKey,
+              tags: r.tags,
+              notes: r.notes,
+              aiSummary: r.aiSummary,
+              recordedAt: r.recordedAt,
+              status: r.status,
+              updatedAt: r.updatedAt,
+            })
+            .where(eq(recordings.id, r.id)) as unknown as ReturnType<typeof h.insert>,
+        );
       } else {
-        tx.insert(recordings)
-          .values({
+        stmts.push(
+          h.insert(recordings).values({
             id: r.id,
             userId,
             folderId: r.folderId,
@@ -414,34 +453,37 @@ export function importBackup(
             status: r.status,
             createdAt: r.createdAt,
             updatedAt: r.updatedAt,
-          })
-          .run();
+          }),
+        );
       }
       counts.recordings++;
     }
 
     // 4. Transcription jobs
     for (const j of backup.transcriptionJobs) {
-      const existing = jobs_.findById(j.id);
-      if (existing) {
-        tx.update(transcriptionJobs)
-          .set({
-            recordingId: j.recordingId,
-            taskId: j.taskId,
-            requestId: j.requestId,
-            status: j.status,
-            submitTime: j.submitTime,
-            endTime: j.endTime,
-            usageSeconds: j.usageSeconds,
-            errorMessage: j.errorMessage,
-            resultUrl: j.resultUrl,
-            updatedAt: j.updatedAt,
-          })
-          .where(eq(transcriptionJobs.id, j.id))
-          .run();
+      if (jobExists.get(j.id)) {
+        stmts.push(
+          h
+            .update(transcriptionJobs)
+            .set({
+              recordingId: j.recordingId,
+              taskId: j.taskId,
+              requestId: j.requestId,
+              status: j.status,
+              submitTime: j.submitTime,
+              endTime: j.endTime,
+              usageSeconds: j.usageSeconds,
+              errorMessage: j.errorMessage,
+              resultUrl: j.resultUrl,
+              updatedAt: j.updatedAt,
+            })
+            .where(eq(transcriptionJobs.id, j.id)) as unknown as ReturnType<
+            typeof h.insert
+          >,
+        );
       } else {
-        tx.insert(transcriptionJobs)
-          .values({
+        stmts.push(
+          h.insert(transcriptionJobs).values({
             id: j.id,
             recordingId: j.recordingId,
             taskId: j.taskId,
@@ -454,30 +496,33 @@ export function importBackup(
             resultUrl: j.resultUrl,
             createdAt: j.createdAt,
             updatedAt: j.updatedAt,
-          })
-          .run();
+          }),
+        );
       }
       counts.transcriptionJobs++;
     }
 
     // 5. Transcriptions
     for (const t of backup.transcriptions) {
-      const existing = transcriptions_.findById(t.id);
-      if (existing) {
-        tx.update(transcriptions)
-          .set({
-            recordingId: t.recordingId,
-            jobId: t.jobId,
-            fullText: t.fullText,
-            sentences: t.sentences,
-            language: t.language,
-            updatedAt: t.updatedAt,
-          })
-          .where(eq(transcriptions.id, t.id))
-          .run();
+      if (transcriptionExists.get(t.id)) {
+        stmts.push(
+          h
+            .update(transcriptions)
+            .set({
+              recordingId: t.recordingId,
+              jobId: t.jobId,
+              fullText: t.fullText,
+              sentences: t.sentences,
+              language: t.language,
+              updatedAt: t.updatedAt,
+            })
+            .where(eq(transcriptions.id, t.id)) as unknown as ReturnType<
+            typeof h.insert
+          >,
+        );
       } else {
-        tx.insert(transcriptions)
-          .values({
+        stmts.push(
+          h.insert(transcriptions).values({
             id: t.id,
             recordingId: t.recordingId,
             jobId: t.jobId,
@@ -486,8 +531,8 @@ export function importBackup(
             language: t.language,
             createdAt: t.createdAt,
             updatedAt: t.updatedAt,
-          })
-          .run();
+          }),
+        );
       }
       counts.transcriptions++;
     }
@@ -497,66 +542,79 @@ export function importBackup(
       backup.recordingTags.map((rt) => rt.recordingId),
     );
     for (const recId of recordingIdsInBackup) {
-      tx.delete(recordingTags)
-        .where(eq(recordingTags.recordingId, recId))
-        .run();
+      stmts.push(
+        h
+          .delete(recordingTags)
+          .where(eq(recordingTags.recordingId, recId)) as unknown as ReturnType<
+          typeof h.insert
+        >,
+      );
     }
     for (const rt of backup.recordingTags) {
-      tx.insert(recordingTags)
-        .values({ recordingId: rt.recordingId, tagId: rt.tagId })
-        .run();
+      stmts.push(
+        h.insert(recordingTags).values({
+          recordingId: rt.recordingId,
+          tagId: rt.tagId,
+        }),
+      );
       counts.recordingTags++;
     }
 
     // 7. Device tokens
     for (const dt of backup.deviceTokens) {
-      const existing = deviceTokens_.findById(dt.id);
-      if (existing) {
-        tx.update(deviceTokens)
-          .set({
-            name: dt.name,
-            tokenHash: dt.tokenHash,
-            lastUsedAt: dt.lastUsedAt,
-          })
-          .where(eq(deviceTokens.id, dt.id))
-          .run();
+      if (tokenExists.get(dt.id)) {
+        stmts.push(
+          h
+            .update(deviceTokens)
+            .set({
+              name: dt.name,
+              tokenHash: dt.tokenHash,
+              lastUsedAt: dt.lastUsedAt,
+            })
+            .where(eq(deviceTokens.id, dt.id)) as unknown as ReturnType<
+            typeof h.insert
+          >,
+        );
       } else {
-        tx.insert(deviceTokens)
-          .values({
+        stmts.push(
+          h.insert(deviceTokens).values({
             id: dt.id,
             userId,
             name: dt.name,
             tokenHash: dt.tokenHash,
             lastUsedAt: dt.lastUsedAt,
             createdAt: dt.createdAt,
-          })
-          .run();
+          }),
+        );
       }
       counts.deviceTokens++;
     }
 
     // 8. Settings
     for (const s of backup.settings) {
-      const existing = settings_.findByKey(userId, s.key);
-      if (existing) {
-        tx.update(settings)
-          .set({ value: s.value, updatedAt: s.updatedAt })
-          .where(
-            and(eq(settings.userId, userId), eq(settings.key, s.key)),
-          )
-          .run();
+      if (settingExists.get(s.key)) {
+        stmts.push(
+          h
+            .update(settings)
+            .set({ value: s.value, updatedAt: s.updatedAt })
+            .where(
+              and(eq(settings.userId, userId), eq(settings.key, s.key)),
+            ) as unknown as ReturnType<typeof h.insert>,
+        );
       } else {
-        tx.insert(settings)
-          .values({
+        stmts.push(
+          h.insert(settings).values({
             userId,
             key: s.key,
             value: s.value,
             updatedAt: s.updatedAt,
-          })
-          .run();
+          }),
+        );
       }
       counts.settings++;
     }
+
+    return stmts;
   });
 
   return counts;
@@ -603,7 +661,7 @@ export async function pushBackupToBacky(
   db?: LyreDb,
 ): Promise<BackyPushResult> {
   const start = Date.now();
-  const backup = exportBackup(user, db);
+  const backup = await exportBackup(user, db);
   const json = JSON.stringify(backup, null, 2);
 
   const environment = getEnvironment(env);

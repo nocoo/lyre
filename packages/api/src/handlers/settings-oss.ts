@@ -69,15 +69,15 @@ export async function ossScanHandler(
     listObjects("uploads/", undefined, ctx.env),
     listObjects("results/", undefined, ctx.env),
   ]);
-  const allUsers = users.findAll();
+  const allUsers = await users.findAll();
   const userMap = new Map(allUsers.map((u) => [u.id, u]));
   const jobUserMap = new Map<string, string>();
   const recordingIdSet = new Set<string>();
   for (const u of allUsers) {
-    const recs = recordings.findAll(u.id);
+    const recs = await recordings.findAll(u.id);
     for (const rec of recs) {
       recordingIdSet.add(rec.id);
-      for (const job of jobs.findByRecordingId(rec.id)) {
+      for (const job of await jobs.findByRecordingId(rec.id)) {
         jobUserMap.set(job.id, u.id);
       }
     }
@@ -99,16 +99,17 @@ export async function ossScanHandler(
 
   for (const [prefix, objects] of resultsByJobId) {
     const jobId = prefix.split("/")[1]!;
+    const hasJobRecord = (await jobs.findById(jobId)) !== undefined;
     const folder: TaskFolder = {
       id: jobId,
       files: objects.map((o) => ({
         key: o.key,
         size: o.size,
         lastModified: o.lastModified,
-        hasDbRecord: jobs.findById(jobId) !== undefined,
+        hasDbRecord: hasJobRecord,
       })),
       totalSize: objects.reduce((s, o) => s + o.size, 0),
-      hasDbRecord: jobs.findById(jobId) !== undefined,
+      hasDbRecord: hasJobRecord,
     };
     const userId = jobUserMap.get(jobId);
     if (userId) {
@@ -269,7 +270,7 @@ export async function ossCleanupHandler(
         continue;
       }
       const recordingId = parts[2]!;
-      if (recordings.findById(recordingId)) skipped.push(key);
+      if (await recordings.findById(recordingId)) skipped.push(key);
       else confirmedOrphans.push(key);
     } else if (key.startsWith("results/")) {
       const parts = key.split("/");
@@ -278,7 +279,7 @@ export async function ossCleanupHandler(
         continue;
       }
       const jobId = parts[1]!;
-      if (jobs.findById(jobId)) skipped.push(key);
+      if (await jobs.findById(jobId)) skipped.push(key);
       else confirmedOrphans.push(key);
     } else {
       skipped.push(key);

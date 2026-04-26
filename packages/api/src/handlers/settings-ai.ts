@@ -28,8 +28,11 @@ interface AiSettings {
   sdkType: SdkType | "";
 }
 
-function readAiSettings(settings: SettingsRepo, userId: string): AiSettings {
-  const all = settings.findByUserId(userId);
+async function readAiSettings(
+  settings: SettingsRepo,
+  userId: string,
+): Promise<AiSettings> {
+  const all = await settings.findByUserId(userId);
   const map = new Map(all.map((s) => [s.key, s.value]));
   return {
     provider: (map.get("ai.provider") ?? "") as AiProvider | "",
@@ -46,10 +49,12 @@ function maskApiKey(key: string): string {
   return `${"*".repeat(Math.max(0, key.length - 4))}${key.slice(-4)}`;
 }
 
-export function getAiSettingsHandler(ctx: RuntimeContext): HandlerResponse {
+export async function getAiSettingsHandler(
+  ctx: RuntimeContext,
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { settings } = makeRepos(ctx.db);
-  const aiSettings = readAiSettings(settings, ctx.user.id);
+  const aiSettings = await readAiSettings(settings, ctx.user.id);
   return json({
     ...aiSettings,
     apiKey: maskApiKey(aiSettings.apiKey),
@@ -66,10 +71,10 @@ export interface UpdateAiSettingsInput {
   sdkType?: string;
 }
 
-export function updateAiSettingsHandler(
+export async function updateAiSettingsHandler(
   ctx: RuntimeContext,
   body: UpdateAiSettingsInput,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   if (body.provider !== undefined && body.provider !== "") {
     if (!isValidProvider(body.provider)) {
@@ -84,19 +89,19 @@ export function updateAiSettingsHandler(
   const userId = ctx.user.id;
   const { settings } = makeRepos(ctx.db);
   if (body.provider !== undefined)
-    settings.upsert(userId, "ai.provider", body.provider);
+    await settings.upsert(userId, "ai.provider", body.provider);
   if (body.apiKey !== undefined)
-    settings.upsert(userId, "ai.apiKey", body.apiKey);
+    await settings.upsert(userId, "ai.apiKey", body.apiKey);
   if (body.model !== undefined)
-    settings.upsert(userId, "ai.model", body.model);
+    await settings.upsert(userId, "ai.model", body.model);
   if (body.autoSummarize !== undefined)
-    settings.upsert(userId, "ai.autoSummarize", String(body.autoSummarize));
+    await settings.upsert(userId, "ai.autoSummarize", String(body.autoSummarize));
   if (body.baseURL !== undefined)
-    settings.upsert(userId, "ai.baseURL", body.baseURL);
+    await settings.upsert(userId, "ai.baseURL", body.baseURL);
   if (body.sdkType !== undefined)
-    settings.upsert(userId, "ai.sdkType", body.sdkType);
+    await settings.upsert(userId, "ai.sdkType", body.sdkType);
 
-  const updated = readAiSettings(settings, userId);
+  const updated = await readAiSettings(settings, userId);
   return json({
     ...updated,
     apiKey: maskApiKey(updated.apiKey),
@@ -109,7 +114,7 @@ export async function testAiSettingsHandler(
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { settings } = makeRepos(ctx.db);
-  const all = settings.findByUserId(ctx.user.id);
+  const all = await settings.findByUserId(ctx.user.id);
   const map = new Map(all.map((s) => [s.key, s.value]));
   const provider = map.get("ai.provider") ?? "";
   const apiKey = map.get("ai.apiKey") ?? "";

@@ -18,7 +18,7 @@ describe("getJobHandler", () => {
     expect(res.status).toBe(401);
   });
   it("404 unknown job", async () => {
-    const { ctx } = setupAuthedCtx();
+    const { ctx } = await setupAuthedCtx();
     const res = await getJobHandler(ctx, "no-such-job");
     expect(res.status).toBe(404);
   });
@@ -47,15 +47,15 @@ describe("cronTickHandler", () => {
   }
 
   it("scans 0 active jobs cleanly", async () => {
-    const { ctx } = setupAuthedCtx();
+    const { ctx } = await setupAuthedCtx();
     setAsrProvider(makeMockProvider());
     const r = await cronTickHandler(ctx);
     expect(r).toEqual({ scanned: 0, changed: 0, failed: 0, errors: [] });
   });
 
   it("polls active jobs and reports changes", async () => {
-    const { ctx, user } = setupAuthedCtx();
-    const rec = recordingsRepo.create({
+    const { ctx, user } = await setupAuthedCtx();
+    const rec = await recordingsRepo.create({
       id: "r-cron-1",
       userId: user.id,
       title: "t",
@@ -68,7 +68,7 @@ describe("cronTickHandler", () => {
       ossKey: "k",
       status: "transcribing",
     });
-    jobsRepo.create({
+    await jobsRepo.create({
       id: "job-cron-1",
       recordingId: rec.id,
       taskId: "task-1",
@@ -92,8 +92,8 @@ describe("cronTickHandler", () => {
   });
 
   it("captures provider errors per job without aborting the tick", async () => {
-    const { ctx, user } = setupAuthedCtx();
-    const rec = recordingsRepo.create({
+    const { ctx, user } = await setupAuthedCtx();
+    const rec = await recordingsRepo.create({
       id: "r-cron-2",
       userId: user.id,
       title: "t",
@@ -106,7 +106,7 @@ describe("cronTickHandler", () => {
       ossKey: "k",
       status: "transcribing",
     });
-    jobsRepo.create({
+    await jobsRepo.create({
       id: "job-cron-2",
       recordingId: rec.id,
       taskId: "task-2",

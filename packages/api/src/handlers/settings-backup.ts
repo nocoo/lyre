@@ -18,24 +18,27 @@ import {
   type HandlerResponse,
 } from "./http";
 
-export function exportBackupHandler(ctx: RuntimeContext): HandlerResponse {
+export async function exportBackupHandler(
+  ctx: RuntimeContext,
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  return json(exportBackup(ctx.user));
+  return json(await exportBackup(ctx.user, ctx.db));
 }
 
-export function importBackupHandler(
+export async function importBackupHandler(
   ctx: RuntimeContext,
   body: unknown,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const validation = validateBackup(body);
   if (validation !== null) {
     return badRequest(`Invalid backup: ${validation}`);
   }
   try {
-    const counts = importBackup(
+    const counts = await importBackup(
       ctx.user.id,
       body as Parameters<typeof importBackup>[1],
+      ctx.db,
     );
     return json({ success: true, imported: counts });
   } catch (err) {
@@ -48,7 +51,7 @@ export async function pushBackupHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const backySettings = readBackySettings(ctx.user.id);
+  const backySettings = await readBackySettings(ctx.user.id, ctx.db);
   if (!backySettings.webhookUrl || !backySettings.apiKey) {
     return badRequest("Backy webhook URL and API key must be configured first");
   }
@@ -59,6 +62,7 @@ export async function pushBackupHandler(
       apiKey: backySettings.apiKey,
     },
     ctx.env,
+    ctx.db,
   );
   const payload = {
     success: result.ok,

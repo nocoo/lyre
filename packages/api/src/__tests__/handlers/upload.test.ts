@@ -22,12 +22,12 @@ describe("presignUploadHandler", () => {
       }).status,
     ).toBe(401);
   });
-  it("400 when fields missing", () => {
-    const { ctx } = setupAuthedCtx();
+  it("400 when fields missing", async () => {
+    const { ctx } = await setupAuthedCtx();
     expect(presignUploadHandler(ctx, {}).status).toBe(400);
   });
-  it("400 when contentType not audio", () => {
-    const { ctx } = setupAuthedCtx();
+  it("400 when contentType not audio", async () => {
+    const { ctx } = await setupAuthedCtx();
     expect(
       presignUploadHandler(ctx, {
         fileName: "x.txt",
@@ -35,8 +35,8 @@ describe("presignUploadHandler", () => {
       }).status,
     ).toBe(400);
   });
-  it("returns presigned URL when authed + audio", () => {
-    const { user } = setupAuthedCtx();
+  it("returns presigned URL when authed + audio", async () => {
+    const { user } = await setupAuthedCtx();
     const ctx = makeCtx(user, {
       env: {
         OSS_ACCESS_KEY_ID: "ak",

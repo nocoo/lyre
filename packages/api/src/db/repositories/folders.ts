@@ -5,12 +5,13 @@
 import { eq, and, desc } from "drizzle-orm";
 import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
+import { rowsAffected } from "../drivers/result";
 import { folders, type DbFolder } from "../schema";
 
 export function makeFoldersRepo(db: LyreDb) {
   return {
-    findByUserId(userId: string): DbFolder[] {
-      return db
+    async findByUserId(userId: string): Promise<DbFolder[]> {
+      return await db
         .select()
         .from(folders)
         .where(eq(folders.userId, userId))
@@ -18,26 +19,29 @@ export function makeFoldersRepo(db: LyreDb) {
         .all();
     },
 
-    findById(id: string): DbFolder | undefined {
-      return db.select().from(folders).where(eq(folders.id, id)).get();
+    async findById(id: string): Promise<DbFolder | undefined> {
+      return await db.select().from(folders).where(eq(folders.id, id)).get();
     },
 
-    findByIdAndUser(id: string, userId: string): DbFolder | undefined {
-      return db
+    async findByIdAndUser(
+      id: string,
+      userId: string,
+    ): Promise<DbFolder | undefined> {
+      return await db
         .select()
         .from(folders)
         .where(and(eq(folders.id, id), eq(folders.userId, userId)))
         .get();
     },
 
-    create(data: {
+    async create(data: {
       id: string;
       userId: string;
       name: string;
       icon?: string;
-    }): DbFolder {
+    }): Promise<DbFolder> {
       const now = Date.now();
-      return db
+      return await db
         .insert(folders)
         .values({
           id: data.id,
@@ -51,11 +55,11 @@ export function makeFoldersRepo(db: LyreDb) {
         .get();
     },
 
-    update(
+    async update(
       id: string,
       data: Partial<{ name: string; icon: string }>,
-    ): DbFolder | undefined {
-      return db
+    ): Promise<DbFolder | undefined> {
+      return await db
         .update(folders)
         .set({ ...data, updatedAt: Date.now() })
         .where(eq(folders.id, id))
@@ -63,12 +67,9 @@ export function makeFoldersRepo(db: LyreDb) {
         .get();
     },
 
-    delete(id: string): boolean {
-      const result = db
-        .delete(folders)
-        .where(eq(folders.id, id))
-        .run() as unknown as { changes: number };
-      return result.changes > 0;
+    async delete(id: string): Promise<boolean> {
+      const result = await db.delete(folders).where(eq(folders.id, id)).run();
+      return rowsAffected(result) > 0;
     },
   };
 }

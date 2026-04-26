@@ -24,31 +24,31 @@ function withMockedFetch<T>(
 }
 
 describe("settings-backup sync handlers", () => {
-  it("401 anon", () => {
-    expect(exportBackupHandler(setupAnonCtx()).status).toBe(401);
-    expect(importBackupHandler(setupAnonCtx(), {}).status).toBe(401);
+  it("401 anon", async () => {
+    expect((await exportBackupHandler(setupAnonCtx())).status).toBe(401);
+    expect((await importBackupHandler(setupAnonCtx(), {})).status).toBe(401);
   });
-  it("export returns shape", () => {
-    const { ctx } = setupAuthedCtx();
-    const res = exportBackupHandler(ctx);
+  it("export returns shape", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await exportBackupHandler(ctx);
     expect(res.status).toBe(200);
   });
-  it("import 400 on invalid body", () => {
-    const { ctx } = setupAuthedCtx();
-    expect(importBackupHandler(ctx, null).status).toBe(400);
-    expect(importBackupHandler(ctx, { wrong: 1 }).status).toBe(400);
+  it("import 400 on invalid body", async () => {
+    const { ctx } = await setupAuthedCtx();
+    expect((await importBackupHandler(ctx, null)).status).toBe(400);
+    expect((await importBackupHandler(ctx, { wrong: 1 })).status).toBe(400);
   });
   it("push 401 anon", async () => {
     expect((await pushBackupHandler(setupAnonCtx())).status).toBe(401);
   });
   it("push 400 when backy unconfigured", async () => {
-    const { ctx } = setupAuthedCtx();
+    const { ctx } = await setupAuthedCtx();
     expect((await pushBackupHandler(ctx)).status).toBe(400);
   });
   it("push success path with mocked fetch", async () => {
-    const { user, ctx } = setupAuthedCtx();
-    settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    const { user, ctx } = await setupAuthedCtx();
+    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () =>
         new Response(JSON.stringify({ ok: true }), {
@@ -62,17 +62,17 @@ describe("settings-backup sync handlers", () => {
     expect((res.body as { success: boolean }).success).toBe(true);
   });
   it("push 502 on backy non-2xx response", async () => {
-    const { user, ctx } = setupAuthedCtx();
-    settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    const { user, ctx } = await setupAuthedCtx();
+    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () => new Response("err", { status: 500 }),
       () => pushBackupHandler(ctx),
     );
     expect(res.status).toBe(502);
   });
-  it("import 500 on import failure", () => {
-    const { ctx } = setupAuthedCtx();
+  it("import 500 on import failure", async () => {
+    const { ctx } = await setupAuthedCtx();
     // Validation passes, but import fails because some referential constraint breaks
     // Provide a recording referencing an unknown folder so foreign-key fails
     const bad = {
@@ -96,7 +96,7 @@ describe("settings-backup sync handlers", () => {
       deviceTokens: [],
       settings: [],
     };
-    const res = importBackupHandler(ctx, bad);
+    const res = await importBackupHandler(ctx, bad);
     // Either 200 (if FK is permissive) or 500. Both exercise the path.
     expect([200, 500]).toContain(res.status);
   });

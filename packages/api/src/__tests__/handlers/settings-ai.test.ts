@@ -25,32 +25,32 @@ function withMockedFetch<T>(
 }
 
 describe("settings-ai sync handlers", () => {
-  it("401 anon", () => {
-    expect(getAiSettingsHandler(setupAnonCtx()).status).toBe(401);
-    expect(updateAiSettingsHandler(setupAnonCtx(), {}).status).toBe(401);
+  it("401 anon", async () => {
+    expect((await getAiSettingsHandler(setupAnonCtx())).status).toBe(401);
+    expect((await updateAiSettingsHandler(setupAnonCtx(), {})).status).toBe(401);
   });
-  it("get returns defaults", () => {
-    const { ctx } = setupAuthedCtx();
-    const res = getAiSettingsHandler(ctx);
+  it("get returns defaults", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await getAiSettingsHandler(ctx);
     expect(res.status).toBe(200);
     if (res.kind !== "json") throw new Error();
     expect((res.body as { hasApiKey: boolean }).hasApiKey).toBe(false);
   });
-  it("400 invalid provider", () => {
-    const { ctx } = setupAuthedCtx();
+  it("400 invalid provider", async () => {
+    const { ctx } = await setupAuthedCtx();
     expect(
-      updateAiSettingsHandler(ctx, { provider: "bogus" }).status,
+      (await updateAiSettingsHandler(ctx, { provider: "bogus" })).status,
     ).toBe(400);
   });
-  it("400 invalid sdkType", () => {
-    const { ctx } = setupAuthedCtx();
+  it("400 invalid sdkType", async () => {
+    const { ctx } = await setupAuthedCtx();
     expect(
-      updateAiSettingsHandler(ctx, { sdkType: "weird" }).status,
+      (await updateAiSettingsHandler(ctx, { sdkType: "weird" })).status,
     ).toBe(400);
   });
-  it("update saves and masks key", () => {
-    const { ctx } = setupAuthedCtx();
-    const res = updateAiSettingsHandler(ctx, {
+  it("update saves and masks key", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await updateAiSettingsHandler(ctx, {
       apiKey: "sk-1234567890",
       autoSummarize: true,
     });
@@ -65,12 +65,12 @@ describe("settings-ai sync handlers", () => {
     expect((await testAiSettingsHandler(setupAnonCtx())).status).toBe(401);
   });
   it("test 400 when not configured", async () => {
-    const { ctx } = setupAuthedCtx();
+    const { ctx } = await setupAuthedCtx();
     expect((await testAiSettingsHandler(ctx)).status).toBe(400);
   });
-  it("update accepts all valid fields", () => {
-    const { ctx } = setupAuthedCtx();
-    const res = updateAiSettingsHandler(ctx, {
+  it("update accepts all valid fields", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await updateAiSettingsHandler(ctx, {
       provider: "anthropic",
       model: "claude-sonnet-4-20250514",
       sdkType: "anthropic",
@@ -78,22 +78,22 @@ describe("settings-ai sync handlers", () => {
     expect(res.status).toBe(200);
   });
   it("test handler error path returns 502 on bad provider config", async () => {
-    const { user, ctx } = setupAuthedCtx();
+    const { user, ctx } = await setupAuthedCtx();
     // Configure with provider "custom" but no baseURL/sdkType -> resolveAiConfig throws
-    settingsRepo.upsert(user.id, "ai.provider", "custom");
-    settingsRepo.upsert(user.id, "ai.apiKey", "sk-test");
-    settingsRepo.upsert(user.id, "ai.model", "gpt-4");
+    await settingsRepo.upsert(user.id, "ai.provider", "custom");
+    await settingsRepo.upsert(user.id, "ai.apiKey", "sk-test");
+    await settingsRepo.upsert(user.id, "ai.model", "gpt-4");
     const res = await testAiSettingsHandler(ctx);
     expect(res.status).toBe(502);
     if (res.kind !== "json") throw new Error();
     expect((res.body as { success: boolean }).success).toBe(false);
   });
   it("test handler 502 on 4xx api error (no retries)", async () => {
-    const { user, ctx } = setupAuthedCtx();
-    settingsRepo.upsert(user.id, "ai.provider", "anthropic");
-    settingsRepo.upsert(user.id, "ai.apiKey", "sk-test");
-    settingsRepo.upsert(user.id, "ai.model", "claude-sonnet-4-20250514");
-    settingsRepo.upsert(user.id, "ai.sdkType", "anthropic");
+    const { user, ctx } = await setupAuthedCtx();
+    await settingsRepo.upsert(user.id, "ai.provider", "anthropic");
+    await settingsRepo.upsert(user.id, "ai.apiKey", "sk-test");
+    await settingsRepo.upsert(user.id, "ai.model", "claude-sonnet-4-20250514");
+    await settingsRepo.upsert(user.id, "ai.sdkType", "anthropic");
     const res = await withMockedFetch(
       async () =>
         new Response(

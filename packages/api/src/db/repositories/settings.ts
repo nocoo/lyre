@@ -8,60 +8,72 @@
 import { eq, and } from "drizzle-orm";
 import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
+import { rowsAffected } from "../drivers/result";
 import { settings, type DbSetting } from "../schema";
 
 export function makeSettingsRepo(db: LyreDb) {
   const repo = {
-    findByUserId(userId: string): DbSetting[] {
-      return db
+    async findByUserId(userId: string): Promise<DbSetting[]> {
+      return await db
         .select()
         .from(settings)
         .where(eq(settings.userId, userId))
         .all();
     },
 
-    findByKey(userId: string, key: string): DbSetting | undefined {
-      return db
+    async findByKey(
+      userId: string,
+      key: string,
+    ): Promise<DbSetting | undefined> {
+      return await db
         .select()
         .from(settings)
         .where(and(eq(settings.userId, userId), eq(settings.key, key)))
         .get();
     },
 
-    upsert(userId: string, key: string, value: string): DbSetting {
-      const existing = repo.findByKey(userId, key);
+    async upsert(
+      userId: string,
+      key: string,
+      value: string,
+    ): Promise<DbSetting> {
+      const existing = await repo.findByKey(userId, key);
       if (existing) {
-        db.update(settings)
+        await db
+          .update(settings)
           .set({ value, updatedAt: Date.now() })
           .where(and(eq(settings.userId, userId), eq(settings.key, key)))
           .run();
-        return repo.findByKey(userId, key)!;
+        return (await repo.findByKey(userId, key))!;
       }
-      return db
+      return await db
         .insert(settings)
         .values({ userId, key, value, updatedAt: Date.now() })
         .returning()
         .get();
     },
 
-    delete(userId: string, key: string): boolean {
-      const result = db
+    async delete(userId: string, key: string): Promise<boolean> {
+      const result = await db
         .delete(settings)
         .where(and(eq(settings.userId, userId), eq(settings.key, key)))
-        .run() as unknown as { changes: number };
-      return result.changes > 0;
+        .run();
+      return rowsAffected(result) > 0;
     },
 
-    deleteByUserId(userId: string): number {
-      const result = db
+    async deleteByUserId(userId: string): Promise<number> {
+      const result = await db
         .delete(settings)
         .where(eq(settings.userId, userId))
-        .run() as unknown as { changes: number };
-      return result.changes;
+        .run();
+      return rowsAffected(result);
     },
 
-    findByKeyAndValue(key: string, value: string): DbSetting | undefined {
-      return db
+    async findByKeyAndValue(
+      key: string,
+      value: string,
+    ): Promise<DbSetting | undefined> {
+      return await db
         .select()
         .from(settings)
         .where(and(eq(settings.key, key), eq(settings.value, value)))

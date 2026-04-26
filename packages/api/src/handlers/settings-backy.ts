@@ -26,10 +26,12 @@ import {
   type HandlerResponse,
 } from "./http";
 
-export function getBackySettingsHandler(ctx: RuntimeContext): HandlerResponse {
+export async function getBackySettingsHandler(
+  ctx: RuntimeContext,
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const settings = readBackySettings(ctx.user.id, ctx.db);
-  const pullKey = readPullKey(ctx.user.id, ctx.db);
+  const settings = await readBackySettings(ctx.user.id, ctx.db);
+  const pullKey = await readPullKey(ctx.user.id, ctx.db);
   return json({
     webhookUrl: settings.webhookUrl,
     apiKey: maskApiKey(settings.apiKey),
@@ -40,19 +42,19 @@ export function getBackySettingsHandler(ctx: RuntimeContext): HandlerResponse {
   });
 }
 
-export function updateBackySettingsHandler(
+export async function updateBackySettingsHandler(
   ctx: RuntimeContext,
   body: { webhookUrl?: string; apiKey?: string },
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { settings } = makeRepos(ctx.db);
   if (body.webhookUrl !== undefined) {
-    settings.upsert(ctx.user.id, "backy.webhookUrl", body.webhookUrl);
+    await settings.upsert(ctx.user.id, "backy.webhookUrl", body.webhookUrl);
   }
   if (body.apiKey !== undefined) {
-    settings.upsert(ctx.user.id, "backy.apiKey", body.apiKey);
+    await settings.upsert(ctx.user.id, "backy.apiKey", body.apiKey);
   }
-  const updated = readBackySettings(ctx.user.id, ctx.db);
+  const updated = await readBackySettings(ctx.user.id, ctx.db);
   return json({
     webhookUrl: updated.webhookUrl,
     apiKey: maskApiKey(updated.apiKey),
@@ -64,7 +66,7 @@ export async function testBackySettingsHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const settings = readBackySettings(ctx.user.id, ctx.db);
+  const settings = await readBackySettings(ctx.user.id, ctx.db);
   if (!settings.webhookUrl || !settings.apiKey) {
     return badRequest("Webhook URL and API key must be configured first");
   }
@@ -99,7 +101,7 @@ export async function backyHistoryHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const settings = readBackySettings(ctx.user.id, ctx.db);
+  const settings = await readBackySettings(ctx.user.id, ctx.db);
   if (!settings.webhookUrl || !settings.apiKey) {
     return badRequest("Webhook URL and API key must be configured first");
   }
@@ -116,18 +118,22 @@ export async function backyHistoryHandler(
   return json(result.data);
 }
 
-export function generatePullKeyHandler(ctx: RuntimeContext): HandlerResponse {
+export async function generatePullKeyHandler(
+  ctx: RuntimeContext,
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const key = generatePullKey();
-  savePullKey(ctx.user.id, key, ctx.db);
+  await savePullKey(ctx.user.id, key, ctx.db);
   return json({ pullKey: key });
 }
 
-export function deletePullKeyHandler(ctx: RuntimeContext): HandlerResponse {
+export async function deletePullKeyHandler(
+  ctx: RuntimeContext,
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const had = readPullKey(ctx.user.id, ctx.db);
+  const had = await readPullKey(ctx.user.id, ctx.db);
   if (!had) return badRequest("No pull key configured");
-  deletePullKey(ctx.user.id, ctx.db);
+  await deletePullKey(ctx.user.id, ctx.db);
   return json({ ok: true });
 }
 
@@ -138,9 +144,9 @@ export function deletePullKeyHandler(ctx: RuntimeContext): HandlerResponse {
  * a HandlerResponse on failure. Public endpoint — caller must NOT enforce
  * auth via RuntimeContext.user (will always be null).
  */
-function authenticateWebhookKey(
+async function authenticateWebhookKey(
   ctx: RuntimeContext,
-): { ok: true; userId: string } | { ok: false; res: HandlerResponse } {
+): Promise<{ ok: true; userId: string } | { ok: false; res: HandlerResponse }> {
   const key = ctx.headers.get("x-webhook-key");
   if (!key) {
     return {
@@ -148,17 +154,17 @@ function authenticateWebhookKey(
       res: json({ error: "Missing X-Webhook-Key header" }, 401),
     };
   }
-  const userId = findUserIdByPullKey(key, ctx.db);
+  const userId = await findUserIdByPullKey(key, ctx.db);
   if (!userId) {
     return { ok: false, res: json({ error: "Invalid webhook key" }, 401) };
   }
   return { ok: true, userId };
 }
 
-export function backyPullHeadHandler(
+export async function backyPullHeadHandler(
   ctx: RuntimeContext,
-): HandlerResponse {
-  const auth = authenticateWebhookKey(ctx);
+): Promise<HandlerResponse> {
+  const auth = await authenticateWebhookKey(ctx);
   if (!auth.ok) return auth.res;
   return { kind: "empty", status: 200 };
 }
@@ -167,11 +173,11 @@ export async function backyPullPostHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   const start = Date.now();
-  const auth = authenticateWebhookKey(ctx);
+  const auth = await authenticateWebhookKey(ctx);
   if (!auth.ok) return auth.res;
   const userId = auth.userId;
 
-  const pushConfig = readBackySettings(userId, ctx.db);
+  const pushConfig = await readBackySettings(userId, ctx.db);
   if (!pushConfig.webhookUrl || !pushConfig.apiKey) {
     return json(
       {
@@ -182,7 +188,7 @@ export async function backyPullPostHandler(
       422,
     );
   }
-  const user = makeRepos(ctx.db).users.findById(userId);
+  const user = await makeRepos(ctx.db).users.findById(userId);
   if (!user) {
     return json({ ok: false, error: "User not found" }, 401);
   }

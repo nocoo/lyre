@@ -213,25 +213,30 @@ describe("D1 repo async probe — every read/write method", () => {
     });
   });
 
-  test("FINDING: every repo method is broken under D1 dialect", () => {
-    // The whole point of the probe: zero methods return correct values
-    // synchronously. Wave C must rewrite the repo layer as async.
+  test("FINDING: every repo method is async-correct under D1 dialect", () => {
+    // Post Wave C.0: every repo method must return a Promise under D1.
+    // `silent-wrong` or `throw:*` verdicts mean the rewrite missed a call site.
     let totalMethods = 0;
-    let brokenMethods = 0;
+    let asyncMethods = 0;
     const broken: string[] = [];
     for (const [repoName, results] of Object.entries(findings)) {
       for (const [method, verdict] of Object.entries(results)) {
         totalMethods++;
-        if (verdict !== ("ok" as unknown)) {
-          brokenMethods++;
+        if (verdict === "promise") {
+          asyncMethods++;
+        } else {
           broken.push(`${repoName}.${method}=${verdict}`);
         }
       }
     }
     console.log(
-      `\n[D1 probe] ${brokenMethods}/${totalMethods} repo methods need async rewrite`,
+      `\n[D1 probe] ${asyncMethods}/${totalMethods} repo methods are async (promise-returning)`,
     );
-    expect(brokenMethods).toBe(totalMethods);
+    if (broken.length > 0) {
+      console.log(`[D1 probe] still-broken: ${broken.join(", ")}`);
+    }
+    expect(broken).toEqual([]);
+    expect(asyncMethods).toBe(totalMethods);
     expect(totalMethods).toBeGreaterThanOrEqual(40);
   });
 });

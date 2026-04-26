@@ -13,13 +13,13 @@ import {
 import { setupAnonCtx, setupAuthedCtx } from "../_fixtures/runtime-context";
 
 describe("listFoldersHandler", () => {
-  it("returns 401 for anonymous", () => {
-    const res = listFoldersHandler(setupAnonCtx());
+  it("returns 401 for anonymous", async () => {
+    const res = await listFoldersHandler(setupAnonCtx());
     expect(res.status).toBe(401);
   });
-  it("returns folders for authed user", () => {
-    const { ctx } = setupAuthedCtx();
-    const res = listFoldersHandler(ctx);
+  it("returns folders for authed user", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await listFoldersHandler(ctx);
     expect(res.status).toBe(200);
     expect(res.kind).toBe("json");
     if (res.kind !== "json") throw new Error();
@@ -28,41 +28,47 @@ describe("listFoldersHandler", () => {
 });
 
 describe("createFolderHandler", () => {
-  it("returns 401 for anonymous", () => {
-    const res = createFolderHandler(setupAnonCtx(), { name: "x" });
+  it("returns 401 for anonymous", async () => {
+    const res = await createFolderHandler(setupAnonCtx(), { name: "x" });
     expect(res.status).toBe(401);
   });
-  it("400 when name missing", () => {
-    const { ctx } = setupAuthedCtx();
-    const res = createFolderHandler(ctx, {});
+  it("400 when name missing", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await createFolderHandler(ctx, {});
     expect(res.status).toBe(400);
   });
-  it("creates folder", () => {
-    const { ctx } = setupAuthedCtx();
-    const res = createFolderHandler(ctx, { name: "Inbox", icon: "📥" });
+  it("creates folder", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const res = await createFolderHandler(ctx, { name: "Inbox", icon: "📥" });
     expect(res.status).toBe(201);
   });
 });
 
 describe("get/update/deleteFolderHandler", () => {
-  it("404 when folder not found", () => {
-    const { ctx } = setupAuthedCtx();
-    expect(getFolderHandler(ctx, "missing").status).toBe(404);
-    expect(updateFolderHandler(ctx, "missing", { name: "x" }).status).toBe(404);
-    expect(deleteFolderHandler(ctx, "missing").status).toBe(404);
+  it("404 when folder not found", async () => {
+    const { ctx } = await setupAuthedCtx();
+    expect((await getFolderHandler(ctx, "missing")).status).toBe(404);
+    expect(
+      (await updateFolderHandler(ctx, "missing", { name: "x" })).status,
+    ).toBe(404);
+    expect((await deleteFolderHandler(ctx, "missing")).status).toBe(404);
   });
-  it("get/update/delete round-trip", () => {
-    const { ctx } = setupAuthedCtx();
-    const created = createFolderHandler(ctx, { name: "F1" });
+  it("get/update/delete round-trip", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const created = await createFolderHandler(ctx, { name: "F1" });
     if (created.kind !== "json") throw new Error();
     const id = (created.body as { id: string }).id;
-    expect(getFolderHandler(ctx, id).status).toBe(200);
-    expect(updateFolderHandler(ctx, id, { name: "F1b" }).status).toBe(200);
-    expect(deleteFolderHandler(ctx, id).status).toBe(200);
+    expect((await getFolderHandler(ctx, id)).status).toBe(200);
+    expect((await updateFolderHandler(ctx, id, { name: "F1b" })).status).toBe(
+      200,
+    );
+    expect((await deleteFolderHandler(ctx, id)).status).toBe(200);
   });
-  it("401 for anonymous", () => {
-    expect(getFolderHandler(setupAnonCtx(), "x").status).toBe(401);
-    expect(updateFolderHandler(setupAnonCtx(), "x", {}).status).toBe(401);
-    expect(deleteFolderHandler(setupAnonCtx(), "x").status).toBe(401);
+  it("401 for anonymous", async () => {
+    expect((await getFolderHandler(setupAnonCtx(), "x")).status).toBe(401);
+    expect((await updateFolderHandler(setupAnonCtx(), "x", {})).status).toBe(
+      401,
+    );
+    expect((await deleteFolderHandler(setupAnonCtx(), "x")).status).toBe(401);
   });
 });

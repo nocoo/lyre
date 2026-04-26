@@ -21,7 +21,9 @@ export function makeTestEnv(overrides: Partial<LyreEnv> = {}): LyreEnv {
 }
 
 /** Reset the in-memory DB and return a clean test user. */
-export function seedTestUser(opts: { id?: string; email?: string } = {}): DbUser {
+export async function seedTestUser(
+  opts: { id?: string; email?: string } = {},
+): Promise<DbUser> {
   resetDb();
   const id = opts.id ?? "test-user-1";
   const email = opts.email ?? "test@example.com";
@@ -47,8 +49,11 @@ export function makeCtx(
 }
 
 /** Combo: reset DB, seed a user, build ctx for that user. */
-export function setupAuthedCtx(): { ctx: RuntimeContext; user: DbUser } {
-  const user = seedTestUser();
+export async function setupAuthedCtx(): Promise<{
+  ctx: RuntimeContext;
+  user: DbUser;
+}> {
+  const user = await seedTestUser();
   return { ctx: makeCtx(user), user };
 }
 

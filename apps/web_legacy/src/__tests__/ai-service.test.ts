@@ -18,7 +18,7 @@ import {
 } from "@lyre/api/services/ai";
 
 describe("AI_PROVIDERS (re-exported registry)", () => {
-  test("contains the expected built-in providers", () => {
+  test("contains the expected built-in providers", async () => {
     const ids = Object.keys(AI_PROVIDERS);
     expect(ids).toContain("anthropic");
     expect(ids).toContain("glm");
@@ -26,7 +26,7 @@ describe("AI_PROVIDERS (re-exported registry)", () => {
     expect(ids).toContain("aihubmix");
   });
 
-  test("each provider info has required fields", () => {
+  test("each provider info has required fields", async () => {
     for (const [id, p] of Object.entries(AI_PROVIDERS)) {
       expect(id).toBe(p.id);
       expect(p.label).toBeTruthy();
@@ -41,7 +41,7 @@ describe("AI_PROVIDERS (re-exported registry)", () => {
 });
 
 describe("ALL_PROVIDER_IDS", () => {
-  test("includes all built-in providers plus custom", () => {
+  test("includes all built-in providers plus custom", async () => {
     expect(ALL_PROVIDER_IDS).toContain("anthropic");
     expect(ALL_PROVIDER_IDS).toContain("minimax");
     expect(ALL_PROVIDER_IDS).toContain("glm");
@@ -51,7 +51,7 @@ describe("ALL_PROVIDER_IDS", () => {
 });
 
 describe("CUSTOM_PROVIDER_INFO", () => {
-  test("has id, label, empty models, empty defaultModel", () => {
+  test("has id, label, empty models, empty defaultModel", async () => {
     expect(CUSTOM_PROVIDER_INFO.id).toBe("custom");
     expect(CUSTOM_PROVIDER_INFO.label).toBe("Custom");
     expect(CUSTOM_PROVIDER_INFO.models).toEqual([]);
@@ -60,7 +60,7 @@ describe("CUSTOM_PROVIDER_INFO", () => {
 });
 
 describe("isValidProvider", () => {
-  test("returns true for built-in providers and custom", () => {
+  test("returns true for built-in providers and custom", async () => {
     expect(isValidProvider("anthropic")).toBe(true);
     expect(isValidProvider("glm")).toBe(true);
     expect(isValidProvider("minimax")).toBe(true);
@@ -68,14 +68,14 @@ describe("isValidProvider", () => {
     expect(isValidProvider("custom")).toBe(true);
   });
 
-  test("returns false for unknown strings", () => {
+  test("returns false for unknown strings", async () => {
     expect(isValidProvider("invalid")).toBe(false);
     expect(isValidProvider("")).toBe(false);
   });
 });
 
 describe("getProviderConfig", () => {
-  test("returns config for valid built-in provider", () => {
+  test("returns config for valid built-in provider", async () => {
     const config = getProviderConfig("anthropic");
     expect(config).toBeDefined();
     expect(config!.id).toBe("anthropic");
@@ -83,28 +83,28 @@ describe("getProviderConfig", () => {
     expect(config!.sdkType).toBe("anthropic");
   });
 
-  test("returns undefined for custom provider", () => {
+  test("returns undefined for custom provider", async () => {
     expect(getProviderConfig("custom")).toBeUndefined();
   });
 
-  test("returns undefined for unknown provider", () => {
+  test("returns undefined for unknown provider", async () => {
     expect(getProviderConfig("invalid")).toBeUndefined();
   });
 });
 
 describe("buildSummaryPrompt", () => {
-  test("builds prompt with transcript wrapped in tags", () => {
+  test("builds prompt with transcript wrapped in tags", async () => {
     const prompt = buildSummaryPrompt("Meeting notes here.");
     expect(prompt).toContain("<transcript>");
     expect(prompt).toContain("Meeting notes here.");
     expect(prompt).toContain("</transcript>");
   });
 
-  test("throws on empty transcript", () => {
+  test("throws on empty transcript", async () => {
     expect(() => buildSummaryPrompt("")).toThrow("Transcript is empty");
   });
 
-  test("throws on whitespace-only transcript", () => {
+  test("throws on whitespace-only transcript", async () => {
     expect(() => buildSummaryPrompt("   \n  ")).toThrow("Transcript is empty");
   });
 });

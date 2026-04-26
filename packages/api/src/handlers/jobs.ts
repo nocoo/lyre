@@ -23,10 +23,10 @@ export async function getJobHandler(
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { jobs, recordings } = makeRepos(ctx.db);
-  const job = jobs.findById(id);
+  const job = await jobs.findById(id);
   if (!job) return notFound("Job not found");
 
-  const recording = recordings.findById(job.recordingId);
+  const recording = await recordings.findById(job.recordingId);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Job not found");
   }
@@ -67,7 +67,7 @@ export async function cronTickHandler(
 ): Promise<CronTickResult> {
   const provider = getAsrProvider(ctx.env);
   const { jobs } = makeRepos(ctx.db);
-  const active = jobs.findActive();
+  const active = await jobs.findActive();
   const result: CronTickResult = {
     scanned: active.length,
     changed: 0,

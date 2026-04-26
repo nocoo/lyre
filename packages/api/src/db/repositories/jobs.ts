@@ -5,31 +5,34 @@
 import { eq, desc, inArray } from "drizzle-orm";
 import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
+import { rowsAffected } from "../drivers/result";
 import { transcriptionJobs, type DbTranscriptionJob } from "../schema";
 import type { JobStatus } from "../../lib/types";
 
 export function makeJobsRepo(db: LyreDb) {
   return {
-    findById(id: string): DbTranscriptionJob | undefined {
-      return db
+    async findById(id: string): Promise<DbTranscriptionJob | undefined> {
+      return await db
         .select()
         .from(transcriptionJobs)
         .where(eq(transcriptionJobs.id, id))
         .get();
     },
 
-    findByTaskId(taskId: string): DbTranscriptionJob | undefined {
-      return db
+    async findByTaskId(
+      taskId: string,
+    ): Promise<DbTranscriptionJob | undefined> {
+      return await db
         .select()
         .from(transcriptionJobs)
         .where(eq(transcriptionJobs.taskId, taskId))
         .get();
     },
 
-    findLatestByRecordingId(
+    async findLatestByRecordingId(
       recordingId: string,
-    ): DbTranscriptionJob | undefined {
-      return db
+    ): Promise<DbTranscriptionJob | undefined> {
+      return await db
         .select()
         .from(transcriptionJobs)
         .where(eq(transcriptionJobs.recordingId, recordingId))
@@ -37,8 +40,10 @@ export function makeJobsRepo(db: LyreDb) {
         .get();
     },
 
-    findByRecordingId(recordingId: string): DbTranscriptionJob[] {
-      return db
+    async findByRecordingId(
+      recordingId: string,
+    ): Promise<DbTranscriptionJob[]> {
+      return await db
         .select()
         .from(transcriptionJobs)
         .where(eq(transcriptionJobs.recordingId, recordingId))
@@ -46,22 +51,22 @@ export function makeJobsRepo(db: LyreDb) {
         .all();
     },
 
-    create(data: {
+    async create(data: {
       id: string;
       recordingId: string;
       taskId: string;
       requestId: string | null;
       status: JobStatus;
-    }): DbTranscriptionJob {
+    }): Promise<DbTranscriptionJob> {
       const now = Date.now();
-      return db
+      return await db
         .insert(transcriptionJobs)
         .values({ ...data, createdAt: now, updatedAt: now })
         .returning()
         .get();
     },
 
-    update(
+    async update(
       id: string,
       data: Partial<{
         status: JobStatus;
@@ -72,8 +77,8 @@ export function makeJobsRepo(db: LyreDb) {
         errorMessage: string | null;
         resultUrl: string | null;
       }>,
-    ): DbTranscriptionJob | undefined {
-      return db
+    ): Promise<DbTranscriptionJob | undefined> {
+      return await db
         .update(transcriptionJobs)
         .set({ ...data, updatedAt: Date.now() })
         .where(eq(transcriptionJobs.id, id))
@@ -81,24 +86,24 @@ export function makeJobsRepo(db: LyreDb) {
         .get();
     },
 
-    delete(id: string): boolean {
-      const result = db
+    async delete(id: string): Promise<boolean> {
+      const result = await db
         .delete(transcriptionJobs)
         .where(eq(transcriptionJobs.id, id))
-        .run() as unknown as { changes: number };
-      return result.changes > 0;
+        .run();
+      return rowsAffected(result) > 0;
     },
 
-    deleteByRecordingId(recordingId: string): number {
-      const result = db
+    async deleteByRecordingId(recordingId: string): Promise<number> {
+      const result = await db
         .delete(transcriptionJobs)
         .where(eq(transcriptionJobs.recordingId, recordingId))
-        .run() as unknown as { changes: number };
-      return result.changes;
+        .run();
+      return rowsAffected(result);
     },
 
-    findActive(): DbTranscriptionJob[] {
-      return db
+    async findActive(): Promise<DbTranscriptionJob[]> {
+      return await db
         .select()
         .from(transcriptionJobs)
         .where(inArray(transcriptionJobs.status, ["PENDING", "RUNNING"]))

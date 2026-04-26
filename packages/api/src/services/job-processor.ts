@@ -106,10 +106,10 @@ export async function pollJob(
       const parsed = parseTranscriptionResult(rawResult);
 
       // Remove existing transcription if re-transcribing
-      transcriptions.deleteByRecordingId(job.recordingId);
+      await transcriptions.deleteByRecordingId(job.recordingId);
 
       // Save transcription
-      transcriptions.create({
+      await transcriptions.create({
         id: crypto.randomUUID(),
         recordingId: job.recordingId,
         jobId: job.id,
@@ -124,10 +124,10 @@ export async function pollJob(
       });
 
       // Update recording status
-      recordings.update(job.recordingId, { status: "completed" });
+      await recordings.update(job.recordingId, { status: "completed" });
 
       // Auto-summarize if enabled (best-effort)
-      const recording = recordings.findById(job.recordingId);
+      const recording = await recordings.findById(job.recordingId);
       if (recording) {
         autoSummarize(recording.userId, job.recordingId, parsed.fullText, db).catch(
           (err) => {
@@ -142,7 +142,7 @@ export async function pollJob(
         err instanceof Error
           ? `Result processing failed: ${err.message}`
           : "Result processing failed";
-      recordings.update(job.recordingId, { status: "failed" });
+      await recordings.update(job.recordingId, { status: "failed" });
     }
   }
 
@@ -150,10 +150,10 @@ export async function pollJob(
   if (newStatus === "FAILED") {
     updateData.errorMessage =
       pollResult.output.message ?? "Transcription failed";
-    recordings.update(job.recordingId, { status: "failed" });
+    await recordings.update(job.recordingId, { status: "failed" });
   }
 
-  const updatedJob = jobs.update(job.id, updateData);
+  const updatedJob = await jobs.update(job.id, updateData);
   const finalJob = updatedJob ?? job;
 
   return {
@@ -205,7 +205,7 @@ async function autoSummarize(
 ): Promise<void> {
   const settings = db ? makeSettingsRepo(db) : settingsRepo;
   const recordings = db ? makeRecordingsRepo(db) : recordingsRepo;
-  const all = settings.findByUserId(userId);
+  const all = await settings.findByUserId(userId);
   const map = new Map(all.map((s) => [s.key, s.value]));
 
   if (map.get("ai.autoSummarize") !== "true") return;
@@ -235,7 +235,7 @@ async function autoSummarize(
     maxOutputTokens: 2048,
   });
 
-  recordings.update(recordingId, { aiSummary: text.trim() });
+  await recordings.update(recordingId, { aiSummary: text.trim() });
   console.log(
     `[auto-summarize] Summary generated for recording ${recordingId}`,
   );

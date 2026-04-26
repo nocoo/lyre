@@ -35,7 +35,7 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const recording = recordingsRepo.findById(id);
+  const recording = await recordingsRepo.findById(id);
 
   if (!recording || recording.userId !== user.id) {
     return NextResponse.json(
@@ -45,7 +45,7 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   // Check transcription exists
-  const transcription = transcriptionsRepo.findByRecordingId(id);
+  const transcription = await transcriptionsRepo.findByRecordingId(id);
   if (!transcription || !transcription.fullText) {
     return NextResponse.json(
       { error: "No transcription available for this recording" },
@@ -54,7 +54,7 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   // Load AI settings
-  const all = settingsRepo.findByUserId(user.id);
+  const all = await settingsRepo.findByUserId(user.id);
   const map = new Map(all.map((s) => [s.key, s.value]));
   const provider = map.get("ai.provider") ?? "";
   const apiKey = map.get("ai.apiKey") ?? "";
@@ -85,11 +85,11 @@ export async function POST(_request: Request, context: RouteContext) {
       model: client,
       prompt,
       maxOutputTokens: 2048,
-      onFinish({ text }) {
+      async onFinish({ text }) {
         // Save the completed summary to the database
         const summary = text.trim();
         if (summary) {
-          recordingsRepo.update(id, { aiSummary: summary });
+          await recordingsRepo.update(id, { aiSummary: summary });
         }
       },
     });

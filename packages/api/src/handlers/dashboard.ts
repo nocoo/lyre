@@ -92,7 +92,7 @@ export async function dashboardHandler(
   if (!ctx.user) return unauthorized();
   const userId = ctx.user.id;
   const { recordings, jobs } = makeRepos(ctx.db);
-  const allRecordings = recordings.findAll(userId);
+  const allRecordings = await recordings.findAll(userId);
 
   const statusCounts: Record<RecordingStatus, number> = {
     uploaded: 0,
@@ -162,7 +162,7 @@ export async function dashboardHandler(
   const recordingIdSet = new Set(allRecordings.map((r) => r.id));
   const userJobIdSet = new Set<string>();
   for (const rec of allRecordings) {
-    for (const job of jobs.findByRecordingId(rec.id)) {
+    for (const job of await jobs.findByRecordingId(rec.id)) {
       userJobIdSet.add(job.id);
     }
   }
@@ -202,7 +202,7 @@ export async function dashboardHandler(
     if (!userJobIdSet.has(jobId)) continue;
     resultTotalFiles++;
     resultTotalSize += obj.size;
-    const job = jobs.findById(jobId);
+    const job = await jobs.findById(jobId);
     if (!job) {
       resultOrphanFiles++;
       resultOrphanSize += obj.size;

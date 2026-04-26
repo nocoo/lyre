@@ -8,8 +8,8 @@ import type { AsrProvider, AsrPollResponse, AsrTranscriptionResult } from "@lyre
 
 // ── Test helpers ──
 
-function seedUser() {
-  usersRepo.create({
+async function seedUser() {
+  await usersRepo.create({
     id: "user-1",
     email: "alice@test.com",
     name: "Alice",
@@ -17,8 +17,8 @@ function seedUser() {
   });
 }
 
-function seedRecording(id = "rec-1", status: "uploaded" | "transcribing" = "transcribing") {
-  return recordingsRepo.create({
+async function seedRecording(id = "rec-1", status: "uploaded" | "transcribing" = "transcribing") {
+  return await recordingsRepo.create({
     id,
     userId: "user-1",
     title: "Test Recording",
@@ -33,12 +33,12 @@ function seedRecording(id = "rec-1", status: "uploaded" | "transcribing" = "tran
   });
 }
 
-function seedJob(
+async function seedJob(
   id = "job-1",
   recordingId = "rec-1",
   status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" = "PENDING",
 ) {
-  return jobsRepo.create({
+  return await jobsRepo.create({
     id,
     recordingId,
     taskId: `task-${id}`,
@@ -108,11 +108,11 @@ function makeProvider(pollFn?: AsrProvider["poll"]): AsrProvider {
   };
 }
 
-function makeDeps(overrides?: Partial<JobManagerDeps>): JobManagerDeps {
+async function makeDeps(overrides?: Partial<JobManagerDeps>): Promise<JobManagerDeps> {
   return {
     getProvider: () => makeProvider(),
-    findActiveJobs: () => jobsRepo.findActive(),
-    findJobById: (id) => jobsRepo.findById(id),
+    findActiveJobs: async () => await jobsRepo.findActive(),
+    findJobById: async (id) => await jobsRepo.findById(id),
     pollIntervalMs: 50, // Fast for tests
     ...overrides,
   };
@@ -138,19 +138,19 @@ async function waitFor(
 describe("JobManager", () => {
   let manager: JobManager;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
-    seedUser();
+    await seedUser();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     manager?.stop();
   });
 
   describe("track + polling", () => {
     test("tracks a job and starts polling", async () => {
-      seedRecording();
-      const job = seedJob();
+      await seedRecording();
+      const job = await seedJob();
 
       let pollCount = 0;
       const provider = makeProvider(async () => {
@@ -158,7 +158,7 @@ describe("JobManager", () => {
         return makePollResponse("RUNNING");
       });
 
-      manager = new JobManager(makeDeps({ getProvider: () => provider }));
+      manager = new JobManager(await makeDeps({ getProvider: () => provider }));
       manager.track(job);
 
       expect(manager.activeCount).toBe(1);
@@ -169,12 +169,12 @@ describe("JobManager", () => {
       expect(pollCount).toBeGreaterThanOrEqual(1);
     });
 
-    test("does not track terminal jobs", () => {
-      seedRecording();
-      const succeeded = seedJob("job-s", "rec-1", "SUCCEEDED");
-      const failed = seedJob("job-f", "rec-1", "FAILED");
+    test("does not track terminal jobs", async () => {
+      await seedRecording();
+      const succeeded = await seedJob("job-s", "rec-1", "SUCCEEDED");
+      const failed = await seedJob("job-f", "rec-1", "FAILED");
 
-      manager = new JobManager(makeDeps());
+      manager = new JobManager(await makeDeps());
       manager.track(succeeded);
       manager.track(failed);
 
@@ -182,8 +182,8 @@ describe("JobManager", () => {
     });
 
     test("stops polling when all jobs complete", async () => {
-      seedRecording();
-      const job = seedJob();
+      await seedRecording();
+      const job = await seedJob();
 
       let pollCount = 0;
       const provider = makeProvider(async () => {
@@ -192,7 +192,7 @@ describe("JobManager", () => {
         return makePollResponse("SUCCEEDED");
       });
 
-      manager = new JobManager(makeDeps({
+      manager = new JobManager(await makeDeps({
         getProvider: () => provider,
       }));
       manager.track(job);
@@ -209,13 +209,13 @@ describe("JobManager", () => {
 
   describe("event emission", () => {
     test("emits event when job status changes", async () => {
-      seedRecording();
-      const job = seedJob();
+      await seedRecording();
+      const job = await seedJob();
 
       const events: JobEvent[] = [];
       const provider = makeProvider(async () => makePollResponse("RUNNING"));
 
-      manager = new JobManager(makeDeps({ getProvider: () => provider }));
+      manager = new JobManager(await makeDeps({ getProvider: () => provider }));
       manager.onJobEvent((e) => events.push(e));
       manager.track(job);
 
@@ -230,13 +230,13 @@ describe("JobManager", () => {
     });
 
     test("emits event on terminal state", async () => {
-      seedRecording();
-      const job = seedJob("job-1", "rec-1", "RUNNING");
+      await seedRecording();
+      const job = await seedJob("job-1", "rec-1", "RUNNING");
 
       const events: JobEvent[] = [];
       const provider = makeProvider(async () => makePollResponse("SUCCEEDED"));
 
-      manager = new JobManager(makeDeps({
+      manager = new JobManager(await makeDeps({
         getProvider: () => provider,
       }));
       manager.onJobEvent((e) => events.push(e));
@@ -249,8 +249,8 @@ describe("JobManager", () => {
     });
 
     test("does not emit when status is unchanged", async () => {
-      seedRecording();
-      const job = seedJob();
+      await seedRecording();
+      const job = await seedJob();
 
       const events: JobEvent[] = [];
       let pollCount = 0;
@@ -259,7 +259,7 @@ describe("JobManager", () => {
         return makePollResponse("PENDING");
       });
 
-      manager = new JobManager(makeDeps({ getProvider: () => provider }));
+      manager = new JobManager(await makeDeps({ getProvider: () => provider }));
       manager.onJobEvent((e) => events.push(e));
       manager.track(job);
 
@@ -269,13 +269,13 @@ describe("JobManager", () => {
     });
 
     test("unsubscribe stops receiving events", async () => {
-      seedRecording();
-      const job = seedJob();
+      await seedRecording();
+      const job = await seedJob();
 
       const events: JobEvent[] = [];
       const provider = makeProvider(async () => makePollResponse("RUNNING"));
 
-      manager = new JobManager(makeDeps({ getProvider: () => provider }));
+      manager = new JobManager(await makeDeps({ getProvider: () => provider }));
       const unsubscribe = manager.onJobEvent((e) => events.push(e));
 
       // Unsubscribe before tracking
@@ -291,12 +291,12 @@ describe("JobManager", () => {
 
   describe("recovery from DB", () => {
     test("start() recovers active jobs from database", async () => {
-      seedRecording("rec-1");
-      seedRecording("rec-2");
-      seedJob("job-1", "rec-1", "PENDING");
-      seedJob("job-2", "rec-2", "RUNNING");
+      await seedRecording("rec-1");
+      await seedRecording("rec-2");
+      await seedJob("job-1", "rec-1", "PENDING");
+      await seedJob("job-2", "rec-2", "RUNNING");
       // This one should NOT be recovered:
-      seedJob("job-3", "rec-1", "SUCCEEDED");
+      await seedJob("job-3", "rec-1", "SUCCEEDED");
 
       let pollCount = 0;
       const provider = makeProvider(async () => {
@@ -304,9 +304,10 @@ describe("JobManager", () => {
         return makePollResponse("PENDING");
       });
 
-      manager = new JobManager(makeDeps({ getProvider: () => provider }));
+      manager = new JobManager(await makeDeps({ getProvider: () => provider }));
       manager.start();
 
+      await waitFor(() => manager.activeCount === 2);
       expect(manager.activeCount).toBe(2);
       expect(manager.isTracking("job-1")).toBe(true);
       expect(manager.isTracking("job-2")).toBe(true);
@@ -315,8 +316,8 @@ describe("JobManager", () => {
       await waitFor(() => pollCount > 0);
     });
 
-    test("start() is idempotent", () => {
-      manager = new JobManager(makeDeps());
+    test("start() is idempotent", async () => {
+      manager = new JobManager(await makeDeps());
       manager.start();
       manager.start();
       manager.start();
@@ -326,10 +327,10 @@ describe("JobManager", () => {
 
   describe("error resilience", () => {
     test("continues polling other jobs when one fails", async () => {
-      seedRecording("rec-1");
-      seedRecording("rec-2");
-      const job1 = seedJob("job-1", "rec-1", "PENDING");
-      const job2 = seedJob("job-2", "rec-2", "PENDING");
+      await seedRecording("rec-1");
+      await seedRecording("rec-2");
+      const job1 = await seedJob("job-1", "rec-1", "PENDING");
+      const job2 = await seedJob("job-2", "rec-2", "PENDING");
 
       const events: JobEvent[] = [];
 
@@ -340,7 +341,7 @@ describe("JobManager", () => {
         return makePollResponse("RUNNING");
       });
 
-      manager = new JobManager(makeDeps({ getProvider: () => provider }));
+      manager = new JobManager(await makeDeps({ getProvider: () => provider }));
       manager.onJobEvent((e) => events.push(e));
       manager.track(job1);
       manager.track(job2);
@@ -354,8 +355,8 @@ describe("JobManager", () => {
     });
 
     test("listener errors do not break polling", async () => {
-      seedRecording();
-      const job = seedJob();
+      await seedRecording();
+      const job = await seedJob();
 
       const events: JobEvent[] = [];
       let pollRound = 0;
@@ -365,7 +366,7 @@ describe("JobManager", () => {
         return makePollResponse("SUCCEEDED");
       });
 
-      manager = new JobManager(makeDeps({ getProvider: () => provider }));
+      manager = new JobManager(await makeDeps({ getProvider: () => provider }));
 
       // Bad listener
       manager.onJobEvent(() => {
@@ -383,8 +384,8 @@ describe("JobManager", () => {
 
   describe("stop", () => {
     test("stops polling and clears state", async () => {
-      seedRecording();
-      const job = seedJob();
+      await seedRecording();
+      const job = await seedJob();
 
       let pollCount = 0;
       const provider = makeProvider(async () => {
@@ -392,7 +393,7 @@ describe("JobManager", () => {
         return makePollResponse("PENDING");
       });
 
-      manager = new JobManager(makeDeps({ getProvider: () => provider }));
+      manager = new JobManager(await makeDeps({ getProvider: () => provider }));
       manager.track(job);
 
       await waitFor(() => pollCount > 0);

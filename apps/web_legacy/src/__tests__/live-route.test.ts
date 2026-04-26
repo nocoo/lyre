@@ -3,7 +3,7 @@ import { resetDb } from "@lyre/api/db";
 import { GET, checkHealth } from "@/app/api/live/route";
 
 describe("GET /api/live", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
   });
 
@@ -98,7 +98,7 @@ describe("checkHealth", () => {
     expect(typeof body.uptime).toBe("number");
   });
 
-  test("sets no-cache headers on success", () => {
+  test("sets no-cache headers on success", async () => {
     const response = checkHealth(() => {});
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
@@ -151,7 +151,7 @@ describe("checkHealth", () => {
     expect(body.database.error).toContain("***");
   });
 
-  test("error response sets no-cache headers", () => {
+  test("error response sets no-cache headers", async () => {
     const response = checkHealth(() => {
       throw new Error("disk I/O error");
     });

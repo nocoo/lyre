@@ -12,6 +12,7 @@
     "./db/repositories": "./src/db/repositories/index.ts",
     "./db/repositories/*": "./src/db/repositories/*.ts",
     "./db/drivers/result": "./src/db/drivers/result.ts",
+    "./db/drivers/batch": "./src/db/drivers/batch.ts",
     "./services/*": "./src/services/*.ts",
     "./lib/api-auth": "./src/lib/api-auth.ts",
     "./lib/types": "./src/lib/types.ts",

@@ -84,11 +84,11 @@ export async function getCurrentUser(
     const rawToken = authorization.slice(7);
     if (rawToken) {
       const hash = hashToken(rawToken);
-      const tokenRecord = deviceTokensRepo.findByHash(hash);
+      const tokenRecord = await deviceTokensRepo.findByHash(hash);
       if (tokenRecord) {
         // Update last-used timestamp (fire-and-forget).
-        deviceTokensRepo.touchLastUsed(tokenRecord.id);
-        return usersRepo.findById(tokenRecord.userId) ?? null;
+        void deviceTokensRepo.touchLastUsed(tokenRecord.id);
+        return (await usersRepo.findById(tokenRecord.userId)) ?? null;
       }
       // Invalid token — fall through to return null (don't try session).
       return null;

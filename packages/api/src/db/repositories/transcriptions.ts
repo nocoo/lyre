@@ -5,6 +5,7 @@
 import { eq } from "drizzle-orm";
 import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
+import { rowsAffected } from "../drivers/result";
 import { transcriptions, type DbTranscription } from "../schema";
 import type { TranscriptionSentence } from "../../lib/types";
 
@@ -19,32 +20,34 @@ function parseSentences(sentencesJson: string): TranscriptionSentence[] {
 
 export function makeTranscriptionsRepo(db: LyreDb) {
   return {
-    findById(id: string): DbTranscription | undefined {
-      return db
+    async findById(id: string): Promise<DbTranscription | undefined> {
+      return await db
         .select()
         .from(transcriptions)
         .where(eq(transcriptions.id, id))
         .get();
     },
 
-    findByRecordingId(recordingId: string): DbTranscription | undefined {
-      return db
+    async findByRecordingId(
+      recordingId: string,
+    ): Promise<DbTranscription | undefined> {
+      return await db
         .select()
         .from(transcriptions)
         .where(eq(transcriptions.recordingId, recordingId))
         .get();
     },
 
-    create(data: {
+    async create(data: {
       id: string;
       recordingId: string;
       jobId: string;
       fullText: string;
       sentences: TranscriptionSentence[];
       language: string | null;
-    }): DbTranscription {
+    }): Promise<DbTranscription> {
       const now = Date.now();
-      return db
+      return await db
         .insert(transcriptions)
         .values({
           ...data,
@@ -56,21 +59,21 @@ export function makeTranscriptionsRepo(db: LyreDb) {
         .get();
     },
 
-    update(
+    async update(
       id: string,
       data: Partial<{
         fullText: string;
         sentences: TranscriptionSentence[];
         language: string | null;
       }>,
-    ): DbTranscription | undefined {
+    ): Promise<DbTranscription | undefined> {
       const updateData: Record<string, unknown> = { updatedAt: Date.now() };
       if (data.fullText !== undefined) updateData.fullText = data.fullText;
       if (data.sentences !== undefined)
         updateData.sentences = JSON.stringify(data.sentences);
       if (data.language !== undefined) updateData.language = data.language;
 
-      return db
+      return await db
         .update(transcriptions)
         .set(updateData)
         .where(eq(transcriptions.id, id))
@@ -78,20 +81,20 @@ export function makeTranscriptionsRepo(db: LyreDb) {
         .get();
     },
 
-    delete(id: string): boolean {
-      const result = db
+    async delete(id: string): Promise<boolean> {
+      const result = await db
         .delete(transcriptions)
         .where(eq(transcriptions.id, id))
-        .run() as unknown as { changes: number };
-      return result.changes > 0;
+        .run();
+      return rowsAffected(result) > 0;
     },
 
-    deleteByRecordingId(recordingId: string): boolean {
-      const result = db
+    async deleteByRecordingId(recordingId: string): Promise<boolean> {
+      const result = await db
         .delete(transcriptions)
         .where(eq(transcriptions.recordingId, recordingId))
-        .run() as unknown as { changes: number };
-      return result.changes > 0;
+        .run();
+      return rowsAffected(result) > 0;
     },
 
     parseSentences,

@@ -8,68 +8,70 @@
 import { eq, and } from "drizzle-orm";
 import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
+import { rowsAffected } from "../drivers/result";
 import { deviceTokens, type DbDeviceToken } from "../schema";
 
 export function makeDeviceTokensRepo(db: LyreDb) {
   return {
-    findByHash(tokenHash: string): DbDeviceToken | undefined {
-      return db
+    async findByHash(tokenHash: string): Promise<DbDeviceToken | undefined> {
+      return await db
         .select()
         .from(deviceTokens)
         .where(eq(deviceTokens.tokenHash, tokenHash))
         .get();
     },
 
-    findById(id: string): DbDeviceToken | undefined {
-      return db
+    async findById(id: string): Promise<DbDeviceToken | undefined> {
+      return await db
         .select()
         .from(deviceTokens)
         .where(eq(deviceTokens.id, id))
         .get();
     },
 
-    findByUserId(userId: string): DbDeviceToken[] {
-      return db
+    async findByUserId(userId: string): Promise<DbDeviceToken[]> {
+      return await db
         .select()
         .from(deviceTokens)
         .where(eq(deviceTokens.userId, userId))
         .all();
     },
 
-    create(data: {
+    async create(data: {
       id: string;
       userId: string;
       name: string;
       tokenHash: string;
-    }): DbDeviceToken {
-      return db
+    }): Promise<DbDeviceToken> {
+      return await db
         .insert(deviceTokens)
         .values({ ...data, createdAt: Date.now() })
         .returning()
         .get();
     },
 
-    touchLastUsed(id: string): void {
-      db.update(deviceTokens)
+    async touchLastUsed(id: string): Promise<void> {
+      await db
+        .update(deviceTokens)
         .set({ lastUsedAt: Date.now() })
         .where(eq(deviceTokens.id, id))
         .run();
     },
 
-    deleteByIdAndUser(id: string, userId: string): boolean {
-      const result = db
+    async deleteByIdAndUser(id: string, userId: string): Promise<boolean> {
+      const result = await db
         .delete(deviceTokens)
         .where(and(eq(deviceTokens.id, id), eq(deviceTokens.userId, userId)))
-        .run() as unknown as { changes: number };
-      return result.changes > 0;
+        .run();
+      return rowsAffected(result) > 0;
     },
 
-    deleteByUserId(userId: string): number {
-      const result = db
+    async deleteByUserId(userId: string): Promise<number> {
+      const result = await db
         .delete(deviceTokens)
         .where(eq(deviceTokens.userId, userId))
-        .run() as unknown as { changes: number };
-      return result.changes;
+        .run();
+      return rowsAffected(result);
     },
   };
 }

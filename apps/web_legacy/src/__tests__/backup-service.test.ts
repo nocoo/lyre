@@ -25,20 +25,20 @@ import {
 
 // ── Helpers ──
 
-function seedUser(id = "user-1", email = "alice@test.com") {
-  return usersRepo.create({ id, email, name: "Alice", avatarUrl: null });
+async function seedUser(id = "user-1", email = "alice@test.com") {
+  return await usersRepo.create({ id, email, name: "Alice", avatarUrl: null });
 }
 
-function seedFullData(userId: string) {
+async function seedFullData(userId: string) {
   // Folder
-  foldersRepo.create({ id: "f-1", userId, name: "Work", icon: "briefcase" });
+  await foldersRepo.create({ id: "f-1", userId, name: "Work", icon: "briefcase" });
 
   // Tags
-  tagsRepo.create({ id: "t-1", userId, name: "meeting" });
-  tagsRepo.create({ id: "t-2", userId, name: "important" });
+  await tagsRepo.create({ id: "t-1", userId, name: "meeting" });
+  await tagsRepo.create({ id: "t-2", userId, name: "important" });
 
   // Recording in folder
-  recordingsRepo.create({
+  await recordingsRepo.create({
     id: "rec-1",
     userId,
     title: "Standup Call",
@@ -56,7 +56,7 @@ function seedFullData(userId: string) {
   });
 
   // Recording without folder
-  recordingsRepo.create({
+  await recordingsRepo.create({
     id: "rec-2",
     userId,
     title: "Quick Note",
@@ -71,17 +71,17 @@ function seedFullData(userId: string) {
   });
 
   // Recording tags (join table)
-  tagsRepo.setTagsForRecording("rec-1", ["t-1", "t-2"]);
+  await tagsRepo.setTagsForRecording("rec-1", ["t-1", "t-2"]);
 
   // Job + transcription for rec-1
-  jobsRepo.create({
+  await jobsRepo.create({
     id: "job-1",
     recordingId: "rec-1",
     taskId: "dash-task-1",
     requestId: "req-1",
     status: "SUCCEEDED",
   });
-  transcriptionsRepo.create({
+  await transcriptionsRepo.create({
     id: "trans-1",
     recordingId: "rec-1",
     jobId: "job-1",
@@ -100,7 +100,7 @@ function seedFullData(userId: string) {
   });
 
   // Device token
-  deviceTokensRepo.create({
+  await deviceTokensRepo.create({
     id: "dt-1",
     userId,
     name: "MacBook",
@@ -108,8 +108,8 @@ function seedFullData(userId: string) {
   });
 
   // Settings
-  settingsRepo.upsert(userId, "ai.provider", "openai");
-  settingsRepo.upsert(userId, "ai.model", "gpt-4");
+  await settingsRepo.upsert(userId, "ai.provider", "openai");
+  await settingsRepo.upsert(userId, "ai.model", "gpt-4");
 }
 
 function makeMinimalBackup(overrides?: Partial<BackupData>): BackupData {
@@ -139,54 +139,54 @@ function makeMinimalBackup(overrides?: Partial<BackupData>): BackupData {
 // ── Tests ──
 
 describe("backup service", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
   });
 
   // ── validateBackup ──
 
   describe("validateBackup", () => {
-    test("accepts valid backup", () => {
+    test("accepts valid backup", async () => {
       expect(validateBackup(makeMinimalBackup())).toBeNull();
     });
 
-    test("rejects null", () => {
+    test("rejects null", async () => {
       expect(validateBackup(null)).toBe("expected an object");
     });
 
-    test("rejects non-object", () => {
+    test("rejects non-object", async () => {
       expect(validateBackup("string")).toBe("expected an object");
       expect(validateBackup(42)).toBe("expected an object");
     });
 
-    test("rejects wrong version", () => {
+    test("rejects wrong version", async () => {
       expect(validateBackup({ ...makeMinimalBackup(), version: 2 })).toBe(
         "unsupported version (expected 1)",
       );
     });
 
-    test("rejects missing version", () => {
+    test("rejects missing version", async () => {
       const data = makeMinimalBackup();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (data as any).version;
       expect(validateBackup(data)).toBe("unsupported version (expected 1)");
     });
 
-    test("rejects missing exportedAt", () => {
+    test("rejects missing exportedAt", async () => {
       const data = makeMinimalBackup();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (data as any).exportedAt;
       expect(validateBackup(data)).toBe("missing exportedAt");
     });
 
-    test("rejects missing user object", () => {
+    test("rejects missing user object", async () => {
       const data = makeMinimalBackup();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (data as any).user;
       expect(validateBackup(data)).toBe("missing user object");
     });
 
-    test("rejects missing required arrays", () => {
+    test("rejects missing required arrays", async () => {
       const arrays = [
         "folders",
         "tags",
@@ -206,7 +206,7 @@ describe("backup service", () => {
       }
     });
 
-    test("rejects non-array for required fields", () => {
+    test("rejects non-array for required fields", async () => {
       const data = makeMinimalBackup();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (data as any).folders = "not-array";
@@ -217,9 +217,9 @@ describe("backup service", () => {
   // ── exportBackup ──
 
   describe("exportBackup", () => {
-    test("exports empty data for user with no records", () => {
-      const user = seedUser();
-      const backup = exportBackup(user);
+    test("exports empty data for user with no records", async () => {
+      const user = await seedUser();
+      const backup = await exportBackup(user);
 
       expect(backup.version).toBe(1);
       expect(backup.exportedAt).toBeDefined();
@@ -235,11 +235,11 @@ describe("backup service", () => {
       expect(backup.settings).toEqual([]);
     });
 
-    test("exports all user data", () => {
-      const user = seedUser();
-      seedFullData(user.id);
+    test("exports all user data", async () => {
+      const user = await seedUser();
+      await seedFullData(user.id);
 
-      const backup = exportBackup(user);
+      const backup = await exportBackup(user);
 
       expect(backup.folders).toHaveLength(1);
       expect(backup.folders[0]!.name).toBe("Work");
@@ -286,28 +286,28 @@ describe("backup service", () => {
       );
     });
 
-    test("does not include data from other users", () => {
-      const user1 = seedUser("user-1", "alice@test.com");
-      const user2 = seedUser("user-2", "bob@test.com");
+    test("does not include data from other users", async () => {
+      const user1 = await seedUser("user-1", "alice@test.com");
+      const user2 = await seedUser("user-2", "bob@test.com");
 
       // Seed data for user-2
-      foldersRepo.create({ id: "f-bob", userId: user2.id, name: "Bob Folder" });
-      tagsRepo.create({ id: "t-bob", userId: user2.id, name: "bob-tag" });
-      settingsRepo.upsert(user2.id, "theme", "dark");
+      await foldersRepo.create({ id: "f-bob", userId: user2.id, name: "Bob Folder" });
+      await tagsRepo.create({ id: "t-bob", userId: user2.id, name: "bob-tag" });
+      await settingsRepo.upsert(user2.id, "theme", "dark");
 
       // Seed data for user-1
-      foldersRepo.create({ id: "f-alice", userId: user1.id, name: "Alice Folder" });
+      await foldersRepo.create({ id: "f-alice", userId: user1.id, name: "Alice Folder" });
 
-      const backup = exportBackup(user1);
+      const backup = await exportBackup(user1);
       expect(backup.folders).toHaveLength(1);
       expect(backup.folders[0]!.name).toBe("Alice Folder");
       expect(backup.tags).toHaveLength(0);
       expect(backup.settings).toHaveLength(0);
     });
 
-    test("exports recording notes and aiSummary", () => {
-      const user = seedUser();
-      recordingsRepo.create({
+    test("exports recording notes and aiSummary", async () => {
+      const user = await seedUser();
+      await recordingsRepo.create({
         id: "rec-notes",
         userId: user.id,
         title: "With Notes",
@@ -321,9 +321,9 @@ describe("backup service", () => {
         status: "completed",
         notes: "These are my notes",
       });
-      recordingsRepo.update("rec-notes", { aiSummary: "AI generated summary" });
+      await recordingsRepo.update("rec-notes", { aiSummary: "AI generated summary" });
 
-      const backup = exportBackup(user);
+      const backup = await exportBackup(user);
       expect(backup.recordings[0]!.notes).toBe("These are my notes");
       expect(backup.recordings[0]!.aiSummary).toBe("AI generated summary");
     });
@@ -332,10 +332,10 @@ describe("backup service", () => {
   // ── importBackup ──
 
   describe("importBackup", () => {
-    test("imports empty backup without errors", () => {
-      seedUser();
+    test("imports empty backup without errors", async () => {
+      await seedUser();
       const backup = makeMinimalBackup();
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
 
       expect(counts.folders).toBe(0);
       expect(counts.tags).toBe(0);
@@ -347,8 +347,8 @@ describe("backup service", () => {
       expect(counts.settings).toBe(0);
     });
 
-    test("imports folders", () => {
-      seedUser();
+    test("imports folders", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         folders: [
           {
@@ -361,35 +361,35 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.folders).toBe(1);
 
-      const folder = foldersRepo.findById("f-imported");
+      const folder = await foldersRepo.findById("f-imported");
       expect(folder).toBeDefined();
       expect(folder!.name).toBe("Imported Folder");
       expect(folder!.icon).toBe("star");
       expect(folder!.userId).toBe("user-1");
     });
 
-    test("imports tags", () => {
-      seedUser();
+    test("imports tags", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         tags: [
           { id: "t-imported", name: "imported-tag", createdAt: 1700000000000 },
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.tags).toBe(1);
 
-      const tag = tagsRepo.findById("t-imported");
+      const tag = await tagsRepo.findById("t-imported");
       expect(tag).toBeDefined();
       expect(tag!.name).toBe("imported-tag");
       expect(tag!.userId).toBe("user-1");
     });
 
-    test("imports recordings with all fields", () => {
-      seedUser();
+    test("imports recordings with all fields", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         recordings: [
           {
@@ -414,10 +414,10 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.recordings).toBe(1);
 
-      const rec = recordingsRepo.findById("rec-imported");
+      const rec = await recordingsRepo.findById("rec-imported");
       expect(rec).toBeDefined();
       expect(rec!.title).toBe("Imported Recording");
       expect(rec!.description).toBe("Test description");
@@ -427,10 +427,10 @@ describe("backup service", () => {
       expect(rec!.userId).toBe("user-1");
     });
 
-    test("imports transcription jobs and transcriptions", () => {
-      seedUser();
+    test("imports transcription jobs and transcriptions", async () => {
+      await seedUser();
       // Need a recording first
-      recordingsRepo.create({
+      await recordingsRepo.create({
         id: "rec-1",
         userId: "user-1",
         title: "Test",
@@ -475,27 +475,27 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.transcriptionJobs).toBe(1);
       expect(counts.transcriptions).toBe(1);
 
-      const job = jobsRepo.findById("job-imported");
+      const job = await jobsRepo.findById("job-imported");
       expect(job).toBeDefined();
       expect(job!.taskId).toBe("task-123");
       expect(job!.status).toBe("SUCCEEDED");
       expect(job!.usageSeconds).toBe(60);
 
-      const trans = transcriptionsRepo.findById("trans-imported");
+      const trans = await transcriptionsRepo.findById("trans-imported");
       expect(trans).toBeDefined();
       expect(trans!.fullText).toBe("Hello world");
       expect(trans!.language).toBe("en");
     });
 
-    test("imports recording-tag associations", () => {
-      seedUser();
-      tagsRepo.create({ id: "t-1", userId: "user-1", name: "tag1" });
-      tagsRepo.create({ id: "t-2", userId: "user-1", name: "tag2" });
-      recordingsRepo.create({
+    test("imports recording-tag associations", async () => {
+      await seedUser();
+      await tagsRepo.create({ id: "t-1", userId: "user-1", name: "tag1" });
+      await tagsRepo.create({ id: "t-2", userId: "user-1", name: "tag2" });
+      await recordingsRepo.create({
         id: "rec-1",
         userId: "user-1",
         title: "Test",
@@ -516,15 +516,15 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.recordingTags).toBe(2);
 
-      const tagIds = tagsRepo.findTagIdsForRecording("rec-1");
+      const tagIds = await tagsRepo.findTagIdsForRecording("rec-1");
       expect(tagIds.sort()).toEqual(["t-1", "t-2"]);
     });
 
-    test("imports device tokens", () => {
-      seedUser();
+    test("imports device tokens", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         deviceTokens: [
           {
@@ -537,18 +537,18 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.deviceTokens).toBe(1);
 
-      const token = deviceTokensRepo.findById("dt-imported");
+      const token = await deviceTokensRepo.findById("dt-imported");
       expect(token).toBeDefined();
       expect(token!.name).toBe("iPhone");
       expect(token!.tokenHash).toBe("hash123");
       expect(token!.userId).toBe("user-1");
     });
 
-    test("imports settings", () => {
-      seedUser();
+    test("imports settings", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         settings: [
           { key: "theme", value: "dark", updatedAt: 1700000000000 },
@@ -556,18 +556,18 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.settings).toBe(2);
 
-      const theme = settingsRepo.findByKey("user-1", "theme");
+      const theme = await settingsRepo.findByKey("user-1", "theme");
       expect(theme!.value).toBe("dark");
-      const lang = settingsRepo.findByKey("user-1", "language");
+      const lang = await settingsRepo.findByKey("user-1", "language");
       expect(lang!.value).toBe("zh");
     });
 
-    test("upserts existing folders (update on conflict)", () => {
-      seedUser();
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Old Name", icon: "folder" });
+    test("upserts existing folders (update on conflict)", async () => {
+      await seedUser();
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "Old Name", icon: "folder" });
 
       const backup = makeMinimalBackup({
         folders: [
@@ -581,30 +581,30 @@ describe("backup service", () => {
         ],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const folder = foldersRepo.findById("f-1");
+      const folder = await foldersRepo.findById("f-1");
       expect(folder!.name).toBe("New Name");
       expect(folder!.icon).toBe("star");
     });
 
-    test("upserts existing tags", () => {
-      seedUser();
-      tagsRepo.create({ id: "t-1", userId: "user-1", name: "old-name" });
+    test("upserts existing tags", async () => {
+      await seedUser();
+      await tagsRepo.create({ id: "t-1", userId: "user-1", name: "old-name" });
 
       const backup = makeMinimalBackup({
         tags: [{ id: "t-1", name: "new-name", createdAt: 1700000000000 }],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const tag = tagsRepo.findById("t-1");
+      const tag = await tagsRepo.findById("t-1");
       expect(tag!.name).toBe("new-name");
     });
 
-    test("upserts existing recordings", () => {
-      seedUser();
-      recordingsRepo.create({
+    test("upserts existing recordings", async () => {
+      await seedUser();
+      await recordingsRepo.create({
         id: "rec-1",
         userId: "user-1",
         title: "Old Title",
@@ -642,35 +642,35 @@ describe("backup service", () => {
         ],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const rec = recordingsRepo.findById("rec-1");
+      const rec = await recordingsRepo.findById("rec-1");
       expect(rec!.title).toBe("Updated Title");
       expect(rec!.description).toBe("New desc");
       expect(rec!.status).toBe("completed");
       expect(rec!.notes).toBe("Updated notes");
     });
 
-    test("upserts existing settings", () => {
-      seedUser();
-      settingsRepo.upsert("user-1", "theme", "light");
+    test("upserts existing settings", async () => {
+      await seedUser();
+      await settingsRepo.upsert("user-1", "theme", "light");
 
       const backup = makeMinimalBackup({
         settings: [{ key: "theme", value: "dark", updatedAt: 1700000001000 }],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const setting = settingsRepo.findByKey("user-1", "theme");
+      const setting = await settingsRepo.findByKey("user-1", "theme");
       expect(setting!.value).toBe("dark");
     });
 
-    test("replaces recording-tag associations on import", () => {
-      seedUser();
-      tagsRepo.create({ id: "t-1", userId: "user-1", name: "tag1" });
-      tagsRepo.create({ id: "t-2", userId: "user-1", name: "tag2" });
-      tagsRepo.create({ id: "t-3", userId: "user-1", name: "tag3" });
-      recordingsRepo.create({
+    test("replaces recording-tag associations on import", async () => {
+      await seedUser();
+      await tagsRepo.create({ id: "t-1", userId: "user-1", name: "tag1" });
+      await tagsRepo.create({ id: "t-2", userId: "user-1", name: "tag2" });
+      await tagsRepo.create({ id: "t-3", userId: "user-1", name: "tag3" });
+      await recordingsRepo.create({
         id: "rec-1",
         userId: "user-1",
         title: "Test",
@@ -685,8 +685,8 @@ describe("backup service", () => {
       });
 
       // Set initial tags
-      tagsRepo.setTagsForRecording("rec-1", ["t-1", "t-2"]);
-      expect(tagsRepo.findTagIdsForRecording("rec-1").sort()).toEqual(["t-1", "t-2"]);
+      await tagsRepo.setTagsForRecording("rec-1", ["t-1", "t-2"]);
+      expect((await tagsRepo.findTagIdsForRecording("rec-1")).sort()).toEqual(["t-1", "t-2"]);
 
       // Import replaces with different tags
       const backup = makeMinimalBackup({
@@ -696,15 +696,15 @@ describe("backup service", () => {
         ],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const tagIds = tagsRepo.findTagIdsForRecording("rec-1");
+      const tagIds = await tagsRepo.findTagIdsForRecording("rec-1");
       expect(tagIds.sort()).toEqual(["t-2", "t-3"]);
     });
 
-    test("re-keys data to current user on import", () => {
-      seedUser("user-1", "alice@test.com");
-      seedUser("user-2", "bob@test.com");
+    test("re-keys data to current user on import", async () => {
+      await seedUser("user-1", "alice@test.com");
+      await seedUser("user-2", "bob@test.com");
 
       // Create backup pretending to be from user-2
       const backup = makeMinimalBackup({
@@ -731,39 +731,39 @@ describe("backup service", () => {
       });
 
       // Import as user-1
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
       // Folder should belong to user-1, not user-2
-      const folder = foldersRepo.findById("f-from-bob");
+      const folder = await foldersRepo.findById("f-from-bob");
       expect(folder).toBeDefined();
       expect(folder!.userId).toBe("user-1");
 
       // Settings should belong to user-1
-      const setting = settingsRepo.findByKey("user-1", "imported-key");
+      const setting = await settingsRepo.findByKey("user-1", "imported-key");
       expect(setting).toBeDefined();
       expect(setting!.value).toBe("imported-val");
 
       // user-2 should have nothing
-      expect(settingsRepo.findByKey("user-2", "imported-key")).toBeUndefined();
+      expect(await settingsRepo.findByKey("user-2", "imported-key")).toBeUndefined();
     });
   });
 
   // ── Full round-trip ──
 
   describe("round-trip export → import", () => {
-    test("export then import into empty DB preserves all data", () => {
-      const user = seedUser();
-      seedFullData(user.id);
+    test("export then import into empty DB preserves all data", async () => {
+      const user = await seedUser();
+      await seedFullData(user.id);
 
       // Export
-      const backup = exportBackup(user);
+      const backup = await exportBackup(user);
 
       // Clear DB
       resetDb();
-      seedUser();
+      await seedUser();
 
       // Import
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
 
       expect(counts.folders).toBe(1);
       expect(counts.tags).toBe(2);
@@ -775,69 +775,69 @@ describe("backup service", () => {
       expect(counts.settings).toBe(2);
 
       // Verify data integrity
-      const folder = foldersRepo.findById("f-1");
+      const folder = await foldersRepo.findById("f-1");
       expect(folder!.name).toBe("Work");
 
-      const rec = recordingsRepo.findById("rec-1");
+      const rec = await recordingsRepo.findById("rec-1");
       expect(rec!.title).toBe("Standup Call");
       expect(rec!.folderId).toBe("f-1");
       expect(rec!.notes).toBe("Good discussion");
 
-      const tagIds = tagsRepo.findTagIdsForRecording("rec-1");
+      const tagIds = await tagsRepo.findTagIdsForRecording("rec-1");
       expect(tagIds.sort()).toEqual(["t-1", "t-2"]);
 
-      const job = jobsRepo.findById("job-1");
+      const job = await jobsRepo.findById("job-1");
       expect(job!.status).toBe("SUCCEEDED");
 
-      const trans = transcriptionsRepo.findByRecordingId("rec-1");
+      const trans = await transcriptionsRepo.findByRecordingId("rec-1");
       expect(trans!.fullText).toContain("Hello team");
 
-      const dt = deviceTokensRepo.findById("dt-1");
+      const dt = await deviceTokensRepo.findById("dt-1");
       expect(dt!.name).toBe("MacBook");
 
-      const aiProvider = settingsRepo.findByKey("user-1", "ai.provider");
+      const aiProvider = await settingsRepo.findByKey("user-1", "ai.provider");
       expect(aiProvider!.value).toBe("openai");
     });
 
-    test("export then re-import is idempotent (upsert same data)", () => {
-      const user = seedUser();
-      seedFullData(user.id);
+    test("export then re-import is idempotent (upsert same data)", async () => {
+      const user = await seedUser();
+      await seedFullData(user.id);
 
-      const backup = exportBackup(user);
+      const backup = await exportBackup(user);
 
       // Import on top of existing data (should upsert, not duplicate)
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
 
       expect(counts.folders).toBe(1);
       expect(counts.recordings).toBe(2);
 
       // Verify no duplicates
-      const allFolders = foldersRepo.findByUserId("user-1");
+      const allFolders = await foldersRepo.findByUserId("user-1");
       expect(allFolders).toHaveLength(1);
 
-      const allRecordings = recordingsRepo.findAll("user-1");
+      const allRecordings = await recordingsRepo.findAll("user-1");
       expect(allRecordings).toHaveLength(2);
 
-      const allTags = tagsRepo.findByUserId("user-1");
+      const allTags = await tagsRepo.findByUserId("user-1");
       expect(allTags).toHaveLength(2);
 
-      const allSettings = settingsRepo.findByUserId("user-1");
+      const allSettings = await settingsRepo.findByUserId("user-1");
       expect(allSettings).toHaveLength(2);
     });
 
-    test("validates exported backup passes validation", () => {
-      const user = seedUser();
-      seedFullData(user.id);
+    test("validates exported backup passes validation", async () => {
+      const user = await seedUser();
+      await seedFullData(user.id);
 
-      const backup = exportBackup(user);
+      const backup = await exportBackup(user);
       expect(validateBackup(backup)).toBeNull();
     });
 
-    test("exported JSON can be serialized and deserialized", () => {
-      const user = seedUser();
-      seedFullData(user.id);
+    test("exported JSON can be serialized and deserialized", async () => {
+      const user = await seedUser();
+      await seedFullData(user.id);
 
-      const backup = exportBackup(user);
+      const backup = await exportBackup(user);
       const serialized = JSON.stringify(backup);
       const deserialized = JSON.parse(serialized);
 
@@ -846,8 +846,8 @@ describe("backup service", () => {
 
       // Clear and re-import
       resetDb();
-      seedUser();
-      const counts = importBackup("user-1", deserialized);
+      await seedUser();
+      const counts = await importBackup("user-1", deserialized);
       expect(counts.recordings).toBe(2);
     });
   });
@@ -855,8 +855,8 @@ describe("backup service", () => {
   // ── Edge cases ──
 
   describe("edge cases", () => {
-    test("import with only folders (no recordings)", () => {
-      seedUser();
+    test("import with only folders (no recordings)", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         folders: [
           {
@@ -869,13 +869,13 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.folders).toBe(1);
       expect(counts.recordings).toBe(0);
     });
 
-    test("import with only settings", () => {
-      seedUser();
+    test("import with only settings", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         settings: [
           { key: "k1", value: "v1", updatedAt: 1700000000000 },
@@ -884,15 +884,15 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.settings).toBe(3);
 
-      const all = settingsRepo.findByUserId("user-1");
+      const all = await settingsRepo.findByUserId("user-1");
       expect(all).toHaveLength(3);
     });
 
-    test("import preserves null fields on recordings", () => {
-      seedUser();
+    test("import preserves null fields on recordings", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         recordings: [
           {
@@ -917,9 +917,9 @@ describe("backup service", () => {
         ],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const rec = recordingsRepo.findById("rec-nulls");
+      const rec = await recordingsRepo.findById("rec-nulls");
       expect(rec!.description).toBeNull();
       expect(rec!.fileSize).toBeNull();
       expect(rec!.duration).toBeNull();
@@ -931,8 +931,8 @@ describe("backup service", () => {
       expect(rec!.folderId).toBeNull();
     });
 
-    test("import with device token null lastUsedAt", () => {
-      seedUser();
+    test("import with device token null lastUsedAt", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         deviceTokens: [
           {
@@ -945,15 +945,15 @@ describe("backup service", () => {
         ],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const dt = deviceTokensRepo.findById("dt-null");
+      const dt = await deviceTokensRepo.findById("dt-null");
       expect(dt!.lastUsedAt).toBeNull();
     });
 
-    test("upserts existing device tokens", () => {
-      seedUser();
-      deviceTokensRepo.create({
+    test("upserts existing device tokens", async () => {
+      await seedUser();
+      await deviceTokensRepo.create({
         id: "dt-1",
         userId: "user-1",
         name: "Old Name",
@@ -972,16 +972,16 @@ describe("backup service", () => {
         ],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const dt = deviceTokensRepo.findById("dt-1");
+      const dt = await deviceTokensRepo.findById("dt-1");
       expect(dt!.name).toBe("Updated Name");
       expect(dt!.tokenHash).toBe("new-hash");
     });
 
-    test("upserts existing transcription jobs", () => {
-      seedUser();
-      recordingsRepo.create({
+    test("upserts existing transcription jobs", async () => {
+      await seedUser();
+      await recordingsRepo.create({
         id: "rec-1",
         userId: "user-1",
         title: "Test",
@@ -994,7 +994,7 @@ describe("backup service", () => {
         ossKey: "uploads/user-1/rec-1/test.mp3",
         status: "completed",
       });
-      jobsRepo.create({
+      await jobsRepo.create({
         id: "job-1",
         recordingId: "rec-1",
         taskId: "old-task",
@@ -1021,17 +1021,17 @@ describe("backup service", () => {
         ],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const job = jobsRepo.findById("job-1");
+      const job = await jobsRepo.findById("job-1");
       expect(job!.taskId).toBe("updated-task");
       expect(job!.status).toBe("SUCCEEDED");
       expect(job!.requestId).toBe("req-updated");
     });
 
-    test("upserts existing transcriptions", () => {
-      seedUser();
-      recordingsRepo.create({
+    test("upserts existing transcriptions", async () => {
+      await seedUser();
+      await recordingsRepo.create({
         id: "rec-1",
         userId: "user-1",
         title: "Test",
@@ -1044,14 +1044,14 @@ describe("backup service", () => {
         ossKey: "uploads/user-1/rec-1/test.mp3",
         status: "completed",
       });
-      jobsRepo.create({
+      await jobsRepo.create({
         id: "job-1",
         recordingId: "rec-1",
         taskId: "task-1",
         requestId: null,
         status: "SUCCEEDED",
       });
-      transcriptionsRepo.create({
+      await transcriptionsRepo.create({
         id: "trans-1",
         recordingId: "rec-1",
         jobId: "job-1",
@@ -1075,15 +1075,15 @@ describe("backup service", () => {
         ],
       });
 
-      importBackup("user-1", backup);
+      await importBackup("user-1", backup);
 
-      const trans = transcriptionsRepo.findById("trans-1");
+      const trans = await transcriptionsRepo.findById("trans-1");
       expect(trans!.fullText).toBe("Updated text");
       expect(trans!.language).toBe("zh");
     });
 
-    test("import multiple recordings with interleaved data", () => {
-      seedUser();
+    test("import multiple recordings with interleaved data", async () => {
+      await seedUser();
       const backup = makeMinimalBackup({
         tags: [
           { id: "t-a", name: "alpha", createdAt: 1700000000000 },
@@ -1165,15 +1165,15 @@ describe("backup service", () => {
         ],
       });
 
-      const counts = importBackup("user-1", backup);
+      const counts = await importBackup("user-1", backup);
       expect(counts.recordings).toBe(2);
       expect(counts.transcriptionJobs).toBe(2);
       expect(counts.recordingTags).toBe(2);
 
-      expect(tagsRepo.findTagIdsForRecording("rec-a")).toEqual(["t-a"]);
-      expect(tagsRepo.findTagIdsForRecording("rec-b")).toEqual(["t-b"]);
+      expect(await tagsRepo.findTagIdsForRecording("rec-a")).toEqual(["t-a"]);
+      expect(await tagsRepo.findTagIdsForRecording("rec-b")).toEqual(["t-b"]);
 
-      const failedJob = jobsRepo.findById("job-b");
+      const failedJob = await jobsRepo.findById("job-b");
       expect(failedJob!.errorMessage).toBe("Timeout");
     });
   });
@@ -1188,17 +1188,17 @@ describe("pushBackupToBacky", () => {
     apiKey: "test-api-key-12345",
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     globalThis.fetch = originalFetch;
   });
 
   test("sends multipart POST with correct fields and auth header", async () => {
-    const user = seedUser();
-    seedFullData(user.id);
+    const user = await seedUser();
+    await seedFullData(user.id);
 
     let capturedUrl: string | undefined;
     let capturedInit: RequestInit | undefined;
@@ -1261,7 +1261,7 @@ describe("pushBackupToBacky", () => {
   });
 
   test("returns error details when Backy rejects", async () => {
-    const user = seedUser();
+    const user = await seedUser();
 
     globalThis.fetch = mock(async () => {
       return new Response(JSON.stringify({ error: "rate limited" }), {
@@ -1281,7 +1281,7 @@ describe("pushBackupToBacky", () => {
   });
 
   test("handles non-JSON response from Backy", async () => {
-    const user = seedUser();
+    const user = await seedUser();
 
     globalThis.fetch = mock(async () => {
       return new Response("Internal Server Error", {
@@ -1300,7 +1300,7 @@ describe("pushBackupToBacky", () => {
   });
 
   test("tag includes correct stats from backup data", async () => {
-    const user = seedUser();
+    const user = await seedUser();
     // No data seeded — empty backup
 
     globalThis.fetch = mock(async () => {
@@ -1325,7 +1325,7 @@ describe("pushBackupToBacky", () => {
   });
 
   test("handles network-level fetch failure (DNS, TLS, connection refused)", async () => {
-    const user = seedUser();
+    const user = await seedUser();
 
     globalThis.fetch = mock(async () => {
       throw new Error("getaddrinfo ENOTFOUND backy.example.com");
@@ -1344,7 +1344,7 @@ describe("pushBackupToBacky", () => {
   });
 
   test("handles non-Error throw from fetch", async () => {
-    const user = seedUser();
+    const user = await seedUser();
 
     globalThis.fetch = mock(async () => {
       throw "connection timeout";

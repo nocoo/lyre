@@ -9,8 +9,8 @@ import type { AsrProvider, AsrPollResponse, AsrTranscriptionResult } from "@lyre
 
 // ── Test helpers ──
 
-function seedUser() {
-  usersRepo.create({
+async function seedUser() {
+  await usersRepo.create({
     id: "user-1",
     email: "alice@test.com",
     name: "Alice",
@@ -18,8 +18,8 @@ function seedUser() {
   });
 }
 
-function seedRecording(overrides?: Partial<Parameters<typeof recordingsRepo.create>[0]>) {
-  return recordingsRepo.create({
+async function seedRecording(overrides?: Partial<Parameters<typeof recordingsRepo.create>[0]>) {
+  return await recordingsRepo.create({
     id: "rec-1",
     userId: "user-1",
     title: "Test Recording",
@@ -35,8 +35,8 @@ function seedRecording(overrides?: Partial<Parameters<typeof recordingsRepo.crea
   });
 }
 
-function seedJob(overrides?: Partial<Parameters<typeof jobsRepo.create>[0]>) {
-  return jobsRepo.create({
+async function seedJob(overrides?: Partial<Parameters<typeof jobsRepo.create>[0]>) {
+  return await jobsRepo.create({
     id: "job-1",
     recordingId: "rec-1",
     taskId: "task-abc-123",
@@ -116,15 +116,15 @@ function makeProvider(overrides?: Partial<AsrProvider>): AsrProvider {
 // ── Tests ──
 
 describe("job-processor", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
-    seedUser();
-    seedRecording();
+    await seedUser();
+    await seedRecording();
   });
 
   describe("pollJob — terminal jobs", () => {
     test("returns immediately for SUCCEEDED job without polling", async () => {
-      const job = seedJob({ status: "SUCCEEDED" });
+      const job = await seedJob({ status: "SUCCEEDED" });
       let pollCalled = false;
       const provider = makeProvider({
         poll: async () => {
@@ -142,7 +142,7 @@ describe("job-processor", () => {
     });
 
     test("returns immediately for FAILED job without polling", async () => {
-      const job = seedJob({ status: "FAILED" });
+      const job = await seedJob({ status: "FAILED" });
       const provider = makeProvider();
 
       const result = await pollJob(job, provider);
@@ -154,7 +154,7 @@ describe("job-processor", () => {
 
   describe("pollJob — status transitions", () => {
     test("PENDING → RUNNING: updates job, reports change", async () => {
-      const job = seedJob({ status: "PENDING" });
+      const job = await seedJob({ status: "PENDING" });
       const provider = makeProvider({
         poll: async () => makePollResponse("RUNNING"),
       });
@@ -166,12 +166,12 @@ describe("job-processor", () => {
       expect(result.job.status).toBe("RUNNING");
 
       // DB should be updated
-      const dbJob = jobsRepo.findById("job-1");
+      const dbJob = await jobsRepo.findById("job-1");
       expect(dbJob?.status).toBe("RUNNING");
     });
 
     test("PENDING → PENDING: updates job, reports no change", async () => {
-      const job = seedJob({ status: "PENDING" });
+      const job = await seedJob({ status: "PENDING" });
       const provider = makeProvider({
         poll: async () => makePollResponse("PENDING"),
       });
@@ -184,7 +184,7 @@ describe("job-processor", () => {
     });
 
     test("RUNNING → SUCCEEDED: saves transcription, updates recording", async () => {
-      const job = seedJob({ status: "RUNNING" });
+      const job = await seedJob({ status: "RUNNING" });
       const provider = makeProvider({
         poll: async () => makePollResponse("SUCCEEDED"),
         fetchResult: async () => MOCK_RAW_RESULT,
@@ -197,23 +197,23 @@ describe("job-processor", () => {
       expect(result.job.status).toBe("SUCCEEDED");
 
       // Transcription should be saved
-      const transcription = transcriptionsRepo.findByRecordingId("rec-1");
+      const transcription = await transcriptionsRepo.findByRecordingId("rec-1");
       expect(transcription).toBeDefined();
       expect(transcription?.fullText).toBe("Hello world.");
       expect(transcription?.jobId).toBe("job-1");
 
       // Recording status should be "completed"
-      const recording = recordingsRepo.findById("rec-1");
+      const recording = await recordingsRepo.findById("rec-1");
       expect(recording?.status).toBe("completed");
 
       // Job should have usage and timing data
-      const dbJob = jobsRepo.findById("job-1");
+      const dbJob = await jobsRepo.findById("job-1");
       expect(dbJob?.usageSeconds).toBe(60);
       expect(dbJob?.resultUrl).toBe("https://oss.example.com/result.json");
     });
 
     test("RUNNING → FAILED: records error, updates recording", async () => {
-      const job = seedJob({ status: "RUNNING" });
+      const job = await seedJob({ status: "RUNNING" });
       const provider = makeProvider({
         poll: async () => makePollResponse("FAILED"),
       });
@@ -225,18 +225,18 @@ describe("job-processor", () => {
       expect(result.job.status).toBe("FAILED");
 
       // Error message should be saved
-      const dbJob = jobsRepo.findById("job-1");
+      const dbJob = await jobsRepo.findById("job-1");
       expect(dbJob?.errorMessage).toBe("Audio too short");
 
       // Recording status should be "failed"
-      const recording = recordingsRepo.findById("rec-1");
+      const recording = await recordingsRepo.findById("rec-1");
       expect(recording?.status).toBe("failed");
     });
   });
 
   describe("pollJob — result processing failure", () => {
     test("marks job as FAILED when fetchResult throws", async () => {
-      const job = seedJob({ status: "RUNNING" });
+      const job = await seedJob({ status: "RUNNING" });
       const provider = makeProvider({
         poll: async () => makePollResponse("SUCCEEDED"),
         fetchResult: async () => {
@@ -250,7 +250,7 @@ describe("job-processor", () => {
       expect(result.job.errorMessage).toContain("Result processing failed");
       expect(result.job.errorMessage).toContain("Network timeout");
 
-      const recording = recordingsRepo.findById("rec-1");
+      const recording = await recordingsRepo.findById("rec-1");
       expect(recording?.status).toBe("failed");
     });
   });
@@ -258,8 +258,8 @@ describe("job-processor", () => {
   describe("pollJob — re-transcription", () => {
     test("deletes existing transcription before saving new one", async () => {
       // Seed an old job + transcription
-      const oldJob = seedJob({ id: "job-old", taskId: "task-old", status: "SUCCEEDED" });
-      transcriptionsRepo.create({
+      const oldJob = await seedJob({ id: "job-old", taskId: "task-old", status: "SUCCEEDED" });
+      await transcriptionsRepo.create({
         id: "tx-old",
         recordingId: "rec-1",
         jobId: oldJob.id,
@@ -268,7 +268,7 @@ describe("job-processor", () => {
         language: "en",
       });
 
-      const job = seedJob({ id: "job-1", taskId: "task-abc-123", status: "RUNNING" });
+      const job = await seedJob({ id: "job-1", taskId: "task-abc-123", status: "RUNNING" });
       const provider = makeProvider({
         poll: async () => makePollResponse("SUCCEEDED"),
         fetchResult: async () => MOCK_RAW_RESULT,
@@ -276,7 +276,7 @@ describe("job-processor", () => {
 
       await pollJob(job, provider);
 
-      const transcription = transcriptionsRepo.findByRecordingId("rec-1");
+      const transcription = await transcriptionsRepo.findByRecordingId("rec-1");
       expect(transcription).toBeDefined();
       expect(transcription?.fullText).toBe("Hello world.");
       expect(transcription?.id).not.toBe("tx-old");
@@ -285,7 +285,7 @@ describe("job-processor", () => {
 
   describe("pollJob — provider error propagation", () => {
     test("throws when provider.poll throws", async () => {
-      const job = seedJob({ status: "PENDING" });
+      const job = await seedJob({ status: "PENDING" });
       const provider = makeProvider({
         poll: async () => {
           throw new Error("DashScope unreachable");
@@ -295,7 +295,7 @@ describe("job-processor", () => {
       await expect(pollJob(job, provider)).rejects.toThrow("DashScope unreachable");
 
       // Job should NOT be modified on provider errors
-      const dbJob = jobsRepo.findById("job-1");
+      const dbJob = await jobsRepo.findById("job-1");
       expect(dbJob?.status).toBe("PENDING");
     });
   });

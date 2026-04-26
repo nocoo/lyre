@@ -12,23 +12,25 @@ import {
   type HandlerResponse,
 } from "./http";
 
-export function listFoldersHandler(ctx: RuntimeContext): HandlerResponse {
+export async function listFoldersHandler(
+  ctx: RuntimeContext,
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { folders } = makeRepos(ctx.db);
-  return json({ items: folders.findByUserId(ctx.user.id) });
+  return json({ items: await folders.findByUserId(ctx.user.id) });
 }
 
-export function createFolderHandler(
+export async function createFolderHandler(
   ctx: RuntimeContext,
   body: { name?: string; icon?: string },
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   if (!body.name?.trim()) {
     return badRequest("Missing required field: name");
   }
   const { folders } = makeRepos(ctx.db);
   const trimmedIcon = body.icon?.trim();
-  const folder = folders.create({
+  const folder = await folders.create({
     id: crypto.randomUUID(),
     userId: ctx.user.id,
     name: body.name.trim(),
@@ -37,43 +39,43 @@ export function createFolderHandler(
   return json(folder, 201);
 }
 
-export function getFolderHandler(
+export async function getFolderHandler(
   ctx: RuntimeContext,
   id: string,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { folders } = makeRepos(ctx.db);
-  const folder = folders.findByIdAndUser(id, ctx.user.id);
+  const folder = await folders.findByIdAndUser(id, ctx.user.id);
   if (!folder) return notFound("Folder not found");
   return json(folder);
 }
 
-export function updateFolderHandler(
+export async function updateFolderHandler(
   ctx: RuntimeContext,
   id: string,
   body: { name?: string; icon?: string },
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { folders } = makeRepos(ctx.db);
-  const existing = folders.findByIdAndUser(id, ctx.user.id);
+  const existing = await folders.findByIdAndUser(id, ctx.user.id);
   if (!existing) return notFound("Folder not found");
 
   const updates: Parameters<typeof folders.update>[1] = {};
   if (body.name !== undefined) updates.name = body.name.trim();
   if (body.icon !== undefined) updates.icon = body.icon.trim();
-  const updated = folders.update(id, updates);
+  const updated = await folders.update(id, updates);
   if (!updated) return json({ error: "Failed to update folder" }, 500);
   return json(updated);
 }
 
-export function deleteFolderHandler(
+export async function deleteFolderHandler(
   ctx: RuntimeContext,
   id: string,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { folders } = makeRepos(ctx.db);
-  const existing = folders.findByIdAndUser(id, ctx.user.id);
+  const existing = await folders.findByIdAndUser(id, ctx.user.id);
   if (!existing) return notFound("Folder not found");
-  folders.delete(id);
+  await folders.delete(id);
   return json({ deleted: true });
 }

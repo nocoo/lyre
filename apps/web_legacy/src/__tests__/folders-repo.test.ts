@@ -3,8 +3,8 @@ import { resetDb } from "@lyre/api/db";
 import { usersRepo } from "@lyre/api/db/repositories/users";
 import { foldersRepo } from "@lyre/api/db/repositories/folders";
 
-function seedUser() {
-  return usersRepo.create({
+async function seedUser() {
+  return await usersRepo.create({
     id: "user-1",
     email: "alice@test.com",
     name: "Alice",
@@ -13,14 +13,14 @@ function seedUser() {
 }
 
 describe("foldersRepo", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
-    seedUser();
+    await seedUser();
   });
 
   describe("create", () => {
-    test("creates a folder with defaults", () => {
-      const folder = foldersRepo.create({
+    test("creates a folder with defaults", async () => {
+      const folder = await foldersRepo.create({
         id: "f-1",
         userId: "user-1",
         name: "Meetings",
@@ -31,8 +31,8 @@ describe("foldersRepo", () => {
       expect(folder.createdAt).toBeGreaterThan(0);
     });
 
-    test("creates a folder with custom icon", () => {
-      const folder = foldersRepo.create({
+    test("creates a folder with custom icon", async () => {
+      const folder = await foldersRepo.create({
         id: "f-1",
         userId: "user-1",
         name: "Podcasts",
@@ -43,75 +43,75 @@ describe("foldersRepo", () => {
   });
 
   describe("findByUserId", () => {
-    test("returns all folders for user", () => {
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "A" });
-      foldersRepo.create({ id: "f-2", userId: "user-1", name: "B" });
-      const folders = foldersRepo.findByUserId("user-1");
+    test("returns all folders for user", async () => {
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "A" });
+      await foldersRepo.create({ id: "f-2", userId: "user-1", name: "B" });
+      const folders = await foldersRepo.findByUserId("user-1");
       expect(folders).toHaveLength(2);
     });
 
-    test("returns empty for different user", () => {
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "A" });
-      expect(foldersRepo.findByUserId("user-other")).toEqual([]);
+    test("returns empty for different user", async () => {
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "A" });
+      expect(await foldersRepo.findByUserId("user-other")).toEqual([]);
     });
   });
 
   describe("findById", () => {
-    test("returns folder when found", () => {
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
-      expect(foldersRepo.findById("f-1")?.name).toBe("Test");
+    test("returns folder when found", async () => {
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
+      expect((await foldersRepo.findById("f-1"))?.name).toBe("Test");
     });
 
-    test("returns undefined when not found", () => {
-      expect(foldersRepo.findById("nope")).toBeUndefined();
+    test("returns undefined when not found", async () => {
+      expect(await foldersRepo.findById("nope")).toBeUndefined();
     });
   });
 
   describe("findByIdAndUser", () => {
-    test("returns folder for correct user", () => {
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
-      expect(foldersRepo.findByIdAndUser("f-1", "user-1")?.name).toBe("Test");
+    test("returns folder for correct user", async () => {
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
+      expect((await foldersRepo.findByIdAndUser("f-1", "user-1"))?.name).toBe("Test");
     });
 
-    test("returns undefined for wrong user", () => {
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
-      expect(foldersRepo.findByIdAndUser("f-1", "user-other")).toBeUndefined();
+    test("returns undefined for wrong user", async () => {
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
+      expect(await foldersRepo.findByIdAndUser("f-1", "user-other")).toBeUndefined();
     });
   });
 
   describe("update", () => {
-    test("updates name", () => {
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Old" });
-      const updated = foldersRepo.update("f-1", { name: "New" });
+    test("updates name", async () => {
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "Old" });
+      const updated = await foldersRepo.update("f-1", { name: "New" });
       expect(updated?.name).toBe("New");
     });
 
-    test("updates icon", () => {
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
-      const updated = foldersRepo.update("f-1", { icon: "star" });
+    test("updates icon", async () => {
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
+      const updated = await foldersRepo.update("f-1", { icon: "star" });
       expect(updated?.icon).toBe("star");
     });
 
-    test("updates updatedAt", () => {
-      const folder = foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
-      const updated = foldersRepo.update("f-1", { name: "New" });
+    test("updates updatedAt", async () => {
+      const folder = await foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
+      const updated = await foldersRepo.update("f-1", { name: "New" });
       expect(updated?.updatedAt).toBeGreaterThanOrEqual(folder.updatedAt);
     });
 
-    test("returns undefined when not found", () => {
-      expect(foldersRepo.update("nope", { name: "X" })).toBeUndefined();
+    test("returns undefined when not found", async () => {
+      expect(await foldersRepo.update("nope", { name: "X" })).toBeUndefined();
     });
   });
 
   describe("delete", () => {
-    test("deletes existing folder", () => {
-      foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
-      expect(foldersRepo.delete("f-1")).toBe(true);
-      expect(foldersRepo.findById("f-1")).toBeUndefined();
+    test("deletes existing folder", async () => {
+      await foldersRepo.create({ id: "f-1", userId: "user-1", name: "Test" });
+      expect(await foldersRepo.delete("f-1")).toBe(true);
+      expect(await foldersRepo.findById("f-1")).toBeUndefined();
     });
 
-    test("returns false when not found", () => {
-      expect(foldersRepo.delete("nope")).toBe(false);
+    test("returns false when not found", async () => {
+      expect(await foldersRepo.delete("nope")).toBe(false);
     });
   });
 });

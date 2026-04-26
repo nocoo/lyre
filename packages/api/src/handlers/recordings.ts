@@ -59,10 +59,10 @@ export interface ListRecordingsInput {
   folderId?: string | null;
 }
 
-export function listRecordingsHandler(
+export async function listRecordingsHandler(
   ctx: RuntimeContext,
   input: ListRecordingsInput,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
 
   const statusParam = input.status ?? "all";
@@ -99,15 +99,17 @@ export function listRecordingsHandler(
     opts.folderId = input.folderId;
   }
 
-  const { items, total } = repos.recordings.findByUserId(ctx.user.id, opts);
-  const userFolders = repos.folders.findByUserId(ctx.user.id);
+  const { items, total } = await repos.recordings.findByUserId(ctx.user.id, opts);
+  const userFolders = await repos.folders.findByUserId(ctx.user.id);
   const folderMap = new Map(userFolders.map((f) => [f.id, f]));
 
-  const mapped = items.map((row) => ({
-    ...row,
-    folder: row.folderId ? folderMap.get(row.folderId) ?? null : null,
-    resolvedTags: repos.tags.findTagsForRecording(row.id),
-  }));
+  const mapped = await Promise.all(
+    items.map(async (row) => ({
+      ...row,
+      folder: row.folderId ? folderMap.get(row.folderId) ?? null : null,
+      resolvedTags: await repos.tags.findTagsForRecording(row.id),
+    })),
+  );
 
   const totalPages = Math.ceil(total / pageSize);
   return json({ items: mapped, total, page, pageSize, totalPages });
@@ -129,10 +131,10 @@ export interface CreateRecordingInput {
   folderId?: string | null;
 }
 
-export function createRecordingHandler(
+export async function createRecordingHandler(
   ctx: RuntimeContext,
   body: CreateRecordingInput,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   if (!body.title || !body.fileName || !body.ossKey) {
     return badRequest("Missing required fields: title, fileName, ossKey");
@@ -140,7 +142,7 @@ export function createRecordingHandler(
   const id = body.id ?? crypto.randomUUID();
   const repos = makeRepos(ctx.db);
   try {
-    const recording = repos.recordings.create({
+    const recording = await repos.recordings.create({
       id,
       userId: ctx.user.id,
       title: body.title,
@@ -157,12 +159,12 @@ export function createRecordingHandler(
     });
     const tagIds = body.tagIds ?? body.tags ?? [];
     if (tagIds.length > 0) {
-      repos.tags.setTagsForRecording(recording.id, tagIds);
+      await repos.tags.setTagsForRecording(recording.id, tagIds);
     }
     return json(
       {
         ...recording,
-        resolvedTags: repos.tags.findTagsForRecording(recording.id),
+        resolvedTags: await repos.tags.findTagsForRecording(recording.id),
       },
       201,
     );
@@ -172,18 +174,18 @@ export function createRecordingHandler(
   }
 }
 
-export function getRecordingHandler(
+export async function getRecordingHandler(
   ctx: RuntimeContext,
   id: string,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const repos = makeRepos(ctx.db);
-  const recording = repos.recordings.findById(id);
+  const recording = await repos.recordings.findById(id);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
-  const dbTranscription = repos.transcriptions.findByRecordingId(id);
-  const latestJob = repos.jobs.findLatestByRecordingId(id) ?? null;
+  const dbTranscription = await repos.transcriptions.findByRecordingId(id);
+  const latestJob = (await repos.jobs.findLatestByRecordingId(id)) ?? null;
   const transcription = dbTranscription
     ? {
         ...dbTranscription,
@@ -197,9 +199,9 @@ export function getRecordingHandler(
     transcription,
     latestJob,
     folder: recording.folderId
-      ? repos.folders.findById(recording.folderId) ?? null
+      ? (await repos.folders.findById(recording.folderId)) ?? null
       : null,
-    resolvedTags: repos.tags.findTagsForRecording(id),
+    resolvedTags: await repos.tags.findTagsForRecording(id),
   };
   return json(detail);
 }
@@ -213,14 +215,14 @@ export interface UpdateRecordingInput {
   tagIds?: string[];
 }
 
-export function updateRecordingHandler(
+export async function updateRecordingHandler(
   ctx: RuntimeContext,
   id: string,
   body: UpdateRecordingInput,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const repos = makeRepos(ctx.db);
-  const existing = repos.recordings.findById(id);
+  const existing = await repos.recordings.findById(id);
   if (!existing || existing.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
@@ -231,12 +233,15 @@ export function updateRecordingHandler(
   if (body.folderId !== undefined) updates.folderId = body.folderId;
   if (body.recordedAt !== undefined) updates.recordedAt = body.recordedAt;
 
-  const updated = repos.recordings.update(id, updates);
+  const updated = await repos.recordings.update(id, updates);
   if (!updated) return serverError("Failed to update recording");
   if (body.tagIds !== undefined) {
-    repos.tags.setTagsForRecording(id, body.tagIds);
+    await repos.tags.setTagsForRecording(id, body.tagIds);
   }
-  return json({ ...updated, resolvedTags: repos.tags.findTagsForRecording(id) });
+  return json({
+    ...updated,
+    resolvedTags: await repos.tags.findTagsForRecording(id),
+  });
 }
 
 /**
@@ -250,14 +255,14 @@ export async function deleteRecordingHandler(
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const repos = makeRepos(ctx.db);
-  const existing = repos.recordings.findById(id);
+  const existing = await repos.recordings.findById(id);
   if (!existing || existing.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
-  const recordingJobs = repos.jobs.findByRecordingId(id);
+  const recordingJobs = await repos.jobs.findByRecordingId(id);
   const jobIds = recordingJobs.map((j) => j.id);
 
-  repos.recordings.deleteCascade(id);
+  await repos.recordings.deleteCascade(id);
 
   if (existing.ossKey) {
     deleteObject(existing.ossKey, undefined, ctx.env).catch(() => {
@@ -291,18 +296,18 @@ export async function batchDeleteRecordingsHandler(
   const ossKeys: string[] = [];
   const jobIds: string[] = [];
   for (const id of ids) {
-    const rec = repos.recordings.findById(id);
+    const rec = await repos.recordings.findById(id);
     if (rec && rec.userId === ctx.user.id) {
       ownedIds.push(id);
       if (rec.ossKey) ossKeys.push(rec.ossKey);
-      for (const job of repos.jobs.findByRecordingId(id)) {
+      for (const job of await repos.jobs.findByRecordingId(id)) {
         jobIds.push(job.id);
       }
     }
   }
   if (ownedIds.length === 0) return json({ deleted: 0 });
 
-  const deleted = repos.recordings.deleteCascadeMany(ownedIds);
+  const deleted = await repos.recordings.deleteCascadeMany(ownedIds);
   for (const key of ossKeys) {
     deleteObject(key, undefined, ctx.env).catch(() => {
       console.warn(`Failed to delete OSS object: ${key}`);
@@ -330,13 +335,13 @@ async function cleanupResultObjects(
   );
 }
 
-export function playUrlHandler(
+export async function playUrlHandler(
   ctx: RuntimeContext,
   id: string,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { recordings } = makeRepos(ctx.db);
-  const recording = recordings.findById(id);
+  const recording = await recordings.findById(id);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
@@ -344,13 +349,13 @@ export function playUrlHandler(
   return json({ playUrl });
 }
 
-export function downloadUrlHandler(
+export async function downloadUrlHandler(
   ctx: RuntimeContext,
   id: string,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { recordings } = makeRepos(ctx.db);
-  const recording = recordings.findById(id);
+  const recording = await recordings.findById(id);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
@@ -377,11 +382,11 @@ export async function wordsHandler(
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { recordings, jobs } = makeRepos(ctx.db);
-  const recording = recordings.findById(id);
+  const recording = await recordings.findById(id);
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
-  const job = jobs.findLatestByRecordingId(id);
+  const job = await jobs.findLatestByRecordingId(id);
   if (!job || job.status !== "SUCCEEDED") {
     return notFound("No completed transcription found");
   }

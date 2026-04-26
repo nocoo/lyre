@@ -7,6 +7,8 @@
 import { eq, desc } from "drizzle-orm";
 import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
+import { rowsAffected } from "../drivers/result";
+import { runBatch } from "../drivers/batch";
 import {
   recordings,
   transcriptions,
@@ -18,8 +20,8 @@ import type { RecordingStatus } from "../../lib/types";
 
 export function makeRecordingsRepo(db: LyreDb) {
   const repo = {
-    findAll(userId: string): DbRecording[] {
-      return db
+    async findAll(userId: string): Promise<DbRecording[]> {
+      return await db
         .select()
         .from(recordings)
         .where(eq(recordings.userId, userId))
@@ -27,11 +29,15 @@ export function makeRecordingsRepo(db: LyreDb) {
         .all();
     },
 
-    findById(id: string): DbRecording | undefined {
-      return db.select().from(recordings).where(eq(recordings.id, id)).get();
+    async findById(id: string): Promise<DbRecording | undefined> {
+      return await db
+        .select()
+        .from(recordings)
+        .where(eq(recordings.id, id))
+        .get();
     },
 
-    findByUserId(
+    async findByUserId(
       userId: string,
       options?: {
         status?: RecordingStatus;
@@ -42,7 +48,7 @@ export function makeRecordingsRepo(db: LyreDb) {
         page?: number;
         pageSize?: number;
       },
-    ): { items: DbRecording[]; total: number } {
+    ): Promise<{ items: DbRecording[]; total: number }> {
       const status = options?.status;
       const query = options?.query?.toLowerCase();
       const folderId = options?.folderId;
@@ -51,7 +57,7 @@ export function makeRecordingsRepo(db: LyreDb) {
       const page = options?.page ?? 1;
       const pageSize = options?.pageSize ?? 10;
 
-      let allRows: DbRecording[] = db
+      let allRows: DbRecording[] = await db
         .select()
         .from(recordings)
         .where(eq(recordings.userId, userId))
@@ -102,7 +108,7 @@ export function makeRecordingsRepo(db: LyreDb) {
       return { items, total };
     },
 
-    create(data: {
+    async create(data: {
       id: string;
       userId: string;
       title: string;
@@ -117,9 +123,9 @@ export function makeRecordingsRepo(db: LyreDb) {
       folderId?: string | null;
       notes?: string | null;
       recordedAt?: number | null;
-    }): DbRecording {
+    }): Promise<DbRecording> {
       const now = Date.now();
-      return db
+      return await db
         .insert(recordings)
         .values({
           ...data,
@@ -134,7 +140,7 @@ export function makeRecordingsRepo(db: LyreDb) {
         .get();
     },
 
-    update(
+    async update(
       id: string,
       data: Partial<{
         title: string;
@@ -147,7 +153,7 @@ export function makeRecordingsRepo(db: LyreDb) {
         aiSummary: string | null;
         recordedAt: number | null;
       }>,
-    ): DbRecording | undefined {
+    ): Promise<DbRecording | undefined> {
       const updateData: Record<string, unknown> = { updatedAt: Date.now() };
       if (data.title !== undefined) updateData.title = data.title;
       if (data.description !== undefined)
@@ -161,7 +167,7 @@ export function makeRecordingsRepo(db: LyreDb) {
       if (data.recordedAt !== undefined)
         updateData.recordedAt = data.recordedAt;
 
-      return db
+      return await db
         .update(recordings)
         .set(updateData)
         .where(eq(recordings.id, id))
@@ -169,56 +175,54 @@ export function makeRecordingsRepo(db: LyreDb) {
         .get();
     },
 
-    delete(id: string): boolean {
-      const result = db
+    async delete(id: string): Promise<boolean> {
+      const result = await db
         .delete(recordings)
         .where(eq(recordings.id, id))
-        .run() as unknown as { changes: number };
-      return result.changes > 0;
+        .run();
+      return rowsAffected(result) > 0;
     },
 
-    deleteCascade(id: string): boolean {
-      return db.transaction((tx: LyreDb) => {
-        tx.delete(transcriptions)
-          .where(eq(transcriptions.recordingId, id))
-          .run();
-        tx.delete(transcriptionJobs)
-          .where(eq(transcriptionJobs.recordingId, id))
-          .run();
-        tx.delete(recordingTags)
-          .where(eq(recordingTags.recordingId, id))
-          .run();
-        const result = tx
-          .delete(recordings)
-          .where(eq(recordings.id, id))
-          .run() as unknown as { changes: number };
-        return result.changes > 0;
-      });
+    async deleteCascade(id: string): Promise<boolean> {
+      // Pre-check existence so we can report whether the cascade actually
+      // deleted anything; D1's batch result doesn't expose per-statement
+      // changes in a uniform way across drivers.
+      const existed = await repo.findById(id);
+      if (!existed) return false;
+      await runBatch(db, (h) => [
+        h.delete(transcriptions).where(eq(transcriptions.recordingId, id)),
+        h
+          .delete(transcriptionJobs)
+          .where(eq(transcriptionJobs.recordingId, id)),
+        h.delete(recordingTags).where(eq(recordingTags.recordingId, id)),
+        h.delete(recordings).where(eq(recordings.id, id)),
+      ]);
+      return true;
     },
 
-    deleteCascadeMany(ids: string[]): number {
+    async deleteCascadeMany(ids: string[]): Promise<number> {
       if (ids.length === 0) return 0;
-
-      return db.transaction((tx: LyreDb) => {
-        let deleted = 0;
-        for (const id of ids) {
-          tx.delete(transcriptions)
-            .where(eq(transcriptions.recordingId, id))
-            .run();
-          tx.delete(transcriptionJobs)
-            .where(eq(transcriptionJobs.recordingId, id))
-            .run();
-          tx.delete(recordingTags)
-            .where(eq(recordingTags.recordingId, id))
-            .run();
-          const result = tx
-            .delete(recordings)
-            .where(eq(recordings.id, id))
-            .run() as unknown as { changes: number };
-          deleted += result.changes;
+      // Filter to existing IDs so the returned count reflects actual deletes.
+      const existingRows: DbRecording[] = await Promise.all(
+        ids.map((id) => repo.findById(id)),
+      ).then((rows) => rows.filter((r): r is DbRecording => !!r));
+      const existingIds = existingRows.map((r) => r.id);
+      if (existingIds.length === 0) return 0;
+      await runBatch(db, (h) => {
+        const stmts = [];
+        for (const id of existingIds) {
+          stmts.push(
+            h.delete(transcriptions).where(eq(transcriptions.recordingId, id)),
+            h
+              .delete(transcriptionJobs)
+              .where(eq(transcriptionJobs.recordingId, id)),
+            h.delete(recordingTags).where(eq(recordingTags.recordingId, id)),
+            h.delete(recordings).where(eq(recordings.id, id)),
+          );
         }
-        return deleted;
+        return stmts;
       });
+      return existingIds.length;
     },
   };
 

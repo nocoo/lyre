@@ -32,9 +32,11 @@ export interface JobManagerDeps {
   /** Returns an AsrProvider (called once per poll cycle, not per job). */
   getProvider: () => AsrProvider;
   /** Finds all non-terminal jobs in the database. */
-  findActiveJobs: () => DbTranscriptionJob[];
+  findActiveJobs: () => Promise<DbTranscriptionJob[]> | DbTranscriptionJob[];
   /** Finds a single job by ID. */
-  findJobById: (id: string) => DbTranscriptionJob | undefined;
+  findJobById: (
+    id: string,
+  ) => Promise<DbTranscriptionJob | undefined> | DbTranscriptionJob | undefined;
   /** Poll interval in milliseconds (default: 5000). */
   pollIntervalMs?: number;
 }
@@ -90,7 +92,7 @@ export class JobManager {
     if (this.initialized) return;
     this.initialized = true;
     this.stopped = false;
-    this.recover();
+    void this.recover();
   }
 
   /** Stop polling and clear all state. */
@@ -108,8 +110,8 @@ export class JobManager {
 
   // ── Internal ──
 
-  private recover(): void {
-    const jobs = this.deps.findActiveJobs();
+  private async recover(): Promise<void> {
+    const jobs = await this.deps.findActiveJobs();
     for (const job of jobs) {
       this.activeJobs.set(job.id, job);
     }
@@ -139,7 +141,7 @@ export class JobManager {
         if (this.stopped) break;
 
         // Re-read from DB to get latest state (another poll cycle may have updated it)
-        const freshJob = this.deps.findJobById(jobId);
+        const freshJob = await this.deps.findJobById(jobId);
         if (!freshJob) {
           this.activeJobs.delete(jobId);
           continue;

@@ -13,10 +13,12 @@ import {
   type HandlerResponse,
 } from "./http";
 
-export function listTokensHandler(ctx: RuntimeContext): HandlerResponse {
+export async function listTokensHandler(
+  ctx: RuntimeContext,
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { deviceTokens } = makeRepos(ctx.db);
-  const tokens = deviceTokens.findByUserId(ctx.user.id);
+  const tokens = await deviceTokens.findByUserId(ctx.user.id);
   const items = tokens.map((t) => ({
     id: t.id,
     name: t.name,
@@ -26,10 +28,10 @@ export function listTokensHandler(ctx: RuntimeContext): HandlerResponse {
   return json({ items });
 }
 
-export function createTokenHandler(
+export async function createTokenHandler(
   ctx: RuntimeContext,
   body: { name?: string },
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const name = body.name?.trim();
   if (!name) return badRequest("Token name is required");
@@ -41,7 +43,7 @@ export function createTokenHandler(
   const rawToken = `lyre_${Buffer.from(rawBytes).toString("base64url")}`;
   const tokenHash = hashToken(rawToken);
   const id = crypto.randomUUID();
-  const record = deviceTokens.create({
+  const record = await deviceTokens.create({
     id,
     userId: ctx.user.id,
     name,
@@ -58,13 +60,13 @@ export function createTokenHandler(
   );
 }
 
-export function deleteTokenHandler(
+export async function deleteTokenHandler(
   ctx: RuntimeContext,
   id: string,
-): HandlerResponse {
+): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
   const { deviceTokens } = makeRepos(ctx.db);
-  const deleted = deviceTokens.deleteByIdAndUser(id, ctx.user.id);
+  const deleted = await deviceTokens.deleteByIdAndUser(id, ctx.user.id);
   if (!deleted) return notFound("Token not found");
   return json({ deleted: true });
 }

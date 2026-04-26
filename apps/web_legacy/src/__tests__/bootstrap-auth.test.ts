@@ -21,13 +21,13 @@ import { join } from "path";
 const ROOT = join(import.meta.dir, "..");
 
 describe("auth provider bootstrap wiring", () => {
-  test("bootstrap-auth.ts registers the NextAuth session provider", () => {
+  test("bootstrap-auth.ts registers the NextAuth session provider", async () => {
     const src = readFileSync(join(ROOT, "lib/bootstrap-auth.ts"), "utf8");
     expect(src).toContain("setAuthSessionProvider");
     expect(src).toContain("@/auth");
   });
 
-  test("handler-adapter.ts imports bootstrap-auth (side-effect)", () => {
+  test("handler-adapter.ts imports bootstrap-auth (side-effect)", async () => {
     const src = readFileSync(join(ROOT, "lib/handler-adapter.ts"), "utf8");
     expect(src).toMatch(/import\s+["']\.\/bootstrap-auth["']/);
   });

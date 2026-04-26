@@ -25,14 +25,14 @@ const SENTENCES: TranscriptionSentence[] = [
   },
 ];
 
-function seedJobAndRecording() {
-  usersRepo.create({
+async function seedJobAndRecording() {
+  await usersRepo.create({
     id: "user-1",
     email: "alice@test.com",
     name: "Alice",
     avatarUrl: null,
   });
-  recordingsRepo.create({
+  await recordingsRepo.create({
     id: "rec-1",
     userId: "user-1",
     title: "Test",
@@ -45,7 +45,7 @@ function seedJobAndRecording() {
     ossKey: "uploads/test.mp3",
     status: "completed",
   });
-  jobsRepo.create({
+  await jobsRepo.create({
     id: "job-1",
     recordingId: "rec-1",
     taskId: "task-1",
@@ -54,7 +54,7 @@ function seedJobAndRecording() {
   });
 }
 
-function makeTranscription(
+async function makeTranscription(
   overrides?: Partial<Parameters<typeof transcriptionsRepo.create>[0]>,
 ) {
   return {
@@ -69,78 +69,78 @@ function makeTranscription(
 }
 
 describe("transcriptionsRepo", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
-    seedJobAndRecording();
+    await seedJobAndRecording();
   });
 
   describe("create", () => {
-    test("creates a transcription and returns it", () => {
-      const t = transcriptionsRepo.create(makeTranscription());
+    test("creates a transcription and returns it", async () => {
+      const t = await transcriptionsRepo.create(await makeTranscription());
       expect(t.id).toBe("trans-1");
       expect(t.fullText).toBe("Hello world. This is a test.");
       expect(t.language).toBe("en");
       expect(t.createdAt).toBeGreaterThan(0);
     });
 
-    test("serializes sentences as JSON", () => {
-      const t = transcriptionsRepo.create(makeTranscription());
+    test("serializes sentences as JSON", async () => {
+      const t = await transcriptionsRepo.create(await makeTranscription());
       expect(typeof t.sentences).toBe("string");
       const parsed = JSON.parse(t.sentences) as TranscriptionSentence[];
       expect(parsed).toHaveLength(2);
       expect(parsed[0]?.text).toBe("Hello world");
     });
 
-    test("allows null language", () => {
-      const t = transcriptionsRepo.create(
-        makeTranscription({ language: null }),
+    test("allows null language", async () => {
+      const t = await transcriptionsRepo.create(
+        await makeTranscription({ language: null }),
       );
       expect(t.language).toBeNull();
     });
 
-    test("handles empty sentences array", () => {
-      const t = transcriptionsRepo.create(
-        makeTranscription({ sentences: [] }),
+    test("handles empty sentences array", async () => {
+      const t = await transcriptionsRepo.create(
+        await makeTranscription({ sentences: [] }),
       );
       expect(t.sentences).toBe("[]");
     });
   });
 
   describe("findById", () => {
-    test("returns transcription when found", () => {
-      transcriptionsRepo.create(makeTranscription());
-      const found = transcriptionsRepo.findById("trans-1");
+    test("returns transcription when found", async () => {
+      await transcriptionsRepo.create(await makeTranscription());
+      const found = await transcriptionsRepo.findById("trans-1");
       expect(found?.fullText).toBe("Hello world. This is a test.");
     });
 
-    test("returns undefined when not found", () => {
-      expect(transcriptionsRepo.findById("nope")).toBeUndefined();
+    test("returns undefined when not found", async () => {
+      expect(await transcriptionsRepo.findById("nope")).toBeUndefined();
     });
   });
 
   describe("findByRecordingId", () => {
-    test("returns transcription for recording", () => {
-      transcriptionsRepo.create(makeTranscription());
-      const found = transcriptionsRepo.findByRecordingId("rec-1");
+    test("returns transcription for recording", async () => {
+      await transcriptionsRepo.create(await makeTranscription());
+      const found = await transcriptionsRepo.findByRecordingId("rec-1");
       expect(found?.id).toBe("trans-1");
     });
 
-    test("returns undefined when not found", () => {
-      expect(transcriptionsRepo.findByRecordingId("nope")).toBeUndefined();
+    test("returns undefined when not found", async () => {
+      expect(await transcriptionsRepo.findByRecordingId("nope")).toBeUndefined();
     });
   });
 
   describe("update", () => {
-    test("updates fullText", () => {
-      transcriptionsRepo.create(makeTranscription());
-      const updated = transcriptionsRepo.update("trans-1", {
+    test("updates fullText", async () => {
+      await transcriptionsRepo.create(await makeTranscription());
+      const updated = await transcriptionsRepo.update("trans-1", {
         fullText: "Updated text",
       });
       expect(updated?.fullText).toBe("Updated text");
     });
 
-    test("updates sentences (serialized)", () => {
-      transcriptionsRepo.create(makeTranscription());
+    test("updates sentences (serialized)", async () => {
+      await transcriptionsRepo.create(await makeTranscription());
       const newSentences: TranscriptionSentence[] = [
         {
           sentenceId: 0,
@@ -151,7 +151,7 @@ describe("transcriptionsRepo", () => {
           emotion: "neutral",
         },
       ];
-      const updated = transcriptionsRepo.update("trans-1", {
+      const updated = await transcriptionsRepo.update("trans-1", {
         sentences: newSentences,
       });
       const parsed = JSON.parse(
@@ -161,71 +161,71 @@ describe("transcriptionsRepo", () => {
       expect(parsed[0]?.text).toBe("New sentence");
     });
 
-    test("updates language", () => {
-      transcriptionsRepo.create(makeTranscription());
-      const updated = transcriptionsRepo.update("trans-1", {
+    test("updates language", async () => {
+      await transcriptionsRepo.create(await makeTranscription());
+      const updated = await transcriptionsRepo.update("trans-1", {
         language: "zh",
       });
       expect(updated?.language).toBe("zh");
     });
 
-    test("updates updatedAt", () => {
-      const t = transcriptionsRepo.create(makeTranscription());
-      const updated = transcriptionsRepo.update("trans-1", {
+    test("updates updatedAt", async () => {
+      const t = await transcriptionsRepo.create(await makeTranscription());
+      const updated = await transcriptionsRepo.update("trans-1", {
         fullText: "X",
       });
       expect(updated?.updatedAt).toBeGreaterThanOrEqual(t.updatedAt);
     });
 
-    test("returns undefined when not found", () => {
+    test("returns undefined when not found", async () => {
       expect(
-        transcriptionsRepo.update("nope", { fullText: "X" }),
+        await transcriptionsRepo.update("nope", { fullText: "X" }),
       ).toBeUndefined();
     });
   });
 
   describe("delete", () => {
-    test("deletes existing transcription", () => {
-      transcriptionsRepo.create(makeTranscription());
-      expect(transcriptionsRepo.delete("trans-1")).toBe(true);
-      expect(transcriptionsRepo.findById("trans-1")).toBeUndefined();
+    test("deletes existing transcription", async () => {
+      await transcriptionsRepo.create(await makeTranscription());
+      expect(await transcriptionsRepo.delete("trans-1")).toBe(true);
+      expect(await transcriptionsRepo.findById("trans-1")).toBeUndefined();
     });
 
-    test("returns false when not found", () => {
-      expect(transcriptionsRepo.delete("nope")).toBe(false);
+    test("returns false when not found", async () => {
+      expect(await transcriptionsRepo.delete("nope")).toBe(false);
     });
   });
 
   describe("deleteByRecordingId", () => {
-    test("deletes transcription for recording", () => {
-      transcriptionsRepo.create(makeTranscription());
-      expect(transcriptionsRepo.deleteByRecordingId("rec-1")).toBe(true);
-      expect(transcriptionsRepo.findByRecordingId("rec-1")).toBeUndefined();
+    test("deletes transcription for recording", async () => {
+      await transcriptionsRepo.create(await makeTranscription());
+      expect(await transcriptionsRepo.deleteByRecordingId("rec-1")).toBe(true);
+      expect(await transcriptionsRepo.findByRecordingId("rec-1")).toBeUndefined();
     });
 
-    test("returns false when no transcription for recording", () => {
-      expect(transcriptionsRepo.deleteByRecordingId("nope")).toBe(false);
+    test("returns false when no transcription for recording", async () => {
+      expect(await transcriptionsRepo.deleteByRecordingId("nope")).toBe(false);
     });
   });
 
   describe("parseSentences", () => {
-    test("parses valid JSON array", () => {
-      const result = transcriptionsRepo.parseSentences(JSON.stringify(SENTENCES));
+    test("parses valid JSON array", async () => {
+      const result = await transcriptionsRepo.parseSentences(JSON.stringify(SENTENCES));
       expect(result).toHaveLength(2);
       expect(result[0]?.beginTime).toBe(0);
       expect(result[1]?.text).toBe("This is a test");
     });
 
-    test("returns empty array for empty JSON", () => {
-      expect(transcriptionsRepo.parseSentences("[]")).toEqual([]);
+    test("returns empty array for empty JSON", async () => {
+      expect(await transcriptionsRepo.parseSentences("[]")).toEqual([]);
     });
 
-    test("returns empty array for invalid JSON", () => {
-      expect(transcriptionsRepo.parseSentences("not json")).toEqual([]);
+    test("returns empty array for invalid JSON", async () => {
+      expect(await transcriptionsRepo.parseSentences("not json")).toEqual([]);
     });
 
-    test("returns empty array for non-array JSON", () => {
-      expect(transcriptionsRepo.parseSentences('{"a":1}')).toEqual([]);
+    test("returns empty array for non-array JSON", async () => {
+      expect(await transcriptionsRepo.parseSentences('{"a":1}')).toEqual([]);
     });
   });
 });

@@ -67,9 +67,12 @@ export function getEnvironment(env?: LyreEnv): "prod" | "dev" {
 // ── Settings read ──
 
 /** Read Backy settings for a user from the key-value settings table. */
-export function readBackySettings(userId: string, db?: LyreDb): BackyCredentials {
+export async function readBackySettings(
+  userId: string,
+  db?: LyreDb,
+): Promise<BackyCredentials> {
   const settings = db ? makeSettingsRepo(db) : settingsRepo;
-  const all = settings.findByUserId(userId);
+  const all = await settings.findByUserId(userId);
   const map = new Map(all.map((s) => [s.key, s.value]));
   return {
     webhookUrl: map.get("backy.webhookUrl") ?? "",
@@ -131,20 +134,27 @@ export function generatePullKey(): string {
 }
 
 /** Read the pull key for a user. Returns empty string if not set. */
-export function readPullKey(userId: string, db?: LyreDb): string {
+export async function readPullKey(userId: string, db?: LyreDb): Promise<string> {
   const settings = db ? makeSettingsRepo(db) : settingsRepo;
-  const setting = settings.findByKey(userId, PULL_KEY_SETTING);
+  const setting = await settings.findByKey(userId, PULL_KEY_SETTING);
   return setting?.value ?? "";
 }
 
 /** Save a pull key for a user (upsert). */
-export function savePullKey(userId: string, key: string, db?: LyreDb): void {
+export async function savePullKey(
+  userId: string,
+  key: string,
+  db?: LyreDb,
+): Promise<void> {
   const settings = db ? makeSettingsRepo(db) : settingsRepo;
-  settings.upsert(userId, PULL_KEY_SETTING, key);
+  await settings.upsert(userId, PULL_KEY_SETTING, key);
 }
 
 /** Delete the pull key for a user. Returns true if a key was deleted. */
-export function deletePullKey(userId: string, db?: LyreDb): boolean {
+export async function deletePullKey(
+  userId: string,
+  db?: LyreDb,
+): Promise<boolean> {
   const settings = db ? makeSettingsRepo(db) : settingsRepo;
   return settings.delete(userId, PULL_KEY_SETTING);
 }
@@ -157,8 +167,11 @@ export function deletePullKey(userId: string, db?: LyreDb): boolean {
  *
  * Returns null if no user has this key.
  */
-export function findUserIdByPullKey(pullKey: string, db?: LyreDb): string | null {
+export async function findUserIdByPullKey(
+  pullKey: string,
+  db?: LyreDb,
+): Promise<string | null> {
   const settings = db ? makeSettingsRepo(db) : settingsRepo;
-  const setting = settings.findByKeyAndValue(PULL_KEY_SETTING, pullKey);
+  const setting = await settings.findByKeyAndValue(PULL_KEY_SETTING, pullKey);
   return setting?.userId ?? null;
 }

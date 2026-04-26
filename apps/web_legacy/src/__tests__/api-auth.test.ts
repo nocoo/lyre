@@ -38,22 +38,22 @@ function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
-function seedUser(id = "user-1", email = "alice@test.com") {
-  return usersRepo.create({ id, email, name: "Alice", avatarUrl: null });
+async function seedUser(id = "user-1", email = "alice@test.com") {
+  return await usersRepo.create({ id, email, name: "Alice", avatarUrl: null });
 }
 
 describe("hashToken", () => {
-  test("returns a 64-char hex string", () => {
+  test("returns a 64-char hex string", async () => {
     const hash = hashToken("some-token");
     expect(hash).toHaveLength(64);
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  test("produces deterministic output", () => {
+  test("produces deterministic output", async () => {
     expect(hashToken("abc")).toBe(hashToken("abc"));
   });
 
-  test("produces different output for different inputs", () => {
+  test("produces different output for different inputs", async () => {
     expect(hashToken("token-a")).not.toBe(hashToken("token-b"));
   });
 });
@@ -62,14 +62,14 @@ describe("getCurrentUser", () => {
   const savedPlaywright = process.env.PLAYWRIGHT;
   const savedNodeEnv = env.NODE_ENV;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetDb();
     mockAuthorizationHeader = null;
     setSession(null);
     delete env.PLAYWRIGHT;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     if (savedPlaywright !== undefined) {
       env.PLAYWRIGHT = savedPlaywright;
     } else {
@@ -119,8 +119,8 @@ describe("getCurrentUser", () => {
     const rawToken = "my-device-token";
     const hash = hashToken(rawToken);
 
-    seedUser("user-1", "alice@test.com");
-    deviceTokensRepo.create({
+    await seedUser("user-1", "alice@test.com");
+    await deviceTokensRepo.create({
       id: "tok-1",
       userId: "user-1",
       name: "My Mac",
@@ -140,27 +140,27 @@ describe("getCurrentUser", () => {
     const rawToken = "touch-token";
     const hash = hashToken(rawToken);
 
-    seedUser("user-1", "alice@test.com");
-    deviceTokensRepo.create({
+    await seedUser("user-1", "alice@test.com");
+    await deviceTokensRepo.create({
       id: "tok-2",
       userId: "user-1",
       name: "Device",
       tokenHash: hash,
     });
 
-    expect(deviceTokensRepo.findById("tok-2")?.lastUsedAt).toBeNull();
+    expect((await deviceTokensRepo.findById("tok-2"))?.lastUsedAt).toBeNull();
 
     mockAuthorizationHeader = `Bearer ${rawToken}`;
     await callGetCurrentUser();
 
-    const token = deviceTokensRepo.findById("tok-2");
+    const token = await deviceTokensRepo.findById("tok-2");
     expect(token?.lastUsedAt).not.toBeNull();
     expect(token!.lastUsedAt!).toBeGreaterThan(0);
   });
 
   test("returns null for invalid Bearer token", async () => {
     env.NODE_ENV = "test";
-    seedUser("user-1", "alice@test.com");
+    await seedUser("user-1", "alice@test.com");
 
     mockAuthorizationHeader = "Bearer invalid-token-not-in-db";
 
@@ -225,7 +225,7 @@ describe("getCurrentUser", () => {
     expect(user).not.toBeNull();
     expect(user!.email).toBe("new@test.com");
 
-    const dbUser = usersRepo.findByEmail("new@test.com");
+    const dbUser = await usersRepo.findByEmail("new@test.com");
     expect(dbUser).toBeDefined();
     expect(dbUser!.name).toBe("New User");
   });

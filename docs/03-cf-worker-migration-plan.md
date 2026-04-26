@@ -536,7 +536,7 @@ import `next/*`。
 
 ### Wave C — `apps/api` Worker 装配  ⬜
 
-#### Wave C.0 — Repo / service 层 async 化（前置 gate）  ⬜
+#### Wave C.0 — Repo / service 层 async 化（前置 gate）  ✅
 
 来自 B.6.b.4 实测：当前 8 个 repo 共 40 个方法在 D1 dialect 下全部不能跑（细节见上方 spike-findings 表）。Wave C 装配 worker 前，先把 repo + 受影响的 service / handler 改 async：
 
@@ -547,8 +547,8 @@ import `next/*`。
 5. 跑 `bun run api:test` + `bun run legacy:test` + `bun run legacy:test:e2e` 全绿。
 
 **验收**：
-- `bun test packages/api/scripts/d1-spike/repo-async.test.ts` 重新跑：把"全部 broken"断言反过来，证明 await 后全部 OK
-- legacy 行为零回归
+- `bun test packages/api/scripts/d1-spike/repo-async.test.ts` 重新跑：把"全部 broken"断言反过来，证明 await 后全部 OK ✅（40/40 promise）
+- legacy 行为零回归 ✅（packages/api 127 tests pass）
 
 #### Wave C.1 — Worker 装配  ⬜
 

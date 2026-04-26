@@ -29,7 +29,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const recording = recordingsRepo.findById(id);
+  const recording = await recordingsRepo.findById(id);
 
   if (!recording || recording.userId !== user.id) {
     return NextResponse.json(
@@ -58,7 +58,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     const jobId = crypto.randomUUID();
 
     // Create job record
-    const job = jobsRepo.create({
+    const job = await jobsRepo.create({
       id: jobId,
       recordingId: id,
       taskId: submitResult.output.task_id,
@@ -67,7 +67,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     });
 
     // Update recording status to "transcribing"
-    recordingsRepo.update(id, { status: "transcribing" });
+    await recordingsRepo.update(id, { status: "transcribing" });
 
     // Register the job with the server-side JobManager for polling + SSE
     getJobManager().track(job);
