@@ -4,7 +4,8 @@ import { cn, hashString, getAvatarColor } from "@/lib/utils";
 describe("utils", () => {
   test("cn merges tailwind classes and dedupes conflicts", () => {
     expect(cn("p-2", "p-4")).toBe("p-4");
-    expect(cn("text-red-500", false && "text-blue-500")).toBe("text-red-500");
+    const falsy: false | string = false;
+    expect(cn("text-red-500", falsy && "text-blue-500")).toBe("text-red-500");
   });
 
   test("hashString is deterministic and non-negative", () => {

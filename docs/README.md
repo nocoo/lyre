@@ -6,6 +6,7 @@
 |---|----------|-------------|
 | 01 | [Deployment Guide](01-deployment.md) | API keys, environment variables, Docker & Railway deployment |
 | 02 | [Backy Remote Backup](02-backy.md) | Bidirectional backup integration (push + pull webhook API) |
+| 03 | [CF Worker Migration Plan](03-cf-worker-migration-plan.md) | API 抽离 → Web 重写（Vite）→ CF Access；Next.js → Cloudflare Workers |
 
 ## Archive
 

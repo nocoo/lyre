@@ -47,10 +47,11 @@ export default tseslint.config(
             "next-themes",
             "@auth/*",
             // Server-only @lyre/api subpaths must not leak into the browser bundle.
-            "@lyre/api",
+            // Browser-safe subpaths (`@lyre/api/contracts/*`, `@lyre/api/lib/*`) are allowed.
             "@lyre/api/services/*",
             "@lyre/api/handlers/*",
             "@lyre/api/runtime",
+            "@lyre/api/db/*",
           ],
         },
       ],

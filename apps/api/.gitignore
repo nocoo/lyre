@@ -1,0 +1,4 @@
+# Vite SPA build output (apps/web → ../api/static)
+static/
+.wrangler/
+node_modules/

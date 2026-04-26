@@ -567,7 +567,7 @@ import `next/*`。
 - 带 `E2E_SKIP_AUTH=true` 跑一份"指向 worker"的 L2 e2e（迁移现 e2e suite）全绿
 - `grep -r "next/server\|NextResponse" apps/api/src` 空
 
-### Wave D — `apps/web` Vite SPA 重写  ⬜
+### Wave D — `apps/web` Vite SPA 重写  ✅
 
 1. 套用 surety/backy 已验证脚手架：`vite.config.ts` + `@tailwindcss/vite` + `react@19` + `react-router@7` + `swr` + `sonner` + `next-themes` 替换为 `<ThemeProvider>` 自实现（surety 已有参考）。
 2. 路由表对齐现 Next.js App Router：

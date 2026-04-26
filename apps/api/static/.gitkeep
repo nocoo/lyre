@@ -1,5 +1,0 @@
-# Static assets directory.
-#
-# Wave D moves the SPA build output (Vite) here so the Worker can serve
-# it via the `[assets]` binding in wrangler.toml. Empty for now —
-# `wrangler deploy` will warn but not fail.
