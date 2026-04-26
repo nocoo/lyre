@@ -9,7 +9,7 @@
  * helper functions below) to start from a clean slate.
  */
 
-import { resetDb } from "../../db";
+import { resetDb, db } from "../../db";
 import { usersRepo } from "../../db/repositories";
 import { emptyEnv, type LyreEnv } from "../../runtime/env";
 import type { RuntimeContext } from "../../runtime/context";
@@ -40,6 +40,7 @@ export function makeCtx(
 ): RuntimeContext {
   return {
     env: makeTestEnv(opts.env),
+    db,
     user,
     headers: new Headers(opts.headers ?? {}),
   };

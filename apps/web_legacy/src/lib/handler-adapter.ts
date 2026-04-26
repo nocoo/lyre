@@ -22,6 +22,7 @@ import { getCurrentUser } from "@lyre/api/lib/api-auth";
 import { loadEnvFromProcess, type LyreEnv } from "@lyre/api/runtime/env";
 import type { RuntimeContext } from "@lyre/api/runtime/context";
 import type { HandlerResponse } from "@lyre/api/handlers/http";
+import { db as legacyDb } from "@lyre/api/db";
 // Side-effect import: registers the NextAuth session provider before any
 // request hits buildContext(). Without this, /api/* routes that don't import
 // `@/auth` themselves would see `getCurrentUser()` return null on every
@@ -73,7 +74,7 @@ export async function buildContext(
   const user = await getCurrentUser({ headers, env });
   const requireAuth = opts.requireAuth ?? true;
   return {
-    ctx: { env, user, headers },
+    ctx: { env, db: legacyDb, user, headers },
     unauthorized: requireAuth && !user,
   };
 }

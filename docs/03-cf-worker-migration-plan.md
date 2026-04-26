@@ -500,7 +500,24 @@ import `next/*`。
 - ✅ legacy 期间形成两套并存：legacy 进程内 JobManager 单例 + worker Cron（指向同一份数据 → Wave E 切流前 worker 用 test D1，不会双写 prod 数据）
 - ✅ Wave E 数据迁移 + DNS 切换后，legacy 自然下线，SSE 代码随 `apps/web_legacy/` 整目录删除
 
-**验收**（B 全部完成）：
+#### B.6 — DB 注入到 RuntimeContext（Wave C 前置）
+
+**B.6.a 基础设施 ✅ 2026-04-26**：
+- ✅ `packages/api/src/db/types.ts` 新增 `LyreDb` 类型别名
+- ✅ `packages/api/src/db/drivers/sqlite.ts` 抽出 Bun/better-sqlite3 driver（唯一 import `fs`/`bun:sqlite`/`better-sqlite3` 的位置）
+- ✅ `packages/api/src/db/drivers/d1.ts` 占位 D1 driver + `D1DatabaseLike` 接口
+- ✅ `packages/api/src/db/index.ts` 改为 thin wrapper（保留 `db` Proxy + `resetDb` 单例 API 给 legacy）
+- ✅ `RuntimeContext` 新增可选 `db: LyreDb` 字段
+- ✅ legacy `handler-adapter.ts` 在 `buildContext()` 注入 SQLite singleton 至 `ctx.db`
+- ✅ 测试 fixture `_fixtures/runtime-context.ts` 同样注入 `db`
+
+**B.6.b 渐进迁移 ⬜ Wave C 前必须完成**：
+- ⬜ Repo 工厂化：`makeUsersRepo(db)`、`makeRecordingsRepo(db)` 等 8 个；保留旧 `usersRepo` 别名 = `makeUsersRepo(globalDb)`
+- ⬜ 17 个 handler/service 调用点改用 `ctx.db` + factory（`packages/api/src/handlers/*`、`packages/api/src/services/job-processor.ts` 等）
+- ⬜ Worker 入口（Wave C）用 `openD1Db(env.DB)` 注入，验证 D1 整体可跑通
+- ⬜ legacy 单例下线（Wave E）
+
+#### Wave B 验收（全部完成）：
 - B.0 spike-findings 全部有解法
 - 三个 workspace `typecheck`/`lint`/`test:coverage` 全绿，覆盖率 ≥ 90%
 - `bun run legacy:test:e2e` 全绿（legacy 已切到 `@lyre/api`，行为不变；SSE 仍工作）

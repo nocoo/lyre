@@ -1,215 +1,49 @@
 /**
- * Database connection management for Lyre.
+ * Database connection — legacy singleton entry point.
  *
- * Supports dual runtime (Bun / Node.js):
- *   - Bun: uses bun:sqlite + drizzle-orm/bun-sqlite
- *   - Node: uses better-sqlite3 + drizzle-orm/better-sqlite3
+ * Delegates to `./drivers/sqlite.ts` (Bun / better-sqlite3) for the actual
+ * connection. Exports a Proxy-based `db` that lazily opens the singleton
+ * on first property access, plus `resetDb` for tests.
  *
- * Exports a Proxy-based `db` that lazily initializes the connection.
- * In test environments, uses an in-memory database.
+ * Wave B.6 status: this singleton is kept for back-compat while handlers
+ * still import `usersRepo` etc. from `./repositories`. The new injection
+ * seam is `RuntimeContext.db` + the per-handler factory in
+ * `./repositories/index.ts` (Wave B.6.b will migrate handlers off the
+ * singleton). The Cloudflare Worker build will use `./drivers/d1.ts` and
+ * never touch this file.
  */
 
-import { existsSync, mkdirSync } from "fs";
-import { dirname } from "path";
-import * as schema from "./schema";
 import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
+import { openSqliteDb, resolveDbPath } from "./drivers/sqlite";
+import type { LyreDb } from "./types";
 
-// ── Types ──
+export type { LyreDb } from "./types";
+export { resolveDbPath, ensureDir } from "./drivers/sqlite";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DbInstance = any;
+let dbInstance: LyreDb | null = null;
 
-const isBun = typeof globalThis.Bun !== "undefined";
-
-let dbInstance: DbInstance | null = null;
-
-// ── Path resolution ──
-
-const DEFAULT_DB_PATH = "database/lyre.db";
-
-/** Resolve the database file path from env or default */
-// optional for back-compat with legacy tests; always pass ctx.env from handlers
-export function resolveDbPath(env?: LyreEnv): string {
-  const e = env ?? loadEnvFromProcess();
-  const envPath = e.LYRE_DB;
-  if (envPath) return envPath;
-  return DEFAULT_DB_PATH;
-}
-
-/** Ensure parent directory exists (skip for :memory:) */
-export function ensureDir(filePath: string): void {
-  if (filePath === ":memory:") return;
-  const dir = dirname(filePath);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-}
-
-// ── Schema bootstrap (raw SQL) ──
-
-const INIT_SQL = `
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  name TEXT,
-  avatar_url TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS folders (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
-  name TEXT NOT NULL,
-  icon TEXT NOT NULL DEFAULT 'folder',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS recordings (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
-  folder_id TEXT REFERENCES folders(id),
-  title TEXT NOT NULL,
-  description TEXT,
-  file_name TEXT NOT NULL,
-  file_size INTEGER,
-  duration REAL,
-  format TEXT,
-  sample_rate INTEGER,
-  oss_key TEXT NOT NULL,
-  tags TEXT NOT NULL DEFAULT '[]',
-  notes TEXT,
-  ai_summary TEXT,
-  recorded_at INTEGER,
-  status TEXT NOT NULL CHECK(status IN ('uploaded','transcribing','completed','failed')),
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS tags (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
-  name TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS recording_tags (
-  recording_id TEXT NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
-  tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-  PRIMARY KEY (recording_id, tag_id)
-);
-
-CREATE TABLE IF NOT EXISTS transcription_jobs (
-  id TEXT PRIMARY KEY,
-  recording_id TEXT NOT NULL REFERENCES recordings(id),
-  task_id TEXT NOT NULL,
-  request_id TEXT,
-  status TEXT NOT NULL CHECK(status IN ('PENDING','RUNNING','SUCCEEDED','FAILED')),
-  submit_time TEXT,
-  end_time TEXT,
-  usage_seconds INTEGER,
-  error_message TEXT,
-  result_url TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS transcriptions (
-  id TEXT PRIMARY KEY,
-  recording_id TEXT NOT NULL UNIQUE REFERENCES recordings(id),
-  job_id TEXT NOT NULL REFERENCES transcription_jobs(id),
-  full_text TEXT NOT NULL,
-  sentences TEXT NOT NULL DEFAULT '[]',
-  language TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS device_tokens (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id),
-  name TEXT NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
-  last_used_at INTEGER,
-  created_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS settings (
-  user_id TEXT NOT NULL REFERENCES users(id),
-  key TEXT NOT NULL,
-  value TEXT NOT NULL,
-  updated_at INTEGER NOT NULL,
-  PRIMARY KEY (user_id, key)
-);
-
-PRAGMA journal_mode=WAL;
-PRAGMA foreign_keys=ON;
-`;
-
-// ── Database creation ──
-
-/**
- * Open a raw SQLite connection, apply PRAGMAs and schema bootstrap,
- * then wrap with Drizzle ORM.
- */
-function openAndInit(dbPath: string): DbInstance {
-  ensureDir(dbPath);
-
-  if (isBun) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Database } = require("bun:sqlite");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { drizzle } = require("drizzle-orm/bun-sqlite");
-    const sqlite = new Database(dbPath);
-    sqlite.exec(INIT_SQL);
-    return drizzle(sqlite, { schema });
-  }
-
-  // Node.js runtime
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const BetterSqlite = require("better-sqlite3");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { drizzle } = require("drizzle-orm/better-sqlite3");
-  const sqlite = new BetterSqlite(dbPath);
-  sqlite.exec(INIT_SQL);
-  return drizzle(sqlite, { schema });
-}
-
-// ── Test database ──
-
-// optional for back-compat with legacy tests; always pass ctx.env from handlers
 function isTestEnv(env?: LyreEnv): boolean {
   const e = env ?? loadEnvFromProcess();
   return e.NODE_ENV === "test" || e.BUN_ENV === "test";
 }
 
-function createTestDb(): void {
-  dbInstance = openAndInit(":memory:");
-}
-
-// ── Production database ──
-
-function getDb(): DbInstance {
+function getDb(): LyreDb {
   if (dbInstance) return dbInstance;
-
-  const dbPath = resolveDbPath();
-  dbInstance = openAndInit(dbPath);
+  dbInstance = openSqliteDb(resolveDbPath());
   return dbInstance;
 }
 
-// ── Reset (for E2E tests) ──
+function createTestDb(): void {
+  dbInstance = openSqliteDb(":memory:");
+}
 
-// optional for back-compat with legacy tests; always pass ctx.env from handlers
 export function resetDb(env?: LyreEnv): void {
   const e = env ?? loadEnvFromProcess();
   if (!isTestEnv(e) && e.PLAYWRIGHT !== "1") {
     throw new Error("resetDb() can only be called in test environments");
   }
-
   if (!dbInstance) return;
 
-  // Delete in reverse FK order
   const tables = [
     "device_tokens",
     "settings",
@@ -221,25 +55,21 @@ export function resetDb(env?: LyreEnv): void {
     "folders",
     "users",
   ];
-
   for (const table of tables) {
     try {
       dbInstance.run(`DELETE FROM ${table}`);
     } catch {
-      // Table may not exist yet
+      /* table may not exist yet */
     }
   }
 }
 
-// ── Proxy export ──
-
-export const db = new Proxy({} as DbInstance, {
+export const db = new Proxy({} as LyreDb, {
   get(_, prop) {
     if (isTestEnv()) {
       if (!dbInstance) createTestDb();
       return dbInstance[prop];
     }
-    const currentDb = getDb();
-    return currentDb[prop];
+    return getDb()[prop];
   },
 });

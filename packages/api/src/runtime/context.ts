@@ -14,10 +14,23 @@
 
 import type { LyreEnv } from "./env";
 import type { DbUser } from "../db/schema";
+import type { LyreDb } from "../db/types";
 
 export interface RuntimeContext {
   /** Env snapshot — see `runtime/env.ts`. */
   env: LyreEnv;
+  /**
+   * Drizzle DB handle for this request.
+   *
+   * Wave B.6: handlers should read/write through `ctx.db` (and the per-db
+   * repo factory in `db/repositories`) rather than the legacy global
+   * singleton. The legacy adapter injects the SQLite singleton; the
+   * Cloudflare Worker entry will inject a D1 handle via `openD1Db()`.
+   *
+   * Optional during the B.6.b migration; will become required once all
+   * handlers are off `import { db }`.
+   */
+  db?: LyreDb;
   /**
    * Current authenticated user, or `null` when the route allows
    * anonymous access (e.g. `/api/live`).
