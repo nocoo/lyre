@@ -1,212 +1,184 @@
 /**
- * Recording repository.
+ * Recording repository factory.
  *
- * Handles CRUD operations for the recordings table.
  * Tags are managed via the normalized tags + recording_tags tables.
  */
 
 import { eq, desc } from "drizzle-orm";
-import { db } from "../index";
-import { recordings, transcriptions, transcriptionJobs, recordingTags, type DbRecording } from "../schema";
+import { db as defaultDb } from "../index";
+import type { LyreDb } from "../types";
+import {
+  recordings,
+  transcriptions,
+  transcriptionJobs,
+  recordingTags,
+  type DbRecording,
+} from "../schema";
 import type { RecordingStatus } from "../../lib/types";
 
-export const recordingsRepo = {
-  findAll(userId: string): DbRecording[] {
-    return db
-      .select()
-      .from(recordings)
-      .where(eq(recordings.userId, userId))
-      .orderBy(desc(recordings.createdAt))
-      .all();
-  },
-
-  findById(id: string): DbRecording | undefined {
-    return db.select().from(recordings).where(eq(recordings.id, id)).get();
-  },
-
-  findByUserId(
-    userId: string,
-    options?: {
-      status?: RecordingStatus;
-      query?: string;
-      folderId?: string | null; // null = unfiled, string = specific folder
-      sortBy?: "createdAt" | "title" | "duration" | "fileSize";
-      sortDir?: "asc" | "desc";
-      page?: number;
-      pageSize?: number;
+export function makeRecordingsRepo(db: LyreDb) {
+  const repo = {
+    findAll(userId: string): DbRecording[] {
+      return db
+        .select()
+        .from(recordings)
+        .where(eq(recordings.userId, userId))
+        .orderBy(desc(recordings.createdAt))
+        .all();
     },
-  ): { items: DbRecording[]; total: number } {
-    const status = options?.status;
-    const query = options?.query?.toLowerCase();
-    const folderId = options?.folderId;
-    const sortBy = options?.sortBy ?? "createdAt";
-    const sortDir = options?.sortDir ?? "desc";
-    const page = options?.page ?? 1;
-    const pageSize = options?.pageSize ?? 10;
 
-    // Build conditions
-    let allRows: DbRecording[] = db
-      .select()
-      .from(recordings)
-      .where(eq(recordings.userId, userId))
-      .all();
+    findById(id: string): DbRecording | undefined {
+      return db.select().from(recordings).where(eq(recordings.id, id)).get();
+    },
 
-    // Filter by status
-    if (status) {
-      allRows = allRows.filter((r) => r.status === status);
-    }
+    findByUserId(
+      userId: string,
+      options?: {
+        status?: RecordingStatus;
+        query?: string;
+        folderId?: string | null;
+        sortBy?: "createdAt" | "title" | "duration" | "fileSize";
+        sortDir?: "asc" | "desc";
+        page?: number;
+        pageSize?: number;
+      },
+    ): { items: DbRecording[]; total: number } {
+      const status = options?.status;
+      const query = options?.query?.toLowerCase();
+      const folderId = options?.folderId;
+      const sortBy = options?.sortBy ?? "createdAt";
+      const sortDir = options?.sortDir ?? "desc";
+      const page = options?.page ?? 1;
+      const pageSize = options?.pageSize ?? 10;
 
-    // Filter by folder
-    if (folderId !== undefined) {
-      if (folderId === null) {
-        allRows = allRows.filter((r) => r.folderId === null);
-      } else {
-        allRows = allRows.filter((r) => r.folderId === folderId);
+      let allRows: DbRecording[] = db
+        .select()
+        .from(recordings)
+        .where(eq(recordings.userId, userId))
+        .all();
+
+      if (status) {
+        allRows = allRows.filter((r) => r.status === status);
       }
-    }
 
-    // Filter by query (title, description, aiSummary)
-    if (query) {
-      allRows = allRows.filter((r) => {
-        const titleMatch = r.title.toLowerCase().includes(query);
-        const descMatch = r.description?.toLowerCase().includes(query) ?? false;
-        const summaryMatch = r.aiSummary?.toLowerCase().includes(query) ?? false;
-        return titleMatch || descMatch || summaryMatch;
-      });
-    }
-
-    // Sort
-    const sortFn = (a: DbRecording, b: DbRecording): number => {
-      const dir = sortDir === "asc" ? 1 : -1;
-      switch (sortBy) {
-        case "title":
-          return dir * a.title.localeCompare(b.title);
-        case "createdAt":
-          return dir * (a.createdAt - b.createdAt);
-        case "duration":
-          return dir * ((a.duration ?? 0) - (b.duration ?? 0));
-        case "fileSize":
-          return dir * ((a.fileSize ?? 0) - (b.fileSize ?? 0));
+      if (folderId !== undefined) {
+        if (folderId === null) {
+          allRows = allRows.filter((r) => r.folderId === null);
+        } else {
+          allRows = allRows.filter((r) => r.folderId === folderId);
+        }
       }
-    };
-    allRows.sort(sortFn);
 
-    const total = allRows.length;
-    const offset = (page - 1) * pageSize;
-    const items = allRows.slice(offset, offset + pageSize);
+      if (query) {
+        allRows = allRows.filter((r) => {
+          const titleMatch = r.title.toLowerCase().includes(query);
+          const descMatch =
+            r.description?.toLowerCase().includes(query) ?? false;
+          const summaryMatch =
+            r.aiSummary?.toLowerCase().includes(query) ?? false;
+          return titleMatch || descMatch || summaryMatch;
+        });
+      }
 
-    return { items, total };
-  },
+      const sortFn = (a: DbRecording, b: DbRecording): number => {
+        const dir = sortDir === "asc" ? 1 : -1;
+        switch (sortBy) {
+          case "title":
+            return dir * a.title.localeCompare(b.title);
+          case "createdAt":
+            return dir * (a.createdAt - b.createdAt);
+          case "duration":
+            return dir * ((a.duration ?? 0) - (b.duration ?? 0));
+          case "fileSize":
+            return dir * ((a.fileSize ?? 0) - (b.fileSize ?? 0));
+        }
+      };
+      allRows.sort(sortFn);
 
-  create(data: {
-    id: string;
-    userId: string;
-    title: string;
-    description: string | null;
-    fileName: string;
-    fileSize: number | null;
-    duration: number | null;
-    format: string | null;
-    sampleRate: number | null;
-    ossKey: string;
-    status: RecordingStatus;
-    folderId?: string | null;
-    notes?: string | null;
-    recordedAt?: number | null;
-  }): DbRecording {
-    const now = Date.now();
-    return db
-      .insert(recordings)
-      .values({
-        ...data,
-        tags: "[]",
-        folderId: data.folderId ?? null,
-        notes: data.notes ?? null,
-        recordedAt: data.recordedAt ?? null,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning()
-      .get();
-  },
+      const total = allRows.length;
+      const offset = (page - 1) * pageSize;
+      const items = allRows.slice(offset, offset + pageSize);
 
-  update(
-    id: string,
-    data: Partial<{
+      return { items, total };
+    },
+
+    create(data: {
+      id: string;
+      userId: string;
       title: string;
       description: string | null;
-      status: RecordingStatus;
-      duration: number | null;
+      fileName: string;
       fileSize: number | null;
-      folderId: string | null;
-      notes: string | null;
-      aiSummary: string | null;
-      recordedAt: number | null;
-    }>,
-  ): DbRecording | undefined {
-    const updateData: Record<string, unknown> = {
-      updatedAt: Date.now(),
-    };
-    if (data.title !== undefined) updateData.title = data.title;
-    if (data.description !== undefined)
-      updateData.description = data.description;
-    if (data.status !== undefined) updateData.status = data.status;
-    if (data.duration !== undefined) updateData.duration = data.duration;
-    if (data.fileSize !== undefined) updateData.fileSize = data.fileSize;
-    if (data.folderId !== undefined) updateData.folderId = data.folderId;
-    if (data.notes !== undefined) updateData.notes = data.notes;
-    if (data.aiSummary !== undefined) updateData.aiSummary = data.aiSummary;
-    if (data.recordedAt !== undefined) updateData.recordedAt = data.recordedAt;
+      duration: number | null;
+      format: string | null;
+      sampleRate: number | null;
+      ossKey: string;
+      status: RecordingStatus;
+      folderId?: string | null;
+      notes?: string | null;
+      recordedAt?: number | null;
+    }): DbRecording {
+      const now = Date.now();
+      return db
+        .insert(recordings)
+        .values({
+          ...data,
+          tags: "[]",
+          folderId: data.folderId ?? null,
+          notes: data.notes ?? null,
+          recordedAt: data.recordedAt ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning()
+        .get();
+    },
 
-    return db
-      .update(recordings)
-      .set(updateData)
-      .where(eq(recordings.id, id))
-      .returning()
-      .get();
-  },
+    update(
+      id: string,
+      data: Partial<{
+        title: string;
+        description: string | null;
+        status: RecordingStatus;
+        duration: number | null;
+        fileSize: number | null;
+        folderId: string | null;
+        notes: string | null;
+        aiSummary: string | null;
+        recordedAt: number | null;
+      }>,
+    ): DbRecording | undefined {
+      const updateData: Record<string, unknown> = { updatedAt: Date.now() };
+      if (data.title !== undefined) updateData.title = data.title;
+      if (data.description !== undefined)
+        updateData.description = data.description;
+      if (data.status !== undefined) updateData.status = data.status;
+      if (data.duration !== undefined) updateData.duration = data.duration;
+      if (data.fileSize !== undefined) updateData.fileSize = data.fileSize;
+      if (data.folderId !== undefined) updateData.folderId = data.folderId;
+      if (data.notes !== undefined) updateData.notes = data.notes;
+      if (data.aiSummary !== undefined) updateData.aiSummary = data.aiSummary;
+      if (data.recordedAt !== undefined)
+        updateData.recordedAt = data.recordedAt;
 
-  delete(id: string): boolean {
-    const result = db
-      .delete(recordings)
-      .where(eq(recordings.id, id))
-      .run() as unknown as { changes: number };
-    return result.changes > 0;
-  },
+      return db
+        .update(recordings)
+        .set(updateData)
+        .where(eq(recordings.id, id))
+        .returning()
+        .get();
+    },
 
-  /**
-   * Delete a recording and all related transcriptions/jobs in a single transaction.
-   * Returns true if the recording was deleted.
-   */
-  deleteCascade(id: string): boolean {
-    return db.transaction((tx: typeof db) => {
-      tx.delete(transcriptions)
-        .where(eq(transcriptions.recordingId, id))
-        .run();
-      tx.delete(transcriptionJobs)
-        .where(eq(transcriptionJobs.recordingId, id))
-        .run();
-      tx.delete(recordingTags)
-        .where(eq(recordingTags.recordingId, id))
-        .run();
-      const result = tx
+    delete(id: string): boolean {
+      const result = db
         .delete(recordings)
         .where(eq(recordings.id, id))
         .run() as unknown as { changes: number };
       return result.changes > 0;
-    });
-  },
+    },
 
-  /**
-   * Delete multiple recordings and all related data in a single transaction.
-   * Returns the number of recordings actually deleted.
-   */
-  deleteCascadeMany(ids: string[]): number {
-    if (ids.length === 0) return 0;
-
-    return db.transaction((tx: typeof db) => {
-      let deleted = 0;
-      for (const id of ids) {
+    deleteCascade(id: string): boolean {
+      return db.transaction((tx: LyreDb) => {
         tx.delete(transcriptions)
           .where(eq(transcriptions.recordingId, id))
           .run();
@@ -220,9 +192,39 @@ export const recordingsRepo = {
           .delete(recordings)
           .where(eq(recordings.id, id))
           .run() as unknown as { changes: number };
-        deleted += result.changes;
-      }
-      return deleted;
-    });
-  },
-};
+        return result.changes > 0;
+      });
+    },
+
+    deleteCascadeMany(ids: string[]): number {
+      if (ids.length === 0) return 0;
+
+      return db.transaction((tx: LyreDb) => {
+        let deleted = 0;
+        for (const id of ids) {
+          tx.delete(transcriptions)
+            .where(eq(transcriptions.recordingId, id))
+            .run();
+          tx.delete(transcriptionJobs)
+            .where(eq(transcriptionJobs.recordingId, id))
+            .run();
+          tx.delete(recordingTags)
+            .where(eq(recordingTags.recordingId, id))
+            .run();
+          const result = tx
+            .delete(recordings)
+            .where(eq(recordings.id, id))
+            .run() as unknown as { changes: number };
+          deleted += result.changes;
+        }
+        return deleted;
+      });
+    },
+  };
+
+  return repo;
+}
+
+export type RecordingsRepo = ReturnType<typeof makeRecordingsRepo>;
+
+export const recordingsRepo: RecordingsRepo = makeRecordingsRepo(defaultDb);

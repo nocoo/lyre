@@ -1,118 +1,113 @@
 /**
- * Transcription jobs repository.
- *
- * Handles CRUD for the transcription_jobs table.
- * Jobs track the async DashScope ASR processing status.
+ * Transcription jobs repository factory.
  */
 
 import { eq, desc, inArray } from "drizzle-orm";
-import { db } from "../index";
+import { db as defaultDb } from "../index";
+import type { LyreDb } from "../types";
 import { transcriptionJobs, type DbTranscriptionJob } from "../schema";
 import type { JobStatus } from "../../lib/types";
 
-export const jobsRepo = {
-  findById(id: string): DbTranscriptionJob | undefined {
-    return db
-      .select()
-      .from(transcriptionJobs)
-      .where(eq(transcriptionJobs.id, id))
-      .get();
-  },
+export function makeJobsRepo(db: LyreDb) {
+  return {
+    findById(id: string): DbTranscriptionJob | undefined {
+      return db
+        .select()
+        .from(transcriptionJobs)
+        .where(eq(transcriptionJobs.id, id))
+        .get();
+    },
 
-  findByTaskId(taskId: string): DbTranscriptionJob | undefined {
-    return db
-      .select()
-      .from(transcriptionJobs)
-      .where(eq(transcriptionJobs.taskId, taskId))
-      .get();
-  },
+    findByTaskId(taskId: string): DbTranscriptionJob | undefined {
+      return db
+        .select()
+        .from(transcriptionJobs)
+        .where(eq(transcriptionJobs.taskId, taskId))
+        .get();
+    },
 
-  /** Get the latest job for a recording */
-  findLatestByRecordingId(
-    recordingId: string,
-  ): DbTranscriptionJob | undefined {
-    return db
-      .select()
-      .from(transcriptionJobs)
-      .where(eq(transcriptionJobs.recordingId, recordingId))
-      .orderBy(desc(transcriptionJobs.createdAt))
-      .get();
-  },
+    findLatestByRecordingId(
+      recordingId: string,
+    ): DbTranscriptionJob | undefined {
+      return db
+        .select()
+        .from(transcriptionJobs)
+        .where(eq(transcriptionJobs.recordingId, recordingId))
+        .orderBy(desc(transcriptionJobs.createdAt))
+        .get();
+    },
 
-  /** Get all jobs for a recording */
-  findByRecordingId(recordingId: string): DbTranscriptionJob[] {
-    return db
-      .select()
-      .from(transcriptionJobs)
-      .where(eq(transcriptionJobs.recordingId, recordingId))
-      .orderBy(desc(transcriptionJobs.createdAt))
-      .all();
-  },
+    findByRecordingId(recordingId: string): DbTranscriptionJob[] {
+      return db
+        .select()
+        .from(transcriptionJobs)
+        .where(eq(transcriptionJobs.recordingId, recordingId))
+        .orderBy(desc(transcriptionJobs.createdAt))
+        .all();
+    },
 
-  create(data: {
-    id: string;
-    recordingId: string;
-    taskId: string;
-    requestId: string | null;
-    status: JobStatus;
-  }): DbTranscriptionJob {
-    const now = Date.now();
-    return db
-      .insert(transcriptionJobs)
-      .values({
-        ...data,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning()
-      .get();
-  },
-
-  update(
-    id: string,
-    data: Partial<{
-      status: JobStatus;
+    create(data: {
+      id: string;
+      recordingId: string;
+      taskId: string;
       requestId: string | null;
-      submitTime: string | null;
-      endTime: string | null;
-      usageSeconds: number | null;
-      errorMessage: string | null;
-      resultUrl: string | null;
-    }>,
-  ): DbTranscriptionJob | undefined {
-    return db
-      .update(transcriptionJobs)
-      .set({ ...data, updatedAt: Date.now() })
-      .where(eq(transcriptionJobs.id, id))
-      .returning()
-      .get();
-  },
+      status: JobStatus;
+    }): DbTranscriptionJob {
+      const now = Date.now();
+      return db
+        .insert(transcriptionJobs)
+        .values({ ...data, createdAt: now, updatedAt: now })
+        .returning()
+        .get();
+    },
 
-  delete(id: string): boolean {
-    const result = db
-      .delete(transcriptionJobs)
-      .where(eq(transcriptionJobs.id, id))
-      .run() as unknown as { changes: number };
-    return result.changes > 0;
-  },
+    update(
+      id: string,
+      data: Partial<{
+        status: JobStatus;
+        requestId: string | null;
+        submitTime: string | null;
+        endTime: string | null;
+        usageSeconds: number | null;
+        errorMessage: string | null;
+        resultUrl: string | null;
+      }>,
+    ): DbTranscriptionJob | undefined {
+      return db
+        .update(transcriptionJobs)
+        .set({ ...data, updatedAt: Date.now() })
+        .where(eq(transcriptionJobs.id, id))
+        .returning()
+        .get();
+    },
 
-  deleteByRecordingId(recordingId: string): number {
-    const result = db
-      .delete(transcriptionJobs)
-      .where(eq(transcriptionJobs.recordingId, recordingId))
-      .run() as unknown as { changes: number };
-    return result.changes;
-  },
+    delete(id: string): boolean {
+      const result = db
+        .delete(transcriptionJobs)
+        .where(eq(transcriptionJobs.id, id))
+        .run() as unknown as { changes: number };
+      return result.changes > 0;
+    },
 
-  /** Find all jobs in non-terminal state (PENDING or RUNNING) */
-  findActive(): DbTranscriptionJob[] {
-    return db
-      .select()
-      .from(transcriptionJobs)
-      .where(
-        inArray(transcriptionJobs.status, ["PENDING", "RUNNING"]),
-      )
-      .orderBy(desc(transcriptionJobs.createdAt))
-      .all();
-  },
-};
+    deleteByRecordingId(recordingId: string): number {
+      const result = db
+        .delete(transcriptionJobs)
+        .where(eq(transcriptionJobs.recordingId, recordingId))
+        .run() as unknown as { changes: number };
+      return result.changes;
+    },
+
+    findActive(): DbTranscriptionJob[] {
+      return db
+        .select()
+        .from(transcriptionJobs)
+        .where(inArray(transcriptionJobs.status, ["PENDING", "RUNNING"]))
+        .orderBy(desc(transcriptionJobs.createdAt))
+        .all();
+    },
+  };
+}
+
+export type JobsRepo = ReturnType<typeof makeJobsRepo>;
+
+export const jobsRepo: JobsRepo = makeJobsRepo(defaultDb);
