@@ -9,10 +9,9 @@ else
   exit 1
 fi
 
-# Web (legacy): unit tests + lint
-# During the CF Worker migration (docs/03-cf-worker-migration-plan.md) only
-# legacy paths run here. Add new-package hooks once apps/web + apps/api ship.
+# Web (legacy) + @lyre/api: unit tests + lint
 bun run legacy:test && bun run legacy:lint
+bun run api:test && bun run api:lint && bun run api:typecheck
 
 # macOS: unit tests + lint
 cd apps/macos && \

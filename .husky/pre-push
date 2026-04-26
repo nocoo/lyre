@@ -9,10 +9,9 @@ else
   exit 1
 fi
 
-# Web (legacy): coverage + lint + build + e2e
-# During the CF Worker migration (docs/03-cf-worker-migration-plan.md) only
-# legacy paths run here. Add new-package hooks once apps/web + apps/api ship.
+# Web (legacy) + @lyre/api: coverage + lint + build + e2e
 bun run legacy:test:coverage && bun run legacy:lint && bun run legacy:build && bun run legacy:test:e2e
+bun run api:test:coverage && bun run api:lint && bun run api:typecheck
 
 # macOS: unit tests + lint (E2E included in LyreTests scheme)
 cd apps/macos && \

@@ -485,7 +485,7 @@ import `next/*`。
 - `grep -r "process\." packages/api/src | grep -v __tests__` ≈ 空
 - `grep -r "from \"next" packages/api/src` 空
 
-#### B.4 — Coverage / 双 workspace 门禁
+#### B.4 — Coverage / 双 workspace 门禁  ✅ 2026-04-26
 
 照 backy Wave 1 「Coverage gate plumbing」：
 - `packages/api/scripts/check-coverage.ts`（90% 阈值，复制 web_legacy 那份）
