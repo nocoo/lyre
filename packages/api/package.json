@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./contracts/*": "./src/contracts/*.ts",
-    "./services/*": "./src/services/*.ts",
-    "./handlers/*": "./src/handlers/*.ts"
+    "./contracts/ai": "./src/contracts/ai.ts",
+    "./contracts/jobs": "./src/contracts/jobs.ts",
+    "./contracts/recordings": "./src/contracts/recordings.ts"
   },
   "scripts": {
-    "placeholder": "echo 'Wave B: @lyre/api — not yet populated'"
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nocoo/next-ai": "^0.2.1"
   }
 }

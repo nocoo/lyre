@@ -77,7 +77,7 @@ import type {
   TranscriptionJob,
   Tag as TagType,
   Folder as FolderType,
-} from "@/lib/types";
+} from "@lyre/api/contracts/recordings";
 
 type PageParams = { params: Promise<{ id: string }> };
 

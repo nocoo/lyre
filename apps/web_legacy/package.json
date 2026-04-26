@@ -16,6 +16,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@lyre/api": "workspace:*",
     "@nocoo/next-ai": "^0.2.1",
     "@radix-ui/react-collapsible": "^1.1.12",
     "ai": "^6.0.116",

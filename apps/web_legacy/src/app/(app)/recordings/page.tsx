@@ -45,7 +45,7 @@ import type {
   RecordingStatus,
   PaginatedResponse,
   Tag,
-} from "@/lib/types";
+} from "@lyre/api/contracts/recordings";
 import { cn } from "@/lib/utils";
 
 // ── Constants ──

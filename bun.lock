@@ -30,6 +30,7 @@
       "name": "@lyre/web-legacy",
       "version": "1.6.5",
       "dependencies": {
+        "@lyre/api": "workspace:*",
         "@nocoo/next-ai": "^0.2.1",
         "@radix-ui/react-collapsible": "^1.1.12",
         "ai": "^6.0.116",
@@ -72,6 +73,9 @@
     "packages/api": {
       "name": "@lyre/api",
       "version": "1.6.5",
+      "dependencies": {
+        "@nocoo/next-ai": "^0.2.1",
+      },
     },
   },
   "trustedDependencies": [

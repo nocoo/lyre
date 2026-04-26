@@ -20,18 +20,12 @@
 
 import type { AsrProvider } from "@/services/asr";
 import type { DbTranscriptionJob } from "@/db/schema";
-import type { JobStatus } from "@/lib/types";
+import type { JobEvent } from "@lyre/api/contracts/jobs";
 import { pollJob } from "@/services/job-processor";
 
 // ── Types ──
 
-export interface JobEvent {
-  jobId: string;
-  recordingId: string;
-  status: JobStatus;
-  previousStatus: JobStatus;
-}
-
+export type { JobEvent };
 export type JobEventListener = (event: JobEvent) => void;
 
 export interface JobManagerDeps {

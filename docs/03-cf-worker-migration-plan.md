@@ -418,7 +418,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 
 **Gate 状态**：✅ 全部有解法 → 进入 B.1。
 
-#### B.1 — Contracts 抽离（client-safe types 先行，仅前置 1 个文件即可解锁 UI）
+#### B.1 — Contracts 抽离（client-safe types 先行，仅前置 1 个文件即可解锁 UI）  ✅ 2026-04-26
 
 把所有 UI 直接 import 的 server-side 模块拆成 contracts 层：
 

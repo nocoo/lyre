@@ -57,7 +57,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { Folder } from "@/lib/types";
+import type { Folder } from "@lyre/api/contracts/recordings";
 
 // ── Icon registry ──
 

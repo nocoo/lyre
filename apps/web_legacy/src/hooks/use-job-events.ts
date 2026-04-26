@@ -21,7 +21,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { JobEvent } from "@/services/job-manager";
+import type { JobEvent } from "@lyre/api/contracts/jobs";
 
 export interface UseJobEventsOptions {
   /** Called on each job status change event. */

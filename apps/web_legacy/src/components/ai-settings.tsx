@@ -12,7 +12,7 @@ import {
   CUSTOM_PROVIDER_INFO,
   type AiProvider,
   type SdkType,
-} from "@/services/ai";
+} from "@lyre/api/contracts/ai";
 
 interface AiSettings {
   provider: AiProvider | "";
