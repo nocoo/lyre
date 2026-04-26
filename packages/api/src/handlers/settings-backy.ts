@@ -28,8 +28,8 @@ import {
 
 export function getBackySettingsHandler(ctx: RuntimeContext): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const settings = readBackySettings(ctx.user.id);
-  const pullKey = readPullKey(ctx.user.id);
+  const settings = readBackySettings(ctx.user.id, ctx.db);
+  const pullKey = readPullKey(ctx.user.id, ctx.db);
   return json({
     webhookUrl: settings.webhookUrl,
     apiKey: maskApiKey(settings.apiKey),
@@ -52,7 +52,7 @@ export function updateBackySettingsHandler(
   if (body.apiKey !== undefined) {
     settings.upsert(ctx.user.id, "backy.apiKey", body.apiKey);
   }
-  const updated = readBackySettings(ctx.user.id);
+  const updated = readBackySettings(ctx.user.id, ctx.db);
   return json({
     webhookUrl: updated.webhookUrl,
     apiKey: maskApiKey(updated.apiKey),
@@ -64,7 +64,7 @@ export async function testBackySettingsHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const settings = readBackySettings(ctx.user.id);
+  const settings = readBackySettings(ctx.user.id, ctx.db);
   if (!settings.webhookUrl || !settings.apiKey) {
     return badRequest("Webhook URL and API key must be configured first");
   }
@@ -99,7 +99,7 @@ export async function backyHistoryHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   if (!ctx.user) return unauthorized();
-  const settings = readBackySettings(ctx.user.id);
+  const settings = readBackySettings(ctx.user.id, ctx.db);
   if (!settings.webhookUrl || !settings.apiKey) {
     return badRequest("Webhook URL and API key must be configured first");
   }
@@ -119,15 +119,15 @@ export async function backyHistoryHandler(
 export function generatePullKeyHandler(ctx: RuntimeContext): HandlerResponse {
   if (!ctx.user) return unauthorized();
   const key = generatePullKey();
-  savePullKey(ctx.user.id, key);
+  savePullKey(ctx.user.id, key, ctx.db);
   return json({ pullKey: key });
 }
 
 export function deletePullKeyHandler(ctx: RuntimeContext): HandlerResponse {
   if (!ctx.user) return unauthorized();
-  const had = readPullKey(ctx.user.id);
+  const had = readPullKey(ctx.user.id, ctx.db);
   if (!had) return badRequest("No pull key configured");
-  deletePullKey(ctx.user.id);
+  deletePullKey(ctx.user.id, ctx.db);
   return json({ ok: true });
 }
 
@@ -139,16 +139,16 @@ export function deletePullKeyHandler(ctx: RuntimeContext): HandlerResponse {
  * auth via RuntimeContext.user (will always be null).
  */
 function authenticateWebhookKey(
-  headers: Headers,
+  ctx: RuntimeContext,
 ): { ok: true; userId: string } | { ok: false; res: HandlerResponse } {
-  const key = headers.get("x-webhook-key");
+  const key = ctx.headers.get("x-webhook-key");
   if (!key) {
     return {
       ok: false,
       res: json({ error: "Missing X-Webhook-Key header" }, 401),
     };
   }
-  const userId = findUserIdByPullKey(key);
+  const userId = findUserIdByPullKey(key, ctx.db);
   if (!userId) {
     return { ok: false, res: json({ error: "Invalid webhook key" }, 401) };
   }
@@ -158,7 +158,7 @@ function authenticateWebhookKey(
 export function backyPullHeadHandler(
   ctx: RuntimeContext,
 ): HandlerResponse {
-  const auth = authenticateWebhookKey(ctx.headers);
+  const auth = authenticateWebhookKey(ctx);
   if (!auth.ok) return auth.res;
   return { kind: "empty", status: 200 };
 }
@@ -167,11 +167,11 @@ export async function backyPullPostHandler(
   ctx: RuntimeContext,
 ): Promise<HandlerResponse> {
   const start = Date.now();
-  const auth = authenticateWebhookKey(ctx.headers);
+  const auth = authenticateWebhookKey(ctx);
   if (!auth.ok) return auth.res;
   const userId = auth.userId;
 
-  const pushConfig = readBackySettings(userId);
+  const pushConfig = readBackySettings(userId, ctx.db);
   if (!pushConfig.webhookUrl || !pushConfig.apiKey) {
     return json(
       {
@@ -186,7 +186,7 @@ export async function backyPullPostHandler(
   if (!user) {
     return json({ ok: false, error: "User not found" }, 401);
   }
-  const pushResult = await pushBackupToBacky(user, pushConfig, ctx.env as LyreEnv);
+  const pushResult = await pushBackupToBacky(user, pushConfig, ctx.env as LyreEnv, ctx.db);
   const durationMs = Date.now() - start;
   if (!pushResult.ok) {
     return json(

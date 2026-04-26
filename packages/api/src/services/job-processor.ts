@@ -18,7 +18,12 @@ import {
   recordingsRepo,
   transcriptionsRepo,
   settingsRepo,
+  makeJobsRepo,
+  makeRecordingsRepo,
+  makeTranscriptionsRepo,
+  makeSettingsRepo,
 } from "../db/repositories";
+import type { LyreDb } from "../db/types";
 import type { AsrProvider } from "./asr";
 import { parseTranscriptionResult } from "./asr";
 import { presignPut, makeResultKey } from "./oss";
@@ -53,13 +58,18 @@ export interface JobPollResult {
  * Returns the updated job and whether its status changed.
  * Throws on unrecoverable ASR provider errors (caller should handle).
  */
-// optional for back-compat with legacy tests; always pass ctx.env from handlers
+// `db` and `env` are optional for back-compat with legacy callers/tests;
+// new worker entry points should always pass `ctx.db` and `ctx.env`.
 export async function pollJob(
   job: DbTranscriptionJob,
   provider: AsrProvider,
   env?: LyreEnv,
+  db?: LyreDb,
 ): Promise<JobPollResult> {
   const e = env ?? loadEnvFromProcess();
+  const jobs = db ? makeJobsRepo(db) : jobsRepo;
+  const recordings = db ? makeRecordingsRepo(db) : recordingsRepo;
+  const transcriptions = db ? makeTranscriptionsRepo(db) : transcriptionsRepo;
   // Already terminal — nothing to do
   if (job.status === "SUCCEEDED" || job.status === "FAILED") {
     return { job, previousStatus: null, changed: false };
@@ -70,7 +80,7 @@ export async function pollJob(
   const newStatus = pollResult.output.task_status;
 
   // Build update payload
-  const updateData: Parameters<typeof jobsRepo.update>[1] = {
+  const updateData: Parameters<typeof jobs.update>[1] = {
     status: newStatus,
     requestId: pollResult.request_id,
   };
@@ -96,10 +106,10 @@ export async function pollJob(
       const parsed = parseTranscriptionResult(rawResult);
 
       // Remove existing transcription if re-transcribing
-      transcriptionsRepo.deleteByRecordingId(job.recordingId);
+      transcriptions.deleteByRecordingId(job.recordingId);
 
       // Save transcription
-      transcriptionsRepo.create({
+      transcriptions.create({
         id: crypto.randomUUID(),
         recordingId: job.recordingId,
         jobId: job.id,
@@ -114,12 +124,12 @@ export async function pollJob(
       });
 
       // Update recording status
-      recordingsRepo.update(job.recordingId, { status: "completed" });
+      recordings.update(job.recordingId, { status: "completed" });
 
       // Auto-summarize if enabled (best-effort)
-      const recording = recordingsRepo.findById(job.recordingId);
+      const recording = recordings.findById(job.recordingId);
       if (recording) {
-        autoSummarize(recording.userId, job.recordingId, parsed.fullText).catch(
+        autoSummarize(recording.userId, job.recordingId, parsed.fullText, db).catch(
           (err) => {
             console.warn("[auto-summarize] Failed:", err);
           },
@@ -132,7 +142,7 @@ export async function pollJob(
         err instanceof Error
           ? `Result processing failed: ${err.message}`
           : "Result processing failed";
-      recordingsRepo.update(job.recordingId, { status: "failed" });
+      recordings.update(job.recordingId, { status: "failed" });
     }
   }
 
@@ -140,10 +150,10 @@ export async function pollJob(
   if (newStatus === "FAILED") {
     updateData.errorMessage =
       pollResult.output.message ?? "Transcription failed";
-    recordingsRepo.update(job.recordingId, { status: "failed" });
+    recordings.update(job.recordingId, { status: "failed" });
   }
 
-  const updatedJob = jobsRepo.update(job.id, updateData);
+  const updatedJob = jobs.update(job.id, updateData);
   const finalJob = updatedJob ?? job;
 
   return {
@@ -191,8 +201,11 @@ async function autoSummarize(
   userId: string,
   recordingId: string,
   fullText: string,
+  db?: LyreDb,
 ): Promise<void> {
-  const all = settingsRepo.findByUserId(userId);
+  const settings = db ? makeSettingsRepo(db) : settingsRepo;
+  const recordings = db ? makeRecordingsRepo(db) : recordingsRepo;
+  const all = settings.findByUserId(userId);
   const map = new Map(all.map((s) => [s.key, s.value]));
 
   if (map.get("ai.autoSummarize") !== "true") return;
@@ -222,7 +235,7 @@ async function autoSummarize(
     maxOutputTokens: 2048,
   });
 
-  recordingsRepo.update(recordingId, { aiSummary: text.trim() });
+  recordings.update(recordingId, { aiSummary: text.trim() });
   console.log(
     `[auto-summarize] Summary generated for recording ${recordingId}`,
   );

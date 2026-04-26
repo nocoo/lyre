@@ -37,7 +37,7 @@ export async function getJobHandler(
 
   try {
     const provider = getAsrProvider(ctx.env);
-    const result = await pollJob(job, provider, ctx.env);
+    const result = await pollJob(job, provider, ctx.env, ctx.db);
     return json(result.job);
   } catch (error) {
     console.error("Failed to poll ASR job:", error);
@@ -77,7 +77,7 @@ export async function cronTickHandler(
 
   for (const job of active) {
     try {
-      const out = await pollJob(job, provider, ctx.env);
+      const out = await pollJob(job, provider, ctx.env, ctx.db);
       if (out.changed) result.changed += 1;
     } catch (error) {
       result.failed += 1;

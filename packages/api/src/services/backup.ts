@@ -5,7 +5,7 @@
  * Separated from the API route for testability.
  */
 
-import { db } from "../db";
+import { db as defaultDb } from "../db";
 import {
   foldersRepo,
   tagsRepo,
@@ -14,6 +14,13 @@ import {
   transcriptionsRepo,
   deviceTokensRepo,
   settingsRepo,
+  makeFoldersRepo,
+  makeTagsRepo,
+  makeRecordingsRepo,
+  makeJobsRepo,
+  makeTranscriptionsRepo,
+  makeDeviceTokensRepo,
+  makeSettingsRepo,
 } from "../db/repositories";
 import {
   folders,
@@ -26,6 +33,7 @@ import {
   settings,
 } from "../db/schema";
 import type { DbUser } from "../db/schema";
+import type { LyreDb } from "../db/types";
 import { eq, and } from "drizzle-orm";
 import { APP_VERSION } from "../lib/version";
 import type { BackyCredentials } from "./backy";
@@ -149,19 +157,27 @@ export function validateBackup(data: unknown): string | null {
 
 // ── Export ──
 
-export function exportBackup(user: DbUser): BackupData {
-  const userFolders = foldersRepo.findByUserId(user.id);
-  const userTags = tagsRepo.findByUserId(user.id);
-  const userRecordings = recordingsRepo.findAll(user.id);
-  const userDeviceTokens = deviceTokensRepo.findByUserId(user.id);
-  const userSettings = settingsRepo.findByUserId(user.id);
+export function exportBackup(user: DbUser, db?: LyreDb): BackupData {
+  const folders_ = db ? makeFoldersRepo(db) : foldersRepo;
+  const tags_ = db ? makeTagsRepo(db) : tagsRepo;
+  const recordings_ = db ? makeRecordingsRepo(db) : recordingsRepo;
+  const jobs_ = db ? makeJobsRepo(db) : jobsRepo;
+  const transcriptions_ = db ? makeTranscriptionsRepo(db) : transcriptionsRepo;
+  const deviceTokens_ = db ? makeDeviceTokensRepo(db) : deviceTokensRepo;
+  const settings_ = db ? makeSettingsRepo(db) : settingsRepo;
+
+  const userFolders = folders_.findByUserId(user.id);
+  const userTags = tags_.findByUserId(user.id);
+  const userRecordings = recordings_.findAll(user.id);
+  const userDeviceTokens = deviceTokens_.findByUserId(user.id);
+  const userSettings = settings_.findByUserId(user.id);
 
   const allJobs: BackupData["transcriptionJobs"] = [];
   const allTranscriptions: BackupData["transcriptions"] = [];
   const allRecordingTags: BackupData["recordingTags"] = [];
 
   for (const rec of userRecordings) {
-    const jobs = jobsRepo.findByRecordingId(rec.id);
+    const jobs = jobs_.findByRecordingId(rec.id);
     for (const job of jobs) {
       allJobs.push({
         id: job.id,
@@ -179,7 +195,7 @@ export function exportBackup(user: DbUser): BackupData {
       });
     }
 
-    const transcription = transcriptionsRepo.findByRecordingId(rec.id);
+    const transcription = transcriptions_.findByRecordingId(rec.id);
     if (transcription) {
       allTranscriptions.push({
         id: transcription.id,
@@ -193,7 +209,7 @@ export function exportBackup(user: DbUser): BackupData {
       });
     }
 
-    const tagIds = tagsRepo.findTagIdsForRecording(rec.id);
+    const tagIds = tags_.findTagIdsForRecording(rec.id);
     for (const tagId of tagIds) {
       allRecordingTags.push({ recordingId: rec.id, tagId });
     }
@@ -282,7 +298,17 @@ export interface ImportCounts {
 export function importBackup(
   userId: string,
   backup: BackupData,
+  dbArg?: LyreDb,
 ): ImportCounts {
+  const db = (dbArg ?? defaultDb) as typeof defaultDb;
+  const folders_ = dbArg ? makeFoldersRepo(dbArg) : foldersRepo;
+  const tags_ = dbArg ? makeTagsRepo(dbArg) : tagsRepo;
+  const recordings_ = dbArg ? makeRecordingsRepo(dbArg) : recordingsRepo;
+  const jobs_ = dbArg ? makeJobsRepo(dbArg) : jobsRepo;
+  const transcriptions_ = dbArg ? makeTranscriptionsRepo(dbArg) : transcriptionsRepo;
+  const deviceTokens_ = dbArg ? makeDeviceTokensRepo(dbArg) : deviceTokensRepo;
+  const settings_ = dbArg ? makeSettingsRepo(dbArg) : settingsRepo;
+
   const counts: ImportCounts = {
     folders: 0,
     tags: 0,
@@ -297,7 +323,7 @@ export function importBackup(
   db.transaction((tx: typeof db) => {
     // 1. Folders
     for (const f of backup.folders) {
-      const existing = foldersRepo.findByIdAndUser(f.id, userId);
+      const existing = folders_.findByIdAndUser(f.id, userId);
       if (existing) {
         tx.update(folders)
           .set({
@@ -324,7 +350,7 @@ export function importBackup(
 
     // 2. Tags
     for (const t of backup.tags) {
-      const existing = tagsRepo.findByIdAndUser(t.id, userId);
+      const existing = tags_.findByIdAndUser(t.id, userId);
       if (existing) {
         tx.update(tags)
           .set({ name: t.name })
@@ -345,7 +371,7 @@ export function importBackup(
 
     // 3. Recordings
     for (const r of backup.recordings) {
-      const existing = recordingsRepo.findById(r.id);
+      const existing = recordings_.findById(r.id);
       if (existing) {
         tx.update(recordings)
           .set({
@@ -396,7 +422,7 @@ export function importBackup(
 
     // 4. Transcription jobs
     for (const j of backup.transcriptionJobs) {
-      const existing = jobsRepo.findById(j.id);
+      const existing = jobs_.findById(j.id);
       if (existing) {
         tx.update(transcriptionJobs)
           .set({
@@ -436,7 +462,7 @@ export function importBackup(
 
     // 5. Transcriptions
     for (const t of backup.transcriptions) {
-      const existing = transcriptionsRepo.findById(t.id);
+      const existing = transcriptions_.findById(t.id);
       if (existing) {
         tx.update(transcriptions)
           .set({
@@ -484,7 +510,7 @@ export function importBackup(
 
     // 7. Device tokens
     for (const dt of backup.deviceTokens) {
-      const existing = deviceTokensRepo.findById(dt.id);
+      const existing = deviceTokens_.findById(dt.id);
       if (existing) {
         tx.update(deviceTokens)
           .set({
@@ -511,7 +537,7 @@ export function importBackup(
 
     // 8. Settings
     for (const s of backup.settings) {
-      const existing = settingsRepo.findByKey(userId, s.key);
+      const existing = settings_.findByKey(userId, s.key);
       if (existing) {
         tx.update(settings)
           .set({ value: s.value, updatedAt: s.updatedAt })
@@ -574,9 +600,10 @@ export async function pushBackupToBacky(
   credentials: BackyCredentials,
   // optional for back-compat with legacy tests; always pass ctx.env from handlers
   env?: LyreEnv,
+  db?: LyreDb,
 ): Promise<BackyPushResult> {
   const start = Date.now();
-  const backup = exportBackup(user);
+  const backup = exportBackup(user, db);
   const json = JSON.stringify(backup, null, 2);
 
   const environment = getEnvironment(env);

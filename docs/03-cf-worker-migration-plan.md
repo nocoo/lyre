@@ -512,8 +512,9 @@ import `next/*`。
 - ✅ 测试 fixture `_fixtures/runtime-context.ts` 同样注入 `db`
 
 **B.6.b 渐进迁移 ⬜ Wave C 前必须完成**：
-- ⬜ Repo 工厂化：`makeUsersRepo(db)`、`makeRecordingsRepo(db)` 等 8 个；保留旧 `usersRepo` 别名 = `makeUsersRepo(globalDb)`
-- ⬜ 17 个 handler/service 调用点改用 `ctx.db` + factory（`packages/api/src/handlers/*`、`packages/api/src/services/job-processor.ts` 等）
+- ✅ Repo 工厂化：`makeUsersRepo(db)`、`makeRecordingsRepo(db)` 等 8 个 + `makeRepos(db)` 聚合；保留旧 `usersRepo` 别名 = `makeUsersRepo(globalDb)`（2026-04-26）
+- ✅ Handler 层切 `ctx.db`：`packages/api/src/handlers/*` 全部 11 个文件；`api-auth.ts` 也改造为接收 `db: LyreDb`，legacy adapter 注入（2026-04-26）
+- ✅ Service 层接 `db?: LyreDb`：`job-processor.ts`（`pollJob`、`autoSummarize`）、`backy.ts`（`readBackySettings`/`readPullKey`/`savePullKey`/`deletePullKey`/`findUserIdByPullKey`）、`backup.ts`（`exportBackup`/`importBackup`/`pushBackupToBacky`）；optional 参数兼容 legacy 单例与测试（2026-04-26）
 - ⬜ Worker 入口（Wave C）用 `openD1Db(env.DB)` 注入，验证 D1 整体可跑通
 - ⬜ legacy 单例下线（Wave E）
 
