@@ -5,7 +5,24 @@
  * Separated from the API route for testability.
  */
 
-import { db as defaultDb } from "../db";
+import type { LyreDb } from "../db/types";
+
+/**
+ * Lazy-load the legacy sqlite singleton — keeps `bun:sqlite` /
+ * `better-sqlite3` out of the worker bundle when callers always pass
+ * an explicit `db`.
+ */
+function getDefaultDb(): LyreDb {
+  const path = "../" + "db";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+  const g = globalThis as any;
+  const req: (id: string) => unknown =
+    typeof g.require === "function"
+      ? g.require
+      : // eslint-disable-next-line @typescript-eslint/no-require-imports
+        (require("mo" + "dule") as { createRequire: (u: string) => (id: string) => unknown }).createRequire(import.meta.url);
+  return (req(path) as typeof import("../db")).db;
+}
 import {
   foldersRepo,
   tagsRepo,
@@ -34,7 +51,6 @@ import {
   settings,
 } from "../db/schema";
 import type { DbUser } from "../db/schema";
-import type { LyreDb } from "../db/types";
 import { eq, and } from "drizzle-orm";
 import { APP_VERSION } from "../lib/version";
 import type { BackyCredentials } from "./backy";
@@ -304,7 +320,7 @@ export async function importBackup(
   backup: BackupData,
   dbArg?: LyreDb,
 ): Promise<ImportCounts> {
-  const db = (dbArg ?? defaultDb) as typeof defaultDb;
+  const db = (dbArg ?? getDefaultDb()) as LyreDb;
   const folders_ = dbArg ? makeFoldersRepo(dbArg) : foldersRepo;
   const tags_ = dbArg ? makeTagsRepo(dbArg) : tagsRepo;
   const recordings_ = dbArg ? makeRecordingsRepo(dbArg) : recordingsRepo;

@@ -14,11 +14,36 @@
  */
 
 import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
-import { openSqliteDb, resolveDbPath } from "./drivers/sqlite";
 import type { LyreDb } from "./types";
 
 export type { LyreDb } from "./types";
-export { resolveDbPath, ensureDir } from "./drivers/sqlite";
+export type { D1DatabaseLike } from "./drivers/d1";
+
+/**
+ * Lazy-load the sqlite driver — keeps `bun:sqlite` / `better-sqlite3` /
+ * `node:fs` out of any worker bundle that touches `db/index.ts`. Worker
+ * builds use `./drivers/d1.ts` directly and never trigger this require.
+ */
+function loadSqlite(): typeof import("./drivers/sqlite") {
+  // String-built path so esbuild treats it as opaque.
+  const path = "./drivers/" + "sqlite";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+  const g = globalThis as any;
+  const req: (id: string) => unknown =
+    typeof g.require === "function"
+      ? g.require
+      : // eslint-disable-next-line @typescript-eslint/no-require-imports
+        (require("mo" + "dule") as { createRequire: (u: string) => (id: string) => unknown }).createRequire(import.meta.url);
+  return req(path) as typeof import("./drivers/sqlite");
+}
+
+export function resolveDbPath(env?: LyreEnv): string {
+  return loadSqlite().resolveDbPath(env);
+}
+
+export function ensureDir(path: string): void {
+  loadSqlite().ensureDir(path);
+}
 
 let dbInstance: LyreDb | null = null;
 
@@ -29,12 +54,13 @@ function isTestEnv(env?: LyreEnv): boolean {
 
 function getDb(): LyreDb {
   if (dbInstance) return dbInstance;
-  dbInstance = openSqliteDb(resolveDbPath());
+  const sqlite = loadSqlite();
+  dbInstance = sqlite.openSqliteDb(sqlite.resolveDbPath());
   return dbInstance;
 }
 
 function createTestDb(): void {
-  dbInstance = openSqliteDb(":memory:");
+  dbInstance = loadSqlite().openSqliteDb(":memory:");
 }
 
 export function resetDb(env?: LyreEnv): void {

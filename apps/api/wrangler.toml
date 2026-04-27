@@ -5,11 +5,17 @@ compatibility_flags = ["nodejs_compat"]
 
 # Empty by design — secrets injected via `wrangler secret put`.
 [vars]
+NODE_ENV = "production"
+OSS_BUCKET = "lyre"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "lyre-db"
-database_id = "PLACEHOLDER_PROD_D1_ID"
+database_id = "442d7cfb-e68d-4746-a83f-9eba16dd308c"
+
+[[routes]]
+pattern = "lyre.hexly.ai"
+custom_domain = true
 
 [triggers]
 crons = ["* * * * *"]
@@ -28,8 +34,14 @@ name = "lyre-api-test"
 
 [env.test.vars]
 E2E_SKIP_AUTH = "true"
+NODE_ENV = "production"
+OSS_BUCKET = "lyre"
 
 [[env.test.d1_databases]]
 binding = "DB"
 database_name = "lyre-db-test"
-database_id = "PLACEHOLDER_TEST_D1_ID"
+database_id = "99e130cd-a2ac-4150-a26d-077b6690496f"
+
+[[env.test.routes]]
+pattern = "lyre-test.hexly.ai"
+custom_domain = true

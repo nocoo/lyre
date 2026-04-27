@@ -14,6 +14,16 @@ import type { LyreDb } from "../types";
 
 const isBun = typeof globalThis.Bun !== "undefined";
 
+/** Build a CJS-style require that esbuild treats as opaque (string-built path). */
+function createRequire(): (id: string) => unknown {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+  const g = globalThis as any;
+  if (typeof g.require === "function") return g.require as (id: string) => unknown;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require("mo" + "dule") as { createRequire: (url: string) => (id: string) => unknown };
+  return mod.createRequire(import.meta.url);
+}
+
 const DEFAULT_DB_PATH = "database/lyre.db";
 
 export function resolveDbPath(env?: LyreEnv): string {
@@ -135,20 +145,24 @@ PRAGMA foreign_keys=ON;
 export function openSqliteDb(dbPath: string): LyreDb {
   ensureDir(dbPath);
 
+  // Concat strings at runtime so the worker bundler (esbuild) can't
+  // statically resolve these paths. Worker builds never call this fn.
+  const bunSqlite = "bun:" + "sqlite";
+  const drizzleBun = "drizzle-orm/bun-" + "sqlite";
+  const betterSqlite = "better-" + "sqlite3";
+  const drizzleBetter = "drizzle-orm/better-" + "sqlite3";
+  const req = createRequire();
+
   if (isBun) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Database } = require("bun:sqlite");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { drizzle } = require("drizzle-orm/bun-sqlite");
+    const { Database } = req(bunSqlite);
+    const { drizzle } = req(drizzleBun);
     const sqlite = new Database(dbPath);
     sqlite.exec(INIT_SQL);
     return drizzle(sqlite, { schema });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const BetterSqlite = require("better-sqlite3");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { drizzle } = require("drizzle-orm/better-sqlite3");
+  const BetterSqlite = req(betterSqlite);
+  const { drizzle } = req(drizzleBetter);
   const sqlite = new BetterSqlite(dbPath);
   sqlite.exec(INIT_SQL);
   return drizzle(sqlite, { schema });

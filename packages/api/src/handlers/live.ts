@@ -6,7 +6,6 @@
  */
 
 import { sql } from "drizzle-orm";
-import { db } from "../db";
 import { APP_VERSION } from "../lib/version";
 import { json, type HandlerResponse } from "./http";
 
@@ -16,13 +15,29 @@ function sanitize(msg: string): string {
 }
 
 /**
+ * Default DB probe — lazy-loads the legacy sqlite singleton so worker
+ * bundles don't drag `bun:sqlite` / `better-sqlite3` in. Worker callers
+ * always pass an explicit probe and never hit this branch.
+ */
+function defaultProbe(): void {
+  const path = "../" + "db";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+  const g = globalThis as any;
+  const req: (id: string) => unknown =
+    typeof g.require === "function"
+      ? g.require
+      : // eslint-disable-next-line @typescript-eslint/no-require-imports
+        (require("mo" + "dule") as { createRequire: (u: string) => (id: string) => unknown }).createRequire(import.meta.url);
+  const { db } = req(path) as typeof import("../db");
+  db.run(sql`SELECT 1 AS probe`);
+}
+
+/**
  * Check DB connectivity and return liveness JSON.
  * `probeDb` is injected for testability; defaults to a `SELECT 1`.
  */
 export function liveHandler(
-  probeDb: () => void = () => {
-    db.run(sql`SELECT 1 AS probe`);
-  },
+  probeDb: () => void = defaultProbe,
 ): HandlerResponse {
   const timestamp = new Date().toISOString();
   // Worker has no host-runtime uptime(); legacy reports it; use 0 fallback.
