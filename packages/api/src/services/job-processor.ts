@@ -9,15 +9,11 @@
  * 3. On FAILED: records error and updates recording status
  * 4. Returns the updated job and its new status
  *
- * This module has NO HTTP/Next.js dependencies — it operates purely on
+ * This module has NO HTTP/framework dependencies — it operates purely on
  * repositories and the ASR provider, making it testable in isolation.
  */
 
 import {
-  jobsRepo,
-  recordingsRepo,
-  transcriptionsRepo,
-  settingsRepo,
   makeJobsRepo,
   makeRecordingsRepo,
   makeTranscriptionsRepo,
@@ -37,7 +33,7 @@ import {
 import { generateText } from "ai";
 import type { DbTranscriptionJob } from "../db/schema";
 import type { JobStatus } from "../lib/types";
-import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
+import type { LyreEnv } from "../runtime/env";
 
 // ── Types ──
 
@@ -58,18 +54,15 @@ export interface JobPollResult {
  * Returns the updated job and whether its status changed.
  * Throws on unrecoverable ASR provider errors (caller should handle).
  */
-// `db` and `env` are optional for back-compat with legacy callers/tests;
-// new worker entry points should always pass `ctx.db` and `ctx.env`.
 export async function pollJob(
   job: DbTranscriptionJob,
   provider: AsrProvider,
-  env?: LyreEnv,
-  db?: LyreDb,
+  env: LyreEnv,
+  db: LyreDb,
 ): Promise<JobPollResult> {
-  const e = env ?? loadEnvFromProcess();
-  const jobs = db ? makeJobsRepo(db) : jobsRepo;
-  const recordings = db ? makeRecordingsRepo(db) : recordingsRepo;
-  const transcriptions = db ? makeTranscriptionsRepo(db) : transcriptionsRepo;
+  const jobs = makeJobsRepo(db);
+  const recordings = makeRecordingsRepo(db);
+  const transcriptions = makeTranscriptionsRepo(db);
   // Already terminal — nothing to do
   if (job.status === "SUCCEEDED" || job.status === "FAILED") {
     return { job, previousStatus: null, changed: false };
@@ -119,7 +112,7 @@ export async function pollJob(
       });
 
       // Archive raw result to OSS (best-effort)
-      archiveRawResult(job.id, rawResult, e).catch((err) => {
+      archiveRawResult(job.id, rawResult, env).catch((err) => {
         console.warn("Failed to archive raw ASR result to OSS:", err);
       });
 
@@ -201,12 +194,12 @@ async function autoSummarize(
   userId: string,
   recordingId: string,
   fullText: string,
-  db?: LyreDb,
+  db: LyreDb,
 ): Promise<void> {
-  const settings = db ? makeSettingsRepo(db) : settingsRepo;
-  const recordings = db ? makeRecordingsRepo(db) : recordingsRepo;
+  const settings = makeSettingsRepo(db);
+  const recordings = makeRecordingsRepo(db);
   const all = await settings.findByUserId(userId);
-  const map = new Map(all.map((s) => [s.key, s.value]));
+  const map = new Map<string, string>(all.map((s: { key: string; value: string }) => [s.key, s.value]));
 
   if (map.get("ai.autoSummarize") !== "true") return;
 

@@ -1,33 +1,33 @@
 /**
  * Shared test fixture for handler tests.
  *
- * Builds a `RuntimeContext` over an in-memory SQLite database (the global
- * proxy DB inside `@lyre/api` is automatically backed by `:memory:` when
- * `BUN_ENV=test`, which is the default for this workspace's `bun test`).
+ * Builds a `RuntimeContext` over an in-memory SQLite database (Bun's
+ * `bun:sqlite`), used as a stand-in for the production D1 binding.
  *
- * Each test should call `resetDb()` and then `seedTestUser()` (or the
- * helper functions below) to start from a clean slate.
+ * Each test should call `setupAuthedCtx()` (or `setupAnonCtx()`) to
+ * start from a clean slate — both reset the in-memory DB.
  */
 
-import { resetDb, db } from "../../db";
-import { usersRepo } from "../../db/repositories";
+import { getTestDb, resetTestDb } from "./test-db";
+import { makeRepos } from "../../db/repositories";
 import { emptyEnv, type LyreEnv } from "../../runtime/env";
 import type { RuntimeContext } from "../../runtime/context";
 import type { DbUser } from "../../db/schema";
 
 /** Build a fresh in-memory env. */
 export function makeTestEnv(overrides: Partial<LyreEnv> = {}): LyreEnv {
-  return { ...emptyEnv(), NODE_ENV: "test", BUN_ENV: "test", ...overrides };
+  return { ...emptyEnv(), NODE_ENV: "test", ...overrides };
 }
 
 /** Reset the in-memory DB and return a clean test user. */
 export async function seedTestUser(
   opts: { id?: string; email?: string } = {},
 ): Promise<DbUser> {
-  resetDb();
+  resetTestDb();
   const id = opts.id ?? "test-user-1";
   const email = opts.email ?? "test@example.com";
-  return usersRepo.create({
+  const { users } = makeRepos(getTestDb());
+  return users.create({
     id,
     email,
     name: "Test User",
@@ -42,7 +42,7 @@ export function makeCtx(
 ): RuntimeContext {
   return {
     env: makeTestEnv(opts.env),
-    db,
+    db: getTestDb(),
     user,
     headers: new Headers(opts.headers ?? {}),
   };
@@ -59,6 +59,11 @@ export async function setupAuthedCtx(): Promise<{
 
 /** Anonymous ctx (no user) — useful for 401 tests. */
 export function setupAnonCtx(): RuntimeContext {
-  resetDb();
+  resetTestDb();
   return makeCtx(null);
+}
+
+/** Convenience: repos bound to the in-memory test DB. */
+export function testRepos(): ReturnType<typeof makeRepos> {
+  return makeRepos(getTestDb());
 }

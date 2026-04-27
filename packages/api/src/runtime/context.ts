@@ -4,12 +4,10 @@
  * Handlers in `packages/api/src/handlers/` receive a `RuntimeContext`
  * along with the parsed request inputs. They MUST NOT read host env
  * variables directly (that's `ctx.env`'s job) and MUST NOT import
- * framework modules (`next/*`, `hono/*`, etc.).
+ * framework modules (`hono/*`, etc.).
  *
- * The legacy Next.js adapter constructs a `RuntimeContext` per request
- * by snapshotting `loadEnvFromProcess()` and resolving the user via
- * `getCurrentUser`. The new Hono worker constructs it from `c.env`
- * + Access JWT / Bearer token middleware.
+ * The Hono worker constructs `RuntimeContext` from `c.env` plus the
+ * Access JWT / Bearer token middleware that resolves the current user.
  */
 
 import type { LyreEnv } from "./env";
@@ -20,12 +18,8 @@ export interface RuntimeContext {
   /** Env snapshot — see `runtime/env.ts`. */
   env: LyreEnv;
   /**
-   * Drizzle DB handle for this request.
-   *
-   * Wave B.6: handlers read/write through `ctx.db` (and the per-db repo
-   * factory in `db/repositories`) rather than the legacy global singleton.
-   * The legacy adapter injects the SQLite singleton; the Cloudflare
-   * Worker entry will inject a D1 handle via `openD1Db()`.
+   * Drizzle DB handle for this request — a D1 handle injected by the
+   * Cloudflare Worker entry via `openD1Db()`.
    */
   db: LyreDb;
   /**

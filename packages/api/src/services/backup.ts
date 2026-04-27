@@ -6,31 +6,7 @@
  */
 
 import type { LyreDb } from "../db/types";
-
-/**
- * Lazy-load the legacy sqlite singleton — keeps `bun:sqlite` /
- * `better-sqlite3` out of the worker bundle when callers always pass
- * an explicit `db`.
- */
-function getDefaultDb(): LyreDb {
-  const path = "../" + "db";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const g = globalThis as any;
-  const req: (id: string) => unknown =
-    typeof g.require === "function"
-      ? g.require
-      : // eslint-disable-next-line @typescript-eslint/no-require-imports
-        (require("mo" + "dule") as { createRequire: (u: string) => (id: string) => unknown }).createRequire(import.meta.url);
-  return (req(path) as typeof import("../db")).db;
-}
 import {
-  foldersRepo,
-  tagsRepo,
-  recordingsRepo,
-  jobsRepo,
-  transcriptionsRepo,
-  deviceTokensRepo,
-  settingsRepo,
   makeFoldersRepo,
   makeTagsRepo,
   makeRecordingsRepo,
@@ -176,15 +152,15 @@ export function validateBackup(data: unknown): string | null {
 
 export async function exportBackup(
   user: DbUser,
-  db?: LyreDb,
+  db: LyreDb,
 ): Promise<BackupData> {
-  const folders_ = db ? makeFoldersRepo(db) : foldersRepo;
-  const tags_ = db ? makeTagsRepo(db) : tagsRepo;
-  const recordings_ = db ? makeRecordingsRepo(db) : recordingsRepo;
-  const jobs_ = db ? makeJobsRepo(db) : jobsRepo;
-  const transcriptions_ = db ? makeTranscriptionsRepo(db) : transcriptionsRepo;
-  const deviceTokens_ = db ? makeDeviceTokensRepo(db) : deviceTokensRepo;
-  const settings_ = db ? makeSettingsRepo(db) : settingsRepo;
+  const folders_ = makeFoldersRepo(db);
+  const tags_ = makeTagsRepo(db);
+  const recordings_ = makeRecordingsRepo(db);
+  const jobs_ = makeJobsRepo(db);
+  const transcriptions_ = makeTranscriptionsRepo(db);
+  const deviceTokens_ = makeDeviceTokensRepo(db);
+  const settings_ = makeSettingsRepo(db);
 
   const userFolders = await folders_.findByUserId(user.id);
   const userTags = await tags_.findByUserId(user.id);
@@ -318,16 +294,15 @@ export interface ImportCounts {
 export async function importBackup(
   userId: string,
   backup: BackupData,
-  dbArg?: LyreDb,
+  db: LyreDb,
 ): Promise<ImportCounts> {
-  const db = (dbArg ?? getDefaultDb()) as LyreDb;
-  const folders_ = dbArg ? makeFoldersRepo(dbArg) : foldersRepo;
-  const tags_ = dbArg ? makeTagsRepo(dbArg) : tagsRepo;
-  const recordings_ = dbArg ? makeRecordingsRepo(dbArg) : recordingsRepo;
-  const jobs_ = dbArg ? makeJobsRepo(dbArg) : jobsRepo;
-  const transcriptions_ = dbArg ? makeTranscriptionsRepo(dbArg) : transcriptionsRepo;
-  const deviceTokens_ = dbArg ? makeDeviceTokensRepo(dbArg) : deviceTokensRepo;
-  const settings_ = dbArg ? makeSettingsRepo(dbArg) : settingsRepo;
+  const folders_ = makeFoldersRepo(db);
+  const tags_ = makeTagsRepo(db);
+  const recordings_ = makeRecordingsRepo(db);
+  const jobs_ = makeJobsRepo(db);
+  const transcriptions_ = makeTranscriptionsRepo(db);
+  const deviceTokens_ = makeDeviceTokensRepo(db);
+  const settings_ = makeSettingsRepo(db);
 
   const counts: ImportCounts = {
     folders: 0,
@@ -672,9 +647,8 @@ export interface BackyPushResult {
 export async function pushBackupToBacky(
   user: DbUser,
   credentials: BackyCredentials,
-  // optional for back-compat with legacy tests; always pass ctx.env from handlers
-  env?: LyreEnv,
-  db?: LyreDb,
+  env: LyreEnv,
+  db: LyreDb,
 ): Promise<BackyPushResult> {
   const start = Date.now();
   const backup = await exportBackup(user, db);

@@ -5,12 +5,9 @@
  * - The `summarize` sub-route is NOT extracted as a handler — it returns
  *   a streaming text response (would need a `stream` branch in
  *   HandlerResponse). Its route stays as a thin direct implementation in
- *   the host app (Worker route file / legacy Next.js route).
- * - `transcribeRecordingHandler` submits the ASR job and persists it but
- *   does NOT track via any in-process JobManager. On the new Worker the
- *   Cron Trigger drives polling (decision 8); on legacy Next.js the route
- *   wrapper still calls `getJobManager().track(job)` after the handler
- *   returns.
+ *   the Worker route file.
+ * - `transcribeRecordingHandler` submits the ASR job and persists it; the
+ *   Cloudflare Cron Trigger drives polling separately.
  */
 
 import { makeRepos, type RecordingsRepo } from "../db/repositories";
@@ -425,10 +422,8 @@ export async function wordsHandler(
 /**
  * Submit an ASR transcription job for a recording.
  *
- * Returns the persisted job (HTTP 201). The caller is responsible for
- * driving polling: the new Worker relies on Cron Triggers
- * (`cronTickHandler`); the legacy Next.js route wrapper still calls
- * `getJobManager().track(job)` after this handler returns.
+ * Returns the persisted job (HTTP 201). Polling is driven separately by
+ * the Worker's Cron Trigger (`cronTickHandler`).
  */
 export async function transcribeRecordingHandler(
   ctx: RuntimeContext,

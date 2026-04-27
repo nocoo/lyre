@@ -8,8 +8,7 @@ export const live = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 live.get("/", async (c) => {
   const runtime = c.get("runtime");
-  // Inject a D1-flavoured probe so the handler doesn't reach for the
-  // legacy SQLite singleton.
+  // Inject a D1-flavoured probe so the handler stays driver-agnostic.
   const probe = async () => {
     await runtime.db.run(sql`SELECT 1 AS probe`);
   };

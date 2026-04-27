@@ -5,7 +5,6 @@
  */
 
 import { eq, and, inArray } from "drizzle-orm";
-import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
 import { rowsAffected } from "../drivers/result";
 import { runBatch } from "../drivers/batch";
@@ -123,4 +122,3 @@ export function makeTagsRepo(db: LyreDb) {
 
 export type TagsRepo = ReturnType<typeof makeTagsRepo>;
 
-export const tagsRepo: TagsRepo = makeTagsRepo(defaultDb);

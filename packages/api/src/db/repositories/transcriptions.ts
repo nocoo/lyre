@@ -3,7 +3,6 @@
  */
 
 import { eq } from "drizzle-orm";
-import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
 import { rowsAffected } from "../drivers/result";
 import { transcriptions, type DbTranscription } from "../schema";
@@ -103,5 +102,3 @@ export function makeTranscriptionsRepo(db: LyreDb) {
 
 export type TranscriptionsRepo = ReturnType<typeof makeTranscriptionsRepo>;
 
-export const transcriptionsRepo: TranscriptionsRepo =
-  makeTranscriptionsRepo(defaultDb);

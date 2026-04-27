@@ -10,7 +10,7 @@ import {
   createRealAsrProvider,
   type AsrProvider,
 } from "./asr";
-import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
+import type { LyreEnv } from "../runtime/env";
 
 let provider: AsrProvider | null = null;
 
@@ -19,12 +19,10 @@ let provider: AsrProvider | null = null;
  * Uses real DashScope provider when DASHSCOPE_API_KEY is set,
  * otherwise falls back to mock provider.
  */
-// optional for back-compat with legacy tests; always pass ctx.env from handlers
-export function getAsrProvider(env?: LyreEnv): AsrProvider {
+export function getAsrProvider(env: LyreEnv): AsrProvider {
   if (provider) return provider;
 
-  const e = env ?? loadEnvFromProcess();
-  const apiKey = e.DASHSCOPE_API_KEY;
+  const apiKey = env.DASHSCOPE_API_KEY;
 
   if (apiKey) {
     provider = createRealAsrProvider(apiKey);

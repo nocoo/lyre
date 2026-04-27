@@ -2,19 +2,14 @@
  * Framework-agnostic HTTP response protocol used by handlers in
  * `packages/api/src/handlers/`.
  *
- * Patterned after backy's `HandlerResponse` — handlers return a plain
- * data object describing the response, and the host framework (Next.js
- * legacy adapter / Hono worker) converts it to its native Response.
+ * Handlers return a plain data object describing the response, and the
+ * Hono worker converts it to a native `Response`.
  *
  * Branches:
  * - `json` — JSON body (default content-type `application/json`)
  * - `text` — plain text body
  * - `bytes` — raw binary body
  * - `empty` — no body, status only
- *
- * SSE is intentionally absent (decision 3 + 8 in the migration plan):
- * the new worker does NOT implement `/api/jobs/events`; legacy keeps
- * its own SSE route untouched.
  */
 
 export type HandlerResponse =

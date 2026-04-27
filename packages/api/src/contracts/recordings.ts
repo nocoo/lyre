@@ -2,8 +2,7 @@
  * Recording, folder, tag, transcription, and pagination contracts.
  *
  * Client-safe: pure types, no runtime imports.
- * Sourced from apps/web_legacy/src/lib/types.ts and frozen here as the
- * cross-boundary shape between the API package and any UI consumer.
+ * Cross-boundary shape between the API package and any UI consumer.
  */
 
 export const RECORDING_STATUSES = [

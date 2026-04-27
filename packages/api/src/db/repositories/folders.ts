@@ -3,7 +3,6 @@
  */
 
 import { eq, and, desc } from "drizzle-orm";
-import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
 import { rowsAffected } from "../drivers/result";
 import { folders, type DbFolder } from "../schema";
@@ -76,4 +75,3 @@ export function makeFoldersRepo(db: LyreDb) {
 
 export type FoldersRepo = ReturnType<typeof makeFoldersRepo>;
 
-export const foldersRepo: FoldersRepo = makeFoldersRepo(defaultDb);

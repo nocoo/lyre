@@ -6,8 +6,7 @@
  *
  * 1. `runtime.user` is already set (by `bearer-auth` running first), or
  * 2. `E2E_SKIP_AUTH === "true"` — in which case we synthesize a stable
- *    test user via `usersRepo.upsertByEmail` (mirrors the legacy
- *    `PLAYWRIGHT=1` branch in `@lyre/api/lib/api-auth`).
+ *    test user via `usersRepo.upsertByEmail`.
  *
  * TODO(security): JWT signature is NOT verified yet. We only decode the
  * payload to extract `email` / `name`. Production hardening must add a
@@ -80,7 +79,7 @@ export function accessAuth(): MiddlewareHandler<{
       if (payload?.email) {
         const email = payload.email;
         const name = payload.name ?? null;
-        // Stable user id derived from email (mirrors `@lyre/api/lib/api-auth`).
+        // Stable user id derived from email.
         const id = `user-${btoa(email).replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-")}`;
         const users = makeUsersRepo(runtime.db);
         runtime.user = await users.upsertByEmail({

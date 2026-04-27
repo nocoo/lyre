@@ -17,8 +17,8 @@ import {
   makeCtx,
   setupAnonCtx,
   setupAuthedCtx,
+  testRepos,
 } from "../_fixtures/runtime-context";
-import { settingsRepo } from "../../db/repositories";
 
 function withMockedFetch<T>(
   impl: (url: string, init?: RequestInit) => Promise<Response>,
@@ -110,8 +110,8 @@ describe("settings-backy network/webhook handlers", () => {
   });
   it("test connection success path with mocked fetch", async () => {
     const { user, ctx } = await setupAuthedCtx();
-    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    await testRepos().settings.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await testRepos().settings.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () => new Response(null, { status: 200 }),
       () => testBackySettingsHandler(ctx),
@@ -122,8 +122,8 @@ describe("settings-backy network/webhook handlers", () => {
   });
   it("test connection HEAD non-ok returns ok:false body", async () => {
     const { user, ctx } = await setupAuthedCtx();
-    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    await testRepos().settings.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await testRepos().settings.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () => new Response(null, { status: 503 }),
       () => testBackySettingsHandler(ctx),
@@ -134,8 +134,8 @@ describe("settings-backy network/webhook handlers", () => {
   });
   it("test connection network error -> 502", async () => {
     const { user, ctx } = await setupAuthedCtx();
-    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    await testRepos().settings.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await testRepos().settings.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () => {
         throw new Error("network down");
@@ -146,8 +146,8 @@ describe("settings-backy network/webhook handlers", () => {
   });
   it("history success path with mocked fetch", async () => {
     const { user, ctx } = await setupAuthedCtx();
-    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    await testRepos().settings.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await testRepos().settings.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () =>
         new Response(JSON.stringify({ items: [] }), {
@@ -160,8 +160,8 @@ describe("settings-backy network/webhook handlers", () => {
   });
   it("history non-ok -> 502", async () => {
     const { user, ctx } = await setupAuthedCtx();
-    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    await testRepos().settings.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await testRepos().settings.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () => new Response("nope", { status: 500 }),
       () => backyHistoryHandler(ctx),

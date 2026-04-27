@@ -9,8 +9,7 @@ import {
   updateAiSettingsHandler,
   testAiSettingsHandler,
 } from "../../handlers/settings-ai";
-import { setupAnonCtx, setupAuthedCtx } from "../_fixtures/runtime-context";
-import { settingsRepo } from "../../db/repositories";
+import { setupAnonCtx, setupAuthedCtx, testRepos } from "../_fixtures/runtime-context";
 
 function withMockedFetch<T>(
   impl: (url: string, init?: RequestInit) => Promise<Response>,
@@ -80,9 +79,9 @@ describe("settings-ai sync handlers", () => {
   it("test handler error path returns 502 on bad provider config", async () => {
     const { user, ctx } = await setupAuthedCtx();
     // Configure with provider "custom" but no baseURL/sdkType -> resolveAiConfig throws
-    await settingsRepo.upsert(user.id, "ai.provider", "custom");
-    await settingsRepo.upsert(user.id, "ai.apiKey", "sk-test");
-    await settingsRepo.upsert(user.id, "ai.model", "gpt-4");
+    await testRepos().settings.upsert(user.id, "ai.provider", "custom");
+    await testRepos().settings.upsert(user.id, "ai.apiKey", "sk-test");
+    await testRepos().settings.upsert(user.id, "ai.model", "gpt-4");
     const res = await testAiSettingsHandler(ctx);
     expect(res.status).toBe(502);
     if (res.kind !== "json") throw new Error();
@@ -90,10 +89,10 @@ describe("settings-ai sync handlers", () => {
   });
   it("test handler 502 on 4xx api error (no retries)", async () => {
     const { user, ctx } = await setupAuthedCtx();
-    await settingsRepo.upsert(user.id, "ai.provider", "anthropic");
-    await settingsRepo.upsert(user.id, "ai.apiKey", "sk-test");
-    await settingsRepo.upsert(user.id, "ai.model", "claude-sonnet-4-20250514");
-    await settingsRepo.upsert(user.id, "ai.sdkType", "anthropic");
+    await testRepos().settings.upsert(user.id, "ai.provider", "anthropic");
+    await testRepos().settings.upsert(user.id, "ai.apiKey", "sk-test");
+    await testRepos().settings.upsert(user.id, "ai.model", "claude-sonnet-4-20250514");
+    await testRepos().settings.upsert(user.id, "ai.sdkType", "anthropic");
     const res = await withMockedFetch(
       async () =>
         new Response(

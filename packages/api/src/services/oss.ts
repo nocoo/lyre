@@ -7,7 +7,7 @@
  */
 
 import { createHmac } from "crypto";
-import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
+import type { LyreEnv } from "../runtime/env";
 
 // ── Config ──
 
@@ -32,17 +32,15 @@ export const BUCKET_DEV = "lyre-dev";
  * - production → "lyre"
  * - everything else (development, test, undefined) → "lyre-dev"
  */
-// optional for back-compat with legacy tests; always pass ctx.env from handlers
-export function resolveBucket(env?: LyreEnv): string {
-  const e = env ?? loadEnvFromProcess();
+export function resolveBucket(env: LyreEnv): string {
+  const e = env;
   const explicit = e.OSS_BUCKET;
   if (explicit) return explicit;
   return e.NODE_ENV === "production" ? BUCKET_PROD : BUCKET_DEV;
 }
 
-// optional for back-compat with legacy tests; always pass ctx.env from handlers
-function getConfig(env?: LyreEnv): OssConfig {
-  const e = env ?? loadEnvFromProcess();
+function getConfig(env: LyreEnv): OssConfig {
+  const e = env;
   const accessKeyId = e.OSS_ACCESS_KEY_ID;
   const accessKeySecret = e.OSS_ACCESS_KEY_SECRET;
   const bucket = resolveBucket(e);
@@ -128,8 +126,8 @@ export function presignPut(
   key: string,
   contentType: string,
   expiresInSec: number = 900,
-  config?: OssConfig,
-  env?: LyreEnv,
+  config: OssConfig | undefined,
+  env: LyreEnv,
 ): string {
   const cfg = config ?? getConfig(env);
   const expires = Math.floor(Date.now() / 1000) + expiresInSec;
@@ -163,9 +161,9 @@ export function presignPut(
 export function presignGet(
   key: string,
   expiresInSec: number = 3600,
-  responseOverrides?: Record<string, string>,
-  config?: OssConfig,
-  env?: LyreEnv,
+  responseOverrides: Record<string, string> | undefined,
+  config: OssConfig | undefined,
+  env: LyreEnv,
 ): string {
   const cfg = config ?? getConfig(env);
   const expires = Math.floor(Date.now() / 1000) + expiresInSec;
@@ -216,8 +214,8 @@ export interface OssObject {
  */
 export async function listObjects(
   prefix: string,
-  config?: OssConfig,
-  env?: LyreEnv,
+  config: OssConfig | undefined,
+  env: LyreEnv,
 ): Promise<OssObject[]> {
   const cfg = config ?? getConfig(env);
   const all: OssObject[] = [];
@@ -293,8 +291,8 @@ export async function listObjects(
  */
 export async function deleteObjects(
   keys: string[],
-  config?: OssConfig,
-  env?: LyreEnv,
+  config: OssConfig | undefined,
+  env: LyreEnv,
 ): Promise<number> {
   if (keys.length === 0) return 0;
   const cfg = config ?? getConfig(env);
@@ -376,8 +374,8 @@ async function computeMd5(data: Buffer): Promise<string> {
  */
 export async function deleteObject(
   key: string,
-  config?: OssConfig,
-  env?: LyreEnv,
+  config: OssConfig | undefined,
+  env: LyreEnv,
 ): Promise<boolean> {
   const cfg = config ?? getConfig(env);
   const date = new Date().toUTCString();

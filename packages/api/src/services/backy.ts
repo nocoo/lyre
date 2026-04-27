@@ -13,9 +13,9 @@
  */
 
 import { randomBytes } from "crypto";
-import { settingsRepo, makeSettingsRepo } from "../db/repositories";
+import { makeSettingsRepo } from "../db/repositories";
 import type { LyreDb } from "../db/types";
-import { loadEnvFromProcess, type LyreEnv } from "../runtime/env";
+import type { LyreEnv } from "../runtime/env";
 
 // ── Types ──
 
@@ -58,10 +58,8 @@ export function maskApiKey(key: string): string {
 }
 
 /** Return "prod" or "dev" based on NODE_ENV. */
-// optional for back-compat with legacy tests; always pass ctx.env from handlers
-export function getEnvironment(env?: LyreEnv): "prod" | "dev" {
-  const e = env ?? loadEnvFromProcess();
-  return e.NODE_ENV === "production" ? "prod" : "dev";
+export function getEnvironment(env: LyreEnv): "prod" | "dev" {
+  return env.NODE_ENV === "production" ? "prod" : "dev";
 }
 
 // ── Settings read ──
@@ -69,11 +67,11 @@ export function getEnvironment(env?: LyreEnv): "prod" | "dev" {
 /** Read Backy settings for a user from the key-value settings table. */
 export async function readBackySettings(
   userId: string,
-  db?: LyreDb,
+  db: LyreDb,
 ): Promise<BackyCredentials> {
-  const settings = db ? makeSettingsRepo(db) : settingsRepo;
+  const settings = makeSettingsRepo(db);
   const all = await settings.findByUserId(userId);
-  const map = new Map(all.map((s) => [s.key, s.value]));
+  const map = new Map<string, string>(all.map((s: { key: string; value: string }) => [s.key, s.value]));
   return {
     webhookUrl: map.get("backy.webhookUrl") ?? "",
     apiKey: map.get("backy.apiKey") ?? "",
@@ -134,8 +132,8 @@ export function generatePullKey(): string {
 }
 
 /** Read the pull key for a user. Returns empty string if not set. */
-export async function readPullKey(userId: string, db?: LyreDb): Promise<string> {
-  const settings = db ? makeSettingsRepo(db) : settingsRepo;
+export async function readPullKey(userId: string, db: LyreDb): Promise<string> {
+  const settings = makeSettingsRepo(db);
   const setting = await settings.findByKey(userId, PULL_KEY_SETTING);
   return setting?.value ?? "";
 }
@@ -144,18 +142,18 @@ export async function readPullKey(userId: string, db?: LyreDb): Promise<string> 
 export async function savePullKey(
   userId: string,
   key: string,
-  db?: LyreDb,
+  db: LyreDb,
 ): Promise<void> {
-  const settings = db ? makeSettingsRepo(db) : settingsRepo;
+  const settings = makeSettingsRepo(db);
   await settings.upsert(userId, PULL_KEY_SETTING, key);
 }
 
 /** Delete the pull key for a user. Returns true if a key was deleted. */
 export async function deletePullKey(
   userId: string,
-  db?: LyreDb,
+  db: LyreDb,
 ): Promise<boolean> {
-  const settings = db ? makeSettingsRepo(db) : settingsRepo;
+  const settings = makeSettingsRepo(db);
   return settings.delete(userId, PULL_KEY_SETTING);
 }
 
@@ -169,9 +167,9 @@ export async function deletePullKey(
  */
 export async function findUserIdByPullKey(
   pullKey: string,
-  db?: LyreDb,
+  db: LyreDb,
 ): Promise<string | null> {
-  const settings = db ? makeSettingsRepo(db) : settingsRepo;
+  const settings = makeSettingsRepo(db);
   const setting = await settings.findByKeyAndValue(PULL_KEY_SETTING, pullKey);
   return setting?.userId ?? null;
 }

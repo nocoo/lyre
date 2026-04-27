@@ -6,7 +6,6 @@
  */
 
 import { eq, and } from "drizzle-orm";
-import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
 import { rowsAffected } from "../drivers/result";
 import { deviceTokens, type DbDeviceToken } from "../schema";
@@ -78,5 +77,3 @@ export function makeDeviceTokensRepo(db: LyreDb) {
 
 export type DeviceTokensRepo = ReturnType<typeof makeDeviceTokensRepo>;
 
-export const deviceTokensRepo: DeviceTokensRepo =
-  makeDeviceTokensRepo(defaultDb);

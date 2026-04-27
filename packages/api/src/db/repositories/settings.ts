@@ -6,7 +6,6 @@
  */
 
 import { eq, and } from "drizzle-orm";
-import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
 import { rowsAffected } from "../drivers/result";
 import { settings, type DbSetting } from "../schema";
@@ -86,4 +85,3 @@ export function makeSettingsRepo(db: LyreDb) {
 
 export type SettingsRepo = ReturnType<typeof makeSettingsRepo>;
 
-export const settingsRepo: SettingsRepo = makeSettingsRepo(defaultDb);

@@ -1,8 +1,5 @@
 /**
  * Handlers for `/api/jobs/[id]` — poll an ASR job.
- *
- * Note: the SSE route `/api/jobs/events` is intentionally NOT extracted
- * (decision 8 — kept on legacy until Wave E).
  */
 
 import { makeRepos } from "../db/repositories";
@@ -22,8 +19,7 @@ import {
  *
  * If `recordingId` is provided, returns jobs for that recording (after
  * verifying ownership). Otherwise returns all currently-active jobs that
- * belong to recordings owned by the user. Used by the SPA's polling hook
- * (decision 8 — `useJobEvents` polls instead of SSE).
+ * belong to recordings owned by the user. Used by the SPA's job-polling hook.
  */
 export async function listJobsHandler(
   ctx: RuntimeContext,
@@ -90,10 +86,8 @@ export interface CronTickResult {
 /**
  * Cron tick: poll all active (PENDING/RUNNING) ASR jobs once.
  *
- * Replaces the legacy in-process JobManager singleton on the new worker
- * (decision 8 — A+C hybrid). Wired into the worker's `scheduled()` export
- * so Cloudflare Cron Triggers drive ASR polling. Legacy `JobManager` keeps
- * running in the Next.js process until Wave E.
+ * Wired into the worker's `scheduled()` export so Cloudflare Cron Triggers
+ * drive ASR polling.
  */
 export async function cronTickHandler(
   ctx: RuntimeContext,

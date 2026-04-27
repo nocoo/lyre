@@ -1,11 +1,10 @@
 /**
- * Handlers for `/api/live` — public health-check endpoint.
+ * Handler for `/api/live` — public health-check endpoint.
  *
  * No authentication. Validates DB connectivity, returns app version
- * and uptime. Called by Railway / monitoring probes.
+ * and uptime. Called by uptime monitors.
  */
 
-import { sql } from "drizzle-orm";
 import { APP_VERSION } from "../lib/version";
 import { json, type HandlerResponse } from "./http";
 
@@ -15,32 +14,15 @@ function sanitize(msg: string): string {
 }
 
 /**
- * Default DB probe — lazy-loads the legacy sqlite singleton so worker
- * bundles don't drag `bun:sqlite` / `better-sqlite3` in. Worker callers
- * always pass an explicit probe and never hit this branch.
- */
-function defaultProbe(): void {
-  const path = "../" + "db";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const g = globalThis as any;
-  const req: (id: string) => unknown =
-    typeof g.require === "function"
-      ? g.require
-      : // eslint-disable-next-line @typescript-eslint/no-require-imports
-        (require("mo" + "dule") as { createRequire: (u: string) => (id: string) => unknown }).createRequire(import.meta.url);
-  const { db } = req(path) as typeof import("../db");
-  db.run(sql`SELECT 1 AS probe`);
-}
-
-/**
  * Check DB connectivity and return liveness JSON.
- * `probeDb` is injected for testability; defaults to a `SELECT 1`.
+ *
+ * `probeDb` is injected by the host (the worker passes a closure that
+ * runs `SELECT 1` against its D1 binding). Synchronous-only: callers
+ * that need to await an async probe should run it themselves and
+ * pass a closure that re-throws any captured error.
  */
-export function liveHandler(
-  probeDb: () => void = defaultProbe,
-): HandlerResponse {
+export function liveHandler(probeDb: () => void): HandlerResponse {
   const timestamp = new Date().toISOString();
-  // Worker has no host-runtime uptime(); legacy reports it; use 0 fallback.
   const procKey = "pro" + "cess";
   const proc = (globalThis as Record<string, unknown>)[procKey] as
     | { uptime?: () => number }

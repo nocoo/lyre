@@ -364,7 +364,7 @@ export function createMockAsrProvider(
  * Fetch wrapper that falls back to curl subprocess when Bun's native fetch
  * hits TLS certificate verification errors (e.g. MITM proxies on macOS).
  *
- * On production (Linux/Railway), native fetch works fine.
+ * In production (Cloudflare Workers), native fetch works fine.
  * On dev (macOS with system proxy), curl bypasses the issue.
  */
 async function safeFetch(

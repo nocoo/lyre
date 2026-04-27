@@ -2,14 +2,10 @@
  * User repository factory.
  *
  * `makeUsersRepo(db)` returns a repository bound to the given Drizzle
- * handle. The default `usersRepo` export wraps the legacy SQLite
- * singleton so existing call sites keep working — Wave C wires every
- * caller to `await makeUsersRepo(ctx.db).xxx(...)` so the same
- * implementation runs on D1 (Promise-returning driver) too.
+ * handle (D1 in production, in-memory SQLite in tests).
  */
 
 import { eq } from "drizzle-orm";
-import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
 import { rowsAffected } from "../drivers/result";
 import { users, type DbUser } from "../schema";
@@ -79,4 +75,3 @@ export function makeUsersRepo(db: LyreDb) {
 
 export type UsersRepo = ReturnType<typeof makeUsersRepo>;
 
-export const usersRepo: UsersRepo = makeUsersRepo(defaultDb);

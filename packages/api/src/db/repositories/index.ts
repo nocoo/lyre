@@ -1,40 +1,22 @@
 /**
  * Repository barrel export.
  *
- * Exports both the legacy singleton repos (bound to the global SQLite
- * handle) AND the per-db factories `make<Name>Repo(db)`. Wave B.6.b is
- * migrating handlers to call the factories with `ctx.db`; once that's
- * done the singletons can go away.
+ * Each repo is a `make<Name>Repo(db)` factory that binds to a Drizzle
+ * handle. Handlers receive `ctx.db` from the runtime context and call
+ * `makeRepos(ctx.db)` once at the top.
  */
 
-export { usersRepo, makeUsersRepo, type UsersRepo } from "./users";
+export { makeUsersRepo, type UsersRepo } from "./users";
+export { makeRecordingsRepo, type RecordingsRepo } from "./recordings";
+export { makeJobsRepo, type JobsRepo } from "./jobs";
 export {
-  recordingsRepo,
-  makeRecordingsRepo,
-  type RecordingsRepo,
-} from "./recordings";
-export { jobsRepo, makeJobsRepo, type JobsRepo } from "./jobs";
-export {
-  transcriptionsRepo,
   makeTranscriptionsRepo,
   type TranscriptionsRepo,
 } from "./transcriptions";
-export {
-  settingsRepo,
-  makeSettingsRepo,
-  type SettingsRepo,
-} from "./settings";
-export {
-  foldersRepo,
-  makeFoldersRepo,
-  type FoldersRepo,
-} from "./folders";
-export { tagsRepo, makeTagsRepo, type TagsRepo } from "./tags";
-export {
-  deviceTokensRepo,
-  makeDeviceTokensRepo,
-  type DeviceTokensRepo,
-} from "./device-tokens";
+export { makeSettingsRepo, type SettingsRepo } from "./settings";
+export { makeFoldersRepo, type FoldersRepo } from "./folders";
+export { makeTagsRepo, type TagsRepo } from "./tags";
+export { makeDeviceTokensRepo, type DeviceTokensRepo } from "./device-tokens";
 
 import type { LyreDb } from "../types";
 import { makeUsersRepo, type UsersRepo } from "./users";
@@ -54,10 +36,6 @@ import {
 
 /**
  * The whole repo bundle bound to a single Drizzle handle.
- *
- * Handlers receive `ctx.db` and call `makeRepos(ctx.db)` once at the top —
- * cheap (just object construction) and keeps the handler signature short
- * while removing the global-singleton dependency.
  */
 export interface Repos {
   users: UsersRepo;

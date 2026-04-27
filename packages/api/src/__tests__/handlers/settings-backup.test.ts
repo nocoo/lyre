@@ -8,8 +8,7 @@ import {
   importBackupHandler,
   pushBackupHandler,
 } from "../../handlers/settings-backup";
-import { setupAnonCtx, setupAuthedCtx } from "../_fixtures/runtime-context";
-import { settingsRepo } from "../../db/repositories";
+import { setupAnonCtx, setupAuthedCtx, testRepos } from "../_fixtures/runtime-context";
 
 function withMockedFetch<T>(
   impl: (url: string, init?: RequestInit) => Promise<Response>,
@@ -47,8 +46,8 @@ describe("settings-backup sync handlers", () => {
   });
   it("push success path with mocked fetch", async () => {
     const { user, ctx } = await setupAuthedCtx();
-    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    await testRepos().settings.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await testRepos().settings.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () =>
         new Response(JSON.stringify({ ok: true }), {
@@ -63,8 +62,8 @@ describe("settings-backup sync handlers", () => {
   });
   it("push 502 on backy non-2xx response", async () => {
     const { user, ctx } = await setupAuthedCtx();
-    await settingsRepo.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
-    await settingsRepo.upsert(user.id, "backy.apiKey", "k");
+    await testRepos().settings.upsert(user.id, "backy.webhookUrl", "https://example.com/h");
+    await testRepos().settings.upsert(user.id, "backy.apiKey", "k");
     const res = await withMockedFetch(
       async () => new Response("err", { status: 500 }),
       () => pushBackupHandler(ctx),

@@ -11,7 +11,7 @@ export interface Bindings {
   DB: D1Database;
   ASSETS?: Fetcher;
 
-  // Auth bypass for E2E (mirrors the legacy PLAYWRIGHT=1 flag).
+  // Auth bypass for E2E.
   E2E_SKIP_AUTH?: string;
 
   NODE_ENV?: string;

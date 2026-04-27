@@ -5,7 +5,6 @@
  */
 
 import { eq, desc } from "drizzle-orm";
-import { db as defaultDb } from "../index";
 import type { LyreDb } from "../types";
 import { rowsAffected } from "../drivers/result";
 import { runBatch } from "../drivers/batch";
@@ -231,4 +230,3 @@ export function makeRecordingsRepo(db: LyreDb) {
 
 export type RecordingsRepo = ReturnType<typeof makeRecordingsRepo>;
 
-export const recordingsRepo: RecordingsRepo = makeRecordingsRepo(defaultDb);

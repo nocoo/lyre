@@ -19,8 +19,8 @@ import {
   makeCtx,
   setupAnonCtx,
   setupAuthedCtx,
+  testRepos,
 } from "../_fixtures/runtime-context";
-import { jobsRepo, recordingsRepo } from "../../db/repositories";
 import {
   resetAsrProvider,
   setAsrProvider,
@@ -234,7 +234,7 @@ describe("wordsHandler", () => {
     });
     if (created.kind !== "json") throw new Error();
     const recId = (created.body as { id: string }).id;
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "job-w-1",
       recordingId: recId,
       taskId: "task-1",
@@ -278,7 +278,7 @@ describe("wordsHandler", () => {
     });
     if (created.kind !== "json") throw new Error();
     const recId = (created.body as { id: string }).id;
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "job-w-2",
       recordingId: recId,
       taskId: "task-2",
@@ -301,7 +301,7 @@ describe("wordsHandler", () => {
     });
     if (created.kind !== "json") throw new Error();
     const recId = (created.body as { id: string }).id;
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "job-w-3",
       recordingId: recId,
       taskId: "task-3",
@@ -326,7 +326,7 @@ describe("wordsHandler", () => {
     });
     if (created.kind !== "json") throw new Error();
     const recId = (created.body as { id: string }).id;
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "job-w-4",
       recordingId: recId,
       taskId: "task-4",
@@ -356,7 +356,7 @@ describe("batch delete with owned recording", () => {
     });
     if (created.kind !== "json") throw new Error();
     const recId = (created.body as { id: string }).id;
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "job-bd-1",
       recordingId: recId,
       taskId: "task-bd-1",
@@ -386,7 +386,7 @@ describe("transcribeRecordingHandler", () => {
   });
   it("404 when recording belongs to another user", async () => {
     const { user: owner } = await setupAuthedCtx();
-    const rec = await recordingsRepo.create({
+    const rec = await testRepos().recordings.create({
       id: "r-other",
       userId: owner.id,
       title: "t",
@@ -410,7 +410,7 @@ describe("transcribeRecordingHandler", () => {
   it("409 when already transcribing", async () => {
     const { user } = await setupAuthedCtx();
     const ctxWithOss = makeCtx(user, { env: ossEnv });
-    const rec = await recordingsRepo.create({
+    const rec = await testRepos().recordings.create({
       id: "r-busy",
       userId: user.id,
       title: "t",
@@ -446,7 +446,7 @@ describe("transcribeRecordingHandler", () => {
     try {
       const { user } = await setupAuthedCtx();
       const ctx = makeCtx(user, { env: ossEnv });
-      const rec = await recordingsRepo.create({
+      const rec = await testRepos().recordings.create({
         id: "r-go",
         userId: user.id,
         title: "t",
@@ -465,7 +465,7 @@ describe("transcribeRecordingHandler", () => {
       const job = res.body as { recordingId: string; taskId: string };
       expect(job.recordingId).toBe(rec.id);
       expect(job.taskId).toBe("task-1");
-      const after = await recordingsRepo.findById(rec.id);
+      const after = await testRepos().recordings.findById(rec.id);
       expect(after?.status).toBe("transcribing");
     } finally {
       resetAsrProvider();

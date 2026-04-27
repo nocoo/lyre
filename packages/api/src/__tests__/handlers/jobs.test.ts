@@ -8,13 +8,12 @@ import {
   getJobHandler,
   listJobsHandler,
 } from "../../handlers/jobs";
-import { jobsRepo, recordingsRepo } from "../../db/repositories";
 import {
   resetAsrProvider,
   setAsrProvider,
 } from "../../services/asr-provider";
 import type { AsrProvider } from "../../services/asr";
-import { setupAnonCtx, setupAuthedCtx } from "../_fixtures/runtime-context";
+import { setupAnonCtx, setupAuthedCtx, testRepos } from "../_fixtures/runtime-context";
 
 describe("getJobHandler", () => {
   it("401 anon", async () => {
@@ -49,7 +48,7 @@ describe("listJobsHandler", () => {
   });
   it("filters by recordingId for the owning user", async () => {
     const { ctx, user } = await setupAuthedCtx();
-    const rec = await recordingsRepo.create({
+    const rec = await testRepos().recordings.create({
       id: "r1",
       userId: user.id,
       title: "t",
@@ -62,7 +61,7 @@ describe("listJobsHandler", () => {
       ossKey: "k",
       status: "transcribing",
     });
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "j1",
       recordingId: rec.id,
       taskId: "tk1",
@@ -78,7 +77,7 @@ describe("listJobsHandler", () => {
   });
   it("returns active jobs across user's recordings when no filter", async () => {
     const { ctx, user } = await setupAuthedCtx();
-    const rec = await recordingsRepo.create({
+    const rec = await testRepos().recordings.create({
       id: "r2",
       userId: user.id,
       title: "t",
@@ -91,7 +90,7 @@ describe("listJobsHandler", () => {
       ossKey: "k",
       status: "transcribing",
     });
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "ja",
       recordingId: rec.id,
       taskId: "tka",
@@ -136,7 +135,7 @@ describe("cronTickHandler", () => {
 
   it("polls active jobs and reports changes", async () => {
     const { ctx, user } = await setupAuthedCtx();
-    const rec = await recordingsRepo.create({
+    const rec = await testRepos().recordings.create({
       id: "r-cron-1",
       userId: user.id,
       title: "t",
@@ -149,7 +148,7 @@ describe("cronTickHandler", () => {
       ossKey: "k",
       status: "transcribing",
     });
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "job-cron-1",
       recordingId: rec.id,
       taskId: "task-1",
@@ -174,7 +173,7 @@ describe("cronTickHandler", () => {
 
   it("captures provider errors per job without aborting the tick", async () => {
     const { ctx, user } = await setupAuthedCtx();
-    const rec = await recordingsRepo.create({
+    const rec = await testRepos().recordings.create({
       id: "r-cron-2",
       userId: user.id,
       title: "t",
@@ -187,7 +186,7 @@ describe("cronTickHandler", () => {
       ossKey: "k",
       status: "transcribing",
     });
-    await jobsRepo.create({
+    await testRepos().jobs.create({
       id: "job-cron-2",
       recordingId: rec.id,
       taskId: "task-2",

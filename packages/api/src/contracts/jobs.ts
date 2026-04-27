@@ -2,8 +2,6 @@
  * Job (transcription) contracts.
  *
  * Client-safe: pure types/enums, no runtime imports.
- * JobEvent shape is consumed by the SSE hook in legacy and (future) by SWR
- * polling in apps/web — keep stable.
  */
 
 export const JOB_STATUSES = [
@@ -32,8 +30,6 @@ export interface TranscriptionJob {
 
 /**
  * Server → client event for job status changes.
- * Emitted over SSE in legacy; the same shape is reused for SWR polling
- * in the worker rewrite.
  */
 export interface JobEvent {
   jobId: string;
