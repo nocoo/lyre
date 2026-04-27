@@ -1,6 +1,8 @@
 # Backy Remote Backup Integration
 
-Lyre integrates with [Backy](https://backy.dev) for off-site backup storage. Backy provides a webhook-based API that accepts JSON backup files and stores them with environment tagging, versioning, and history retrieval.
+Lyre integrates with [Backy](https://backy.dev) for off-site backup storage.
+Backy provides a webhook-based API that accepts JSON backup files and stores
+them with environment tagging, versioning, and history retrieval.
 
 ## Overview
 
@@ -28,7 +30,9 @@ All Push requests are authenticated with a Bearer token in the `Authorization` h
 | **Pull webhook** | `POST /api/backy/pull` | Backy calls Lyre to trigger an auto-push |
 | **Pull health check** | `HEAD /api/backy/pull` | Verify pull key validity |
 
-Pull requests are authenticated with an `X-Webhook-Key` header (no NextAuth session required).
+Pull requests authenticate via the `X-Webhook-Key` header and bypass
+Cloudflare Access (the Worker treats `/api/backy/pull` as a public webhook
+endpoint).
 
 ## Setup
 
@@ -49,7 +53,8 @@ Pull requests are authenticated with an `X-Webhook-Key` header (no NextAuth sess
 
 ### 3. Configure Pull Webhook (Optional)
 
-The Pull direction allows Backy to trigger automatic backups by calling Lyre's webhook endpoint.
+The Pull direction allows Backy to trigger automatic backups by calling
+Lyre's webhook endpoint.
 
 1. Navigate to **Settings → General**
 2. Scroll to the **Pull Webhook** section
@@ -57,7 +62,8 @@ The Pull direction allows Backy to trigger automatic backups by calling Lyre's w
 4. Copy the **Webhook URL** and **Key**
 5. Configure these in your Backy project's outgoing webhook settings
 
-**Prerequisites:** Push configuration (webhook URL + API key) must be set first. Pull uses the existing Push config to send the backup.
+**Prerequisites:** Push configuration (webhook URL + API key) must be set
+first. Pull uses the existing Push config to send the backup.
 
 ## Webhook API
 
@@ -136,7 +142,9 @@ Authorization: Bearer {apiKey}
 
 ## Pull Webhook API
 
-The Pull webhook allows external systems (Backy) to trigger Lyre backups remotely. Authentication is via the `X-Webhook-Key` header — no NextAuth session is required.
+The Pull webhook allows external systems (Backy) to trigger Lyre backups
+remotely. Authentication is via the `X-Webhook-Key` header — Cloudflare
+Access is bypassed for this route.
 
 ### Health Check (HEAD)
 
@@ -188,49 +196,55 @@ X-Webhook-Key: {pullKey}
 **curl example:**
 
 ```bash
-curl -X POST https://your-lyre-instance.com/api/backy/pull \
+curl -X POST https://lyre.example.com/api/backy/pull \
   -H "X-Webhook-Key: your-64-char-hex-pull-key"
 ```
 
 ## Lyre Internal API
 
-The Lyre web app exposes these internal API routes for the Settings UI:
+The Hono Worker exposes these routes for the Settings UI. All
+session-authenticated endpoints sit behind Cloudflare Access; the pull
+webhook is exempt.
 
 | Endpoint | Method | Auth | Description |
 |---|---|---|---|
-| `/api/settings/backy` | `GET` | Session | Read Backy config (URL, masked key, environment, pull key info) |
-| `/api/settings/backy` | `PUT` | Session | Save Backy config (URL and/or API key) |
-| `/api/settings/backy/test` | `POST` | Session | Test connection to Backy webhook |
-| `/api/settings/backy/history` | `GET` | Session | Fetch remote backup history |
-| `/api/settings/backy/pull-key` | `POST` | Session | Generate (or regenerate) a pull key |
-| `/api/settings/backy/pull-key` | `DELETE` | Session | Revoke the pull key |
-| `/api/settings/backup/push` | `POST` | Session | Export data and push to Backy |
+| `/api/settings/backy` | `GET` | Access | Read Backy config (URL, masked key, environment, pull key info) |
+| `/api/settings/backy` | `PUT` | Access | Save Backy config (URL and/or API key) |
+| `/api/settings/backy/test` | `POST` | Access | Test connection to Backy webhook |
+| `/api/settings/backy/history` | `GET` | Access | Fetch remote backup history |
+| `/api/settings/backy/pull-key` | `POST` | Access | Generate (or regenerate) a pull key |
+| `/api/settings/backy/pull-key` | `DELETE` | Access | Revoke the pull key |
+| `/api/settings/backup/push` | `POST` | Access | Export data and push to Backy |
 | `/api/backy/pull` | `HEAD` | Webhook Key | Verify pull key validity |
 | `/api/backy/pull` | `POST` | Webhook Key | Trigger a full backup push |
 
-Session-authenticated endpoints require NextAuth login and return `401` if unauthorized. Webhook Key endpoints authenticate via the `X-Webhook-Key` header (machine-to-machine). The `test`, `history`, and `push` endpoints return `400` if the webhook URL or API key is not configured.
+Access-authenticated endpoints return `401` when the
+`Cf-Access-Jwt-Assertion` header is missing or invalid. Webhook Key
+endpoints authenticate via the `X-Webhook-Key` header (machine-to-machine).
+The `test`, `history`, and `push` endpoints return `400` if the webhook URL
+or API key is not configured.
 
 ## Architecture
 
 ```
 Push Direction (User-initiated):
   Settings UI (BackySection)
-    ├── Save config     → PUT  /api/settings/backy     → settingsRepo (SQLite)
+    ├── Save config     → PUT  /api/settings/backy     → settingsRepo (D1)
     ├── Test connection → POST /api/settings/backy/test → HEAD webhookUrl
     ├── Push backup     → POST /api/settings/backup/push
-    │                     ├── exportBackup(user)         → Full JSON export
+    │                     ├── exportBackup(ctx, user)   → Full JSON export
     │                     └── POST webhookUrl (multipart) → Backy service
     └── View history    → GET  /api/settings/backy/history
                           └── GET webhookUrl              → Backy service
 
 Pull Direction (Backy-initiated):
-  Backy                                     Lyre
+  Backy                                     Lyre Worker
     │                                         │
     ├── POST /api/backy/pull ───────────────→ │
     │   (X-Webhook-Key header)                │
     │                                         ├── Validate pull key → find userId
     │                                         ├── Read push config (webhookUrl + apiKey)
-    │                                         ├── exportBackup(user) → Full JSON export
+    │                                         ├── exportBackup(ctx, user) → Full JSON export
     │                                         └── POST webhookUrl (multipart) → Backy ←─┐
     │                                                                                    │
     └────────────────────────────────────── receives backup ─────────────────────────────┘
@@ -246,18 +260,15 @@ Pull Key Lifecycle:
 
 | File | Purpose |
 |---|---|
-| `services/backy.ts` | Service layer: `readBackySettings`, `maskApiKey`, `getEnvironment`, `fetchBackyHistory`, pull key CRUD (`generatePullKey`, `readPullKey`, `savePullKey`, `deletePullKey`, `findUserIdByPullKey`) |
-| `services/backup.ts` | Backup export/import/push: `exportBackup`, `importBackup`, `pushBackupToBacky` |
-| `api/settings/backy/route.ts` | GET/PUT config (includes pull key info in GET response) |
-| `api/settings/backy/test/route.ts` | POST test connection |
-| `api/settings/backy/history/route.ts` | GET remote history |
-| `api/settings/backy/pull-key/route.ts` | POST generate / DELETE revoke pull key |
-| `api/settings/backup/push/route.ts` | POST push backup |
-| `api/backy/pull/route.ts` | HEAD health check / POST trigger pull-initiated backup |
+| `packages/api/src/services/backy.ts` | Service layer: `readBackySettings`, `maskApiKey`, `getEnvironment`, `fetchBackyHistory`, pull key CRUD (`generatePullKey`, `readPullKey`, `savePullKey`, `deletePullKey`, `findUserIdByPullKey`) |
+| `packages/api/src/services/backup.ts` | Backup export/import/push: `exportBackup`, `importBackup`, `pushBackupToBacky` |
+| `apps/api/src/routes/settings/backy.ts` | GET/PUT config, test, history, pull-key generate/revoke |
+| `apps/api/src/routes/settings/backup.ts` | POST push backup |
+| `apps/api/src/routes/backy.ts` | HEAD health check / POST trigger pull-initiated backup |
 
 ### Configuration Storage
 
-Backy settings are stored in the SQLite `settings` table (key-value store):
+Backy settings are stored in the D1 `settings` table (key-value store):
 
 | Key | Value |
 |---|---|
@@ -292,7 +303,8 @@ To integrate Backy in a new project, you need:
    - Exports your data as JSON
    - Builds a `FormData` with `file`, `environment`, and `tag` fields
    - POSTs to the webhook URL with `Authorization: Bearer {apiKey}`
-3. **A history endpoint** (optional) that GETs the webhook URL to display backup count and recent entries
+3. **A history endpoint** (optional) that GETs the webhook URL to display
+   backup count and recent entries
 
 Minimal push example:
 
@@ -310,14 +322,5 @@ const res = await fetch(webhookUrl, {
 });
 ```
 
-**Note on Node.js compatibility:** Use `new Blob()` + `form.append(name, blob, filename)` rather than `new File()`, which may not be available in all Node.js versions.
-
-### TLS with Self-Signed Certificates
-
-If your Backy instance uses mkcert or other self-signed certificates (common in development), add the CA certificate to the Node.js trust store:
-
-```bash
-NODE_EXTRA_CA_CERTS="$HOME/Library/Application Support/mkcert/rootCA.pem" node server.js
-```
-
-This must be set before the process starts — it cannot be loaded from `.env` files at runtime.
+The example above runs unmodified on Cloudflare Workers (native `fetch` +
+`FormData` + `Blob`) and on modern Node.js / Bun.

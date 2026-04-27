@@ -1,39 +1,28 @@
 # Lyre - Project Guide
 
 Audio recording management and transcription platform with word-level karaoke playback.
+Runs as a single Cloudflare Worker that serves the Vite SPA from its asset
+binding and exposes the Hono-based API on the same origin.
 
-> **🚧 Migration in progress** — see `docs/03-cf-worker-migration-plan.md`.
-> Legacy Next.js app lives in `apps/web_legacy/` (FROZEN, bug fixes only). New
-> work goes into `apps/web/` (Vite SPA), `apps/api/` (Hono Worker), or
-> `packages/api/` (`@lyre/api`). Root scripts (`bun dev`/`build`/`test`/...)
-> currently alias to `legacy:*` and target `apps/web_legacy/`.
+## Monorepo Layout
 
-## Monorepo Structure
-
-Bun native workspaces monorepo. Legacy Next.js app lives in `apps/web_legacy/`
-during the CF Worker migration; new packages are being scaffolded under
-`apps/web/`, `apps/api/`, `packages/api/`.
+Bun-native workspaces. There is no Next.js / Railway / SQLite-on-disk story —
+production is Cloudflare Workers + D1 + R2-style Aliyun OSS, and the dev loop
+uses Wrangler + a Vite dev server.
 
 ```
 lyre/
 ├── apps/
-│   ├── web/          ← Next.js app (@lyre/web)
-│   │   ├── src/      ← Source code
-│   │   ├── public/   ← Static assets
-│   │   ├── scripts/  ← Build/test helper scripts
-│   │   ├── database/ ← SQLite DB (gitignored)
-│   │   └── ...       ← Config files (tsconfig, eslint, next.config, etc.)
-│   └── macos/        ← Native Swift/SwiftUI menu bar app
-│       ├── Lyre/       ← Swift source code
-│       ├── LyreTests/  ← Unit + E2E tests (Swift Testing)
-│       └── project.yml ← xcodegen project definition
-├── packages/         ← Shared packages placeholder (.gitkeep)
-├── package.json      ← Root workspace config (proxies scripts to apps/web)
-├── bun.lock
-├── .husky/           ← Git hooks
-├── Dockerfile        ← Multi-stage build (monorepo-aware)
-├── CLAUDE.md
+│   ├── web/        Vite SPA (@lyre/web) — bundled into the Worker as static assets
+│   ├── api/        Hono Worker (@lyre/api-worker) — entry, middleware, routes, cron
+│   └── macos/      Native Swift/SwiftUI menu bar app
+├── packages/
+│   └── api/        @lyre/api — handlers, services, repos, contracts (framework-agnostic)
+├── docs/
+├── .husky/         Git hooks (pre-commit, pre-push)
+├── package.json    Bun workspaces root
 ├── README.md
+├── CLAUDE.md
 ├── CHANGELOG.md
 └── LICENSE
 ```
@@ -42,20 +31,33 @@ lyre/
 
 ### Web (apps/web)
 
-- **Runtime**: Bun
-- **Framework**: Next.js 16 (App Router, standalone output)
-- **Language**: TypeScript 5 (strict)
-- **Database**: SQLite via Drizzle ORM (`apps/web/database/lyre.db`, override with `LYRE_DB`)
-- **UI**: shadcn/ui + Radix UI + Tailwind CSS v4 (utility classes only, no CSS modules)
+- **Build**: Vite 7 (SSG-free SPA, output to `dist/`)
+- **UI**: React 19 + TypeScript 5 (strict)
+- **Styling**: Tailwind CSS v4 + shadcn/ui (Radix primitives)
 - **Icons**: `lucide-react` (the only icon library — do not introduce others)
-- **Auth**: NextAuth v5 + Google OAuth with email allowlist
-- **AI**: Vercel AI SDK (`ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic`) for multi-provider LLM summarization
-- **Storage**: Aliyun OSS (zero-SDK, custom V1 signature)
-- **ASR**: Aliyun DashScope (`qwen3-asr-flash-filetrans`)
-- **Charts**: Recharts (dashboard visualizations)
-- **Theming**: `next-themes` (dark/light mode)
+- **Routing**: React Router (with a small `router-compat` shim)
+- **State**: TanStack Query for server state
 - **Markdown**: `react-markdown` + `remark-gfm` (AI summary rendering)
-- **Path alias**: `@/*` → `./src/*` (relative to `apps/web/`)
+- **Theming**: dark/light mode via `next-themes` (consumed in Vite)
+- **Path alias**: `@/*` → `apps/web/src/*`
+
+### API Worker (apps/api)
+
+- **Runtime**: Cloudflare Workers
+- **Framework**: Hono 4
+- **Bindings**: `DB` (D1), `ASSETS` (Vite SPA), env vars and secrets via Wrangler
+- **Auth**: Cloudflare Access JWT for browser sessions; bearer device tokens for the macOS app
+- **Cron**: Cloudflare Cron Trigger drives `cronTickHandler` for ASR job polling
+
+### Shared API package (packages/api)
+
+- **Purpose**: Framework-agnostic handlers, services, repos, and contracts.
+  Imported by `apps/api` (production), and exercised directly in unit tests.
+- **DB**: Drizzle ORM. `LyreDb` is opaque — D1 in production, in-memory `bun:sqlite` in tests.
+- **Storage**: Aliyun OSS (zero SDK, custom V1 signature)
+- **ASR**: Aliyun DashScope (`qwen3-asr-flash-filetrans`)
+- **AI**: Vercel AI SDK (multi-provider: OpenAI, Anthropic, OpenAI-compatible)
+- **DI**: Every handler receives a `RuntimeContext { env, db, user, headers }` — no global singletons
 
 ### macOS App (apps/macos)
 
@@ -63,209 +65,158 @@ lyre/
 - **Language**: Swift 6 (strict concurrency)
 - **Minimum macOS**: 15.0 (full ScreenCaptureKit support)
 - **Audio**: ScreenCaptureKit (system + mic) → AudioMixer → AudioEncoder (AVAssetWriter M4A/AAC)
-- **Build System**: xcodegen (`project.yml`) → Xcode project → `xcodebuild`
+- **Build**: xcodegen → Xcode project → `xcodebuild`
 - **Networking**: URLSession (async/await)
-- **Features**: Meeting recording (mic + system audio), upload to Lyre server, input device memory
-- **Testing**: Swift Testing framework (`xcodebuild test`), SwiftLint (lint)
+- **Testing**: Swift Testing (`xcodebuild test`), SwiftLint (lint)
 - **Code Signing**: Apple Development + Automatic signing (Team ID `93WWLTN9XU`)
 
-## Key Commands
-
-All commands run from the **repository root**. Root `package.json` proxies them via `bun run --cwd apps/web`.
+## Key Commands (run from repo root)
 
 ```bash
-bun dev                # Start web dev server (port 7016)
-bun run build          # Web production build
-bun run test           # Run web unit tests
-bun run test:coverage  # Run web tests with coverage check
-bun run test:e2e       # Run web E2E tests (port 17016, independent DB)
-bun run lint           # Run ESLint (web)
-bun run db:push        # Apply schema to database
-bun run db:studio      # Open Drizzle Studio
+# Dev
+bun run web:dev               # Vite SPA dev server
+bun run worker:dev            # Hono Worker via Wrangler (local D1)
+
+# Quality gates
+bun run lint                  # web + @lyre/api
+bun run typecheck             # web + worker + @lyre/api
+bun run test                  # unit tests (web + worker + @lyre/api)
+bun run test:coverage         # @lyre/api coverage gate
+
+# Deploy
+bun run deploy                # build SPA + publish Worker (production)
+bun run deploy:test           # build SPA + publish Worker (staging env)
 ```
 
-### macOS App Commands
-
-Run from `apps/macos/`:
+### macOS app commands (run from `apps/macos/`)
 
 ```bash
-xcodegen generate                  # Regenerate Xcode project from project.yml
+xcodegen generate
 xcodebuild build -project Lyre.xcodeproj -scheme Lyre -configuration Debug -destination "platform=macOS"
-xcodebuild test -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS"
-swiftlint lint Lyre/               # Lint production code (zero violations)
+xcodebuild test  -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS"
+swiftlint lint Lyre/
 ```
 
 ## Git Hooks (Husky)
 
-- **pre-commit**: Web UT + lint, then macOS UT + lint
-- **pre-push**: Web coverage + lint + build + E2E, then macOS UT + lint + E2E
-
-All code (web + macOS) must pass UT + lint before commit. Coverage, build, and E2E are enforced before push.
-
-## E2E Test Infrastructure
-
-- **Port**: E2E server runs on port **17016** (dev/prod uses 7016)
-- **Auth bypass**: `PLAYWRIGHT=1` env var skips login/auth in E2E. Set automatically by the runner script.
-- **Database**: Each E2E run uses an independent SQLite DB (auto-created, isolated from dev data)
-- **ASR mock**: The runner unsets `DASHSCOPE_API_KEY` to force mock ASR mode
-- **Runner**: `apps/web/scripts/run-e2e.ts` — spawns a Next.js dev server, waits for health, runs tests, then tears down
-
-### Real LLM Integration Tests
-
-Some E2E tests make **real API calls** to an LLM provider. These require credentials stored in `.env.e2e` (gitignored, never committed).
-
-- **Template**: `apps/web/.env.e2e.example` is checked in — copy it to `apps/web/.env.e2e` and fill in real values
-- **Required vars**: `AI_E2E_AUTH_TOKEN`, `AI_E2E_BASE_URL`, `AI_E2E_MODEL`
-- **Graceful skip**: Tests use `test.skipIf(!HAS_AI_CREDS)` — they skip cleanly when `.env.e2e` is absent or incomplete
-- **CI/local**: Works in both — CI can inject secrets via env vars; locally just populate `.env.e2e`
+- **pre-commit**: gitleaks (secret scan) → `bun run lint` → `bun run test` → `bun run typecheck`, then macOS UT + lint.
+- **pre-push**: osv-scanner (deps) → `bun run lint` → `bun run typecheck` → `bun run test:coverage` → `bun run web:build`, then macOS UT + lint.
 
 ## Architecture Notes
 
-- **Scrollable container**: The app's main scrollable element lives in `src/components/layout/app-shell.tsx` — a `<div>` with `overflow-y-auto` inside the floating island content area. Scroll-to-top FAB is attached here.
-- **Sonner toast**: `<Toaster />` is mounted in `src/app/layout.tsx` (uses `theme="system"`, no `next-themes` dependency). Import `toast` from `sonner` to show notifications.
-- **ASR mock**: Set `DASHSCOPE_API_KEY` to empty or omit it entirely to use the mock ASR provider. E2E tests unset this key to force mock mode.
-- **Suspense boundaries**: Components using `useSearchParams()` must be wrapped in `<Suspense>`. Currently applied in `app-shell.tsx` (for Sidebar) and `recordings/page.tsx` (for the page content).
+- **Single deployment unit**: `bun run deploy` builds the SPA into `apps/web/dist`, and Wrangler publishes the Worker with that directory bound as `ASSETS`. The browser hits one origin; static assets and `/api/*` are both served by the same Worker.
+- **Auth**: Cloudflare Access fronts the Worker. The `Cf-Access-Jwt-Assertion` header is decoded in `apps/api/src/middleware/access-auth.ts` (signature verification is a TODO — fine while behind Access, MUST be added before exposing the Worker directly). The macOS app uses bearer device tokens via `apps/api/src/middleware/bearer-auth.ts`. E2E sets `E2E_SKIP_AUTH=true` to synthesize a stable test user.
+- **DB**: `RuntimeContext.db` carries the live D1 handle in production; tests use a per-suite in-memory `bun:sqlite` Drizzle handle (`packages/api/src/__tests__/_fixtures/test-db.ts`). Repositories are constructed per request via `makeRepos(db)` — never globally.
+- **Env**: `apps/api/src/lib/env.ts` maps `c.env` (Cloudflare Bindings) into the typed `LyreEnv`. `@lyre/api` reads env only via `ctx.env`.
+- **ASR mock**: When `DASHSCOPE_API_KEY` is unset/empty, `getAsrProvider(env)` returns the mock provider with realistic timing — used by unit tests and by local dev when no real key is supplied.
+- **Job polling**: ASR jobs are polled out-of-band by the Cloudflare Cron Trigger which calls `cronTickHandler` via `apps/api/src/lib/cron-ctx.ts`. The SPA hook `useJobEvents` polls `/api/jobs` for status updates (no SSE).
 
 ## Version Management
 
-Version is managed from the **root `package.json`** as the single source of truth, kept in sync across all sub-projects:
+Version is managed from the **root `package.json`** as the single source of truth, kept in sync across all workspaces.
 
-| Location | File | Field |
-|---|---|---|
-| Root (source of truth) | `package.json` | `version` |
-| Web app | `apps/web/package.json` | `version` |
-| macOS app | `apps/macos/project.yml` | `MARKETING_VERSION` |
+| Location               | File                            | Field                |
+|------------------------|---------------------------------|----------------------|
+| Root (source of truth) | `package.json`                  | `version`            |
+| Web app                | `apps/web/package.json`         | `version`            |
+| Worker                 | `apps/api/package.json`         | `version`            |
+| Shared API             | `packages/api/package.json`     | `version`            |
+| macOS app              | `apps/macos/project.yml`        | `MARKETING_VERSION`  |
 
-- Version format: `1.2.3` in source, displayed as `v1.2.3` in UI and releases
-- `src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION`
-- Sidebar displays the version badge (in `src/components/layout/sidebar.tsx`)
-- `/api/live` endpoint returns the version in its JSON response (via `APP_VERSION`)
-- macOS About page reads the version from `CFBundleShortVersionString` (set by `MARKETING_VERSION`)
+- `packages/api/src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION` (Vite inlines it).
+- `/api/live` returns the version in its JSON response.
+- macOS About page reads `CFBundleShortVersionString` (set by `MARKETING_VERSION`).
+- `bun run release` walks all workspace `package.json` files (`scripts/release.ts`).
 
 ### How to bump version
 
-1. Update `version` in **all 3 locations** listed above (root, web, project.yml MARKETING_VERSION)
-2. Run `xcodegen generate` from `apps/macos/` to sync `project.pbxproj`
-3. Update `CHANGELOG.md` with changes since last version
-4. Commit, push, then tag and release via `gh`
+1. Update `version` in all four `package.json` files and `MARKETING_VERSION` in `apps/macos/project.yml`.
+2. Run `xcodegen generate` from `apps/macos/` to sync `project.pbxproj`.
+3. Update `CHANGELOG.md` with changes since last version.
+4. Commit, push, then tag and release via `gh`.
 
-## Project Structure (apps/web/src/)
+## Project Layout Detail
+
+### apps/web/src
 
 ```
-src/
-├── auth.ts             # NextAuth v5 config (Google OAuth, email allowlist)
-├── proxy.ts            # Next.js 16 proxy convention (auth guard, E2E bypass)
-├── app/                # Next.js App Router pages & API routes
-│   ├── api/            # REST endpoints (see API Routes section below)
-│   ├── (app)/          # Route group: authenticated app pages
-│   │   ├── page.tsx                    # Dashboard (charts, stats)
-│   │   ├── recordings/page.tsx         # Recording list (search, filter, sort)
-│   │   ├── recordings/[id]/page.tsx    # Recording detail (player, transcript, summary)
-│   │   ├── settings/page.tsx           # General settings
-│   │   ├── settings/ai/page.tsx        # AI provider configuration
-│   │   ├── settings/storage/page.tsx   # OSS storage settings
-│   │   └── settings/tokens/page.tsx    # Device token management
-│   └── login/          # OAuth login page
-├── components/         # React components
-│   ├── layout/         # App shell, sidebar, breadcrumbs, folder sidebar, contexts
-│   ├── ui/             # shadcn/ui primitives (22 components)
-│   ├── ai-settings.tsx
-│   ├── audio-player.tsx
-│   ├── auth-provider.tsx
-│   ├── cassette-player.tsx
-│   ├── device-tokens.tsx
-│   ├── global-search.tsx
-│   ├── loading-screen.tsx
-│   ├── oss-storage.tsx
-│   ├── recording-card.tsx
-│   ├── recording-list-item.tsx
-│   ├── recording-tile-card.tsx
-│   ├── transcript-viewer.tsx
-│   └── upload-dialog.tsx
-├── db/                 # Drizzle schema & repository layer
-│   ├── schema.ts       # 9 tables (users, recordings, folders, tags, etc.)
-│   ├── index.ts        # DB connection (Bun/Node dual runtime, lazy proxy)
-│   └── repositories/   # 8 repos (users, recordings, jobs, transcriptions,
-│                        #   settings, folders, tags, device-tokens)
-├── services/           # Backend service layer
-│   ├── ai.ts           # LLM summarization (Vercel AI SDK, multi-provider)
-│   ├── asr.ts          # ASR orchestration (submit + poll)
-│   ├── asr-provider.ts # ASR provider abstraction (DashScope / mock)
-│   ├── backup.ts       # Database backup export/import
-│   ├── backy.ts        # Backy remote backup integration
-│   ├── job-event-hub.ts      # SSE fan-out hub for job status
-│   ├── job-manager.ts        # Server-side job polling engine
-│   ├── job-manager-singleton.ts
-│   ├── job-processor.ts      # ASR job processing logic
-│   └── oss.ts          # Aliyun OSS (V1 signature, presign, upload, delete)
-├── hooks/              # React hooks
-│   ├── use-job-events.ts   # SSE hook for real-time job updates
-│   └── use-mobile.ts       # Mobile viewport detection
-├── lib/                # Types, utils, view models, version
-│   ├── api-auth.ts          # API auth helper (session + device token)
-│   ├── audio-player-vm.ts   # Audio player view model
-│   ├── badge-colors.ts      # Badge color assignment
-│   ├── dashboard-vm.ts      # Dashboard view model
-│   ├── mock-data.ts         # Mock data for dev/testing
-│   ├── palette.ts           # Color palette definitions
-│   ├── recording-detail-vm.ts
-│   ├── recordings-list-vm.ts
-│   ├── sidebar-nav.ts       # Sidebar navigation items
-│   ├── theme-utils.ts       # Theme utilities
-│   ├── types.ts             # Shared TypeScript types
-│   ├── utils.ts             # General utilities (cn, etc.)
-│   └── version.ts           # App version export
-└── __tests__/          # Unit tests (30) & E2E tests (9)
+App.tsx                    React Router root
+main.tsx                   Vite entry
+pages/                     Route components (dashboard, recordings, settings/*)
+components/                Feature components + layout/ + ui/ (shadcn)
+hooks/                     use-job-events, use-me, use-mobile
+lib/                       api client, view models, theme utils, version
+__tests__/                 Vitest/bun unit tests
 ```
 
-## Project Structure (apps/macos/)
+### apps/api/src
+
+```
+index.ts                   Worker entry — Hono app + scheduled() handler
+bindings.ts                Cloudflare Bindings + Hono Variables types
+middleware/
+  runtime-context.ts       Builds RuntimeContext per request
+  access-auth.ts           Cloudflare Access JWT decode → user
+  bearer-auth.ts           Device token → user
+routes/
+  live, me, dashboard, recordings, jobs, folders, tags, search, upload, backy
+  settings/                ai, backy, backup, oss, tokens
+lib/
+  d1.ts                    `openD1(binding)` Drizzle wrapper
+  env.ts                   Bindings → LyreEnv mapping
+  cron-ctx.ts              RuntimeContext for scheduled() runs
+  to-response.ts           HandlerResponse → native Response
+__tests__/                 Worker integration tests (Hono test client)
+```
+
+### packages/api/src
+
+```
+contracts/                 Pure types shared with the SPA (jobs, recordings, ai)
+db/
+  schema.ts                Drizzle schema (users, recordings, folders, tags, …)
+  types.ts                 LyreDb type alias
+  drivers/result.ts        rowsAffected helper (D1/bun-sqlite agnostic)
+  repositories/            Per-table factories: makeUsersRepo(db), …, makeRepos(db)
+runtime/
+  env.ts                   LyreEnv type + emptyEnv() for tests
+  context.ts               RuntimeContext type
+handlers/                  Framework-agnostic: receive RuntimeContext + parsed input
+services/
+  ai.ts                    Vercel AI SDK wrapper, prompt builders
+  asr.ts                   DashScope client + result parsing
+  asr-provider.ts          Mock vs real provider selection
+  oss.ts                   Aliyun OSS V1 sign + presign + delete
+  backup.ts                Backup export/import
+  backy.ts                 Backy push/pull integration
+  job-processor.ts         pollJob() — single-job lifecycle on terminal states
+lib/
+  api-auth.ts              hashToken() — shared by bearer-auth + tokens handler
+  palette.ts, sidebar-nav.ts, types.ts, version.ts
+__tests__/                 bun test suites with in-memory SQLite
+  _fixtures/test-db.ts     Bootstraps the in-memory DB
+  _fixtures/runtime-context.ts  setupAuthedCtx(), testRepos(), …
+```
+
+### apps/macos
 
 ```
 apps/macos/
-├── project.yml                    ← xcodegen project definition
-├── .swiftlint.yml                 ← SwiftLint config
-├── Lyre.xcodeproj/                ← Generated (xcodegen generate)
+├── project.yml                     xcodegen project definition
+├── .swiftlint.yml
+├── Lyre.xcodeproj/                 generated
 ├── Lyre/
-│   ├── LyreApp.swift              ← @main, MenuBarExtra, TrayMenu, MainWindowView
-│   ├── Constants.swift            ← Shared constants (subsystem, audio params)
-│   ├── Info.plist                  ← LSUIElement, NSMicrophoneUsageDescription
-│   ├── Lyre.entitlements           ← Audio Input
-│   ├── Assets.xcassets/            ← App icon, tray icons
-│   ├── Audio/
-│   │   ├── PermissionManager.swift
-│   │   ├── AudioCaptureManager.swift
-│   │   ├── AudioMixer.swift
-│   │   ├── AudioEncoder.swift      ← AVAssetWriter M4A/AAC encoding
-│   │   └── RecordingManager.swift  ← State machine, orchestrates capture + encoder
-│   ├── Recording/
-│   │   └── RecordingsStore.swift   ← File scanning, metadata, bulk delete
-│   ├── Network/
-│   │   ├── APIClient.swift         ← Actor, all endpoints, injectable URLSession
-│   │   └── UploadManager.swift     ← 3-step upload flow
-│   ├── Config/
-│   │   └── AppConfig.swift         ← JSON persistence
-│   ├── Views/
-│   │   ├── RecordingsView.swift    ← List, playback, multi-select batch delete
-│   │   ├── UploadView.swift        ← Upload form, folder/tag, progress
-│   │   ├── SettingsView.swift      ← Server config, connection test
-│   │   ├── AboutView.swift         ← Version, GitHub links
-│   │   └── PermissionGuideView.swift ← Step-by-step onboarding
-│   └── Utilities/
-│       ├── AudioPlayerManager.swift ← AVAudioPlayer wrapper
-│       └── KeychainHelper.swift     ← Keychain read/write/delete for auth token
-└── LyreTests/
-    ├── SmokeTests.swift            ← 1 test
-    ├── PermissionManagerTests.swift ← 4 tests
-    ├── AudioMixerTests.swift       ← 27 tests
-    ├── AudioCaptureManagerTests.swift ← 14 tests
-    ├── AudioEncoderTests.swift     ← 16 tests
-    ├── RecordingManagerTests.swift  ← 10 tests
-    ├── RecordingsStoreTests.swift   ← 10 tests
-    ├── AppConfigTests.swift         ← 11 tests
-    ├── KeychainHelperTests.swift    ← 9 tests
-    ├── APIClientTests.swift         ← 15 tests
-    ├── UploadManagerTests.swift     ← 8 tests
-    └── RecordingE2ETests.swift      ← 3 E2E tests
+│   ├── LyreApp.swift               @main, MenuBarExtra, TrayMenu, MainWindowView
+│   ├── Audio/                      PermissionManager, AudioCaptureManager,
+│   │                               AudioMixer, AudioEncoder, RecordingManager
+│   ├── Recording/RecordingsStore.swift
+│   ├── Network/{APIClient, UploadManager}.swift
+│   ├── Config/AppConfig.swift
+│   ├── Views/                      Recordings, Upload, Settings, About, PermissionGuide
+│   └── Utilities/                  AudioPlayerManager, KeychainHelper
+└── LyreTests/                      Smoke, Permission, AudioMixer, Encoder, Capture,
+                                    RecordingManager, RecordingsStore, AppConfig,
+                                    Keychain, APIClient, UploadManager, RecordingE2E
 ```
 
 ### macOS App Architecture
@@ -281,9 +232,7 @@ apps/macos/
 
 ## Retrospective
 
-- **useSearchParams() needs Suspense**: In Next.js 16, any component using `useSearchParams()` must be wrapped in a `<Suspense>` boundary, otherwise the production build fails during static page generation. This applies to both page components and shared components like Sidebar.
-- **SQLite WAL mode: always checkpoint before copying**: When copying a SQLite database file, `ALTER TABLE` and other schema changes may live in the `.db-wal` file, not the main `.db` file. Always run `PRAGMA wal_checkpoint(TRUNCATE)` before `cp`, or copy all three files (`.db`, `.db-shm`, `.db-wal`) together. Copying only the `.db` file silently loses uncommitted WAL changes.
-- **Production DB schema must be migrated after schema changes**: Drizzle schema changes (new columns, new tables) only affect the local dev DB when running `db:push`. The production SQLite on Railway volume is **not** auto-migrated on deploy. After any schema change, SSH into the Railway container (`railway ssh`) and run the necessary `ALTER TABLE ADD COLUMN` statements via `bun -e` (since `sqlite3` CLI is not available in the standalone image). Always run `PRAGMA wal_checkpoint(TRUNCATE)` after migration. Failure to migrate causes silent HTTP 500 errors because Drizzle generates SQL referencing columns that don't exist yet — and without try/catch the real error (`table X has no column named Y`) is swallowed by Next.js's generic 500 handler.
-- **Pre-push hook must include `bun run build`**: UT, lint, and E2E alone do NOT catch TypeScript type errors that only surface during `next build` (which runs full `tsc`). ESLint doesn't flag array-index `string | undefined` narrowing issues, and E2E uses `next dev` which skips type checking. The pre-push hook order is: `test:coverage → lint → build → test:e2e`, followed by macOS UT + lint.
 - **SCStream requires registering each output type separately**: Apple's `SCStream.addStreamOutput(_:type:)` must be called for **each** `SCStreamOutputType` you want to receive. Setting `capturesMicrophone = true` in `SCStreamConfiguration` enables microphone capture at the system level, but the stream only delivers microphone buffers if you also register an output handler with type `.microphone`. Without this registration, mic samples are silently discarded — the handler registered for `.audio` never sees them.
-- **System audio + microphone are separate PCM streams that must be mixed**: ScreenCaptureKit delivers system audio and microphone as independent `CMSampleBuffer` streams. Simply concatenating both into the same MP3 encoder doubles the recording duration (2s recording → 4s file). The correct approach is an `AudioMixer` that buffers both sources independently and outputs their sample-by-sample average `(a + b) / 2`. The mixer also handles the single-source fallback (e.g. no mic permission) by draining the active buffer after a threshold (~100ms at 48kHz) to prevent unbounded accumulation.
+- **System audio + microphone are separate PCM streams that must be mixed**: ScreenCaptureKit delivers system audio and microphone as independent `CMSampleBuffer` streams. Simply concatenating both into the same encoder doubles the recording duration. The correct approach is an `AudioMixer` that buffers both sources independently and outputs their sample-by-sample average `(a + b) / 2`. The mixer also handles the single-source fallback (e.g. no mic permission) by draining the active buffer after a threshold (~100ms at 48kHz) to prevent unbounded accumulation.
+- **D1 schema must be migrated explicitly after a schema change**: `wrangler d1 migrations apply` does not run automatically on `wrangler deploy`. After any Drizzle schema change, generate the SQL and apply it to both the staging and production D1 databases before deploying the Worker that depends on the new columns.
+- **No global DB singleton**: Every repo is constructed via `makeRepos(db)` inside a handler with the request-scoped D1 handle. Adding a new singleton anywhere breaks D1 (no shared connection across requests) and breaks tests (no isolation between cases).

@@ -1,107 +1,90 @@
 # Deployment Guide
 
-This guide walks you through setting up Lyre from scratch — getting all the required API keys, configuring environment variables, and deploying to production.
+Lyre runs as a single Cloudflare Worker. The Vite SPA is bundled as static
+assets served by the same Worker; the Hono API lives at `/api/*`. Storage is
+Cloudflare D1 (SQLite at the edge). Audio blobs live in Aliyun OSS.
+
+```
+Cloudflare Access  →  Worker `lyre-api`
+                       ├─ ASSETS  (apps/web/dist — Vite SPA)
+                       ├─ DB      (D1 SQLite binding)
+                       └─ Cron    (* * * * *)  →  cronTickHandler (ASR poll)
+```
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) v1.0+ (runtime & package manager)
-- A Google account (for OAuth setup)
-- An Aliyun account (for OSS storage and ASR transcription)
+- [Bun](https://bun.sh) 1.0+ (build + tests)
+- A Cloudflare account with **Workers Paid** (D1 + Cron Triggers + Access)
+- [Wrangler](https://developers.cloudflare.com/workers/wrangler/) (installed as a workspace dep)
+- Cloudflare Access configured for the Worker's hostname (or `E2E_SKIP_AUTH=true` for staging)
+- An Aliyun account (OSS for audio blobs, DashScope for ASR)
 
-## 1. Google OAuth Setup
+## 1. Cloudflare Access (auth)
 
-Lyre uses Google OAuth for authentication with an email allowlist for access control.
+The Worker decodes the `Cf-Access-Jwt-Assertion` header set by Cloudflare
+Access. Configure an Access application in the Cloudflare dashboard:
 
-### Create OAuth Credentials
+1. **Zero Trust → Access → Applications → Add an application → Self-hosted**
+2. Hostname: the Worker's custom domain (e.g. `lyre.example.com`)
+3. Add an Access policy with the email allowlist you want to grant access to.
+4. Save.
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (or select an existing one)
-3. Navigate to **APIs & Services → Credentials**
-4. Click **Create Credentials → OAuth client ID**
-5. If prompted, configure the **OAuth consent screen** first:
-   - User Type: **External** (or Internal if using Google Workspace)
-   - Fill in the required fields (App name, User support email, Developer contact)
-   - Scopes: add `email` and `profile`
-   - Test users: add your own email (required for External type while in testing mode)
-6. Back in Credentials, create the OAuth client ID:
-   - Application type: **Web application**
-   - Authorized redirect URIs: add the callback URL for your environment
+> **Note**: JWT signature verification is currently a TODO inside
+> `apps/api/src/middleware/access-auth.ts`. The Worker trusts the header
+> on the assumption that traffic only reaches it via Cloudflare Access (which
+> strips and re-injects the header at the edge). Do NOT expose the Worker on a
+> hostname that is not behind Access until JWKS verification is wired up.
 
-| Environment | Redirect URI |
-|---|---|
-| Local dev | `http://localhost:7016/api/auth/callback/google` |
-| Production | `https://your-domain.com/api/auth/callback/google` |
+The macOS app authenticates separately with bearer device tokens; create
+tokens via **Settings → Tokens** in the SPA.
 
-7. Copy the **Client ID** and **Client Secret**
-
-### Environment Variables
+## 2. Create the D1 database
 
 ```bash
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
+# From the repo root (one-time per environment)
+bunx wrangler d1 create lyre-db          # production
+bunx wrangler d1 create lyre-db-test     # staging
 ```
 
-## 2. NextAuth Configuration
+Copy the returned `database_id` values into `apps/api/wrangler.toml` under the
+`[[d1_databases]]` and `[[env.test.d1_databases]]` blocks.
 
-### Generate Auth Secret
+### Apply the schema
 
 ```bash
-openssl rand -base64 32
+# Production
+bunx wrangler d1 execute lyre-db --remote --file packages/api/src/db/schema.sql
+
+# Staging
+bunx wrangler d1 execute lyre-db-test --remote --file packages/api/src/db/schema.sql
 ```
 
-### Access Control
+(If you change Drizzle schema, regenerate the SQL and re-apply via
+`wrangler d1 execute --remote --file <new.sql>`. There is no auto-migration
+on `wrangler deploy`.)
 
-Set a comma-separated list of email addresses allowed to log in:
+## 3. Aliyun OSS
 
-```bash
-AUTH_SECRET=your-generated-secret
-ALLOWED_EMAILS=alice@gmail.com,bob@example.com
-```
+Lyre stores audio blobs in Aliyun OSS. The integration uses zero SDK — all
+requests are signed with a custom V1 signature implementation in
+`packages/api/src/services/oss.ts`.
 
-Only emails in this list can sign in. If the list is empty, no one can log in.
+### Create a bucket
 
-### Reverse Proxy (Optional)
-
-If Lyre runs behind an HTTPS reverse proxy in development:
-
-```bash
-USE_SECURE_COOKIES=true
-```
-
-Not needed in production — `NODE_ENV=production` enables secure cookies automatically.
-
-## 3. Aliyun OSS Setup
-
-Lyre stores audio files in [Aliyun OSS](https://www.alibabacloud.com/product/object-storage-service) (Object Storage Service). The integration uses zero SDK — all requests are signed with a custom V1 signature implementation.
-
-### Create an OSS Bucket
-
-1. Log in to [Aliyun Console](https://home.console.aliyun.com/)
-2. Go to **Object Storage Service (OSS)**
-3. Click **Create Bucket**
-   - Bucket name: `lyre` (for production) or `lyre-dev` (for development)
-   - Region: choose a region close to your users (e.g. `oss-cn-beijing`)
+1. Log in to the [Aliyun Console](https://home.console.aliyun.com/).
+2. **Object Storage Service (OSS) → Create Bucket**.
+   - Bucket name: `lyre` (production) or `lyre-dev` (staging/dev)
+   - Region: pick one close to your users (e.g. `oss-cn-beijing`)
    - Storage class: **Standard**
-   - Access control: **Private** (recommended)
-4. Note the **Region ID** (e.g. `oss-cn-beijing`) and **Endpoint** (e.g. `https://oss-cn-beijing.aliyuncs.com`)
+   - Access control: **Private**
+3. Note the **Region ID** and **Endpoint**.
 
-> **Tip**: Create two buckets — `lyre` for production, `lyre-dev` for development. Lyre auto-selects the bucket based on `NODE_ENV`, so you never accidentally mix dev and prod data.
+### Create a RAM user with OSS access
 
-### Create a RAM User
-
-1. Go to **RAM (Resource Access Management)** in Aliyun Console
-2. Navigate to **Users → Create User**
-3. Check **OpenAPI Access** to generate an AccessKey pair
-4. Save the **AccessKey ID** and **AccessKey Secret** immediately (the secret is only shown once)
-
-### Grant OSS Permissions
-
-1. Go to the RAM user you just created
-2. Click **Add Permissions**
-3. Attach the policy: **AliyunOSSFullAccess** (or create a custom policy scoped to your buckets)
-
-<details>
-<summary>Custom policy example (principle of least privilege)</summary>
+1. **RAM (Resource Access Management) → Users → Create User**.
+2. Check **OpenAPI Access** to generate an AccessKey pair.
+3. Save the **AccessKey ID** and **AccessKey Secret** (the secret is shown once).
+4. Attach the **AliyunOSSFullAccess** policy (or a custom least-privilege policy):
 
 ```json
 {
@@ -111,164 +94,103 @@ Lyre stores audio files in [Aliyun OSS](https://www.alibabacloud.com/product/obj
       "Effect": "Allow",
       "Action": "oss:*",
       "Resource": [
-        "acs:oss:*:*:lyre",
-        "acs:oss:*:*:lyre/*",
-        "acs:oss:*:*:lyre-dev",
-        "acs:oss:*:*:lyre-dev/*"
+        "acs:oss:*:*:lyre",      "acs:oss:*:*:lyre/*",
+        "acs:oss:*:*:lyre-dev",  "acs:oss:*:*:lyre-dev/*"
       ]
     }
   ]
 }
 ```
 
-</details>
+### Configure CORS for browser uploads
 
-### Configure CORS (Required for Browser Uploads)
+In the OSS Console, **bucket → Access Control → Cross-Origin Resource Sharing**:
 
-In the OSS Console, go to your bucket → **Access Control → Cross-Origin Resource Sharing** and add:
+| Field            | Value                                                       |
+|------------------|-------------------------------------------------------------|
+| Allowed Origins  | The Worker's custom domain (e.g. `https://lyre.example.com`) |
+| Allowed Methods  | `GET, PUT, HEAD`                                            |
+| Allowed Headers  | `*`                                                         |
+| Expose Headers   | `ETag`                                                      |
 
-| Field | Value |
-|---|---|
-| Allowed Origins | `http://localhost:7016`, `https://your-domain.com` |
-| Allowed Methods | `GET, PUT, HEAD` |
-| Allowed Headers | `*` |
-| Expose Headers | `ETag` |
+## 4. Aliyun DashScope ASR
 
-### Environment Variables
+Lyre uses [DashScope](https://dashscope.aliyuncs.com/) for transcription
+(`qwen3-asr-flash-filetrans`).
 
-```bash
-OSS_ACCESS_KEY_ID=your-access-key-id
-OSS_ACCESS_KEY_SECRET=your-access-key-secret
-OSS_REGION=oss-cn-beijing
-OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com
-```
+1. Open the [DashScope console](https://dashscope.console.aliyun.com/) and
+   activate DashScope (free to activate, pay-per-use).
+2. **API-KEY Management → Create API Key**.
+3. Save the generated key.
 
-`OSS_BUCKET` is optional — Lyre auto-resolves the bucket name:
-- `NODE_ENV=production` → `lyre`
-- Otherwise → `lyre-dev`
+If `DASHSCOPE_API_KEY` is unset/empty, the API falls back to a mock provider
+that returns deterministic placeholder transcriptions — useful for staging
+and tests without incurring API costs.
 
-To override, set `OSS_BUCKET=your-custom-bucket`.
+## 5. Push secrets to the Worker
 
-## 4. Aliyun DashScope ASR Setup
-
-Lyre uses [DashScope](https://dashscope.aliyuncs.com/) for speech-to-text transcription with the `qwen3-asr-flash-filetrans` model.
-
-### Get a DashScope API Key
-
-1. Go to [DashScope Console](https://dashscope.console.aliyun.com/)
-2. If you don't have DashScope activated, click **Activate** (free to activate, pay-per-use)
-3. Navigate to **API-KEY Management**
-4. Click **Create API Key**
-5. Copy the generated key
-
-### Environment Variables
+`apps/api/wrangler.toml` keeps non-secret config in `[vars]`. Push the rest
+via `wrangler secret put`:
 
 ```bash
-DASHSCOPE_API_KEY=sk-your-dashscope-api-key
+cd apps/api
+
+# Production
+bunx wrangler secret put OSS_ACCESS_KEY_ID
+bunx wrangler secret put OSS_ACCESS_KEY_SECRET
+bunx wrangler secret put OSS_REGION
+bunx wrangler secret put OSS_ENDPOINT
+bunx wrangler secret put DASHSCOPE_API_KEY      # optional
+
+# Staging — same keys, but with --env test
+bunx wrangler secret put OSS_ACCESS_KEY_ID --env test
+# ...etc.
 ```
 
-> **Note**: This variable is optional. If omitted or empty, Lyre uses a mock ASR provider that returns placeholder transcriptions — useful for development and testing without incurring API costs.
-
-## 5. Database
-
-Lyre uses SQLite — no external database server needed. The database file is created automatically.
+## 6. Build & deploy
 
 ```bash
-# Initialize the schema
-bun run db:push
+# Production
+bun run deploy
+
+# Staging
+bun run deploy:test
 ```
 
-Default path: `apps/web/database/lyre.db` (gitignored).
+`bun run deploy` runs `web:build` (Vite → `apps/web/dist`) and then
+`wrangler deploy` from `apps/api` (which uploads the bundled SPA via the
+`[assets]` directory and the Worker code itself).
 
-To override (e.g. for Docker volume mounts):
+## 7. Local development
 
 ```bash
-LYRE_DB=/data/lyre.db
+# Vite SPA on http://localhost:5173 by default
+bun run web:dev
+
+# Hono Worker on http://localhost:7017 with a local D1 + assets
+bun run worker:dev
 ```
 
-## 6. Complete Configuration
+The local Worker uses Wrangler's `--local` mode, which provisions an ephemeral
+SQLite-backed D1 instance. Apply the schema once with `wrangler d1 execute`
+(without `--remote`) before exercising routes that hit the DB.
 
-Here is the full `.env.local` template with all required variables:
+## Environment variable reference
 
-```bash
-# ── Auth ──
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
-AUTH_SECRET=your-generated-secret
-ALLOWED_EMAILS=your-email@gmail.com
+These are the bindings expected on the Worker side
+(`apps/api/src/bindings.ts`). Non-secret values live in `wrangler.toml`;
+secrets must be pushed via `wrangler secret put`.
 
-# ── Aliyun OSS ──
-OSS_ACCESS_KEY_ID=your-access-key-id
-OSS_ACCESS_KEY_SECRET=your-access-key-secret
-OSS_REGION=oss-cn-beijing
-OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com
-
-# ── ASR (optional, omit for mock mode) ──
-DASHSCOPE_API_KEY=sk-your-dashscope-api-key
-```
-
-## 7. Run Locally
-
-```bash
-# Install dependencies
-bun install
-
-# Initialize database
-bun run db:push
-
-# Start development server
-bun dev
-```
-
-Open [http://localhost:7016](http://localhost:7016) and sign in with a Google account listed in `ALLOWED_EMAILS`.
-
-## 8. Deploy with Docker
-
-Lyre ships with a multi-stage Dockerfile optimized for production.
-
-### Build & Run
-
-```bash
-docker build -t lyre .
-
-docker run -p 7016:7016 \
-  -v lyre-data:/data \
-  -e LYRE_DB=/data/lyre.db \
-  -e NODE_ENV=production \
-  -e GOOGLE_CLIENT_ID=... \
-  -e GOOGLE_CLIENT_SECRET=... \
-  -e AUTH_SECRET=... \
-  -e ALLOWED_EMAILS=... \
-  -e OSS_ACCESS_KEY_ID=... \
-  -e OSS_ACCESS_KEY_SECRET=... \
-  -e OSS_REGION=... \
-  -e OSS_ENDPOINT=... \
-  -e DASHSCOPE_API_KEY=... \
-  lyre
-```
-
-> **Important**: Mount a persistent volume at `/data` for SQLite database durability. Without it, your data is lost when the container restarts.
-
-### Deploy to Railway
-
-1. Connect your GitHub repo to [Railway](https://railway.com/)
-2. Add a persistent volume mounted at `/data`
-3. Set `LYRE_DB=/data/lyre.db` and all other environment variables above
-4. Railway auto-deploys on push to `main`
-
-## Environment Variable Reference
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `GOOGLE_CLIENT_ID` | Yes | — | Google OAuth Client ID |
-| `GOOGLE_CLIENT_SECRET` | Yes | — | Google OAuth Client Secret |
-| `AUTH_SECRET` | Yes | — | NextAuth JWT signing secret |
-| `ALLOWED_EMAILS` | Yes | `""` | Comma-separated login allowlist |
-| `OSS_ACCESS_KEY_ID` | Yes | — | Aliyun RAM AccessKey ID |
-| `OSS_ACCESS_KEY_SECRET` | Yes | — | Aliyun RAM AccessKey Secret |
-| `OSS_REGION` | Yes | — | OSS region (e.g. `oss-cn-beijing`) |
-| `OSS_ENDPOINT` | Yes | — | OSS endpoint URL |
-| `OSS_BUCKET` | No | Auto (`lyre` / `lyre-dev`) | Override bucket name |
-| `DASHSCOPE_API_KEY` | No | — (mock mode) | DashScope API key for ASR |
-| `LYRE_DB` | No | `database/lyre.db` | SQLite database file path |
-| `USE_SECURE_COOKIES` | No | `false` | Enable secure cookies behind HTTPS proxy |
+| Variable                | Source            | Required | Description                                                  |
+|-------------------------|-------------------|----------|--------------------------------------------------------------|
+| `DB`                    | D1 binding        | Yes      | The D1 database binding                                       |
+| `ASSETS`                | Asset binding     | Yes      | The Vite SPA static asset binding                             |
+| `NODE_ENV`              | `[vars]`          | Yes      | `production` selects the prod OSS bucket and disables E2E    |
+| `OSS_BUCKET`            | `[vars]`          | No       | Override bucket name; defaults to `lyre` (prod) or `lyre-dev` |
+| `OSS_ACCESS_KEY_ID`     | secret            | Yes      | Aliyun RAM AccessKey ID                                       |
+| `OSS_ACCESS_KEY_SECRET` | secret            | Yes      | Aliyun RAM AccessKey Secret                                   |
+| `OSS_REGION`            | secret or `[vars]` | Yes     | OSS region, e.g. `oss-cn-beijing`                             |
+| `OSS_ENDPOINT`          | secret or `[vars]` | Yes     | OSS endpoint URL                                              |
+| `DASHSCOPE_API_KEY`     | secret            | No       | DashScope API key; omit/empty for mock ASR                    |
+| `SKIP_OSS_ARCHIVE`      | `[vars]`          | No       | `"1"` skips raw ASR JSON archival (used by tests)             |
+| `E2E_SKIP_AUTH`         | `[vars]`          | No       | `"true"` enables a synthetic test user (staging only)         |

@@ -10,9 +10,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Next.js-16-black" alt="Next.js">
+  <img src="https://img.shields.io/badge/Vite-7-646CFF" alt="Vite">
+  <img src="https://img.shields.io/badge/Cloudflare%20Workers-Hono-F38020" alt="Cloudflare Workers">
+  <img src="https://img.shields.io/badge/D1-SQLite-003A70" alt="Cloudflare D1">
   <img src="https://img.shields.io/badge/TypeScript-5-blue" alt="TypeScript">
-  <img src="https://img.shields.io/badge/SQLite-local-green" alt="SQLite">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
 </p>
 
@@ -22,150 +23,122 @@
 
 ---
 
-## ✨ Features
+## Features
 
-- 🎙️ **Audio Upload** — Direct-to-OSS presigned upload with progress tracking (up to 500 MB)
-- 📝 **ASR Transcription** — Powered by Aliyun DashScope, async job with real-time SSE status updates
-- 🤖 **AI Summaries** — Multi-provider LLM summarization (OpenAI, Anthropic) with streaming markdown
-- 🎵 **Audio Player** — Custom player with play/pause, skip, variable speed, and progress seeking
-- 💬 **Transcript Viewer** — Sentence view synced to audio playback, full-text view, one-click copy
-- 🔤 **Word-Level Karaoke** — Lazy-loaded word timestamps, clickable words for seeking, real-time highlighting
-- 🔍 **Recording Management** — Full CRUD, search, folders, tags, status filter, pagination, and sorting
-- 📊 **Dashboard** — Charts and statistics for recording activity overview
-- 🔒 **Google OAuth** — Email allowlist-based access control with reverse proxy support
-- 🗄️ **Local SQLite** — All data stored locally via Drizzle ORM, zero external database dependency
-- 💾 **Remote Backup** — Bidirectional Backy integration (push + pull webhook)
-- 🖥️ **macOS App** — Native Swift/SwiftUI menu bar app for meeting recording (mic + system audio)
-- 🐳 **Docker Ready** — Multi-stage Dockerfile optimized for Railway deployment
+- **Audio Upload** — Direct-to-OSS presigned upload with progress tracking (up to 500 MB)
+- **ASR Transcription** — Aliyun DashScope async job, polled by a Cloudflare Cron Trigger
+- **AI Summaries** — Multi-provider LLM summarization (OpenAI, Anthropic) with streaming markdown
+- **Audio Player** — Custom player with play/pause, skip, variable speed, and progress seeking
+- **Transcript Viewer** — Sentence view synced to playback, full-text view, one-click copy
+- **Word-Level Karaoke** — Lazy-loaded word timestamps, clickable words for seeking, real-time highlighting
+- **Recording Management** — CRUD, search, folders, tags, status filter, pagination, and sorting
+- **Dashboard** — Charts and statistics for recording activity overview
+- **Cloudflare Access SSO** — Email-based access control enforced at the edge
+- **Cloudflare D1** — Serverless SQLite store managed entirely on the Cloudflare edge
+- **Remote Backup** — Bidirectional Backy integration (push + pull webhook)
+- **macOS App** — Native Swift/SwiftUI menu bar app for meeting recording (mic + system audio)
 
-## 🚀 Quick Start
+## Architecture
 
-### 1️⃣ Install Dependencies
+```
+                ┌──────────────────────────────────────────┐
+   Browser ───▶ │ Cloudflare Access (SSO + JWT)            │
+                ├──────────────────────────────────────────┤
+                │ Worker `lyre-api`  (apps/api)            │
+                │   • Hono router                          │
+                │   • Static SPA via [assets] (apps/web)   │
+                │   • D1 binding `DB`                      │
+                │   • Cron Trigger → ASR poll              │
+                └──────────────────────────────────────────┘
+                         │              │
+                         ▼              ▼
+                   Aliyun OSS    Aliyun DashScope
+                   (audio blobs)  (qwen3-asr-flash)
+```
+
+- `apps/web` — Vite SPA, served as static assets by the Worker.
+- `apps/api` — Hono Worker entry, middleware (Access JWT, bearer token), and route adapters.
+- `packages/api` — Framework-agnostic handlers, services, repos, contracts (`@lyre/api`).
+- `apps/macos` — Native menu bar recorder that uploads via the Worker API.
+
+## Quick Start
+
+### 1. Install dependencies
 
 ```bash
 # Requires Bun: https://bun.sh
 bun install
 ```
 
-### 2️⃣ Configure Environment Variables
+### 2. Configure environment variables
+
+The Worker reads its config from Wrangler (`apps/api/wrangler.toml` + secrets).
+The Vite SPA only needs the API origin at build time.
+
+> See **[docs/01-deployment.md](docs/01-deployment.md)** for the full list of
+> Cloudflare bindings (D1, vars, secrets) and how to provision them.
+
+### 3. Local development
 
 ```bash
-cp apps/web/.env.example apps/web/.env.local
+# Vite SPA (web UI)
+bun run web:dev
+
+# Hono Worker against a local D1 (separate terminal)
+bun run worker:dev
 ```
 
-You'll need API keys from **Google Cloud** (OAuth) and **Aliyun** (OSS + ASR).
-
-> 📖 **[Deployment Guide](docs/01-deployment.md)** — Step-by-step instructions for obtaining all API keys, configuring each service, and deploying to production.
->
-> 📚 **[All Documentation](docs/README.md)** — Full docs index including deployment, backup integration, and archived planning docs.
-
-### 3️⃣ Initialize Database
+### 4. Deploy
 
 ```bash
-bun run db:push
+# Build the SPA into apps/web/dist, then publish the Worker
+bun run deploy        # production
+bun run deploy:test   # staging environment
 ```
 
-### 4️⃣ Start Development Server
-
-```bash
-bun dev
-```
-
-Open your browser 👉 [http://localhost:7016](http://localhost:7016)
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 lyre/
-├── 📂 apps/
-│   ├── 📂 web/                    # Next.js web app (@lyre/web)
-│   │   ├── 📂 src/
-│   │   │   ├── 📂 app/            # App Router pages & API routes
-│   │   │   ├── 📂 components/     # React components (layout, ui, features)
-│   │   │   ├── 📂 db/             # Schema & repositories (Drizzle ORM)
-│   │   │   ├── 📂 services/       # Backend services (AI, ASR, OSS, backup)
-│   │   │   ├── 📂 hooks/          # React hooks (SSE, mobile detection)
-│   │   │   ├── 📂 lib/            # Types, utils, view models
-│   │   │   └── 📂 __tests__/      # Unit tests & E2E tests
-│   │   ├── 📂 scripts/            # Seed, coverage, E2E runner
-│   │   ├── 📂 database/           # SQLite database files (gitignored)
-│   │   └── 📂 public/             # Static assets (logos, favicons)
-│   └── 📂 macos/                  # Native Swift/SwiftUI menu bar app
-│       ├── 📂 Lyre/               # Swift source code
-│       └── 📂 LyreTests/          # Unit + E2E tests (Swift Testing)
-├── 📂 packages/                   # Shared packages placeholder
-├── Dockerfile                     # Multi-stage Docker build (Bun)
-└── package.json                   # Root workspace config
+├── apps/
+│   ├── web/        Vite SPA (@lyre/web) — bundled into the Worker as static assets
+│   ├── api/        Hono Worker (@lyre/api-worker) — entry, middleware, routes, cron
+│   └── macos/      Native Swift/SwiftUI menu bar app
+├── packages/
+│   └── api/        @lyre/api — handlers, services, repos, contracts (framework-agnostic)
+├── docs/
+└── package.json    Bun workspaces root
 ```
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| ⚡ Runtime | Bun |
-| 🖥️ Framework | Next.js 16 (App Router, Standalone) |
-| 📝 Language | TypeScript 5 (Strict) |
-| 🗄️ Database | SQLite + Drizzle ORM |
-| 🎨 UI | shadcn/ui + Radix UI + Tailwind CSS v4 |
-| 🔐 Auth | NextAuth v5 + Google OAuth |
-| 🤖 AI | Vercel AI SDK (OpenAI + Anthropic) |
-| ☁️ Storage | Aliyun OSS (zero-SDK, custom V1 signature) |
-| 🗣️ ASR | Aliyun DashScope (`qwen3-asr-flash-filetrans`) |
-| 📊 Charts | Recharts (dashboard visualizations) |
-| 🐳 Deploy | Docker (multi-stage, Bun runtime) → Railway |
+| Layer       | Technology                                              |
+|-------------|---------------------------------------------------------|
+| Runtime     | Bun (dev/build), Cloudflare Workers (prod)              |
+| Web         | Vite 7 + React 19 + TypeScript 5                        |
+| API         | Hono 4 on Cloudflare Workers                            |
+| Database    | Cloudflare D1 (SQLite) via Drizzle ORM                  |
+| UI          | shadcn/ui + Radix UI + Tailwind CSS v4                  |
+| Auth        | Cloudflare Access (web) + bearer device tokens (macOS)  |
+| AI          | Vercel AI SDK (OpenAI + Anthropic)                      |
+| Storage     | Aliyun OSS (zero-SDK, custom V1 signature)              |
+| ASR         | Aliyun DashScope (`qwen3-asr-flash-filetrans`)          |
+| Job polling | Cloudflare Cron Trigger → `cronTickHandler`             |
+| Deploy      | Wrangler (`bun run deploy`)                             |
 
-## 📋 Common Commands
+## Common Commands
 
-| Command | Description |
-|---|---|
-| `bun dev` | Start development server (port 7016) |
-| `bun run build` | Production build |
-| `bun run lint` | Run ESLint |
-| `bun run test` | Run unit tests |
-| `bun run test:coverage` | Run tests with coverage check |
-| `bun run test:e2e` | Run E2E tests |
-| `bun run db:push` | Apply schema to database |
-| `bun run db:studio` | Open Drizzle Studio |
+| Command                  | Description                                              |
+|--------------------------|----------------------------------------------------------|
+| `bun run web:dev`        | Start the Vite SPA dev server                            |
+| `bun run worker:dev`     | Start the Hono Worker locally (Wrangler)                 |
+| `bun run lint`           | Lint web + `@lyre/api`                                   |
+| `bun run typecheck`      | Typecheck web + worker + `@lyre/api`                     |
+| `bun run test`           | Unit tests for web + worker + `@lyre/api`                |
+| `bun run test:coverage`  | `@lyre/api` coverage gate                                |
+| `bun run deploy`         | Build SPA + publish Worker to production                 |
+| `bun run deploy:test`    | Build SPA + publish Worker to staging                    |
 
-## 🔧 Database Management
-
-### Override Database Path
-
-```bash
-# Default path
-database/lyre.db
-
-# For Railway deployment (with volume mount at /data)
-LYRE_DB=/data/lyre.db
-```
-
-### Use Drizzle Studio
-
-```bash
-bun run db:studio
-```
-
-> 💡 **Tip**: Drizzle Studio opens a web UI for browsing and editing database records.
-
-## 🐳 Docker Deployment
-
-```bash
-# Build the image
-docker build -t lyre .
-
-# Run with environment variables
-docker run -p 7016:7016 \
-  -v lyre-data:/data \
-  -e LYRE_DB=/data/lyre.db \
-  -e GOOGLE_CLIENT_ID=... \
-  -e AUTH_SECRET=... \
-  lyre
-```
-
-> ⚠️ **Important**: Mount a persistent volume at `/data` for SQLite database durability.
->
-> See **[Deployment Guide](docs/01-deployment.md)** for full Docker and Railway deployment instructions.
-
-## 📄 License
+## License
 
 [MIT](LICENSE) © 2026
