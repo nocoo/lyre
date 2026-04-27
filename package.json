@@ -7,26 +7,22 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run legacy:dev",
-    "build": "bun run legacy:build",
-    "start": "bun run legacy:start",
-    "lint": "bun run legacy:lint && bun run api:lint",
-    "test": "bun run legacy:test && bun run api:test",
-    "test:coverage": "bun run legacy:test:coverage && bun run api:test:coverage",
-    "test:e2e": "bun run legacy:test:e2e",
-    "typecheck": "bun run legacy:typecheck && bun run api:typecheck",
-    "db:push": "bun run legacy:db:push",
-    "db:studio": "bun run legacy:db:studio",
-    "legacy:dev": "bun run --cwd apps/web_legacy dev",
-    "legacy:build": "bun run --cwd apps/web_legacy build",
-    "legacy:start": "bun run --cwd apps/web_legacy start",
-    "legacy:lint": "bun run --cwd apps/web_legacy lint",
-    "legacy:test": "bun run --cwd apps/web_legacy test",
-    "legacy:test:coverage": "bun run --cwd apps/web_legacy test:coverage",
-    "legacy:test:e2e": "bun run --cwd apps/web_legacy test:e2e",
-    "legacy:typecheck": "bun run --cwd apps/web_legacy tsc --noEmit",
-    "legacy:db:push": "bun run --cwd apps/web_legacy db:push",
-    "legacy:db:studio": "bun run --cwd apps/web_legacy db:studio",
+    "dev": "bun run web:dev",
+    "build": "bun run web:build",
+    "lint": "bun run web:lint && bun run api:lint",
+    "test": "bun run web:test && bun run worker:test && bun run api:test",
+    "test:coverage": "bun run api:test:coverage",
+    "typecheck": "bun run web:typecheck && bun run worker:typecheck && bun run api:typecheck",
+    "deploy:test": "bun run web:build && bun run --cwd apps/api deploy:test",
+    "deploy": "bun run web:build && bun run --cwd apps/api deploy",
+    "web:dev": "bun run --cwd apps/web dev",
+    "web:build": "bun run --cwd apps/web build",
+    "web:lint": "bun run --cwd apps/web lint",
+    "web:test": "bun run --cwd apps/web test",
+    "web:typecheck": "bun run --cwd apps/web typecheck",
+    "worker:dev": "bun run --cwd apps/api dev",
+    "worker:test": "bun run --cwd apps/api test",
+    "worker:typecheck": "bun run --cwd apps/api typecheck",
     "api:lint": "bun run --cwd packages/api lint",
     "api:test": "bun run --cwd packages/api test",
     "api:test:coverage": "bun run --cwd packages/api test:coverage",
@@ -36,18 +32,5 @@
   },
   "devDependencies": {
     "husky": "^9.1.7"
-  },
-  "dependencies": {
-    "@hono/node-server": "^1.19.13",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "drizzle-orm": "^0.45.2",
-    "express-rate-limit": "^8.3.2",
-    "hono": "^4.12.14",
-    "next": "^16.2.3",
-    "path-to-regexp": "^8.4.2",
-    "picomatch": "^4.0.4"
-  },
-  "overrides": {
-    "hono": "^4.12.14"
   }
 }

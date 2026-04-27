@@ -1,7 +1,7 @@
-# pre-push: L1 (Coverage) + G1 (Lint) + L2 (E2E) + G2b (Deps)
+# pre-push: dep scan + coverage + lint + typecheck + build (web, worker, @lyre/api, macOS)
 set -e
 
-# G2b: Dependency vulnerability scanning
+# Dependency vulnerability scanning
 if command -v osv-scanner &>/dev/null; then
   [ -f bun.lock ] && osv-scanner scan --lockfile=bun.lock --config=osv-scanner.toml
 else
@@ -9,9 +9,10 @@ else
   exit 1
 fi
 
-# Web (legacy) + @lyre/api: coverage + lint + build + e2e
-bun run legacy:test:coverage && bun run legacy:lint && bun run legacy:build && bun run legacy:test:e2e
-bun run api:test:coverage && bun run api:lint && bun run api:typecheck
+bun run lint
+bun run typecheck
+bun run test:coverage
+bun run web:build
 
 # macOS: unit tests + lint (E2E included in LyreTests scheme)
 cd apps/macos && \

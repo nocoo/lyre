@@ -1,7 +1,7 @@
-# pre-commit: L1 (Unit tests) + G1 (Lint) + G2a (Secrets)
+# pre-commit: secrets scan + lint + UT + typecheck (web, worker, @lyre/api, macOS)
 set -e
 
-# G2a: Secrets scanning (must run before any other check)
+# Secrets scanning (must run before any other check)
 if command -v gitleaks &>/dev/null; then
   gitleaks protect --staged --no-banner
 else
@@ -9,9 +9,9 @@ else
   exit 1
 fi
 
-# Web (legacy) + @lyre/api: unit tests + lint
-bun run legacy:test && bun run legacy:lint
-bun run api:test && bun run api:lint && bun run api:typecheck
+bun run lint
+bun run test
+bun run typecheck
 
 # macOS: unit tests + lint
 cd apps/macos && \
