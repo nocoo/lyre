@@ -29,7 +29,7 @@
     "drizzle-orm": "^0.45.2",
     "express-rate-limit": "^8.3.2",
     "hono": "^4.12.14",
-    "next": "^16.2.3",
+    "next": "16.2.4",
     "path-to-regexp": "^8.4.2",
     "picomatch": "^4.0.4"
   },
