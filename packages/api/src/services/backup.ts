@@ -14,7 +14,7 @@ import type { LyreDb } from "../db/types";
  */
 function getDefaultDb(): LyreDb {
   const path = "../" + "db";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = globalThis as any;
   const req: (id: string) => unknown =
     typeof g.require === "function"

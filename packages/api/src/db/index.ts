@@ -27,7 +27,7 @@ export type { D1DatabaseLike } from "./drivers/d1";
 function loadSqlite(): typeof import("./drivers/sqlite") {
   // String-built path so esbuild treats it as opaque.
   const path = "./drivers/" + "sqlite";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = globalThis as any;
   const req: (id: string) => unknown =
     typeof g.require === "function"

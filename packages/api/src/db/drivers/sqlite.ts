@@ -16,7 +16,7 @@ const isBun = typeof globalThis.Bun !== "undefined";
 
 /** Build a CJS-style require that esbuild treats as opaque (string-built path). */
 function createRequire(): (id: string) => unknown {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = globalThis as any;
   if (typeof g.require === "function") return g.require as (id: string) => unknown;
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -154,15 +154,15 @@ export function openSqliteDb(dbPath: string): LyreDb {
   const req = createRequire();
 
   if (isBun) {
-    const { Database } = req(bunSqlite);
-    const { drizzle } = req(drizzleBun);
+    const { Database } = req(bunSqlite) as { Database: new (path: string) => { exec(sql: string): void } };
+    const { drizzle } = req(drizzleBun) as { drizzle: (db: unknown, opts: { schema: typeof schema }) => LyreDb };
     const sqlite = new Database(dbPath);
     sqlite.exec(INIT_SQL);
     return drizzle(sqlite, { schema });
   }
 
-  const BetterSqlite = req(betterSqlite);
-  const { drizzle } = req(drizzleBetter);
+  const BetterSqlite = req(betterSqlite) as new (path: string) => { exec(sql: string): void };
+  const { drizzle } = req(drizzleBetter) as { drizzle: (db: unknown, opts: { schema: typeof schema }) => LyreDb };
   const sqlite = new BetterSqlite(dbPath);
   sqlite.exec(INIT_SQL);
   return drizzle(sqlite, { schema });
