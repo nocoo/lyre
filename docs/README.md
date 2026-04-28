@@ -6,6 +6,7 @@
 |---|----------|-------------|
 | 01 | [Deployment Guide](01-deployment.md) | Cloudflare Worker + D1 + Vite SPA deployment via Wrangler |
 | 02 | [Backy Remote Backup](02-backy.md) | Bidirectional backup integration (push + pull webhook API) |
+| 04 | [Quality Upgrade Plan](04-quality-upgrade-plan.md) | L1/L2/L3/G1/G2 quality gates upgrade plan (vs dove) |
 
 ## Archive
 
