@@ -38,7 +38,7 @@ lyre/
 - **Routing**: React Router (with a small `router-compat` shim)
 - **State**: TanStack Query for server state
 - **Markdown**: `react-markdown` + `remark-gfm` (AI summary rendering)
-- **Theming**: dark/light mode via `next-themes` (consumed in Vite)
+- **Theming**: dark/light mode via in-house `theme-utils` + `<ThemeToggle>`
 - **Path alias**: `@/*` → `apps/web/src/*`
 
 ### API Worker (apps/api)

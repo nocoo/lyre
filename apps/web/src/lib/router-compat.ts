@@ -1,10 +1,9 @@
 /**
- * Tiny compatibility helpers to bridge legacy Next.js navigation patterns
- * to react-router 7 semantics.
+ * Router compatibility shim for react-router.
  */
 import { useLocation } from "react-router";
 
-/** Drop-in replacement for Next's `usePathname()`. */
+/** Returns the current pathname. */
 export function useLocationPathname(): string {
   return useLocation().pathname;
 }

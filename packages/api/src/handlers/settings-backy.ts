@@ -137,7 +137,7 @@ export async function deletePullKeyHandler(
   return json({ ok: true });
 }
 
-// ── Public Backy pull webhook (no NextAuth) ──
+// ── Public Backy pull webhook (X-Webhook-Key auth) ──
 
 /**
  * Validate the X-Webhook-Key header from the request and return userId, or

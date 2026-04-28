@@ -62,9 +62,9 @@ reason = "Indirect: picomatch via micromatch/tinyglobby"
 id = "GHSA-c2c7-rcm5-vvqj"
 reason = "Indirect: picomatch via micromatch/tinyglobby"
 
-# postcss 8.4.31 pinned by next@16.2.3, 8.5.6 via @tailwindcss/postcss and shadcn (devDependency).
+# postcss via @tailwindcss/postcss and shadcn (devDependency).
 # GHSA-qx2v-qp2m-jg93 requires parsing untrusted CSS; here postcss only runs at build time
 # against developer-authored CSS, so the parsing-error vector is not reachable.
 [[IgnoredVulns]]
 id = "GHSA-qx2v-qp2m-jg93"
-reason = "Indirect: postcss via next/@tailwindcss/postcss/shadcn (build-time only, no untrusted CSS)"
+reason = "Indirect: postcss via @tailwindcss/postcss/shadcn (build-time only, no untrusted CSS)"

@@ -25,9 +25,8 @@ export function useMe() {
 }
 
 /**
- * Adapter for components ported from the legacy NextAuth integration.
- * Mirrors the relevant subset of `useSession()` so the sidebar can read
- * `session.user.{name,email,image}` without further refactor.
+ * Adapter that provides a `useSession()`-like API for sidebar components.
+ * Returns `session.user.{name,email,image}` shape.
  */
 export interface SessionUserShape {
   name: string;
