@@ -50,7 +50,7 @@ osv-scanner → lint → typecheck → test:coverage → web:build → macOS
 | 3 | E2E 运行脚本 | `scripts/run-e2e.ts` | ❌ 缺失 |
 | 4 | Route 覆盖门禁 | `scripts/check-route-coverage.ts` | ❌ 缺失 |
 | 5 | Page 覆盖门禁 | `scripts/check-page-coverage.ts` | ❌ 缺失 |
-| 6 | 统一安全门禁 | `scripts/gate-security.ts` | ❌ 分散 |
+| 6 | 统一安全门禁 | `scripts/gate-secrets.ts` + `scripts/gate-deps.ts` | ❌ 分散 |
 | 7 | Playwright 配置 | `playwright.config.ts` | ❌ 缺失 |
 | 8 | CD Workflow | `.github/workflows/release.yml` | ❌ 缺失 |
 | 9 | 并行 Hooks | `.husky/pre-commit` | ❌ 串行 |
@@ -64,8 +64,8 @@ osv-scanner → lint → typecheck → test:coverage → web:build → macOS
 
 #### 1. bun test → vitest 迁移 (L1 前置)
 
-**动机**: bun test 不支持 JSON/LCOV 覆盖率输出，无法做精细的 per-file/threshold 分析。
-vitest 支持 v8 coverage provider，可输出 JSON/LCOV，且与 dove 保持一致。
+**动机**: bun test 支持 lcov reporter，但缺少成熟的 per-file JSON 解析和细粒度 threshold 配置。
+vitest 的 v8 coverage provider 原生支持 JSON output + per-file thresholds，与 dove 保持一致。
 
 **迁移范围**:
 - `packages/api/src/__tests__/` — 117 tests (核心)
@@ -78,9 +78,12 @@ vitest 支持 v8 coverage provider，可输出 JSON/LCOV，且与 dove 保持一
 
 **修改**:
 - `package.json` — `test` 脚本改为 `vitest run`
-- `packages/api/package.json` — 添加 `vitest` 依赖，移除 `bun:test` 依赖
+- `packages/api/package.json` — 添加 `vitest` 依赖；保留 `@types/bun` (用于非测试代码的 Bun 类型)
 - `packages/api/scripts/check-coverage.ts` — 切换为 vitest JSON output 解析
-- 所有 `*.test.ts` — 无需修改 (vitest 兼容 bun:test API)
+- 所有 `*.test.ts` — **需要修改**：
+  - `import { ... } from "bun:test"` → `import { ... } from "vitest"`
+  - `bun:test` 的 `mock()` 等 API 替换为 `vi.fn()` / `vi.mock()`
+  - 测试文件中如使用 `Bun.file()` / `Bun.spawn()` 等 Bun 专有 API，需保留或改写
 
 **验收**:
 - [ ] `bun run test` 全绿
@@ -107,14 +110,15 @@ DELETE /api/recordings/:id
 POST   /api/upload/presign
 GET    /api/dashboard
 GET    /api/search?q=
-POST   /api/settings/backy
+PUT    /api/settings/backy      (update config)
+POST   /api/settings/backy/test (test connection)
 HEAD   /api/backy/pull          (webhook auth)
 ```
 
 **新增文件**:
 - `e2e/api/` — Worker runtime E2E 测试目录
 - `scripts/run-e2e.ts` — 启动 `wrangler dev --env test` + 跑测试 + 清理
-- `scripts/check-route-coverage.ts` — 静态解析 `apps/api/src/index.ts` 中注册的 route tree，对比 e2e/api/ 中的覆盖
+- `scripts/check-route-coverage.ts` — 静态解析 `apps/api/src/routes/**/*.ts` 中注册的 route (method + path)，对比 e2e/api/ 中的覆盖。需解析 `.get()` / `.post()` / `.put()` / `.delete()` / `.head()` 等 Hono method 调用
 
 **修改**:
 - `package.json` 添加 `test:e2e` 脚本
@@ -188,6 +192,11 @@ bun run gate:deps      # osv-scanner scan --lockfile=bun.lock (pre-push 语义)
 
 **新增依赖**:
 - `@playwright/test`
+
+**验收**:
+- [ ] `bun run test:e2e:bdd` 通过
+- [ ] `bun run gate:pages` 通过 (页面路径级别覆盖)
+- [ ] CI L3 job 绿 (需确认 base-ci `enable-l3` input)
 
 ---
 
