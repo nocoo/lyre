@@ -95,18 +95,26 @@ apps/web 和 apps/api (Worker glue) 迁移到 vitest。覆盖率先按 workspace
 后续再考虑统一。
 
 **修改**:
-- `package.json` — `test` 脚本改为 `vitest run` (apps/web + apps/api)
-- `packages/api/package.json` — 保持 `bun test` 不变
+- `package.json` — `test` 脚本保持组合：`bun run web:test && bun run worker:test && bun run api:test`
+  - `web:test` = `vitest run` (apps/web)
+  - `worker:test` = `vitest run` (apps/api)
+  - `api:test` = `bun test` (packages/api，保持 Bun runtime + bun:sqlite)
+- `package.json` — `test:coverage` 脚本：`bun run web:test:coverage && bun run worker:test:coverage && bun run api:test:coverage`
+  - `web:test:coverage` / `worker:test:coverage` = vitest JSON output
+  - `api:test:coverage` = 现有 Bun text gate (packages/api/scripts/check-coverage.ts)
 - `apps/web/package.json` — 添加 `vitest`, `@vitest/coverage-v8`, `happy-dom`
-- `apps/api/package.json` — 添加 `vitest`
-- `packages/api/scripts/check-coverage.ts` — 保持现有解析逻辑，后续可切 JSON
+- `apps/api/package.json` — 添加 `vitest`, `@vitest/coverage-v8`
+- `packages/api/package.json` — 保持不变
+- `packages/api/scripts/check-coverage.ts` — 保持现有 Bun text 解析逻辑
 - `apps/web/src/__tests__/*.test.ts` — 改 import，添加 happy-dom 环境
 - `apps/api/src/__tests__/*.test.ts` — 改 import
 
 **验收**:
-- [ ] `bun run test` 全绿 (bun test + vitest 混合)
-- [ ] `bun run test:coverage` 输出 JSON 格式 (apps/web + apps/api)
-- [ ] 覆盖率阈值按 lines/functions/branches/statements 配置
+- [ ] `bun run test` 全绿 (vitest + bun test 混合)
+- [ ] `bun run web:test:coverage` 输出 JSON 格式
+- [ ] `bun run worker:test:coverage` 输出 JSON 格式
+- [ ] `bun run api:test:coverage` 保持现有 Bun text gate 通过
+- [ ] 覆盖率阈值按 lines/functions/branches/statements 配置 (vitest workspace)
 
 ---
 
@@ -251,20 +259,21 @@ time git commit --allow-empty -m "benchmark"
 #### 6. 细粒度覆盖率阈值
 
 **现状**: `packages/api/scripts/check-coverage.ts` 解析 bun test 文本表格，计算 handler 文件平均行覆盖率。
-迁移 vitest 后，可利用 v8 coverage provider 输出 JSON 格式。
+单纯平均值会掩盖某个关键 handler 覆盖率很低的问题。
+例如 jobs.ts 覆盖率 80% 会被 recordings.ts 的 93% 拉到平均值以上。
 
-**改进**: 切换到 vitest JSON output 解析，区分 global threshold 与 per-file threshold：
+**短期改进** (保持 Bun，改进现有 gate):
+- 从"平均值"改成 per-file 最低值：任意 handler 文件低于阈值则失败
+- 解析更多指标：functions / branches / statements
 
 ```typescript
-// global (整个 packages/api)
-const GLOBAL_THRESHOLD = { lines: 85, functions: 85, branches: 75, statements: 85 };
-
-// per-file (handler 层)
+// per-file 最低阈值 (handler 层)
 const HANDLER_THRESHOLD = { lines: 90, functions: 90, branches: 80, statements: 90 };
 ```
 
-> 单纯平均值会掩盖某个关键 handler 覆盖率很低的问题。
-> 例如 jobs.ts 覆盖率 80% 会被 recordings.ts 的 93% 拉到平均值以上。
+**长期方案** (如需统一 JSON 覆盖率):
+- 将 packages/api handler tests 迁移到 vitest (需解决 bun:sqlite → better-sqlite3/D1 mock)
+- 或使用 Bun 原生 JSON/LCOV reporter (如后续 Bun 版本支持)
 
 ---
 
