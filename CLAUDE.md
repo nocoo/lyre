@@ -84,8 +84,7 @@ bun run test                  # unit tests (web + worker + @lyre/api)
 bun run test:coverage         # @lyre/api coverage gate
 
 # Deploy
-bun run deploy                # build SPA + publish Worker (production)
-bun run deploy:test           # build SPA + publish Worker (staging env)
+bun run deploy                # build SPA + publish Worker
 ```
 
 ### macOS app commands (run from `apps/macos/`)
@@ -234,5 +233,5 @@ apps/macos/
 
 - **SCStream requires registering each output type separately**: Apple's `SCStream.addStreamOutput(_:type:)` must be called for **each** `SCStreamOutputType` you want to receive. Setting `capturesMicrophone = true` in `SCStreamConfiguration` enables microphone capture at the system level, but the stream only delivers microphone buffers if you also register an output handler with type `.microphone`. Without this registration, mic samples are silently discarded — the handler registered for `.audio` never sees them.
 - **System audio + microphone are separate PCM streams that must be mixed**: ScreenCaptureKit delivers system audio and microphone as independent `CMSampleBuffer` streams. Simply concatenating both into the same encoder doubles the recording duration. The correct approach is an `AudioMixer` that buffers both sources independently and outputs their sample-by-sample average `(a + b) / 2`. The mixer also handles the single-source fallback (e.g. no mic permission) by draining the active buffer after a threshold (~100ms at 48kHz) to prevent unbounded accumulation.
-- **D1 schema must be migrated explicitly after a schema change**: `wrangler d1 migrations apply` does not run automatically on `wrangler deploy`. After any Drizzle schema change, generate the SQL and apply it to both the staging and production D1 databases before deploying the Worker that depends on the new columns.
+- **D1 schema must be migrated explicitly after a schema change**: `wrangler d1 migrations apply` does not run automatically on `wrangler deploy`. After any Drizzle schema change, generate the SQL and apply it to the D1 database before deploying the Worker that depends on the new columns.
 - **No global DB singleton**: Every repo is constructed via `makeRepos(db)` inside a handler with the request-scoped D1 handle. Adding a new singleton anywhere breaks D1 (no shared connection across requests) and breaks tests (no isolation between cases).

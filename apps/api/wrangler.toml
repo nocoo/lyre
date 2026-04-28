@@ -1,9 +1,12 @@
-name = "lyre-api"
+name = "lyre"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Empty by design — secrets injected via `wrangler secret put`.
+[dev]
+port = 7017
+
+# Secrets injected via `wrangler secret put`.
 [vars]
 NODE_ENV = "production"
 OSS_BUCKET = "lyre"
@@ -26,22 +29,16 @@ binding = "ASSETS"
 run_worker_first = ["/api/*"]
 not_found_handling = "single-page-application"
 
-# ─────────────────────────────────────────────────────────────────
-# `test` env — used by E2E and a separate D1 instance.
-# ─────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Test environment (local wrangler dev only, never deployed)
+# ─────────────────────────────────────────────────────────────────────────────
+
 [env.test]
-name = "lyre-api-test"
 
 [env.test.vars]
 E2E_SKIP_AUTH = "true"
-NODE_ENV = "production"
-OSS_BUCKET = "lyre"
 
 [[env.test.d1_databases]]
 binding = "DB"
 database_name = "lyre-db-test"
 database_id = "99e130cd-a2ac-4150-a26d-077b6690496f"
-
-[[env.test.routes]]
-pattern = "lyre-test.hexly.ai"
-custom_domain = true

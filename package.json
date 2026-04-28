@@ -13,7 +13,6 @@
     "test": "bun run web:test && bun run worker:test && bun run api:test",
     "test:coverage": "bun run api:test:coverage",
     "typecheck": "bun run web:typecheck && bun run worker:typecheck && bun run api:typecheck",
-    "deploy:test": "bun run web:build && bun run --cwd apps/api deploy:test",
     "deploy": "bun run web:build && bun run --cwd apps/api deploy",
     "web:dev": "bun run --cwd apps/web dev",
     "web:build": "bun run --cwd apps/web build",

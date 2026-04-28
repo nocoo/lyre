@@ -5,7 +5,7 @@ assets served by the same Worker; the Hono API lives at `/api/*`. Storage is
 Cloudflare D1 (SQLite at the edge). Audio blobs live in Aliyun OSS.
 
 ```
-Cloudflare Access  →  Worker `lyre-api`
+Cloudflare Access  →  Worker `lyre`
                        ├─ ASSETS  (apps/web/dist — Vite SPA)
                        ├─ DB      (D1 SQLite binding)
                        └─ Cron    (* * * * *)  →  cronTickHandler (ASR poll)
@@ -16,7 +16,7 @@ Cloudflare Access  →  Worker `lyre-api`
 - [Bun](https://bun.sh) 1.0+ (build + tests)
 - A Cloudflare account with **Workers Paid** (D1 + Cron Triggers + Access)
 - [Wrangler](https://developers.cloudflare.com/workers/wrangler/) (installed as a workspace dep)
-- Cloudflare Access configured for the Worker's hostname (or `E2E_SKIP_AUTH=true` for staging)
+- Cloudflare Access configured for the Worker's hostname
 - An Aliyun account (OSS for audio blobs, DashScope for ASR)
 
 ## 1. Cloudflare Access (auth)
@@ -41,22 +41,16 @@ tokens via **Settings → Tokens** in the SPA.
 ## 2. Create the D1 database
 
 ```bash
-# From the repo root (one-time per environment)
-bunx wrangler d1 create lyre-db          # production
-bunx wrangler d1 create lyre-db-test     # staging
+bunx wrangler d1 create lyre-db
 ```
 
-Copy the returned `database_id` values into `apps/api/wrangler.toml` under the
-`[[d1_databases]]` and `[[env.test.d1_databases]]` blocks.
+Copy the returned `database_id` into `apps/api/wrangler.toml` under the
+`[[d1_databases]]` block.
 
 ### Apply the schema
 
 ```bash
-# Production
 bunx wrangler d1 execute lyre-db --remote --file packages/api/src/db/schema.sql
-
-# Staging
-bunx wrangler d1 execute lyre-db-test --remote --file packages/api/src/db/schema.sql
 ```
 
 (If you change Drizzle schema, regenerate the SQL and re-apply via
@@ -73,7 +67,7 @@ requests are signed with a custom V1 signature implementation in
 
 1. Log in to the [Aliyun Console](https://home.console.aliyun.com/).
 2. **Object Storage Service (OSS) → Create Bucket**.
-   - Bucket name: `lyre` (production) or `lyre-dev` (staging/dev)
+   - Bucket name: `lyre`
    - Region: pick one close to your users (e.g. `oss-cn-beijing`)
    - Storage class: **Standard**
    - Access control: **Private**
@@ -94,8 +88,8 @@ requests are signed with a custom V1 signature implementation in
       "Effect": "Allow",
       "Action": "oss:*",
       "Resource": [
-        "acs:oss:*:*:lyre",      "acs:oss:*:*:lyre/*",
-        "acs:oss:*:*:lyre-dev",  "acs:oss:*:*:lyre-dev/*"
+        "acs:oss:*:*:lyre",
+        "acs:oss:*:*:lyre/*"
       ]
     }
   ]
@@ -124,8 +118,8 @@ Lyre uses [DashScope](https://dashscope.aliyuncs.com/) for transcription
 3. Save the generated key.
 
 If `DASHSCOPE_API_KEY` is unset/empty, the API falls back to a mock provider
-that returns deterministic placeholder transcriptions — useful for staging
-and tests without incurring API costs.
+that returns deterministic placeholder transcriptions — useful for local
+development and tests without incurring API costs.
 
 ## 5. Push secrets to the Worker
 
@@ -134,27 +128,17 @@ via `wrangler secret put`:
 
 ```bash
 cd apps/api
-
-# Production
 bunx wrangler secret put OSS_ACCESS_KEY_ID
 bunx wrangler secret put OSS_ACCESS_KEY_SECRET
 bunx wrangler secret put OSS_REGION
 bunx wrangler secret put OSS_ENDPOINT
 bunx wrangler secret put DASHSCOPE_API_KEY      # optional
-
-# Staging — same keys, but with --env test
-bunx wrangler secret put OSS_ACCESS_KEY_ID --env test
-# ...etc.
 ```
 
 ## 6. Build & deploy
 
 ```bash
-# Production
 bun run deploy
-
-# Staging
-bun run deploy:test
 ```
 
 `bun run deploy` runs `web:build` (Vite → `apps/web/dist`) and then
@@ -171,9 +155,13 @@ bun run web:dev
 bun run worker:dev
 ```
 
-The local Worker uses Wrangler's `--local` mode, which provisions an ephemeral
-SQLite-backed D1 instance. Apply the schema once with `wrangler d1 execute`
-(without `--remote`) before exercising routes that hit the DB.
+The local Worker uses Wrangler's local D1 mode, which provisions an ephemeral
+SQLite-backed D1 instance in `.wrangler/state/`. Apply the schema once with
+`wrangler d1 execute` (without `--remote`) before exercising routes that hit
+the DB.
+
+For E2E testing, use `wrangler dev --env test` which enables `E2E_SKIP_AUTH`
+to bypass Cloudflare Access authentication with a synthetic test user.
 
 ## Environment variable reference
 
@@ -185,12 +173,12 @@ secrets must be pushed via `wrangler secret put`.
 |-------------------------|-------------------|----------|--------------------------------------------------------------|
 | `DB`                    | D1 binding        | Yes      | The D1 database binding                                       |
 | `ASSETS`                | Asset binding     | Yes      | The Vite SPA static asset binding                             |
-| `NODE_ENV`              | `[vars]`          | Yes      | `production` selects the prod OSS bucket and disables E2E    |
-| `OSS_BUCKET`            | `[vars]`          | No       | Override bucket name; defaults to `lyre` (prod) or `lyre-dev` |
+| `NODE_ENV`              | `[vars]`          | Yes      | `production` in deployed worker                               |
+| `OSS_BUCKET`            | `[vars]`          | No       | Override bucket name; defaults to `lyre`                      |
 | `OSS_ACCESS_KEY_ID`     | secret            | Yes      | Aliyun RAM AccessKey ID                                       |
 | `OSS_ACCESS_KEY_SECRET` | secret            | Yes      | Aliyun RAM AccessKey Secret                                   |
 | `OSS_REGION`            | secret or `[vars]` | Yes     | OSS region, e.g. `oss-cn-beijing`                             |
 | `OSS_ENDPOINT`          | secret or `[vars]` | Yes     | OSS endpoint URL                                              |
 | `DASHSCOPE_API_KEY`     | secret            | No       | DashScope API key; omit/empty for mock ASR                    |
 | `SKIP_OSS_ARCHIVE`      | `[vars]`          | No       | `"1"` skips raw ASR JSON archival (used by tests)             |
-| `E2E_SKIP_AUTH`         | `[vars]`          | No       | `"true"` enables a synthetic test user (staging only)         |
+| `E2E_SKIP_AUTH`         | `[vars]`          | No       | `"true"` enables a synthetic test user (local E2E only)       |

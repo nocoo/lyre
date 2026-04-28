@@ -4,9 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --port 7017 --local",
+    "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "deploy:test": "wrangler deploy --env=test",
     "test": "bun test src/__tests__",
     "typecheck": "tsc --noEmit"
   },
