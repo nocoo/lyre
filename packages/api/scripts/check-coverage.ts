@@ -3,10 +3,7 @@
  * Coverage check for `@lyre/api` handler tests.
  *
  * Runs `bun test --coverage` with coverage scoped to `src/handlers/**`
- * and fails if line coverage falls below `THRESHOLD`. Mirrors the
- * legacy script in `apps/web_legacy/scripts/check-coverage.ts` but
- * applies a 90% threshold (vs 95%) since handlers are still being
- * filled in across migration waves.
+ * and fails if line coverage falls below `THRESHOLD`.
  */
 
 const THRESHOLD = 90;

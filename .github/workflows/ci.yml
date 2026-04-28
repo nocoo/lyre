@@ -14,6 +14,5 @@ jobs:
       pre-command: "bun run build"
       test-command: "bun run test:coverage"
       typecheck-command: "bun run typecheck"
-      enable-l2: "true"
-      l2-command: "bun run --cwd apps/web_legacy test:e2e"
+      enable-l2: "false"
     secrets: inherit
