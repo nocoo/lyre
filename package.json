@@ -29,6 +29,8 @@
     "api:typecheck": "bun run --cwd packages/api typecheck",
     "test:e2e": "bun run scripts/run-e2e.ts",
     "gate:routes": "bun run scripts/check-route-coverage.ts",
+    "gate:secrets": "bun run scripts/gate-secrets.ts",
+    "gate:deps": "bun run scripts/gate-deps.ts",
     "prepare": "husky",
     "release": "bun run scripts/release.ts"
   },

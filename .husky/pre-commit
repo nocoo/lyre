@@ -2,12 +2,7 @@
 set -e
 
 # Secrets scanning (must run before any other check)
-if command -v gitleaks &>/dev/null; then
-  gitleaks protect --staged --no-banner
-else
-  echo "❌ gitleaks not installed — install: brew install gitleaks" >&2
-  exit 1
-fi
+bun run gate:secrets
 
 bun run lint
 bun run test

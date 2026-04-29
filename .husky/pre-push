@@ -2,12 +2,7 @@
 set -e
 
 # Dependency vulnerability scanning
-if command -v osv-scanner &>/dev/null; then
-  [ -f bun.lock ] && osv-scanner scan --lockfile=bun.lock --config=osv-scanner.toml
-else
-  echo "❌ osv-scanner not installed — install: brew install osv-scanner" >&2
-  exit 1
-fi
+bun run gate:deps
 
 bun run lint
 bun run typecheck
