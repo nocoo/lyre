@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach, mock } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
 import {
   apiFetch,
   apiJson,
@@ -49,7 +49,7 @@ describe("apiFetch", () => {
 
   test("on 401 invokes the unauthorized handler and throws ApiError", async () => {
     mockFetch((async () => new Response("nope", { status: 401 })) as unknown as typeof fetch);
-    const onUnauth = mock(() => {});
+    const onUnauth = vi.fn();
     const restore = setUnauthorizedHandler(onUnauth);
 
     await expect(apiFetch("/api/foo")).rejects.toBeInstanceOf(ApiError);
@@ -111,7 +111,7 @@ describe("apiJson", () => {
 
   test("on 401 calls the unauthorized handler exactly once", async () => {
     mockFetch((async () => new Response("", { status: 401 })) as unknown as typeof fetch);
-    const onUnauth = mock(() => {});
+    const onUnauth = vi.fn();
     const restore = setUnauthorizedHandler(onUnauth);
 
     await expect(apiJson("/api/x")).rejects.toBeInstanceOf(ApiError);

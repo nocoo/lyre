@@ -90,31 +90,29 @@ vitest 默认 Node runtime 下无法运行。两种方案：
 | A: 改用 better-sqlite3 | vitest 原生支持，不依赖 Bun | 需改 test-db.ts，drizzle driver 不同 |
 | B: 保留 packages/api handler tests 用 Bun | 零改动 | 覆盖率工具链不统一 |
 
-**推荐方案 B**: packages/api 的 handler tests 继续用 `bun test` (Bun runtime + bun:sqlite)，
-apps/web 和 apps/api (Worker glue) 迁移到 vitest。覆盖率先按 workspace 独立统计，
-后续再考虑统一。
+**推荐方案 B**: packages/api 的 handler tests 继续用 `bun test` (Bun runtime + bun:sqlite)。
+apps/api 的 Worker glue tests 依赖 `packages/api/src/__tests__/_fixtures/test-db.ts` (bun:sqlite)，
+因此也只能留在 bun test。仅 apps/web 迁移到 vitest。覆盖率先按 workspace 独立统计，后续再考虑统一。
 
 **修改**:
 - `package.json` — `test` 脚本保持组合：`bun run web:test && bun run worker:test && bun run api:test`
   - `web:test` = `vitest run` (apps/web)
-  - `worker:test` = `vitest run` (apps/api)
-  - `api:test` = `bun test` (packages/api，保持 Bun runtime + bun:sqlite)
-- `package.json` — `test:coverage` 脚本：`bun run web:test:coverage && bun run worker:test:coverage && bun run api:test:coverage`
-  - `web:test:coverage` / `worker:test:coverage` = vitest JSON output
+  - `worker:test` = `bun test` (apps/api，bun:sqlite 依赖)
+  - `api:test` = `bun test` (packages/api，bun:sqlite 依赖)
+- `package.json` — `test:coverage` 脚本：`bun run web:test:coverage && bun run api:test:coverage`
+  - `web:test:coverage` = vitest JSON output
   - `api:test:coverage` = 现有 Bun text gate (packages/api/scripts/check-coverage.ts)
 - `apps/web/package.json` — 添加 `vitest`, `@vitest/coverage-v8`, `happy-dom`
-- `apps/api/package.json` — 添加 `vitest`, `@vitest/coverage-v8`
+- `apps/api/package.json` — 保持不变 (bun test)
 - `packages/api/package.json` — 保持不变
 - `packages/api/scripts/check-coverage.ts` — 保持现有 Bun text 解析逻辑
 - `apps/web/src/__tests__/*.test.ts` — 改 import，添加 happy-dom 环境
-- `apps/api/src/__tests__/*.test.ts` — 改 import
 
 **验收**:
-- [ ] `bun run test` 全绿 (vitest + bun test 混合)
-- [ ] `bun run web:test:coverage` 输出 JSON 格式
-- [ ] `bun run worker:test:coverage` 输出 JSON 格式
-- [ ] `bun run api:test:coverage` 保持现有 Bun text gate 通过
-- [ ] 覆盖率阈值按 lines/functions/branches/statements 配置 (vitest workspace)
+- [x] `bun run test` 全绿 (apps/web vitest + apps/api bun test + packages/api bun test)
+- [x] `bun run web:test:coverage` 输出 JSON 格式 + 阈值生效
+- [x] `bun run api:test:coverage` 保持现有 Bun text gate 通过
+- [x] apps/web 覆盖率阈值按 lines/functions/branches/statements 配置
 
 ---
 
