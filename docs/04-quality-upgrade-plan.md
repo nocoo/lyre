@@ -44,17 +44,17 @@ osv-scanner → lint → typecheck → test:coverage → web:build → macOS
 
 | # | 组件 | Dove 路径 | Lyre 状态 |
 |---|------|-----------|-----------|
-| 0 | vitest 迁移 | `vitest.config.ts` | ⚠️ 使用 bun test |
-| 1 | 真实 Worker E2E 测试 | `e2e/api/` | ⚠️ 仅 route glue |
+| 0 | vitest 迁移 (apps/web) | `vitest.config.ts` | ✅ apps/web 迁移完成 |
+| 1 | 真实 Worker E2E 测试 | `e2e/api/` | ✅ 38 tests, 49 routes |
 | 2 | BDD E2E 测试 | `e2e/bdd/` | ❌ 缺失 |
-| 3 | E2E 运行脚本 | `scripts/run-e2e.ts` | ❌ 缺失 |
-| 4 | Route 覆盖门禁 | `scripts/check-route-coverage.ts` | ❌ 缺失 |
+| 3 | E2E 运行脚本 | `scripts/run-e2e.ts` | ✅ |
+| 4 | Route 覆盖门禁 | `scripts/check-route-coverage.ts` | ✅ |
 | 5 | Page 覆盖门禁 | `scripts/check-page-coverage.ts` | ❌ 缺失 |
-| 6 | 统一安全门禁 | `scripts/gate-secrets.ts` + `scripts/gate-deps.ts` | ❌ 分散 |
+| 6 | 统一安全门禁 | `scripts/gate-secrets.ts` + `scripts/gate-deps.ts` | ✅ |
 | 7 | Playwright 配置 | `playwright.config.ts` | ❌ 缺失 |
 | 8 | CD Workflow | `.github/workflows/release.yml` | ❌ 缺失 |
 | 9 | 并行 Hooks | `.husky/pre-commit` | ❌ 串行 |
-| 10 | 细粒度覆盖率 | vitest thresholds | ❌ 仅 handler lines |
+| 10 | 细粒度覆盖率 | vitest thresholds | ✅ apps/web vitest thresholds |
 
 ---
 
@@ -154,8 +154,8 @@ HEAD   /api/backy/pull          (webhook auth)
 - `.husky/pre-push` 添加 L2 gate
 
 **验收**:
-- [ ] `bun run test:e2e` 通过
-- [ ] `bun run gate:routes` 通过 (METHOD + path 级别覆盖)
+- [x] `bun run test:e2e` 通过 (38 tests, 9 files)
+- [x] `bun run gate:routes` 通过 (49/49 routes covered)
 - [ ] CI L2 job 绿 (需确认 base-ci `enable-l2` input)
 
 ---
@@ -176,8 +176,8 @@ bun run gate:deps      # osv-scanner scan --lockfile=bun.lock (pre-push 语义)
 - `scripts/gate-deps.ts` — osv-scanner wrapper
 
 **验收**:
-- [ ] `bun run gate:secrets` 在 pre-commit 中运行
-- [ ] `bun run gate:deps` 在 pre-push 中运行
+- [x] `bun run gate:secrets` 在 pre-commit 中运行
+- [x] `bun run gate:deps` 在 pre-push 中运行
 
 ---
 
