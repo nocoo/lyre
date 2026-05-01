@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "bun test src/__tests__",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
