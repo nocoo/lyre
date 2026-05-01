@@ -10,26 +10,27 @@
     "dev": "bun run web:dev",
     "build": "bun run web:build",
     "lint": "bun run web:lint && bun run api:lint",
-    "test": "bun run web:test && bun run worker:test && bun run api:test",
-    "test:coverage": "bun run api:test:coverage",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "bun run web:typecheck && bun run worker:typecheck && bun run api:typecheck",
     "deploy": "bun run web:build && bun run --cwd apps/api deploy",
     "web:dev": "bun run --cwd apps/web dev",
     "web:build": "bun run --cwd apps/web build",
     "web:lint": "bun run --cwd apps/web lint",
-    "web:test": "bun run --cwd apps/web test",
     "web:typecheck": "bun run --cwd apps/web typecheck",
     "worker:dev": "bun run --cwd apps/api dev",
-    "worker:test": "bun run --cwd apps/api test",
     "worker:typecheck": "bun run --cwd apps/api typecheck",
     "api:lint": "bun run --cwd packages/api lint",
-    "api:test": "bun run --cwd packages/api test",
-    "api:test:coverage": "bun run --cwd packages/api test:coverage",
     "api:typecheck": "bun run --cwd packages/api typecheck",
     "prepare": "husky",
     "release": "bun run scripts/release.ts"
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "@types/better-sqlite3": "^7.6.13",
+    "@vitest/coverage-v8": "^4.1.5",
+    "better-sqlite3": "^12.9.0",
+    "husky": "^9.1.7",
+    "vitest": "^4.1.5"
   }
 }

@@ -2,7 +2,7 @@
  * Tests for `handlers/jobs.ts`.
  */
 
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   cronTickHandler,
   getJobHandler,

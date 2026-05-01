@@ -3,7 +3,7 @@
  * network calls and is covered by E2E with credentials).
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import {
   getAiSettingsHandler,
   updateAiSettingsHandler,

@@ -2,7 +2,7 @@
  * Tests for `handlers/settings-backup.ts` (sync handlers only).
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import {
   exportBackupHandler,
   importBackupHandler,
