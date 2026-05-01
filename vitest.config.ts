@@ -106,6 +106,29 @@ export default defineConfig({
         branches: 95,
         functions: 95,
         lines: 95,
+        // Per-package gates so the API handler suite is judged on its own —
+        // without these, the frontend (apps/web) and pure helpers
+        // (packages/api/src/db/drivers) at 100% would mask any regression
+        // in API handler branch coverage. Each glob must independently meet
+        // the same 95/95/95/95 bar.
+        "packages/api/src/handlers/**": {
+          statements: 95,
+          branches: 95,
+          functions: 95,
+          lines: 95,
+        },
+        "packages/api/src/db/drivers/**": {
+          statements: 95,
+          branches: 95,
+          functions: 95,
+          lines: 95,
+        },
+        "apps/web/src/lib/**": {
+          statements: 95,
+          branches: 95,
+          functions: 95,
+          lines: 95,
+        },
       },
     },
   },

@@ -37,4 +37,16 @@ describe("liveHandler", () => {
     const body = res.body as { database: { error: string } };
     expect(body.database.error).toBe("unexpected database failure");
   });
+  it("uptime defaults to 0 when process.uptime is unavailable", () => {
+    const g = globalThis as Record<string, unknown>;
+    const orig = g["process"];
+    g["process"] = undefined;
+    try {
+      const res = liveHandler(() => {});
+      if (res.kind !== "json") throw new Error();
+      expect((res.body as { uptime: number }).uptime).toBe(0);
+    } finally {
+      g["process"] = orig;
+    }
+  });
 });

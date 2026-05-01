@@ -71,4 +71,14 @@ describe("get/update/deleteFolderHandler", () => {
     );
     expect((await deleteFolderHandler(setupAnonCtx(), "x")).status).toBe(401);
   });
+  it("update accepts icon-only patch", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const created = await createFolderHandler(ctx, { name: "Plain" });
+    if (created.kind !== "json") throw new Error();
+    const id = (created.body as { id: string }).id;
+    const updated = await updateFolderHandler(ctx, id, { icon: "books" });
+    expect(updated.status).toBe(200);
+    if (updated.kind !== "json") throw new Error();
+    expect((updated.body as { icon: string }).icon).toBe("books");
+  });
 });
