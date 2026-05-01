@@ -5,7 +5,7 @@
  * that a URL is returned. We do NOT validate the signature.
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { presignUploadHandler } from "../../handlers/upload";
 import {
   makeCtx,

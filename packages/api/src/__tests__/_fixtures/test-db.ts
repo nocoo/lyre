@@ -1,12 +1,14 @@
 /**
- * In-memory SQLite test database (Bun-only).
+ * In-memory SQLite test database.
  *
- * Provides a Drizzle handle backed by `bun:sqlite` for handler/service
- * unit tests. Production code never touches this — the worker uses D1.
+ * Provides a Drizzle handle backed by `better-sqlite3` for handler/service
+ * unit tests under Vitest (Node runtime). Production code never touches
+ * this — the worker uses D1.
  */
 
-import { Database } from "bun:sqlite";
-import { drizzle } from "drizzle-orm/bun-sqlite";
+import Database from "better-sqlite3";
+import type { Database as BetterSqliteDb } from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../../db/schema";
 import type { LyreDb } from "../../db/types";
 
@@ -121,7 +123,7 @@ const TABLES = [
   "users",
 ];
 
-let cached: { sqlite: Database; db: LyreDb } | null = null;
+let cached: { sqlite: BetterSqliteDb; db: LyreDb } | null = null;
 
 export function getTestDb(): LyreDb {
   if (cached) return cached.db;

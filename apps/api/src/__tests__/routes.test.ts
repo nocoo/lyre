@@ -8,7 +8,7 @@
  * `packages/api/src/__tests__/handlers/*`.
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { buildAppWithCtx, setupAuthedCtx, setupAnonCtx } from "./_helpers";
 
 describe("worker routes — happy path", () => {

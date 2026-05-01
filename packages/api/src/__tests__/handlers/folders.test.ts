@@ -2,7 +2,7 @@
  * Tests for `handlers/folders.ts`.
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import {
   listFoldersHandler,
   createFolderHandler,

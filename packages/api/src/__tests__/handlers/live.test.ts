@@ -2,7 +2,7 @@
  * Tests for `handlers/live.ts`.
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import { liveHandler } from "../../handlers/live";
 
 describe("liveHandler", () => {
@@ -27,5 +27,14 @@ describe("liveHandler", () => {
     // sanitize() must replace "ok" → "***"
     expect(body.database.error).not.toContain("ok");
     expect(body.database.error).toContain("***");
+  });
+  it("returns 503 when probe throws a non-Error value", () => {
+    const res = liveHandler(() => {
+      throw "boom";
+    });
+    expect(res.status).toBe(503);
+    if (res.kind !== "json") throw new Error();
+    const body = res.body as { database: { error: string } };
+    expect(body.database.error).toBe("unexpected database failure");
   });
 });
