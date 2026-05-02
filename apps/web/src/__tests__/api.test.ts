@@ -49,7 +49,7 @@ describe("apiFetch", () => {
 
   test("on 401 invokes the unauthorized handler and throws ApiError", async () => {
     mockFetch((async () => new Response("nope", { status: 401 })) as unknown as typeof fetch);
-    const onUnauth = vi.fn();
+    const onUnauth = vi.fn(() => {});
     const restore = setUnauthorizedHandler(onUnauth);
 
     await expect(apiFetch("/api/foo")).rejects.toBeInstanceOf(ApiError);
@@ -111,12 +111,32 @@ describe("apiJson", () => {
 
   test("on 401 calls the unauthorized handler exactly once", async () => {
     mockFetch((async () => new Response("", { status: 401 })) as unknown as typeof fetch);
-    const onUnauth = vi.fn();
+    const onUnauth = vi.fn(() => {});
     const restore = setUnauthorizedHandler(onUnauth);
 
     await expect(apiJson("/api/x")).rejects.toBeInstanceOf(ApiError);
     expect(onUnauth).toHaveBeenCalledTimes(1);
 
     restore();
+  });
+});
+
+describe("default unauthorized handler", () => {
+  test("calls window.location.reload when window exists", async () => {
+    let reloadCalls = 0;
+    const fakeWindow = { location: { reload: () => reloadCalls++ } };
+    (globalThis as { window: unknown }).window = fakeWindow;
+    mockFetch((async () => new Response("", { status: 401 })) as unknown as typeof fetch);
+    // No override → exercises the module-default reloadHandler.
+    await expect(apiFetch("/api/x")).rejects.toBeInstanceOf(ApiError);
+    expect(reloadCalls).toBe(1);
+    delete (globalThis as { window?: unknown }).window;
+  });
+
+  test("is a no-op when window is undefined", async () => {
+    delete (globalThis as { window?: unknown }).window;
+    mockFetch((async () => new Response("", { status: 401 })) as unknown as typeof fetch);
+    await expect(apiFetch("/api/x")).rejects.toBeInstanceOf(ApiError);
+    // Reaching here without throwing on the missing window is the assertion.
   });
 });

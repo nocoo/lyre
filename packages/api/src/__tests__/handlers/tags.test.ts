@@ -2,7 +2,7 @@
  * Tests for `handlers/tags.ts`.
  */
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import {
   listTagsHandler,
   createTagHandler,
@@ -43,6 +43,15 @@ describe("tags handlers", () => {
     expect((await updateTagHandler(ctx, "nope", { name: "z" })).status).toBe(404);
     expect((await deleteTagHandler(ctx, id)).status).toBe(200);
     expect((await deleteTagHandler(ctx, id)).status).toBe(404);
+  });
+  it("update conflicts when renaming to another tag's name", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const a = await createTagHandler(ctx, { name: "one" });
+    const b = await createTagHandler(ctx, { name: "two" });
+    if (a.kind !== "json" || b.kind !== "json") throw new Error();
+    const bId = (b.body as { id: string }).id;
+    const conflict = await updateTagHandler(ctx, bId, { name: "one" });
+    expect(conflict.status).toBe(409);
   });
   it("401 anon for update/delete", async () => {
     expect((await updateTagHandler(setupAnonCtx(), "x", {})).status).toBe(401);

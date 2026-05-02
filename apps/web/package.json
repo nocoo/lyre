@@ -8,9 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --port 7016",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint --max-warnings=0 src",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "lint": "eslint --max-warnings=0 src"
   },
   "dependencies": {
     "@lyre/api": "workspace:*",

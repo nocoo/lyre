@@ -25,9 +25,7 @@
   },
   "scripts": {
     "lint": "eslint --max-warnings=0 src",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test src/__tests__",
-    "test:coverage": "bun scripts/check-coverage.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@nocoo/next-ai": "^0.2.1",
