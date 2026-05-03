@@ -16,7 +16,7 @@ test.describe("Settings", () => {
       page.getByRole("heading", { name: "AI Settings" }),
     ).toBeVisible();
     await expect(
-      page.getByText("Configure LLM provider"),
+      page.getByText("Configure LLM provider").first(),
     ).toBeVisible();
   });
 

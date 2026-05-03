@@ -14,7 +14,11 @@ export default defineConfig({
     headless: true,
   },
   webServer: {
-    command: "npx wrangler dev --env test --port 27016",
+    command: [
+      "npx wrangler d1 execute lyre-db-test --env test --local --file ../../e2e/schema.sql",
+      "&&",
+      "npx wrangler dev --env test --port 27016",
+    ].join(" "),
     cwd: "apps/api",
     port: 27016,
     reuseExistingServer: !process.env.CI,
