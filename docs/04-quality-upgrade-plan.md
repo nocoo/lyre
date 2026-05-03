@@ -227,8 +227,8 @@ bun run gate:deps      # osv-scanner scan --lockfile=bun.lock (pre-push 语义)
 - `@playwright/test`
 
 **验收**:
-- [ ] `bun run test:e2e:bdd` 通过
-- [ ] `bun run gate:pages` 通过 (页面路径级别覆盖)
+- [x] `bun run test:e2e:bdd` 通过
+- [x] `bun run gate:pages` 通过 (页面路径级别覆盖)
 - [ ] CI L3 job 绿 (需确认 base-ci `enable-l3` input)
 
 ---
