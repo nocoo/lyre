@@ -24,13 +24,16 @@
     "api:lint": "bun run --cwd packages/api lint",
     "api:typecheck": "bun run --cwd packages/api typecheck",
     "test:e2e": "bun run scripts/run-e2e.ts",
+    "test:e2e:bdd": "npx playwright test",
     "gate:routes": "bun run scripts/check-route-coverage.ts",
+    "gate:pages": "bun run scripts/check-page-coverage.ts",
     "gate:secrets": "bun run scripts/gate-secrets.ts",
     "gate:deps": "bun run scripts/gate-deps.ts",
     "prepare": "husky",
     "release": "bun run scripts/release.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@types/better-sqlite3": "^7.6.13",
     "@vitest/coverage-v8": "^4.1.5",
     "better-sqlite3": "^12.9.0",
