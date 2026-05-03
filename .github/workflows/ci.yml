@@ -14,5 +14,8 @@ jobs:
       pre-command: "bun run build"
       test-command: "bun run test:coverage"
       typecheck-command: "bun run typecheck"
-      enable-l2: "false"
+      enable-l2: "true"
+      l2-command: "bun run test:e2e"
+      enable-l3: "true"
+      l3-command: "bun run test:e2e:bdd"
     secrets: inherit
