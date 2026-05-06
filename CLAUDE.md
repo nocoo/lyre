@@ -192,7 +192,7 @@ services/
 lib/
   api-auth.ts              hashToken() — shared by bearer-auth + tokens handler
   palette.ts, sidebar-nav.ts, types.ts, version.ts
-__tests__/                 bun test suites with in-memory SQLite
+__tests__/                 vitest suites with in-memory SQLite
   _fixtures/test-db.ts     Bootstraps the in-memory DB
   _fixtures/runtime-context.ts  setupAuthedCtx(), testRepos(), …
 ```
