@@ -194,11 +194,15 @@ actor APIClient {
     }
 
     private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
+        var req = request
+        req.setValue(Constants.CFAccess.clientId, forHTTPHeaderField: "CF-Access-Client-Id")
+        req.setValue(Constants.CFAccess.clientSecret, forHTTPHeaderField: "CF-Access-Client-Secret")
+
         let data: Data
         let response: URLResponse
 
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await session.data(for: req)
         } catch {
             throw APIError.networkError(error.localizedDescription)
         }
