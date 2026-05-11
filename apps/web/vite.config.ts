@@ -13,6 +13,7 @@ export default defineConfig({
   },
   server: {
     port: 7016,
+    allowedHosts: ["lyre.dev.hexly.ai"],
     proxy: {
       // During `vite dev`, forward /api/* to the local Worker on :7017.
       "/api": {

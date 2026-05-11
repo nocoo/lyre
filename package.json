@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "bun run web:dev",
+    "dev:all": "bun run worker:dev & bun run web:dev",
     "build": "bun run web:build",
     "lint": "bun run web:lint && bun run api:lint",
     "test": "vitest run",
