@@ -1,5 +1,76 @@
 # Changelog
 
+## v1.6.6 (2026-05-12)
+
+### 🚀 Features
+
+- feat(macos): add CF Access service token for API requests (e56f7bc)
+- feat(security): add unified gate scripts, update happy-dom (f5b7a78)
+- feat(e2e): add L2 real Worker E2E tests with route coverage gate (c219bdc)
+- feat(web): migrate apps/web tests from bun test to vitest (f43121b)
+- feat(api): Wave E — deploy Worker to Cloudflare with D1 + custom domains (a6e424d)
+- feat(web): Wave D step 2 — port pages, components, and view models from legacy (53aab4f)
+- feat(web): Wave D step 1 — Vite SPA shell, data layer, auth gate (2066269)
+- feat(api): Wave C.1 — scaffold Hono Worker (apps/api) (9d3247b)
+- feat(api): Wave B.5 — add cronTickHandler for new worker (3ad5be6)
+
+### 🐛 Bug Fixes
+
+- fix(dev): unblock local dev server (allowedHosts + auth bypass + dev:all) (3cb3cb8)
+- fix(deps): upgrade hono to fix CVEs (GHSA-69xw, GHSA-9vqf) (63236e0)
+- fix(e2e): resolve strict mode violations and ESM compat in L3 specs (71078a0)
+- fix(web): emit terminal job events for list-mode useJobEvents (8a2a51b)
+- fix(web,api): wire missing SPA→Worker routes uncovered post-Wave D (66a6c73)
+- fix(auth): register session provider deterministically in legacy adapter (6720667)
+
+### 📝 Other Changes
+
+- chore: add .dev.vars to .gitignore (3d79959)
+- docs: update test references from bun test to vitest (b87c6f9)
+- ci: add release.yml for CF Worker CD (b29ee54)
+- ci: enable L2 API E2E and L3 Playwright browser E2E in CI (c007af7)
+- docs: mark L3 BDD E2E acceptance criteria as completed (11bb944)
+- test(e2e): add L3 BDD Playwright specs and page coverage gate (b7f12c4)
+- build: add @playwright/test and L3 scripts (5ee0a77)
+- chore(coverage): add per-package thresholds for API handlers (1db8724)
+- test: cover runBatch driver branches (7e6e7d4)
+- chore: replace per-package bun test scripts with root vitest (9335a00)
+- test: migrate from bun:test to vitest (fa33b36)
+- build: add vitest + v8 coverage with 95% gate (70a624d)
+- style: unify HTML title to "lyre - Audio Transcription Manager" (dbfaf38)
+- docs: mark L2 E2E and security gates as completed in quality plan (5a5a656)
+- docs: fix quality upgrade plan (3 review items) (fb86d8d)
+- docs: fix quality upgrade plan (5 review items) (45381ba)
+- docs: fix quality upgrade plan (7 review items) (2a124b7)
+- docs: add quality upgrade plan (L1-L3/G1-G2/CD vs dove) (d2a887b)
+- chore: remove Next.js/NextAuth legacy references (05a510a)
+- refactor(deploy): single worker `lyre` (remove -test env deployment) (0af5f6e)
+- ci: drop L2 e2e step (apps/web_legacy removed) (376ab92)
+- deps: upgrade next to 16.2.4 (852c8f7)
+- docs: rewrite README/CLAUDE/docs for Cloudflare Worker + D1 + Vite SPA (ddc90f5)
+- chore: simplify root scripts + husky hooks for the new workspace layout (a737dbe)
+- refactor(api): drop legacy SQLite singletons + force explicit db/env injection (2c68d27)
+- chore(api): tighten eslint-disable scope on lazy-require helpers (a2ce9de)
+- chore(web): Wave D step 3 — eslint deps + import-restriction tightening (1ae5707)
+- refactor(api): Wave C.0 — async-rewrite repo/handler/service layer for D1 (1b8e052)
+- refactor(api): Wave C.0 step 1 — add rowsAffected driver-adapter helper (cbd01f5)
+- test(api): Wave B.6.b.4 — D1 repo async-mismatch probe (876baf7)
+- refactor(api): Wave B.6.b.3 — services accept optional db (d8bee25)
+- refactor(api): Wave B.6.b.2 — handlers + auth use ctx.db (95427d6)
+- refactor(api): Wave B.6.b.1 — repo factory functions (cf25336)
+- refactor(api): Wave B.6.a — split DB drivers, expose ctx.db injection seam (f6eb9d2)
+- chore(migration): Wave B.4 — dual-workspace lint/test/coverage gates (55fd4bb)
+- chore(migration): Wave B.3 — extract handlers + RuntimeContext, drop Next deps from @lyre/api (0c78bbb)
+- chore(migration): Wave B.2 — physically move db/services/lib to @lyre/api (bef9ec9)
+- chore(migration): Wave B.1 — extract @lyre/api/contracts/* and enforce UI boundary (4846a01)
+- chore(migration): Wave B.0 — D1 compatibility spike (gate cleared) (0d2c248)
+- chore(migration): Wave A — archive legacy web, scaffold new workspaces (d38093b)
+- docs: add CF Worker migration plan (docs/03) (40147c9)
+- chore(security): ignore postcss GHSA-qx2v-qp2m-jg93 (build-time only) (1d3f219)
+- ci: upgrade base-ci to v2026.1 (0ec7e21)
+- ci(g2): add gitleaks to pre-commit and osv-scanner to pre-push (3b14c66)
+
+
 ## v1.6.5 (2026-04-18)
 
 ### 🚀 Features
