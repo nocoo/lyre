@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.7 (2026-05-12)
+
+### 🐛 Bug Fixes
+
+- fix(macos): recordings tab spinner stuck on first launch (7221d8b)
+- fix(macos): align LiveResponse.timestamp type with server (String, not Int) (c9f81e3)
+
+### 📝 Other Changes
+
+- chore: add .claude/ to .gitignore (5a3423b)
+
+
 ## v1.6.6 (2026-05-12)
 
 ### 🚀 Features
