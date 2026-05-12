@@ -1,8 +1,7 @@
 import { makeRepos } from "../db/repositories";
+import { DEFAULT_ASR_MODEL } from "../services/asr";
 import type { RuntimeContext } from "../runtime/context";
 import { json, unauthorized, type HandlerResponse } from "./http";
-
-const DEFAULT_ASR_MODEL = "qwen3-asr-flash-filetrans";
 
 interface AsrSettings {
   model: string;

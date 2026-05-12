@@ -89,13 +89,16 @@ export interface ParsedAsrResult {
 
 // ── Provider interface ──
 
+export const DEFAULT_ASR_MODEL = "qwen3-asr-flash-filetrans";
+
 export interface AsrProvider {
   /**
    * Submit a new transcription job.
    * @param fileUrl - Public downloadable URL of the audio file
+   * @param model - DashScope ASR model name (defaults to DEFAULT_ASR_MODEL)
    * @returns Submit response with task_id
    */
-  submit(fileUrl: string): Promise<AsrSubmitResponse>;
+  submit(fileUrl: string, model?: string): Promise<AsrSubmitResponse>;
 
   /**
    * Poll a transcription job status.
@@ -281,7 +284,7 @@ export function createMockAsrProvider(
   };
 
   return {
-    async submit(_fileUrl: string): Promise<AsrSubmitResponse> {
+    async submit(_fileUrl: string, _model?: string): Promise<AsrSubmitResponse> {
       const taskId = `mock-task-${crypto.randomUUID()}`;
       pollCounts.set(taskId, 0);
       return {
@@ -436,7 +439,7 @@ export function createRealAsrProvider(apiKey: string): AsrProvider {
   };
 
   return {
-    async submit(fileUrl: string): Promise<AsrSubmitResponse> {
+    async submit(fileUrl: string, model?: string): Promise<AsrSubmitResponse> {
       const { status, body } = await safeFetch(
         `${DASHSCOPE_BASE_URL}/services/audio/asr/transcription`,
         {
@@ -446,7 +449,7 @@ export function createRealAsrProvider(apiKey: string): AsrProvider {
             "X-DashScope-Async": "enable",
           },
           body: JSON.stringify({
-            model: "qwen3-asr-flash-filetrans",
+            model: model ?? DEFAULT_ASR_MODEL,
             input: {
               file_url: fileUrl,
             },

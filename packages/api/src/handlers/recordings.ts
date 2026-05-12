@@ -19,6 +19,7 @@ import {
   makeResultKey,
 } from "../services/oss";
 import { getAsrProvider } from "../services/asr-provider";
+import { DEFAULT_ASR_MODEL } from "../services/asr";
 import type {
   RecordingDetail,
   RecordingStatus,
@@ -451,7 +452,10 @@ export async function transcribeRecordingHandler(
       ctx.env,
     );
     const provider = getAsrProvider(ctx.env);
-    const submitResult = await provider.submit(audioUrl);
+    const asrModel =
+      (await repos.settings.findByKey(ctx.user.id, "asr.model"))
+        ?.value ?? DEFAULT_ASR_MODEL;
+    const submitResult = await provider.submit(audioUrl, asrModel);
     const job = await repos.jobs.create({
       id: crypto.randomUUID(),
       recordingId: id,
