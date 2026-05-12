@@ -21,7 +21,6 @@ import { APP_VERSION } from "@/lib/version";
 import {
   isNavItemActive,
   isRecordingsPath,
-  isSettingsPath,
 } from "@lyre/api/lib/sidebar-nav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -106,7 +105,6 @@ export function Sidebar() {
   const userInitial = userName[0] ?? "?";
 
   const isRecordingsPage = isRecordingsPath(pathname);
-  const isSettingsPage = isSettingsPath(pathname);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -366,7 +364,7 @@ export function Sidebar() {
               </NavGroupSection>
 
               {/* Settings group */}
-              <NavGroupSection label="Settings" defaultOpen={isSettingsPage}>
+              <NavGroupSection label="Settings" defaultOpen>
                 {settingsItems.map((item) => {
                   const isActive = isNavItemActive(item, pathname);
                   return (
