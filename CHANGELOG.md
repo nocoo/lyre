@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.6.8 (2026-05-12)
+
+### 🚀 Features
+
+- feat(api): make ASR model configurable via user settings (3952361)
+- feat(api): add ASR settings route and mount at /api/settings/asr (5eb3f98)
+- feat(api): add ASR settings handler for model selection (4b85303)
+- feat(web): default Settings section to expanded in sidebar (e45c203)
+
+### 🐛 Bug Fixes
+
+- fix(web): match ASR card height to AI card on settings page (05bb3e2)
+- fix(api,web): restrict ASR models to filetrans-compatible, add validation (201cf71)
+- fix(web): unify property save via Save button, fix duplicate icons (3267e7f)
+
+### 📝 Other Changes
+
+- test(api): add unit tests for settings-asr handler (5d6e10d)
+- test(api): sync route-test helper with ASR settings route (a3bd38f)
+- test(e2e): add route coverage for GET/PUT /api/settings/asr (5ec2c45)
+
+
 ## v1.6.7 (2026-05-12)
 
 ### 🐛 Bug Fixes
