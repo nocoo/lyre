@@ -3,11 +3,20 @@ import SwiftUI
 
 @main
 struct LyreApp: App {
-    @State private var recorder = RecordingManager()
-    @State private var config = AppConfig()
-    @State private var recordingsStore: RecordingsStore?
+    @State private var recorder: RecordingManager
+    @State private var config: AppConfig
+    @State private var recordingsStore: RecordingsStore
     @State private var selectedTab: MainWindowView.SidebarTab = .recordings
     @Environment(\.openWindow) private var openWindow
+
+    init() {
+        let cfg = AppConfig()
+        let mgr = RecordingManager()
+        mgr.outputDirectory = cfg.outputDirectory
+        _config = State(initialValue: cfg)
+        _recorder = State(initialValue: mgr)
+        _recordingsStore = State(initialValue: RecordingsStore(directory: cfg.outputDirectory))
+    }
 
     var body: some Scene {
         // Menu bar tray
@@ -39,19 +48,12 @@ struct LyreApp: App {
                 recorder.outputDirectory = newDir
                 recordingsStore = RecordingsStore(directory: newDir)
             }
-            .onAppear {
-                // Sync config → recorder on first launch
-                recorder.outputDirectory = config.outputDirectory
-                if recordingsStore == nil {
-                    recordingsStore = RecordingsStore(directory: config.outputDirectory)
-                }
-            }
         }
         .defaultSize(width: 600, height: 500)
     }
 
     private var resolvedStore: RecordingsStore {
-        recordingsStore ?? RecordingsStore(directory: config.outputDirectory)
+        recordingsStore
     }
 }
 

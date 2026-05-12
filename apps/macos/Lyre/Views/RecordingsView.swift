@@ -26,9 +26,9 @@ struct RecordingsView: View {
         }
         .frame(minWidth: 400, minHeight: 300)
         .toolbar { toolbarContent }
-        .onAppear {
+        .task(id: ObjectIdentifier(store)) {
             store.startWatching()
-            Task { await store.scan() }
+            await store.scan()
         }
         .onDisappear {
             store.stopWatching()
