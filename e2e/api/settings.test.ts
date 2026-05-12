@@ -94,6 +94,34 @@ describe("settings/oss", () => {
   });
 });
 
+describe("settings/asr", () => {
+  test("GET /api/settings/asr returns 200 with default model", async () => {
+    const res = await get("/api/settings/asr");
+    expect(res.status).toBe(200);
+    const body = await json<{ model: string }>(res);
+    expect(body.model).toBe("qwen3-asr-flash-filetrans");
+  });
+
+  test("PUT /api/settings/asr updates model", async () => {
+    const res = await put("/api/settings/asr", {
+      model: "qwen3-asr-flash-filetrans-2025-11-17",
+    });
+    expect(res.status).toBe(200);
+    const body = await json<{ model: string }>(res);
+    expect(body.model).toBe("qwen3-asr-flash-filetrans-2025-11-17");
+
+    // Reset to default
+    await put("/api/settings/asr", { model: "qwen3-asr-flash-filetrans" });
+  });
+
+  test("PUT /api/settings/asr returns 400 for invalid model", async () => {
+    const res = await put("/api/settings/asr", {
+      model: "invalid-model-name",
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("settings/backup", () => {
   test("GET /api/settings/backup/export returns 200", async () => {
     const res = await get("/api/settings/backup/export");
