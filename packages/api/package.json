@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./contracts/ai": "./src/contracts/ai.ts",
+    "./contracts/asr": "./src/contracts/asr.ts",
     "./contracts/jobs": "./src/contracts/jobs.ts",
     "./contracts/recordings": "./src/contracts/recordings.ts",
     "./db": "./src/db/index.ts",

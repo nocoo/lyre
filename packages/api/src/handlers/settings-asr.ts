@@ -1,7 +1,7 @@
 import { makeRepos } from "../db/repositories";
-import { DEFAULT_ASR_MODEL } from "../services/asr";
+import { DEFAULT_ASR_MODEL, isValidAsrModel } from "../contracts/asr";
 import type { RuntimeContext } from "../runtime/context";
-import { json, unauthorized, type HandlerResponse } from "./http";
+import { json, badRequest, unauthorized, type HandlerResponse } from "./http";
 
 interface AsrSettings {
   model: string;
@@ -13,8 +13,9 @@ async function readAsrSettings(
 ): Promise<AsrSettings> {
   const all = await settings.findByUserId(userId);
   const map = new Map(all.map((s) => [s.key, s.value]));
+  const raw = map.get("asr.model") ?? DEFAULT_ASR_MODEL;
   return {
-    model: map.get("asr.model") ?? DEFAULT_ASR_MODEL,
+    model: isValidAsrModel(raw) ? raw : DEFAULT_ASR_MODEL,
   };
 }
 
@@ -38,8 +39,12 @@ export async function updateAsrSettingsHandler(
   const userId = ctx.user.id;
   const { settings } = makeRepos(ctx.db);
 
-  if (body.model !== undefined)
+  if (body.model !== undefined) {
+    if (!isValidAsrModel(body.model)) {
+      return badRequest(`Invalid ASR model: ${body.model}`);
+    }
     await settings.upsert(userId, "asr.model", body.model);
+  }
 
   return json(await readAsrSettings(settings, userId));
 }

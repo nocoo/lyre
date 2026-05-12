@@ -18,6 +18,7 @@
  */
 
 import type { TranscriptionSentence } from "../lib/types";
+import { DEFAULT_ASR_MODEL } from "../contracts/asr";
 
 // ── DashScope API response types ──
 
@@ -89,7 +90,7 @@ export interface ParsedAsrResult {
 
 // ── Provider interface ──
 
-export const DEFAULT_ASR_MODEL = "qwen3-asr-flash-filetrans";
+export { DEFAULT_ASR_MODEL } from "../contracts/asr";
 
 export interface AsrProvider {
   /**
