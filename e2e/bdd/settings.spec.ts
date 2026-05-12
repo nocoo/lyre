@@ -13,7 +13,7 @@ test.describe("Settings", () => {
     await page.goto("/settings/ai");
 
     await expect(
-      page.getByRole("heading", { name: "AI Settings" }),
+      page.getByRole("heading", { name: "AI & ASR Settings" }),
     ).toBeVisible();
     await expect(
       page.getByText("Configure LLM provider").first(),

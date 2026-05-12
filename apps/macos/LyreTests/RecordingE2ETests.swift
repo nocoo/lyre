@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import AVFoundation
+import ScreenCaptureKit
 @testable import Lyre
 
 /// End-to-end test for the full recording lifecycle.
@@ -23,7 +24,25 @@ struct RecordingE2ETests {
             "[E2E] Screen Recording: \(permissions.screenRecording), " +
             "Microphone: \(permissions.microphone), allGranted: \(permissions.allGranted)"
         )
-        return permissions.allGranted
+        guard permissions.allGranted else { return false }
+
+        // Even with permissions granted, the runner may have no display
+        // available (headless CI / locked screen). SCShareableContent.displays
+        // is empty in that case, and the recorder fails with `noDisplayFound`.
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false,
+                onScreenWindowsOnly: true,
+            )
+            if content.displays.isEmpty {
+                print("[E2E] No displays available — skipping")
+                return false
+            }
+            return true
+        } catch {
+            print("[E2E] SCShareableContent failed: \(error) — skipping")
+            return false
+        }
     }
 
     // MARK: - Full Lifecycle
