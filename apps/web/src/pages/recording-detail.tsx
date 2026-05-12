@@ -160,6 +160,24 @@ function RecordingDetailContent({ id }: { id: string }) {
     return null;
   }, [id]);
 
+  const refreshDetail = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/recordings/${id}`);
+      if (res.ok) {
+        const data = (await res.json()) as RecordingDetail;
+        setDetail(data);
+        setAiSummary(data.aiSummary ?? null);
+        setSelectedTagIds(data.resolvedTags.map((t) => t.id));
+        setSelectedFolderId(data.folderId);
+        setRecordedAtDate(
+          data.recordedAt ? toDateInputValue(data.recordedAt) : "",
+        );
+      }
+    } catch {
+      // silently fail
+    }
+  }, [id]);
+
   // ── Load user's tags and folders ──
   const loadTagsAndFolders = useCallback(async () => {
     const [tagsRes, foldersRes] = await Promise.all([
@@ -444,13 +462,40 @@ function RecordingDetailContent({ id }: { id: string }) {
     if (notes !== (detail?.notes ?? "")) {
       updates.notes = notes || null;
     }
+    if (selectedFolderId !== (detail?.folderId ?? null)) {
+      updates.folderId = selectedFolderId;
+    }
+    const origTagIds = detail?.resolvedTags.map((t) => t.id) ?? [];
+    if (
+      selectedTagIds.length !== origTagIds.length ||
+      selectedTagIds.some((id) => !origTagIds.includes(id))
+    ) {
+      updates.tagIds = selectedTagIds;
+    }
+    const origDate = detail?.recordedAt
+      ? toDateInputValue(detail.recordedAt)
+      : "";
+    if (recordedAtDate !== origDate) {
+      updates.recordedAt = recordedAtDate
+        ? new Date(recordedAtDate).getTime()
+        : null;
+    }
     if (Object.keys(updates).length === 0) return;
     setTitleSaving(true);
     await updateRecording(updates);
     await loadDetail();
     setTitleSaving(false);
     toast.success("Properties saved");
-  }, [editTitle, notes, detail?.title, detail?.notes, updateRecording, loadDetail]);
+  }, [
+    editTitle,
+    notes,
+    selectedFolderId,
+    selectedTagIds,
+    recordedAtDate,
+    detail,
+    updateRecording,
+    loadDetail,
+  ]);
 
   // ── Title save on blur ──
   const handleTitleSave = useCallback(async () => {
@@ -458,11 +503,10 @@ function RecordingDetailContent({ id }: { id: string }) {
     if (!trimmed || trimmed === detail?.title) return;
     setTitleSaving(true);
     await updateRecording({ title: trimmed });
-    // Refresh detail to update header
-    await loadDetail();
+    await refreshDetail();
     setTitleSaving(false);
     toast.success("Title saved");
-  }, [editTitle, detail?.title, updateRecording, loadDetail]);
+  }, [editTitle, detail?.title, updateRecording, refreshDetail]);
 
   // ── Notes save on blur ──
   const handleNotesSave = useCallback(async () => {
@@ -475,18 +519,14 @@ function RecordingDetailContent({ id }: { id: string }) {
 
   // ── Tag toggle ──
   const handleToggleTag = useCallback(
-    async (tagId: string) => {
-      const isRemoving = selectedTagIds.includes(tagId);
-      const next = isRemoving
-        ? selectedTagIds.filter((t) => t !== tagId)
-        : [...selectedTagIds, tagId];
-      setSelectedTagIds(next);
-      await updateRecording({ tagIds: next });
-      await loadDetail();
-      const tagName = allTags.find((t) => t.id === tagId)?.name ?? "Tag";
-      toast.success(isRemoving ? `Removed "${tagName}"` : `Added "${tagName}"`);
+    (tagId: string) => {
+      setSelectedTagIds((prev) =>
+        prev.includes(tagId)
+          ? prev.filter((t) => t !== tagId)
+          : [...prev, tagId],
+      );
     },
-    [selectedTagIds, allTags, updateRecording, loadDetail],
+    [],
   );
 
   // ── Create new tag and assign ──
@@ -506,42 +546,29 @@ function RecordingDetailContent({ id }: { id: string }) {
         setAllTags((prev) =>
           prev.some((t) => t.id === tag.id) ? prev : [...prev, tag],
         );
-        const next = [...selectedTagIds, tag.id];
-        setSelectedTagIds(next);
-        await updateRecording({ tagIds: next });
-        await loadDetail();
-        toast.success(`Created and added "${tag.name}"`);
+        setSelectedTagIds((prev) => [...prev, tag.id]);
       }
     } finally {
       setNewTagName("");
       setCreatingTag(false);
     }
-  }, [newTagName, selectedTagIds, updateRecording, loadDetail]);
+  }, [newTagName]);
 
   // ── Folder change ──
   const handleFolderChange = useCallback(
-    async (folderId: string | null) => {
+    (folderId: string | null) => {
       setSelectedFolderId(folderId);
       setFolderOpen(false);
-      await updateRecording({ folderId });
-      await loadDetail();
-      const folderName = folderId
-        ? allFolders.find((f) => f.id === folderId)?.name ?? "folder"
-        : null;
-      toast.success(folderName ? `Moved to "${folderName}"` : "Removed from folder");
     },
-    [allFolders, updateRecording, loadDetail],
+    [],
   );
 
   // ── RecordedAt change ──
   const handleRecordedAtChange = useCallback(
-    async (dateStr: string) => {
+    (dateStr: string) => {
       setRecordedAtDate(dateStr);
-      const ms = dateStr ? new Date(dateStr).getTime() : null;
-      await updateRecording({ recordedAt: ms });
-      toast.success("Date saved");
     },
-    [updateRecording],
+    [],
   );
 
   if (loading) {
@@ -555,6 +582,16 @@ function RecordingDetailContent({ id }: { id: string }) {
   if (!detail) return <NotFound />;
 
   const vm = toRecordingDetailVM(detail);
+
+  const originalTagIds = new Set(detail.resolvedTags.map((t) => t.id));
+  const propertiesDirty =
+    (editTitle.trim() !== "" && editTitle.trim() !== detail.title) ||
+    notes !== (detail.notes ?? "") ||
+    selectedFolderId !== (detail.folderId ?? null) ||
+    selectedTagIds.length !== originalTagIds.size ||
+    selectedTagIds.some((id) => !originalTagIds.has(id)) ||
+    recordedAtDate !==
+      (detail.recordedAt ? toDateInputValue(detail.recordedAt) : "");
 
   return (
     <div className="space-y-5">
@@ -719,10 +756,7 @@ function RecordingDetailContent({ id }: { id: string }) {
             onNotesSave={handleNotesSave}
             notesSaving={notesSaving}
             onSaveAll={handleSaveProperties}
-            isDirty={
-              (editTitle.trim() !== "" && editTitle.trim() !== (detail?.title ?? "")) ||
-              notes !== (detail?.notes ?? "")
-            }
+            isDirty={propertiesDirty}
             recordedAtDate={recordedAtDate}
             onRecordedAtChange={handleRecordedAtChange}
             selectedTagIds={selectedTagIds}
@@ -1132,8 +1166,7 @@ function AiInfoCard({
       </p>
       <div className="space-y-3">
         <div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Settings className="h-3.5 w-3.5" strokeWidth={1.5} />
+          <p className="text-xs text-muted-foreground">
             Provider
           </p>
           <p className="mt-0.5 text-sm text-foreground">
@@ -1222,8 +1255,7 @@ function EditableProperties({
 
       {/* Title */}
       <div className="space-y-1.5">
-        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
+        <label className="text-xs font-medium text-muted-foreground">
           Title
           {titleSaving && (
             <Loader2 className="h-3 w-3 animate-spin" />
