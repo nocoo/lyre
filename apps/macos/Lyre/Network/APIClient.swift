@@ -46,7 +46,7 @@ actor APIClient {
     struct LiveResponse: Codable, Sendable {
         let status: String
         let version: String?
-        let timestamp: Int?
+        let timestamp: String?
     }
 
     struct PresignRequest: Codable, Sendable {
