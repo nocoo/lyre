@@ -21,6 +21,7 @@ import { dashboard } from "../routes/dashboard";
 import { search } from "../routes/search";
 import { upload } from "../routes/upload";
 import { settingsAi } from "../routes/settings/ai";
+import { settingsAsr } from "../routes/settings/asr";
 import { settingsBackup } from "../routes/settings/backup";
 import { settingsBacky } from "../routes/settings/backy";
 import { settingsOss } from "../routes/settings/oss";
@@ -43,6 +44,7 @@ export function buildAppWithCtx(ctx: RuntimeContext) {
   app.route("/api/search", search);
   app.route("/api/upload", upload);
   app.route("/api/settings/ai", settingsAi);
+  app.route("/api/settings/asr", settingsAsr);
   app.route("/api/settings/backup", settingsBackup);
   app.route("/api/settings/backy", settingsBacky);
   app.route("/api/settings/oss", settingsOss);

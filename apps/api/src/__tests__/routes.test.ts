@@ -72,6 +72,15 @@ describe("worker routes — happy path", () => {
     expect(res.status).toBe(200);
   });
 
+  test("GET /api/settings/asr returns 200 with default model when authed", async () => {
+    const { ctx } = await setupAuthedCtx();
+    const app = buildAppWithCtx(ctx);
+    const res = await app.request("/api/settings/asr");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { model: string };
+    expect(body.model).toBe("qwen3-asr-flash-filetrans");
+  });
+
   test("GET /api/jobs returns 200 list when authed", async () => {
     const { ctx } = await setupAuthedCtx();
     const app = buildAppWithCtx(ctx);
@@ -181,6 +190,13 @@ describe("worker routes — auth gates", () => {
     const ctx = setupAnonCtx();
     const app = buildAppWithCtx(ctx);
     const res = await app.request("/api/settings/ai");
+    expect(res.status).toBe(401);
+  });
+
+  test("GET /api/settings/asr returns 401 when no user", async () => {
+    const ctx = setupAnonCtx();
+    const app = buildAppWithCtx(ctx);
+    const res = await app.request("/api/settings/asr");
     expect(res.status).toBe(401);
   });
 
