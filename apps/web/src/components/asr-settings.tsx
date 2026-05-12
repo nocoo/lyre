@@ -49,7 +49,7 @@ export function AsrSettingsSection() {
 
   if (!loaded) {
     return (
-      <div className="rounded-card bg-secondary p-5">
+      <div className="rounded-card bg-secondary p-5 h-full">
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
@@ -58,7 +58,7 @@ export function AsrSettingsSection() {
   }
 
   return (
-    <div className="rounded-card bg-secondary p-5">
+    <div className="rounded-card bg-secondary p-5 h-full flex flex-col">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
           <AudioWaveform className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
@@ -88,7 +88,7 @@ export function AsrSettingsSection() {
         </select>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-auto pt-4">
         <Button
           onClick={handleSave}
           disabled={saving}
