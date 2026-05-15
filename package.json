@@ -30,6 +30,7 @@
     "gate:pages": "bun run scripts/check-page-coverage.ts",
     "gate:secrets": "bun run scripts/gate-secrets.ts",
     "gate:deps": "bun run scripts/gate-deps.ts",
+    "pre-push": "bun run scripts/pre-push.ts",
     "prepare": "husky",
     "release": "bun run scripts/release.ts"
   },

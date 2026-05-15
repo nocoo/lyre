@@ -1,15 +1,1 @@
-# pre-push: dep scan + coverage + lint + typecheck + build (web, worker, @lyre/api, macOS)
-set -e
-
-# Dependency vulnerability scanning
-bun run gate:deps
-
-bun run lint
-bun run typecheck
-bun run test:coverage
-bun run web:build
-
-# macOS: unit tests + lint (E2E included in LyreTests scheme)
-cd apps/macos && \
-  xcodebuild test -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS" -quiet && \
-  swiftlint lint --strict Lyre/ LyreTests/
+bun run scripts/pre-push.ts
