@@ -25,6 +25,30 @@ const POLL_INTERVAL_MS = 500;
 const MAX_WAIT_MS = 60_000;
 
 // ---------------------------------------------------------------------------
+// Step 0: Ensure static assets exist (worktree-friendly)
+// ---------------------------------------------------------------------------
+
+import { existsSync } from "node:fs";
+
+async function ensureStaticAssets(): Promise<void> {
+  const staticDir = resolve(WORKER_DIR, "static");
+  if (existsSync(staticDir)) return;
+
+  console.log("Step 0: static/ missing (worktree?) — running web:build...");
+  const proc = Bun.spawn(["bun", "run", "web:build"], {
+    cwd: ROOT,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    console.error("FATAL: web:build failed");
+    process.exit(1);
+  }
+  console.log("  Build complete.");
+}
+
+// ---------------------------------------------------------------------------
 // Step 1: Apply D1 schema to local database
 // ---------------------------------------------------------------------------
 
@@ -132,6 +156,7 @@ async function runTests(): Promise<number> {
 async function main(): Promise<void> {
   console.log("=== L2: API E2E Test Runner ===\n");
 
+  await ensureStaticAssets();
   await applySchema();
   const server = spawnDevServer();
   let testExitCode = 1;
