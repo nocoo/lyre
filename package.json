@@ -44,5 +44,8 @@
   },
   "dependencies": {
     "hono": "^4.12.18"
+  },
+  "overrides": {
+    "ws": "^8.20.1"
   }
 }
