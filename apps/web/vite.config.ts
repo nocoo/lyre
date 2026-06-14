@@ -27,4 +27,11 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
   },
+  esbuild: {
+    // esbuild 0.28.x regressed and flags destructuring as needing
+    // downlevel for our browser targets even though all of them
+    // (chrome87+, es2020, firefox78, safari14, edge88) support it
+    // natively. Pin support explicitly until upstream restores defaults.
+    supported: { destructuring: true },
+  },
 });
