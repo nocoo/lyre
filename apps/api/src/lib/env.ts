@@ -12,6 +12,8 @@ export function buildLyreEnv(env: Bindings): LyreEnv {
     NODE_ENV: env.NODE_ENV,
     PLAYWRIGHT: env.E2E_SKIP_AUTH === "true" ? "1" : undefined,
     SKIP_OSS_ARCHIVE: env.SKIP_OSS_ARCHIVE,
+    CF_ACCESS_TEAM_DOMAIN: env.CF_ACCESS_TEAM_DOMAIN,
+    CF_ACCESS_AUD: env.CF_ACCESS_AUD,
     OSS_ACCESS_KEY_ID: env.OSS_ACCESS_KEY_ID,
     OSS_ACCESS_KEY_SECRET: env.OSS_ACCESS_KEY_SECRET,
     OSS_BUCKET: env.OSS_BUCKET,

@@ -17,6 +17,13 @@ export interface Bindings {
   NODE_ENV?: string;
   SKIP_OSS_ARCHIVE?: string;
 
+  // Cloudflare Access — required for verifying the
+  // `Cf-Access-Jwt-Assertion` header. Both must be set in production;
+  // missing/empty values cause the middleware to reject the assertion
+  // (fail-closed). Set via `wrangler secret put` or `[vars]`.
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
+
   // Aliyun OSS
   OSS_ACCESS_KEY_ID?: string;
   OSS_ACCESS_KEY_SECRET?: string;
