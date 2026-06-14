@@ -10,7 +10,14 @@
 
 import { describe, expect, test, beforeEach } from "vitest";
 import { Hono } from "hono";
-import { SignJWT, exportJWK, generateKeyPair } from "jose";
+import {
+  SignJWT,
+  exportJWK,
+  generateKeyPair,
+  jwtVerify,
+  createLocalJWKSet,
+  type JWK,
+} from "jose";
 
 import type { Bindings, Variables } from "../bindings";
 import { accessAuth, type AccessVerifier } from "../middleware/access-auth";
@@ -224,133 +231,195 @@ describe("accessAuth — bypass and ordering", () => {
 
 describe("defaultAccessVerifier — real RS256 verification", () => {
   // The default verifier closes over a `createRemoteJWKSet` that fetches
-  // from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`. To
-  // exercise the real `jose.jwtVerify` codepath without network, we
-  // intercept `globalThis.fetch` and return a JWKS we control.
-  const TEAM_KEY = "lyre-jwks-test";
+  // from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` and
+  // caches the resolver per teamDomain at module scope. Every test
+  // therefore uses a UNIQUE teamDomain so each gets a fresh JWKS cache
+  // entry whose published key matches that test's signing key. Sharing
+  // one teamDomain across tests would let the first test's cached JWKS
+  // reject later tests' tokens on signature mismatch before the
+  // issuer/audience checks ever run — which would mean the wrong-issuer
+  // and wrong-audience regressions silently stop covering those claims.
   const AUDIENCE = "audience-tag-xyz";
-  const ISSUER = `https://${TEAM_KEY}.cloudflareaccess.com`;
-  const CERTS_URL = `${ISSUER}/cdn-cgi/access/certs`;
-  let privateKey: CryptoKey;
   let originalFetch: typeof globalThis.fetch;
+  let teamCounter = 0;
 
-  beforeEach(async () => {
+  type Harness = {
+    teamDomain: string;
+    issuer: string;
+    privateKey: CryptoKey;
+    publicJwk: JWK;
+    fetchUrls: string[];
+  };
+
+  async function newHarness(): Promise<Harness> {
+    teamCounter += 1;
+    const teamDomain = `lyre-jwks-test-${teamCounter}-${Date.now()}`;
+    const issuer = `https://${teamDomain}.cloudflareaccess.com`;
+    const certsUrl = `${issuer}/cdn-cgi/access/certs`;
     const kp = await generateKeyPair("RS256", { extractable: true });
-    privateKey = kp.privateKey;
     const jwk = await exportJWK(kp.publicKey);
     jwk.kid = "test-kid";
     jwk.alg = "RS256";
     jwk.use = "sig";
     const body = JSON.stringify({ keys: [jwk] });
-    originalFetch = globalThis.fetch;
+
+    const fetchUrls: string[] = [];
+    const prior = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
-      if (url === CERTS_URL) {
+      fetchUrls.push(url);
+      if (url === certsUrl) {
         return new Response(body, {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      throw new Error(`Unexpected fetch in test: ${url}`);
+      // Fall through to the previously installed fetch so we don't
+      // accidentally swallow unrelated calls in this process.
+      return prior(input as RequestInfo);
     }) as typeof globalThis.fetch;
-  });
 
-  async function sign(
+    return { teamDomain, issuer, privateKey: kp.privateKey, publicJwk: jwk, fetchUrls };
+  }
+
+  function signWith(
+    h: Harness,
     overrides: { issuer?: string; audience?: string; email?: string; expiresIn?: string } = {},
   ) {
     return new SignJWT({ email: overrides.email ?? "verified@example.com" })
       .setProtectedHeader({ alg: "RS256", kid: "test-kid" })
       .setIssuedAt()
-      .setIssuer(overrides.issuer ?? ISSUER)
+      .setIssuer(overrides.issuer ?? h.issuer)
       .setAudience(overrides.audience ?? AUDIENCE)
       .setExpirationTime(overrides.expiresIn ?? "5m")
-      .sign(privateKey);
+      .sign(h.privateKey);
+  }
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  function restoreFetch() {
+    globalThis.fetch = originalFetch;
   }
 
   test("valid RS256 assertion populates user", async () => {
-    const jwt = await sign();
-    const { defaultAccessVerifier } = await import("../middleware/access-auth");
+    const h = await newHarness();
     try {
+      const jwt = await signWith(h);
+      const { defaultAccessVerifier } = await import("../middleware/access-auth");
       const payload = await defaultAccessVerifier(jwt, {
-        teamDomain: TEAM_KEY,
+        teamDomain: h.teamDomain,
         audience: AUDIENCE,
       });
       expect(payload?.email).toBe("verified@example.com");
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
-  test("forged token (different key) is rejected", async () => {
-    const otherKp = await generateKeyPair("RS256", { extractable: true });
-    const forged = await new SignJWT({ email: "attacker@example.com" })
-      .setProtectedHeader({ alg: "RS256", kid: "test-kid" })
-      .setIssuedAt()
-      .setIssuer(ISSUER)
-      .setAudience(AUDIENCE)
-      .setExpirationTime("5m")
-      .sign(otherKp.privateKey);
-    const { defaultAccessVerifier } = await import("../middleware/access-auth");
+  test("forged token (different key, same kid) is rejected on signature", async () => {
+    const h = await newHarness();
     try {
+      const otherKp = await generateKeyPair("RS256", { extractable: true });
+      const forged = await new SignJWT({ email: "attacker@example.com" })
+        .setProtectedHeader({ alg: "RS256", kid: "test-kid" })
+        .setIssuedAt()
+        .setIssuer(h.issuer)
+        .setAudience(AUDIENCE)
+        .setExpirationTime("5m")
+        .sign(otherKp.privateKey);
+      const { defaultAccessVerifier } = await import("../middleware/access-auth");
       const payload = await defaultAccessVerifier(forged, {
-        teamDomain: TEAM_KEY,
+        teamDomain: h.teamDomain,
         audience: AUDIENCE,
       });
       expect(payload).toBeNull();
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
-  test("wrong issuer is rejected", async () => {
-    const jwt = await sign({ issuer: "https://attacker.cloudflareaccess.com" });
-    const { defaultAccessVerifier } = await import("../middleware/access-auth");
+  test("wrong issuer is rejected (claim check, not signature)", async () => {
+    const h = await newHarness();
     try {
+      // Token is signed with this harness's real private key — so the
+      // signature WILL verify against the cached JWKS for h.teamDomain.
+      // The rejection must therefore come from the issuer claim check.
+      const jwt = await signWith(h, {
+        issuer: "https://attacker.cloudflareaccess.com",
+      });
+      // Sanity: without the issuer constraint the same JWT verifies
+      // fine against the published JWKS — proves the rejection below is
+      // the issuer check, not a signature mismatch hidden by the cache.
+      const localJwks = createLocalJWKSet({ keys: [h.publicJwk] });
+      const sanity = await jwtVerify(jwt, localJwks, {
+        audience: AUDIENCE,
+        algorithms: ["RS256"],
+      });
+      expect(sanity.payload.iss).toBe("https://attacker.cloudflareaccess.com");
+
+      const { defaultAccessVerifier } = await import("../middleware/access-auth");
       const payload = await defaultAccessVerifier(jwt, {
-        teamDomain: TEAM_KEY,
+        teamDomain: h.teamDomain,
         audience: AUDIENCE,
       });
       expect(payload).toBeNull();
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
-  test("wrong audience is rejected", async () => {
-    const jwt = await sign({ audience: "some-other-app" });
-    const { defaultAccessVerifier } = await import("../middleware/access-auth");
+  test("wrong audience is rejected (claim check, not signature)", async () => {
+    const h = await newHarness();
     try {
+      // Same logic as wrong-issuer: real signature, mutated claim. The
+      // rejection must come from the audience check, not signature
+      // mismatch.
+      const jwt = await signWith(h, { audience: "some-other-app" });
+      // Sanity: without the audience constraint the JWT verifies
+      // against the published JWKS — proves the rejection below is the
+      // audience check, not signature.
+      const localJwks = createLocalJWKSet({ keys: [h.publicJwk] });
+      const sanity = await jwtVerify(jwt, localJwks, {
+        issuer: h.issuer,
+        algorithms: ["RS256"],
+      });
+      expect(sanity.payload.aud).toBe("some-other-app");
+
+      const { defaultAccessVerifier } = await import("../middleware/access-auth");
       const payload = await defaultAccessVerifier(jwt, {
-        teamDomain: TEAM_KEY,
+        teamDomain: h.teamDomain,
         audience: AUDIENCE,
       });
       expect(payload).toBeNull();
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 
   test("unsigned (alg=none) token from the original 'trust the header' regression is rejected", async () => {
-    // Craft an unsigned three-segment JWT exactly like the previous
-    // middleware would have accepted at face value.
-    const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }))
-      .replace(/=+$/, "")
-      .replace(/\//g, "_")
-      .replace(/\+/g, "-");
-    const payload = btoa(JSON.stringify({ email: "attacker@example.com" }))
-      .replace(/=+$/, "")
-      .replace(/\//g, "_")
-      .replace(/\+/g, "-");
-    const unsigned = `${header}.${payload}.`;
-    const { defaultAccessVerifier } = await import("../middleware/access-auth");
+    const h = await newHarness();
     try {
+      // Craft an unsigned three-segment JWT exactly like the previous
+      // middleware would have accepted at face value.
+      const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }))
+        .replace(/=+$/, "")
+        .replace(/\//g, "_")
+        .replace(/\+/g, "-");
+      const payload = btoa(JSON.stringify({ email: "attacker@example.com" }))
+        .replace(/=+$/, "")
+        .replace(/\//g, "_")
+        .replace(/\+/g, "-");
+      const unsigned = `${header}.${payload}.`;
+      const { defaultAccessVerifier } = await import("../middleware/access-auth");
       const out = await defaultAccessVerifier(unsigned, {
-        teamDomain: TEAM_KEY,
+        teamDomain: h.teamDomain,
         audience: AUDIENCE,
       });
       expect(out).toBeNull();
     } finally {
-      globalThis.fetch = originalFetch;
+      restoreFetch();
     }
   });
 });
