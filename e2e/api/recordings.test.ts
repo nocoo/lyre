@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { get, post, del, json } from "./helpers";
+import { get, post, put, del, json } from "./helpers";
 
 describe("recordings endpoints", () => {
   test("GET /api/recordings returns 200 with paginated structure", async () => {
@@ -25,14 +25,9 @@ describe("recordings endpoints", () => {
     expect(getRes.status).toBe(200);
 
     // PUT /api/recordings/:id
-    const putRes = await fetch(
-      `http://localhost:7017/api/recordings/${body.id}`,
-      {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: "e2e-test-recording-updated" }),
-      },
-    );
+    const putRes = await put(`/api/recordings/${body.id}`, {
+      title: "e2e-test-recording-updated",
+    });
     expect(putRes.status).toBe(200);
 
     // GET /api/recordings/:id/play-url (500 when OSS not configured)
