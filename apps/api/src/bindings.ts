@@ -17,6 +17,12 @@ export interface Bindings {
   NODE_ENV?: string;
   SKIP_OSS_ARCHIVE?: string;
 
+  // Comma-separated list of additional origins (scheme://host) that are
+  // allowed to issue cookie-authenticated writes to `/api/*`. The Worker's
+  // own request origin is always allowed; this is for SPAs hosted on a
+  // separate origin (e.g. preview deploys, custom domains).
+  PUBLIC_ORIGIN?: string;
+
   // Aliyun OSS
   OSS_ACCESS_KEY_ID?: string;
   OSS_ACCESS_KEY_SECRET?: string;
