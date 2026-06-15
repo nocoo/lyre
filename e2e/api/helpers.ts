@@ -3,6 +3,10 @@
  *
  * All tests run against a real wrangler dev server with E2E_SKIP_AUTH=true,
  * which synthesizes a stable test user via the access-auth middleware.
+ *
+ * The cookie/Access-bypass model represents a same-origin browser session,
+ * so unsafe-method requests carry the wrangler dev origin as `Origin` to
+ * satisfy `csrfGuard` — matching what a real browser would send.
  */
 
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:7017";
@@ -17,9 +21,10 @@ async function request(
   body?: unknown,
 ): Promise<Response> {
   const url = `${BASE}${path}`;
-  const init: RequestInit = { method, headers: {} };
+  const headers: Record<string, string> = { Origin: BASE };
+  const init: RequestInit = { method, headers };
   if (body !== undefined) {
-    init.headers = { "content-type": "application/json" };
+    headers["content-type"] = "application/json";
     init.body = JSON.stringify(body);
   }
   return fetch(url, init);
