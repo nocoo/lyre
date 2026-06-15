@@ -4,6 +4,7 @@
  *
  * Middleware order (request flow):
  *   secureHeaders          — defensive HTTP headers
+ *   csrfGuard               — same-origin check for unsafe-method writes
  *   runtimeContext          — build per-request RuntimeContext (env + db)
  *   bearerAuth              — populate user from Authorization: Bearer
  *   accessAuth              — populate user from CF Access JWT (or E2E bypass)
@@ -20,6 +21,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { cronTickHandler } from "@lyre/api/handlers/jobs";
 
 import type { Bindings, Variables } from "./bindings";
+import { csrfGuard } from "./middleware/csrf-guard";
 import { runtimeContext } from "./middleware/runtime-context";
 import { bearerAuth } from "./middleware/bearer-auth";
 import { accessAuth } from "./middleware/access-auth";
@@ -45,6 +47,7 @@ import { backy } from "./routes/backy";
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use("*", secureHeaders());
+app.use("/api/*", csrfGuard());
 app.use("/api/*", runtimeContext());
 app.use("/api/*", bearerAuth());
 app.use("/api/*", accessAuth());

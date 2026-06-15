@@ -2,8 +2,13 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
 
 const BASE = "http://localhost:27016";
 
+// Same-origin Origin header so the Worker's csrfGuard accepts unsafe-method
+// writes — mirrors what a real browser would send from the SPA on BASE.
+const ORIGIN_HEADERS = { Origin: BASE } as const;
+
 async function createRecording(request: APIRequestContext): Promise<string> {
   const res = await request.post(`${BASE}/api/recordings`, {
+    headers: ORIGIN_HEADERS,
     data: {
       title: "E2E Test Recording",
       fileName: "e2e-test.m4a",
@@ -19,7 +24,9 @@ async function deleteRecording(
   request: APIRequestContext,
   id: string,
 ): Promise<void> {
-  await request.delete(`${BASE}/api/recordings/${id}`);
+  await request.delete(`${BASE}/api/recordings/${id}`, {
+    headers: ORIGIN_HEADERS,
+  });
 }
 
 test.describe("Recordings", () => {
