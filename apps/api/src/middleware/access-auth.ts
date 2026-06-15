@@ -5,48 +5,85 @@
  * issued by Cloudflare Access. Skipped entirely when:
  *
  * 1. `runtime.user` is already set (by `bearer-auth` running first), or
- * 2. `E2E_SKIP_AUTH === "true"` — in which case we synthesize a stable
- *    test user via `usersRepo.upsertByEmail`.
+ * 2. `E2E_SKIP_AUTH === "true"` (in non-production) — in which case we
+ *    synthesize a stable test user via `usersRepo.upsertByEmail`.
  *
- * TODO(security): JWT signature is NOT verified yet. We only decode the
- * payload to extract `email` / `name`. Production hardening must add a
- * JWKS fetch + RS256 verify against the team's Access certs URL
- * (`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`).
+ * Otherwise the assertion is verified end-to-end:
+ *   - RS256 signature against the team's JWKS at
+ *     `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`
+ *   - `iss === https://<team>.cloudflareaccess.com`
+ *   - `aud` contains `CF_ACCESS_AUD` (the Application AUD tag)
+ *   - `exp`/`nbf` are honored by `jwtVerify`
  *
- * For now this is "trust the header" — fine while the Worker only runs
- * behind Cloudflare Access, which strips and re-injects the header at
- * the edge, but MUST be tightened before exposing the Worker directly.
+ * The middleware is **fail-closed**: any failure (bad signature, missing
+ * config, malformed token) leaves `runtime.user` null and the request
+ * continues unauthenticated. Routes that require auth call
+ * `unauthorized()` themselves, matching the bearer-auth contract.
  */
 
 import type { MiddlewareHandler } from "hono";
+import {
+  createRemoteJWKSet,
+  jwtVerify,
+  type JWTPayload,
+  type JWTVerifyGetKey,
+} from "jose";
 import { makeUsersRepo } from "@lyre/api/db/repositories";
 import type { Bindings, Variables } from "../bindings";
 
-interface AccessPayload {
+interface AccessPayload extends JWTPayload {
   email?: string;
   name?: string;
-  sub?: string;
 }
 
-function decodePayload(jwt: string): AccessPayload | null {
-  const parts = jwt.split(".");
-  if (parts.length !== 3) return null;
+export interface AccessVerifyConfig {
+  teamDomain: string;
+  audience: string;
+}
+
+export type AccessVerifier = (
+  jwt: string,
+  cfg: AccessVerifyConfig,
+) => Promise<AccessPayload | null>;
+
+const jwksCache = new Map<string, JWTVerifyGetKey>();
+
+function getJwks(teamDomain: string): JWTVerifyGetKey {
+  let jwks = jwksCache.get(teamDomain);
+  if (!jwks) {
+    jwks = createRemoteJWKSet(
+      new URL(`https://${teamDomain}.cloudflareaccess.com/cdn-cgi/access/certs`),
+    );
+    jwksCache.set(teamDomain, jwks);
+  }
+  return jwks;
+}
+
+export const defaultAccessVerifier: AccessVerifier = async (jwt, cfg) => {
   try {
-    // Base64url decode the payload segment.
-    const payload = parts[1];
-    if (!payload) return null;
-    const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4);
-    const b64 = padded.replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(b64)) as AccessPayload;
-  } catch {
+    const { payload } = await jwtVerify<AccessPayload>(jwt, getJwks(cfg.teamDomain), {
+      issuer: `https://${cfg.teamDomain}.cloudflareaccess.com`,
+      audience: cfg.audience,
+      algorithms: ["RS256"],
+    });
+    return payload;
+  } catch (err) {
+    console.warn("[access-auth] JWT verification failed", err);
     return null;
   }
+};
+
+export interface AccessAuthOptions {
+  verifier?: AccessVerifier;
 }
 
-export function accessAuth(): MiddlewareHandler<{
+export function accessAuth(
+  options: AccessAuthOptions = {},
+): MiddlewareHandler<{
   Bindings: Bindings;
   Variables: Variables;
 }> {
+  const verify = options.verifier ?? defaultAccessVerifier;
   return async (c, next) => {
     const runtime = c.get("runtime");
 
@@ -56,7 +93,8 @@ export function accessAuth(): MiddlewareHandler<{
       return;
     }
 
-    // E2E bypass: synthesize a stable test user.
+    // E2E bypass: synthesize a stable test user. Guarded by NODE_ENV so
+    // the flag cannot be flipped in production to bypass auth.
     if (
       runtime.env.PLAYWRIGHT === "1" &&
       runtime.env.NODE_ENV !== "production"
@@ -72,22 +110,28 @@ export function accessAuth(): MiddlewareHandler<{
       return;
     }
 
-    // Read CF Access JWT header.
     const jwt = c.req.header("Cf-Access-Jwt-Assertion");
     if (jwt) {
-      const payload = decodePayload(jwt);
-      if (payload?.email) {
-        const email = payload.email;
-        const name = payload.name ?? null;
-        // Stable user id derived from email.
-        const id = `user-${btoa(email).replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-")}`;
-        const users = makeUsersRepo(runtime.db);
-        runtime.user = await users.upsertByEmail({
-          id,
-          email,
-          name,
-          avatarUrl: null,
-        });
+      const teamDomain = runtime.env.CF_ACCESS_TEAM_DOMAIN;
+      const audience = runtime.env.CF_ACCESS_AUD;
+      if (!teamDomain || !audience) {
+        console.warn(
+          "[access-auth] CF_ACCESS_TEAM_DOMAIN / CF_ACCESS_AUD not configured — rejecting Access assertion",
+        );
+      } else {
+        const payload = await verify(jwt, { teamDomain, audience });
+        if (payload?.email) {
+          const email = payload.email;
+          const name = payload.name ?? null;
+          const id = `user-${btoa(email).replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-")}`;
+          const users = makeUsersRepo(runtime.db);
+          runtime.user = await users.upsertByEmail({
+            id,
+            email,
+            name,
+            avatarUrl: null,
+          });
+        }
       }
     }
 

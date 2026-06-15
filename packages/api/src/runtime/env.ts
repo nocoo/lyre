@@ -14,6 +14,18 @@ export interface LyreEnv {
   /** "1" disables uploading the raw ASR JSON to OSS (used in tests). */
   SKIP_OSS_ARCHIVE: string | undefined;
 
+  /**
+   * Cloudflare Access team domain (the subdomain before
+   * `.cloudflareaccess.com`). Used to build the JWKS URL and expected
+   * issuer. Missing => Access assertions are rejected (fail-closed).
+   */
+  CF_ACCESS_TEAM_DOMAIN: string | undefined;
+  /**
+   * Cloudflare Access Application AUD tag. Missing => Access
+   * assertions are rejected (fail-closed).
+   */
+  CF_ACCESS_AUD: string | undefined;
+
   // Aliyun OSS
   OSS_ACCESS_KEY_ID: string | undefined;
   OSS_ACCESS_KEY_SECRET: string | undefined;
@@ -31,6 +43,8 @@ export function emptyEnv(): LyreEnv {
     NODE_ENV: undefined,
     PLAYWRIGHT: undefined,
     SKIP_OSS_ARCHIVE: undefined,
+    CF_ACCESS_TEAM_DOMAIN: undefined,
+    CF_ACCESS_AUD: undefined,
     OSS_ACCESS_KEY_ID: undefined,
     OSS_ACCESS_KEY_SECRET: undefined,
     OSS_BUCKET: undefined,

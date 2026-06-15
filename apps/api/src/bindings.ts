@@ -17,6 +17,13 @@ export interface Bindings {
   NODE_ENV?: string;
   SKIP_OSS_ARCHIVE?: string;
 
+  // Cloudflare Access — required for verifying the
+  // `Cf-Access-Jwt-Assertion` header. Both must be set in production;
+  // missing/empty values cause the middleware to reject the assertion
+  // (fail-closed). Set via `wrangler secret put` or `[vars]`.
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
+
   // Comma-separated list of additional origins (scheme://host) that are
   // allowed to issue cookie-authenticated writes to `/api/*`. The Worker's
   // own request origin is always allowed; this is for SPAs hosted on a
