@@ -70,6 +70,23 @@
 bun install
 ```
 
+> **Supply-chain hardening — trusted dependencies.**
+> Bun does not run npm lifecycle scripts (`preinstall` / `install` / `postinstall` /
+> `prepare`) for dependencies by default. This repo's `package.json` declares an
+> explicit `trustedDependencies` allow-list, which **replaces** Bun's built-in
+> 367-package default list — only packages on this short list are permitted to
+> execute install scripts. Current entries:
+>
+> - `better-sqlite3` — fetches the prebuilt native binding used by the in-memory test DB.
+> - `husky` — installs the local git hooks declared in `.husky/`.
+>
+> **Trusted fallback procedure.** If a new dependency genuinely needs to run an
+> install script (typical case: a package shipping a prebuilt native binding),
+> add it to `trustedDependencies` in the same PR that introduces the dependency.
+> Reviewers must inspect the package's install script and confirm it is not an
+> attack vector before approving. Packages omitted from the list silently skip
+> their lifecycle scripts — confirm via `bun pm untrusted` after install.
+
 ### 2. Configure environment variables
 
 The Worker reads its config from Wrangler (`apps/api/wrangler.toml` + secrets).
