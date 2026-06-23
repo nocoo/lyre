@@ -90,6 +90,10 @@
       },
     },
   },
+  "trustedDependencies": [
+    "husky",
+    "better-sqlite3",
+  ],
   "overrides": {
     "@babel/core": "^7.29.6",
     "esbuild": "^0.28.1",
