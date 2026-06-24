@@ -210,8 +210,9 @@ AVAssetWriter 会将空 input 从输出文件中剔除（Phase 0 探针证实）
   按 track 的 `mediaTimeRange.start` 跟 encoder 内部记录的"哪路 source 启动时缓存的首帧 PTS"
   关联，得到 `(source, AVAssetTrack.trackID)` 映射，写入 `Recording_xxx.tracks.json` sidecar
   （与 m4a 同目录、同 basename，内容 `{ "system": <trackID>, "mic": <trackID> }`，缺席的一路省略）。
-  下游（player / downmix / ASR pre-processing）读 sidecar 拿 trackID。sidecar 缺失时退化为
-  "第一条 track = system"（与单轨缺席启动的语义一致）。
+  下游（player / downmix / ASR pre-processing）读 sidecar 拿 trackID。**sidecar 缺失时下游必须按
+  "无法识别来源"处理**（不渲染来源标签、不做按源分离），**不能**默认"第一条 track = system" ——
+  允许只有 mic 有帧、system 路无权限或无信号的合法场景。
 
 - 🔍 **条件方案 — 探针通过后才启用容器内 metadata**：如果未来某个 macOS / AVFoundation 版本
   让 `AVAssetWriterInput.metadata` 在 `.m4a` 上变得可读回，可落地为 sidecar 的冗余备份；
@@ -257,7 +258,7 @@ Audio/
 **Sidecar 约定**：每个 `Recording_xxx.m4a` 旁边写一个 `Recording_xxx.tracks.json`
 （内容形如 `{"system": <CMPersistentTrackID>, "mic": <CMPersistentTrackID>}`，缺席的一路省略）。
 sidecar 是 track 身份信息的**唯一可靠来源** —— 容器内 metadata 已被本地探针证伪。
-sidecar 仅本机使用，不上传 OSS、不入 `RecordingsStore` 索引（缺失即缺失，下游退化为"第一条 audio track = system"）。
+sidecar 仅本机使用，不上传 OSS、不入 `RecordingsStore` 索引（缺失即缺失，下游按"无法识别来源"处理，不假设默认 source）。
 
 ### AudioCaptureManager（after）
 
@@ -397,20 +398,40 @@ final class AudioEncoder: @unchecked Sendable {
     }
 
     /// finalize 完成后，按 AVAsset(url:) 读最终 tracks，依据 mediaTimeRange.start
-    /// 与 encoder 记录的每路首帧 PTS 做匹配，写出 {source: trackID} 的 sidecar。
-    /// 失败不抛 —— sidecar 缺失时下游退化为"第一条 track = system"。
+    /// finalize 完成后，写出 {source: trackID} 的 sidecar。
+    /// **不**用 timeRange.start 匹配 host-clock PTS —— .m4a 会把 track 起点规整到容器时间轴，
+    /// Mitigation A 的 silent prefix 也会让晚到 track 从 0 开始，PTS 匹配不可靠。
+    /// 映射规则改为：
+    ///   - 单源：only system → 唯一 audio track 是 system；only mic → 唯一是 mic。
+    ///   - 两源：依赖 AVAssetWriter 的 add() 顺序与最终 `asset.tracks(withMediaType: .audio)`
+    ///     顺序一致（先 add(sys) 再 add(mic) → tracks[0] = system，tracks[1] = mic）。
+    ///     **此假设必须由 Phase 0 探针 `LyreTests/AVAssetWriterTrackOrderProbeTests.swift` 验证**：
+    ///     重复 N 次"add(sys) → add(mic) → 双源写入 → finalize → 读 audio tracks"，断言每次都 tracks[0]
+    ///     的 trackID < tracks[1]，且首帧 ASBD 与 sys 输入一致。探针失败 → encoder 必须在 append 阶段
+    ///     额外把 (systemInput.preferredVolume tag, micInput.preferredVolume tag) 之类的可读回标记
+    ///     落到 RecordingsStore 元数据，本设计退化为"sidecar 仅 single-source 可用"。
+    /// 失败不抛 —— sidecar 缺失时下游按"无法识别来源"处理（不假设默认 source），参见 Compatibility 章节。
     private func writeTrackIdentitySidecarLocked(outputURL: URL,
-                                                  systemFirstPTS: CMTime?,
-                                                  micFirstPTS: CMTime?) {
+                                                  systemDidAppend: Bool,
+                                                  micDidAppend: Bool) {
         let asset = AVAsset(url: outputURL)
         let audioTracks = asset.tracks(withMediaType: .audio)
         var map: [String: CMPersistentTrackID] = [:]
-        for track in audioTracks {
-            let start = track.timeRange.start
-            if let sys = systemFirstPTS, abs((start - sys).seconds) < 0.05 { map["system"] = track.trackID }
-            else if let mic = micFirstPTS, abs((start - mic).seconds) < 0.05 { map["mic"] = track.trackID }
+        switch (systemDidAppend, micDidAppend, audioTracks.count) {
+        case (true,  false, 1): map["system"] = audioTracks[0].trackID
+        case (false, true,  1): map["mic"]    = audioTracks[0].trackID
+        case (true,  true,  2):
+            // 探针约定：先 add(sys) 再 add(mic) → tracks[0] = system, tracks[1] = mic
+            map["system"] = audioTracks[0].trackID
+            map["mic"]    = audioTracks[1].trackID
+        case (true,  true,  1):
+            // 一路被 AVAssetWriter 剔除（无 buffer 实际写入但 didAppend 已 true 极少见，保守处理）
+            Self.logger.warning("track count=1 with both sources active; cannot identify, skipping sidecar")
+            return
+        default:
+            Self.logger.warning("unexpected (sysDid=\(systemDidAppend), micDid=\(micDidAppend), tracks=\(audioTracks.count)); skipping sidecar")
+            return
         }
-        guard !map.isEmpty else { return }
         let sidecar = outputURL.deletingPathExtension().appendingPathExtension("tracks.json")
         if let data = try? JSONSerialization.data(withJSONObject: map) {
             try? data.write(to: sidecar, options: .atomic)
@@ -523,9 +544,9 @@ final class AudioEncoder: @unchecked Sendable {
 
     /// finalize 必须 throws，把 writer.error 显式上抛。否则上层无法区分
     /// "录音正常收尾"和"writer 中途失败但文件残缺"。
-    /// 成功路径在 finishWriting 之后写出 tracks.json sidecar（失败不抛，缺失下游退化）。
+    /// 成功路径在 finishWriting 之后写出 tracks.json sidecar（失败不抛，缺失下游不假设来源）。
     func finalize() async throws {
-        let (w, url, sysFirst, micFirst): (AVAssetWriter?, URL?, CMTime?, CMTime?) = queue.sync {
+        let (w, url, sysDid, micDid): (AVAssetWriter?, URL?, Bool, Bool) = queue.sync {
             sessionStartTimer?.cancel(); sessionStartTimer = nil
             // 两路从未到帧的极端情况：用 .zero 启动以便 finishWriting 正常收尾。
             // 这是 finalize 路径独占的兜底，不与 enqueue 路径上的 startSessionLocked 混用。
@@ -535,9 +556,9 @@ final class AudioEncoder: @unchecked Sendable {
             }
             systemInput?.markAsFinished()
             micInput?.markAsFinished()
-            // firstSystemPTS / firstMicPTS 是 startSessionLocked() 排空 pending 前记下的
-            // "每路首帧 PTS"（与 lastSystemPTS / lastMicPTS 同生命周期，per-source 记录一次）。
-            return (writer, outputURL, firstSystemPTS, firstMicPTS)
+            // systemDidAppend / micDidAppend 在 appendLocked() 成功 append 后置 true，
+            // per-source 一次置位、不会再变。这比"首帧 PTS"可靠：silent prefix / .zero 启动都不影响。
+            return (writer, outputURL, systemDidAppend, micDidAppend)
         }
         guard let w else { return }
         await withCheckedContinuation { c in w.finishWriting { c.resume() } }
@@ -546,16 +567,16 @@ final class AudioEncoder: @unchecked Sendable {
             throw EncoderError.writerFailed(err.localizedDescription)
         }
         if let url { writeTrackIdentitySidecarLocked(outputURL: url,
-                                                     systemFirstPTS: sysFirst,
-                                                     micFirstPTS: micFirst) }
+                                                     systemDidAppend: sysDid,
+                                                     micDidAppend: micDid) }
     }
 }
 ```
 
 > encoder 内需额外维护：`private var outputURL: URL?`（`setup()` 保存）、
-> `private var firstSystemPTS: CMTime?` / `private var firstMicPTS: CMTime?`
-> （`startSessionLocked()` 排空 pending 前从 `pendingSystem.first` / `pendingMic.first`
-> 抓取一次，per-source 各保存一份，后续不再覆写）。
+> `private var systemDidAppend = false` / `private var micDidAppend = false`
+> （`appendLocked()` 内 `input.append(buf) == true` 后 per-source 置位，silent prefix 也算
+> append 成功 —— sidecar 关心的是"这路有没有 track 出现在最终文件里"，而不是"是否含真实音频"）。
 
 **关键变化**：
 
@@ -632,7 +653,7 @@ func stopRecording() async throws -> URL {
   行为**没有明确文档保证**，需要在手工验收阶段听一遍确认两路声音都能出。如果只能听到 track 0：
   - 短期方案：把 `AudioPlayerManager` 内部从 `AVAudioPlayer` 换成 `AVPlayer`（API 接近，支持多 track 自动混音）。
   - 长期方案：见 Risk & Fallback。
-- **Aliyun OSS 上传**: 字节级透传，不感知 track 结构，无需改动。**但 `Recording_xxx.tracks.json` sidecar 不上传** —— sidecar 仅本机使用，云端 ASR / 历史回看走"第一条 track = system"退化语义。如果未来需要云端识别 track 身份，再扩展 upload 流水线。
+- **Aliyun OSS 上传**: 字节级透传，不感知 track 结构，无需改动。**但 `Recording_xxx.tracks.json` sidecar 不上传** —— sidecar 仅本机使用，云端 ASR / 历史回看按"无法识别来源"处理（不假设第一条 track 是 system）。如果未来需要云端识别 track 身份，再扩展 upload 流水线把 sidecar 一起带上。
 
 ## Testing Strategy
 
@@ -776,6 +797,10 @@ func downmixToSingleTrack(input: URL, output: URL) async throws {
    - 延迟首帧探针：假设 A 是否成立
    - PTS gap 探针：假设 B 是否成立
    - 把两条结论写进 PR 描述。任一为否 → 按"决策树"启用 Mitigation A / B；若 Mitigation A / B 二次探针仍失败，**只能**走 B1 PCM 中间文件兜底（**禁止**读已写好的 AAC m4a 做离线渲染，时间信息已丢失）。改 Phase 1 的 encoder 设计；Phase 2 用例 2 改测对应 mitigation。
+6. **跑 `LyreTests/AVAssetWriterTrackOrderProbeTests.swift` 验证 track 顺序稳定性**（sidecar 双源映射的前提）：
+   - 重复 N（≥ 20）次：建 writer → add(sys) → add(mic) → 双源 append 各 1s → finalize → 读 `asset.tracks(withMediaType: .audio)`。
+   - 断言每次都 `tracks[0].trackID < tracks[1].trackID`，且 `tracks[0]` 首帧 ASBD 与 sys 输入一致。
+   - 结论写进 PR 描述。失败 → 不能用"add() 顺序 → tracks 顺序"做双源映射；sidecar 退化为"仅 single-source 可写"，且双源场景的 source 识别需另设方案（落到本计划之外的后续 issue）。
 
 **Phase 1 — 代码改造（Phase 0 通过后）**
 
