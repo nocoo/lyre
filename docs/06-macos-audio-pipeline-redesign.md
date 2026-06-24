@@ -554,6 +554,7 @@ func stopRecording() async throws -> URL {
         capture.onStreamError        = nil
         encoder = nil
         currentFileURL = nil
+        recordingStartTime = nil      // 现有实现也清；不清会让 elapsed 显示残值
         state = .idle
     }
     try await capture.stopCapture()
