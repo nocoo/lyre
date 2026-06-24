@@ -201,7 +201,7 @@ AVAssetWriter 会将空 input 从输出文件中剔除（Phase 0 探针证实）
   `"system"` / `"mic"` 不是合法语言标签，会抛 `NSInvalidArgumentException` 直接崩溃。
 - ✅ 可选方案（择一）：
   1. **track metadata**：用 `AVAssetWriterInput.metadata` 写入 `AVMetadataItem`
-     （`identifier = .commonIdentifierTitle` 或自定义 `keySpace = "com.lyre.audio"`，`key = "source"`，`value = "system"`），
+     （raw identifier 统一为 `"mdta/com.lyre.audio.source"`，`dataType = kCMMetadataBaseDataType_UTF8`，`value = "system"` | `"mic"`），
      下游用 `AVAssetTrack.metadata` 读回。
   2. **finalize 后读 metadata 反查**：`finishWriting` 完成后用 `AVAsset(url: outputURL)`
      按 metadata（方案 1 写入的 `source` key）读出每条 `AVAssetTrack.trackID`，把
@@ -362,7 +362,7 @@ final class AudioEncoder: @unchecked Sendable {
         sys.expectsMediaDataInRealTime = true
         mic.expectsMediaDataInRealTime = true
         // Track 身份标记（合法路径，见 Compatibility & Migration 章节）：
-        // 自定义 keySpace "com.lyre.audio" / key "source" / value "system" | "mic"。
+        // raw identifier "mdta/com.lyre.audio.source" / UTF-8 value "system" | "mic"。
         // 用例 4（单轨缺席启动）的 metadata 断言依赖此设置；不要省。
         sys.metadata = [Self.makeSourceMetadata("system")]
         mic.metadata = [Self.makeSourceMetadata("mic")]
@@ -542,18 +542,23 @@ encoder / `state = .idle`，一次失败的 stop 会留下 `state == .recording`
 活着的 capture callbacks，下一次 `startRecording()` 会撞 precondition 或往已 finalize 的 encoder 上 append。
 
 ```swift
-func stopRecording() async throws {
-    guard state == .recording else { return }
+@discardableResult
+func stopRecording() async throws -> URL {
+    guard state == .recording, let fileURL = currentFileURL else {
+        throw RecordingError.notRecording
+    }
     // defer 在 throw 之前跑，保证无论 finalize 成败状态都干净
     defer {
         capture.onSystemSampleBuffer = nil
         capture.onMicSampleBuffer    = nil
         capture.onStreamError        = nil
         encoder = nil
+        currentFileURL = nil
         state = .idle
     }
     try await capture.stopCapture()
     try await encoder?.finalize()    // 失败时 defer 仍执行
+    return fileURL                    // 仅 finalize 成功才能跑到这里
 }
 ```
 
@@ -601,7 +606,7 @@ PTS 序列，作为真值断言（而不是依赖 encoder 内部状态 / `startS
 | `LyreTests/AudioEncoderTests.swift` 用例 1 — 双轨基本写入（**期望随假设 A 切换**） | 合成两路 `CMSampleBuffer`（system PTS 起点 = 1000ms，mic PTS 起点 = 1200ms），各写 1 秒，session 启动于 PTS = 1000ms。<br>**Main path（假设 A 通过）**：用 `AVAssetReader` 断言 ① `tracks(withMediaType: .audio).count == 2`；② mic track 第一个 sample PTS ≈ **1200ms**；③ 两 track 总时长 ≈ 1s。<br>**Mitigation A path（假设 A 失败 → silent PCM prefix）**：① count == 2；② mic track 第一个**有效音频** sample PTS ≈ 1200ms，但 200ms 前缀由 silent PCM `CMSampleBuffer` append → AAC encoder 压缩成静默 AAC frame（解码后能量 ≈ 0，不是空 timeline）；③ mic track 总时长 ≈ **1.2s**（含 silent prefix）。 |
 | `LyreTests/AudioEncoderTests.swift` 用例 2 — PTS gap 处理（Cause B 回归，**期望随假设 B 切换**） | 合成 mic 轨：第 0–500ms append 5 个 100ms buffer（PTS 连续），跳过 500–600ms，再 append 6 个 100ms buffer（PTS 从 600ms 起，不回填）。<br>**Main path（假设 B 通过）**：用 `AVAssetReader` 断言第 6 个 sample 的 presentationTime ≈ **600ms**（gap 在容器层保留）。<br>**Mitigation B path（假设 B 失败 → silent PCM fill）**：encoder 在 600ms append 前应已合成 500–600ms 的 silent PCM `CMSampleBuffer` 并 append（由 AAC encoder 自动压缩成静默 AAC frame）；断言第 6 个**真实**音频 sample 在 600ms，500–600ms 区间解码后能量 ≈ 0。<br>**B 二次失败兜底（B1 PCM 中间文件）**：测试改为读 PCM 中间文件 + 重渲染后的单轨 m4a，断言 600ms 处仍是静默而非压贴。 |
 | `LyreTests/AudioEncoderTests.swift` 用例 3 — **Sample-rate mismatch 重采样**（Cause A 回归，新增） | 合成 mic `CMSampleBuffer`，ASBD 中 `mSampleRate = 44100`，写 5 秒 440Hz 正弦波。append 给 encoder。用 `AVAssetReader` 读输出 mic track：① 输出 ASBD `mSampleRate == 48000`（AAC encoder 已重采样）；② track duration ≈ **5 秒**（不是 44100/48000 × 5s = 4.59s）；③ （可选）解码前 100ms PCM 做 FFT，峰值频率仍 ≈ 440Hz（不是 ×48000/44100 后的 ≈ 479Hz）。这条用例失败 = Cause A 没被修。 |
-| `LyreTests/AudioEncoderTests.swift` 用例 4 — 单轨缺席启动 | 只喂 system，不喂 mic，等 500ms timer 触发后断言 ① 文件能 finalize；② **`tracks(withMediaType: .audio).count == 1`**（探针确认：AVAssetWriter 会把从未 append 数据的空 `AVAssetWriterInput` 从最终 `.m4a` 中剔除，不会保留为"空 track"）；③ 该 track 的 metadata 标识为 system 来源（通过 `AVAssetTrack.metadata` 读取 `com.lyre.audio/source` 自定义 metadata item，详见 Track 身份标记章节，**不**使用 `extendedLanguageTag`）；④ system track 在 timeout 前的所有 buffer 都被写入（验证 #1 修复：pre-session 不只缓存首帧）。**注意**：用例 1 的 track 0 / track 1 顺序约定只在"两路都有数据"时成立；下游若需可靠识别 track 来源，不能依赖 track 序号。 |
+| `LyreTests/AudioEncoderTests.swift` 用例 4 — 单轨缺席启动 | 只喂 system，不喂 mic，等 500ms timer 触发后断言 ① 文件能 finalize；② **`tracks(withMediaType: .audio).count == 1`**（探针确认：AVAssetWriter 会把从未 append 数据的空 `AVAssetWriterInput` 从最终 `.m4a` 中剔除，不会保留为"空 track"）；③ 该 track 的 metadata 标识为 system 来源（通过 `AVAssetTrack.metadata` 读取 identifier == `"mdta/com.lyre.audio.source"` 的 item，断言其 `stringValue == "system"`，详见 Track 身份标记章节，**不**使用 `extendedLanguageTag`）；④ system track 在 timeout 前的所有 buffer 都被写入（验证 #1 修复：pre-session 不只缓存首帧）。**注意**：用例 1 的 track 0 / track 1 顺序约定只在"两路都有数据"时成立；下游若需可靠识别 track 来源，不能依赖 track 序号。 |
 | `LyreTests/AudioEncoderTests.swift` 用例 5 — PTS 单调性 | 给 system 喂 PTS 递增 buffer 后突然喂一个 PTS 回退的 buffer，断言被丢弃、不抛异常、后续递增 buffer 仍能正常写入。验证：`AVAssetReader` 读出的 sample 数 = 递增 buffer 数（逆序 buffer 不在文件里）。 |
 | `LyreTests/AudioCaptureManagerTests.swift` | 断言 `onSystemSampleBuffer` / `onMicSampleBuffer` 被分别触发（通过 inject 假 SCStream 或直接调用 `stream(_:didOutputSampleBuffer:of:)`）；不再断言 mixed PCM 内容。 |
 | `LyreTests/RecordingManagerTests.swift` | start → stop 流程；断言两路 callback 都接到 encoder 的对应入口。 |
