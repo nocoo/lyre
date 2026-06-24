@@ -205,11 +205,19 @@ AVAssetWriter 会将空 input 从输出文件中剔除（Phase 0 探针证实）
   不会把 per-input 的 `mdta` track metadata 实际持久化到容器里 —— `AVAssetWriterInput.metadata`
   在 `.m4a` 上**不可读回**。直接靠 `AVAssetTrack.metadata` 识别来源会失败。
 
-- ✅ **默认方案 — sidecar 映射文件**：encoder **不依赖容器** metadata 记录来源。
-  `finishWriting` 完成后用 `AVAsset(url: outputURL)` 拿到最终 `tracks(withMediaType: .audio)`，
-  按 track 的 `mediaTimeRange.start` 跟 encoder 内部记录的"哪路 source 启动时缓存的首帧 PTS"
-  关联，得到 `(source, AVAssetTrack.trackID)` 映射，写入 `Recording_xxx.tracks.json` sidecar
-  （与 m4a 同目录、同 basename，内容 `{ "system": <trackID>, "mic": <trackID> }`，缺席的一路省略）。
+- ✅ **默认方案 — sidecar 映射文件**：encoder **不依赖容器** metadata 记录来源，**也不**用
+  `timeRange.start` 匹配 host-clock PTS（.m4a 会把 track 起点规整到容器时间轴，且 Mitigation A
+  的 silent prefix 会让晚到 track 也从 0 开始，PTS 匹配会失配或误判）。改用：
+  - **per-source 锁存位**：`appendLocked()` 内 `input.append(buf) == true` 后置
+    `systemDidAppend` / `micDidAppend`，per-source 一次置位、不会再变。
+  - **AVAssetWriter `add()` 顺序约定**：先 `add(sys)` 再 `add(mic)` →
+    `asset.tracks(withMediaType: .audio)` 顺序为 `[sys, mic]`。**此假设由 Phase 0 探针
+    `AVAssetWriterTrackOrderProbeTests` 验证**（写不同内容到两路 → 读回检查 tracks[0] 内容来自 sys）。
+  - 用 `(systemDidAppend, micDidAppend, audioTracks.count)` 三元组判断来源：
+    `(true, false, 1)` → 唯一 track = system；`(false, true, 1)` → mic；
+    `(true, true, 2)` → tracks[0] = system, tracks[1] = mic；其他组合 → 跳过 sidecar 不写。
+  结果写入 `Recording_xxx.tracks.json` sidecar（与 m4a 同目录、同 basename，内容
+  `{ "system": <trackID>, "mic": <trackID> }`，缺席的一路省略）。
   下游（player / downmix / ASR pre-processing）读 sidecar 拿 trackID。**sidecar 缺失时下游必须按
   "无法识别来源"处理**（不渲染来源标签、不做按源分离），**不能**默认"第一条 track = system" ——
   允许只有 mic 有帧、system 路无权限或无信号的合法场景。
@@ -397,7 +405,6 @@ final class AudioEncoder: @unchecked Sendable {
         }
     }
 
-    /// finalize 完成后，按 AVAsset(url:) 读最终 tracks，依据 mediaTimeRange.start
     /// finalize 完成后，写出 {source: trackID} 的 sidecar。
     /// **不**用 timeRange.start 匹配 host-clock PTS —— .m4a 会把 track 起点规整到容器时间轴，
     /// Mitigation A 的 silent prefix 也会让晚到 track 从 0 开始，PTS 匹配不可靠。
@@ -405,11 +412,13 @@ final class AudioEncoder: @unchecked Sendable {
     ///   - 单源：only system → 唯一 audio track 是 system；only mic → 唯一是 mic。
     ///   - 两源：依赖 AVAssetWriter 的 add() 顺序与最终 `asset.tracks(withMediaType: .audio)`
     ///     顺序一致（先 add(sys) 再 add(mic) → tracks[0] = system，tracks[1] = mic）。
-    ///     **此假设必须由 Phase 0 探针 `LyreTests/AVAssetWriterTrackOrderProbeTests.swift` 验证**：
-    ///     重复 N 次"add(sys) → add(mic) → 双源写入 → finalize → 读 audio tracks"，断言每次都 tracks[0]
-    ///     的 trackID < tracks[1]，且首帧 ASBD 与 sys 输入一致。探针失败 → encoder 必须在 append 阶段
-    ///     额外把 (systemInput.preferredVolume tag, micInput.preferredVolume tag) 之类的可读回标记
-    ///     落到 RecordingsStore 元数据，本设计退化为"sidecar 仅 single-source 可用"。
+    ///     **此假设必须由 Phase 0 内容探针 `LyreTests/AVAssetWriterTrackOrderProbeTests.swift` 验证**：
+    ///     重复 N 次"add(sys) → add(mic) → sys 写 440Hz 正弦波、mic 写 880Hz 正弦波（两路 outputSettings 相同）
+    ///     → finalize → 用 `AVAssetReader` 解码 tracks[0] / tracks[1] 各取 100ms PCM 做 FFT"，
+    ///     断言每次 tracks[0] 主频 ≈ 440Hz、tracks[1] 主频 ≈ 880Hz。**不**靠 trackID 大小或首帧 ASBD
+    ///     判断（两路 outputSettings 相同 → ASBD 也相同；trackID 由 AVAssetWriter 内部分配，无序保证）。
+    ///     探针失败 → "add() 顺序 → tracks 顺序"映射不可用，sidecar 退化为"仅 single-source 可写"，
+    ///     双源场景的 source 识别需另设方案（落到本计划之外的后续 issue）。
     /// 失败不抛 —— sidecar 缺失时下游按"无法识别来源"处理（不假设默认 source），参见 Compatibility 章节。
     private func writeTrackIdentitySidecarLocked(outputURL: URL,
                                                   systemDidAppend: Bool,
@@ -798,9 +807,9 @@ func downmixToSingleTrack(input: URL, output: URL) async throws {
    - PTS gap 探针：假设 B 是否成立
    - 把两条结论写进 PR 描述。任一为否 → 按"决策树"启用 Mitigation A / B；若 Mitigation A / B 二次探针仍失败，**只能**走 B1 PCM 中间文件兜底（**禁止**读已写好的 AAC m4a 做离线渲染，时间信息已丢失）。改 Phase 1 的 encoder 设计；Phase 2 用例 2 改测对应 mitigation。
 6. **跑 `LyreTests/AVAssetWriterTrackOrderProbeTests.swift` 验证 track 顺序稳定性**（sidecar 双源映射的前提）：
-   - 重复 N（≥ 20）次：建 writer → add(sys) → add(mic) → 双源 append 各 1s → finalize → 读 `asset.tracks(withMediaType: .audio)`。
-   - 断言每次都 `tracks[0].trackID < tracks[1].trackID`，且 `tracks[0]` 首帧 ASBD 与 sys 输入一致。
-   - 结论写进 PR 描述。失败 → 不能用"add() 顺序 → tracks 顺序"做双源映射；sidecar 退化为"仅 single-source 可写"，且双源场景的 source 识别需另设方案（落到本计划之外的后续 issue）。
+   - 重复 N（≥ 20）次：建 writer → `add(sys)` → `add(mic)`（两路 outputSettings 相同）→ sys 写 1s 440Hz 正弦波、mic 写 1s 880Hz 正弦波 → finalize → 用 `AVAssetReader` 解码 `tracks(withMediaType: .audio)[0]` / `[1]` 各取 100ms PCM 做 FFT。
+   - 断言每次 `tracks[0]` 主频 ≈ 440Hz、`tracks[1]` 主频 ≈ 880Hz（即 tracks 顺序与 add() 顺序一致）。**不**用 trackID 大小或 ASBD 判断 —— 两路相同 outputSettings 的 ASBD 必然相同，trackID 由 AVAssetWriter 内部分配，无序保证。
+   - 结论写进 PR 描述。失败 → "add() 顺序 → tracks 顺序"假设不成立，sidecar 退化为"仅 single-source 可写"，双源场景的 source 识别需另设方案（落到本计划之外的后续 issue）。
 
 **Phase 1 — 代码改造（Phase 0 通过后）**
 
