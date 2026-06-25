@@ -50,6 +50,13 @@ const STEPS: Step[] = [
       "-destination",
       "platform=macOS",
       "-quiet",
+      // Ad-hoc signing for the local test bundle so dev machines without
+      // the production Apple Dev cert can still run the gate. Release
+      // (release.ts) does not pass these overrides and continues to use
+      // the team-managed cert.
+      "CODE_SIGN_IDENTITY=-",
+      "CODE_SIGNING_REQUIRED=NO",
+      "CODE_SIGNING_ALLOWED=NO",
     ],
     cwd: MACOS_DIR,
   },

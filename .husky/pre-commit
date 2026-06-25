@@ -9,6 +9,13 @@ bun run test
 bun run typecheck
 
 # macOS: unit tests + lint
+#
+# Ad-hoc signing (CODE_SIGN_IDENTITY="-" + CODE_SIGNING_{REQUIRED,ALLOWED}=NO)
+# lets the test bundle build on dev machines that do not carry the Apple
+# Developer cert matching the project's release team — running tests does
+# not need a real signature, but `release.ts` still uses the team cert
+# because it does not pass these overrides.
 cd apps/macos && \
-  xcodebuild test -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS" -quiet && \
+  xcodebuild test -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS" -quiet \
+    CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO && \
   swiftlint lint --strict Lyre/ LyreTests/
