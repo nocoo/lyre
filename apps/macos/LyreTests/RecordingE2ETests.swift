@@ -101,6 +101,56 @@ struct RecordingE2ETests {
         let durationSeconds = CMTimeGetSeconds(duration)
         #expect(durationSeconds > 1.0, "Recording should be at least 1 second (was \(durationSeconds)s)")
         #expect(durationSeconds < 5.0, "Recording should be less than 5 seconds (was \(durationSeconds)s)")
+
+        // Conditional sidecar consistency check (task #6 commit 2).
+        // The dualTrack path writes a `tracks.json` next to the m4a
+        // mapping role → trackID. In live SCK runs we cannot guarantee
+        // both sources produce real buffers (locked screen / no system
+        // audio playing / mic muted), and AudioEncoder only records
+        // roles for sources that actually appended real buffers — so
+        // the sidecar might map zero, one, or two roles. If it exists,
+        // it must be internally consistent with the finalized asset.
+        let sidecarURL = outputURL.deletingPathExtension().appendingPathExtension("tracks.json")
+        if FileManager.default.fileExists(atPath: sidecarURL.path) {
+            try Self.assertSidecarConsistent(sidecarURL: sidecarURL, audioTracks: tracks)
+        }
+    }
+
+    /// Validate a sidecar JSON file matches the asset it describes.
+    /// Used only when the sidecar exists; absence is allowed in live
+    /// E2E because dualTrack only emits sidecar for sources that
+    /// actually appended a real buffer.
+    private static func assertSidecarConsistent(
+        sidecarURL: URL,
+        audioTracks: [AVAssetTrack]
+    ) throws {
+        let data = try Data(contentsOf: sidecarURL)
+        let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        let mapping = raw["tracks"] as? [String: Any] ?? [:]
+
+        let allowedRoles: Set<String> = ["system", "mic"]
+        let actualTrackIDs = Set(audioTracks.map(\.trackID))
+
+        // Every role must be from the allowed set; every trackID must
+        // be a real audio track of the finalized asset.
+        for (role, value) in mapping {
+            #expect(allowedRoles.contains(role), "sidecar role '\(role)' must be system or mic")
+            guard let n = value as? NSNumber else {
+                Issue.record("sidecar value for role '\(role)' is not a number: \(value)")
+                continue
+            }
+            let trackID = CMPersistentTrackID(n.int32Value)
+            #expect(actualTrackIDs.contains(trackID), "sidecar trackID \(trackID) for '\(role)' not in asset")
+        }
+
+        // Role count should match audio track count: AudioEncoder
+        // skips the sidecar entirely when the two counts differ
+        // (Reviewer Finding 5 / task #4). Seeing a sidecar with
+        // mismatched counts means the encoder's defensive skip broke.
+        #expect(
+            mapping.count == audioTracks.count,
+            "sidecar role count (\(mapping.count)) must match audio track count (\(audioTracks.count))"
+        )
     }
 
     // MARK: - Double Start Prevention
