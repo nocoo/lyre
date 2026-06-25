@@ -244,6 +244,7 @@ describe("wordsHandler", () => {
     const fakeAsr = {
       transcripts: [
         {
+          channel_id: 0,
           sentences: [
             {
               sentence_id: 1,
@@ -265,8 +266,81 @@ describe("wordsHandler", () => {
     );
     expect(res.status).toBe(200);
     if (res.kind !== "json") throw new Error();
-    const body = res.body as { sentences: Array<{ sentenceId: number }> };
+    const body = res.body as {
+      sentences: Array<{ sentenceId: number; channelId: number }>;
+    };
+    // channel_id=0 keeps the raw sentence_id; composite encoding only
+    // raises the id for higher channels.
     expect(body.sentences[0]?.sentenceId).toBe(1);
+    expect(body.sentences[0]?.channelId).toBe(0);
+  });
+  it("merges sentences from every channel and assigns composite sentenceIds", async () => {
+    const { user } = await setupAuthedCtx();
+    const ctx = makeCtx(user, { env: ossEnv });
+    const created = await createRecordingHandler(ctx, {
+      title: "X",
+      fileName: "x.m4a",
+      ossKey: "uploads/u/r/x.m4a",
+    });
+    if (created.kind !== "json") throw new Error();
+    const recId = (created.body as { id: string }).id;
+    await testRepos().jobs.create({
+      id: "job-w-multi",
+      recordingId: recId,
+      taskId: "task-multi",
+      requestId: null,
+      status: "SUCCEEDED",
+    });
+    const fakeAsr = {
+      transcripts: [
+        {
+          channel_id: 0,
+          sentences: [
+            {
+              sentence_id: 0,
+              words: [
+                { begin_time: 0, end_time: 100, text: "sys-a", punctuation: "" },
+              ],
+            },
+          ],
+        },
+        {
+          channel_id: 1,
+          sentences: [
+            {
+              sentence_id: 0,
+              words: [
+                { begin_time: 50, end_time: 150, text: "mic-a", punctuation: "" },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const res = await withMockedFetch(
+      async () =>
+        new Response(JSON.stringify(fakeAsr), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      () => wordsHandler(ctx, recId),
+    );
+    expect(res.status).toBe(200);
+    if (res.kind !== "json") throw new Error();
+    const body = res.body as {
+      sentences: Array<{ sentenceId: number; channelId: number; words: Array<{ text: string }> }>;
+    };
+    expect(body.sentences).toHaveLength(2);
+    // Sorted by first word's begin_time; channel 0 (begin 0) first,
+    // channel 1 (begin 50) second.
+    expect(body.sentences[0]?.channelId).toBe(0);
+    expect(body.sentences[0]?.sentenceId).toBe(0);
+    expect(body.sentences[0]?.words[0]?.text).toBe("sys-a");
+    expect(body.sentences[1]?.channelId).toBe(1);
+    // Channel 1's raw sentence_id=0 lifts by SENTENCE_ID_CHANNEL_STRIDE so
+    // it does not collide with channel 0's id=0.
+    expect(body.sentences[1]?.sentenceId).toBe(100_000);
+    expect(body.sentences[1]?.words[0]?.text).toBe("mic-a");
   });
   it("502 when OSS fetch returns non-ok", async () => {
     const { user } = await setupAuthedCtx();

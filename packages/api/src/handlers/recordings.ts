@@ -20,6 +20,7 @@ import {
 } from "../services/oss";
 import { getAsrProvider } from "../services/asr-provider";
 import { DEFAULT_ASR_MODEL, isValidAsrModel } from "../contracts/asr";
+import { SENTENCE_ID_CHANNEL_STRIDE } from "../contracts/recordings";
 import type {
   RecordingDetail,
   RecordingStatus,
@@ -375,7 +376,13 @@ export async function downloadUrlHandler(
 }
 
 export interface SentenceWords {
+  /**
+   * Composite ID built with `SENTENCE_ID_CHANNEL_STRIDE` so consumers
+   * can match this back to `TranscriptionSentence.sentenceId`.
+   */
   sentenceId: number;
+  /** Source audio track (channel) this sentence came from. */
+  channelId: number;
   words: AsrTranscriptionWord[];
 }
 
@@ -402,17 +409,43 @@ export async function wordsHandler(
       return json({ error: "Failed to fetch transcription data from storage" }, 502);
     }
     const raw = (await response.json()) as AsrTranscriptionResult;
-    const transcript = raw.transcripts[0];
-    if (!transcript) return json({ sentences: [] });
+    const transcripts = raw.transcripts ?? [];
+    if (transcripts.length === 0) return json({ sentences: [] });
 
-    const sentences: SentenceWords[] = transcript.sentences.map((s) => ({
-      sentenceId: s.sentence_id,
-      words: s.words.map((w) => ({
-        begin_time: w.begin_time,
-        end_time: w.end_time,
-        text: w.text,
-        punctuation: w.punctuation,
-      })),
+    // Merge sentences from every channel. The composite `sentenceId`
+    // uses the same `SENTENCE_ID_CHANNEL_STRIDE` formula as
+    // `parseTranscriptionResult` so the front-end karaoke can correlate
+    // word rows back to the persisted sentence rows by id. Ordering
+    // matches the parser exactly — sentence-level `(begin_time,
+    // channelId, sentenceId)` — so the `/words` order lines up 1:1 with
+    // the persisted sentence order.
+    type SentenceWithSort = SentenceWords & { sortBeginTime: number };
+    const ranked: SentenceWithSort[] = [];
+    for (const transcript of transcripts) {
+      const channelId = transcript.channel_id;
+      for (const s of transcript.sentences) {
+        ranked.push({
+          sentenceId: channelId * SENTENCE_ID_CHANNEL_STRIDE + s.sentence_id,
+          channelId,
+          words: s.words.map((w) => ({
+            begin_time: w.begin_time,
+            end_time: w.end_time,
+            text: w.text,
+            punctuation: w.punctuation,
+          })),
+          sortBeginTime: s.begin_time,
+        });
+      }
+    }
+    ranked.sort((a, b) => {
+      if (a.sortBeginTime !== b.sortBeginTime) return a.sortBeginTime - b.sortBeginTime;
+      if (a.channelId !== b.channelId) return a.channelId - b.channelId;
+      return a.sentenceId - b.sentenceId;
+    });
+    const sentences: SentenceWords[] = ranked.map((r) => ({
+      sentenceId: r.sentenceId,
+      channelId: r.channelId,
+      words: r.words,
     }));
     return json({ sentences });
   } catch {

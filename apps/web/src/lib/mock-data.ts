@@ -21,7 +21,7 @@ const DAY = 86_400_000;
 
 const mockSentences: TranscriptionSentence[] = [
   {
-    sentenceId: 0,
+    sentenceId: 0, channelId: 0,
     beginTime: 0,
     endTime: 3200,
     text: "Welcome to the quarterly product review meeting.",
@@ -29,7 +29,7 @@ const mockSentences: TranscriptionSentence[] = [
     emotion: "neutral",
   },
   {
-    sentenceId: 1,
+    sentenceId: 1, channelId: 0,
     beginTime: 3200,
     endTime: 7800,
     text: "Today we'll be discussing the progress on our main initiatives and the roadmap for next quarter.",
@@ -37,7 +37,7 @@ const mockSentences: TranscriptionSentence[] = [
     emotion: "neutral",
   },
   {
-    sentenceId: 2,
+    sentenceId: 2, channelId: 0,
     beginTime: 7800,
     endTime: 12400,
     text: "Let's start with the user growth metrics. We've seen a 23% increase in monthly active users.",
@@ -45,7 +45,7 @@ const mockSentences: TranscriptionSentence[] = [
     emotion: "neutral",
   },
   {
-    sentenceId: 3,
+    sentenceId: 3, channelId: 0,
     beginTime: 12400,
     endTime: 18200,
     text: "The mobile app retention rate improved significantly, reaching 68% at day-30, which is well above our target.",
@@ -53,7 +53,7 @@ const mockSentences: TranscriptionSentence[] = [
     emotion: "neutral",
   },
   {
-    sentenceId: 4,
+    sentenceId: 4, channelId: 0,
     beginTime: 18200,
     endTime: 23000,
     text: "Moving on to the technical infrastructure, we completed the migration to the new database cluster last week.",

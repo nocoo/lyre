@@ -88,7 +88,13 @@ export interface TranscriptionJob {
 }
 
 export interface TranscriptionSentence {
+  /**
+   * Composite ID stable across all channels. See
+   * `SENTENCE_ID_CHANNEL_STRIDE` in `contracts/recordings.ts`.
+   */
   sentenceId: number;
+  /** Source audio track (channel) this sentence came from. */
+  channelId: number;
   beginTime: number; // milliseconds
   endTime: number; // milliseconds
   text: string;

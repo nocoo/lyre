@@ -60,13 +60,30 @@ export interface Recording {
 }
 
 export interface TranscriptionSentence {
+  /**
+   * Composite ID stable across all channels in this transcription:
+   * `channelId * SENTENCE_ID_CHANNEL_STRIDE + sentence_id`. DashScope's
+   * raw `sentence_id` restarts at 0 per channel, so we encode the
+   * channel into a higher decimal band so consumers (front-end karaoke,
+   * `/words` endpoint) can use a single number as the row key.
+   */
   sentenceId: number;
+  /** Source audio track (channel) this sentence came from. */
+  channelId: number;
   beginTime: number;
   endTime: number;
   text: string;
   language: string;
   emotion: string;
 }
+
+/**
+ * Multiplier used when collapsing the per-channel `(channel_id,
+ * sentence_id)` tuple into the single `TranscriptionSentence.sentenceId`
+ * key. Keep this in sync with `parseTranscriptionResult` and
+ * `wordsHandler`.
+ */
+export const SENTENCE_ID_CHANNEL_STRIDE = 100_000;
 
 export interface Transcription {
   id: string;

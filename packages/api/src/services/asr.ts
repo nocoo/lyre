@@ -19,6 +19,7 @@
 
 import type { TranscriptionSentence } from "../lib/types";
 import { DEFAULT_ASR_MODEL } from "../contracts/asr";
+import { SENTENCE_ID_CHANNEL_STRIDE } from "../contracts/recordings";
 
 // ── DashScope API response types ──
 
@@ -120,14 +121,28 @@ export interface AsrProvider {
 
 /**
  * Transform the raw DashScope transcription JSON into domain types.
- * Takes the first transcript channel. Strips word-level data (too large for DB).
- * Detects dominant language from sentences.
+ *
+ * Merges sentences across every channel returned by DashScope. Raw
+ * `transcripts` come back as one entry per audio track; each carries
+ * its own `sentence_id` sequence starting at 0, so we collapse the
+ * `(channel_id, sentence_id)` tuple into a single, stable
+ * `TranscriptionSentence.sentenceId` via `SENTENCE_ID_CHANNEL_STRIDE`.
+ *
+ * Ordering is `(beginTime asc, channelId asc, sentenceId asc)` so the
+ * merged transcript reads chronologically and ties between channels are
+ * broken deterministically.
+ *
+ * `fullText` is rebuilt from the sorted sentences (joined by a single
+ * space) rather than taken from `transcripts[0].text` so the second
+ * track's content is not silently dropped. Word-level data is excluded
+ * to keep the DB row small — it stays in the OSS result blob for
+ * `wordsHandler` to fetch on demand.
  */
 export function parseTranscriptionResult(
   raw: AsrTranscriptionResult,
 ): ParsedAsrResult {
-  const transcript = raw.transcripts[0];
-  if (!transcript) {
+  const transcripts = raw.transcripts ?? [];
+  if (transcripts.length === 0) {
     return {
       fullText: "",
       language: null,
@@ -137,16 +152,33 @@ export function parseTranscriptionResult(
     };
   }
 
-  const sentences: TranscriptionSentence[] = transcript.sentences.map((s) => ({
-    sentenceId: s.sentence_id,
-    beginTime: s.begin_time,
-    endTime: s.end_time,
-    text: s.text,
-    language: s.language,
-    emotion: s.emotion,
-  }));
+  const sentences: TranscriptionSentence[] = [];
+  for (const transcript of transcripts) {
+    const channelId = transcript.channel_id;
+    for (const s of transcript.sentences) {
+      sentences.push({
+        sentenceId: channelId * SENTENCE_ID_CHANNEL_STRIDE + s.sentence_id,
+        channelId,
+        beginTime: s.begin_time,
+        endTime: s.end_time,
+        text: s.text,
+        language: s.language,
+        emotion: s.emotion,
+      });
+    }
+  }
 
-  // Detect dominant language (most frequent among sentences)
+  sentences.sort((a, b) => {
+    if (a.beginTime !== b.beginTime) return a.beginTime - b.beginTime;
+    if (a.channelId !== b.channelId) return a.channelId - b.channelId;
+    return a.sentenceId - b.sentenceId;
+  });
+
+  const fullText = sentences.map((s) => s.text).join(" ").trim();
+
+  // Detect dominant language (most frequent among sentences across all
+  // channels). Ties resolve to the first seen, matching the prior
+  // single-channel behaviour for the common case.
   const langCounts = new Map<string, number>();
   for (const s of sentences) {
     langCounts.set(s.language, (langCounts.get(s.language) ?? 0) + 1);
@@ -161,7 +193,7 @@ export function parseTranscriptionResult(
   }
 
   return {
-    fullText: transcript.text,
+    fullText,
     language: dominantLang,
     sentences,
     audioFormat: raw.audio_info.format,
