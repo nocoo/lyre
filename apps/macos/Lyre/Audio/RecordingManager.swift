@@ -54,25 +54,43 @@ final class RecordingManager: @unchecked Sendable {
 
     // MARK: - Dependencies
 
-    let permissions: PermissionManager
-    let capture: AudioCaptureManager
+    let permissions: RecordingPermissions
+    let capture: AudioCapturing
+
+    /// Concrete `PermissionManager` for the SwiftUI menus that need
+    /// the @Observable surface. `nil` when a test injected a non-
+    /// production permissions impl.
+    var permissionsObservable: PermissionManager? { permissions as? PermissionManager }
+
+    /// Concrete `AudioCaptureManager` for the SwiftUI menus that bind
+    /// device pickers through the @Observable surface. `nil` when a
+    /// test injected a non-production capture impl.
+    var captureObservable: AudioCaptureManager? { capture as? AudioCaptureManager }
 
     /// Directory where recordings are saved.
     var outputDirectory: URL
 
+    /// Recorder mode for new recordings.
+    let useDualTrack: Bool
+
     // MARK: - Private encoder
 
-    private var encoder: AudioEncoder?
+    private let encoderFactory: () -> AudioEncoding
+    private var encoder: AudioEncoding?
 
     // MARK: - Init
 
     init(
-        permissions: PermissionManager = PermissionManager(),
-        capture: AudioCaptureManager = AudioCaptureManager(),
+        permissions: RecordingPermissions = PermissionManager(),
+        capture: AudioCapturing = AudioCaptureManager(),
+        encoderFactory: @escaping () -> AudioEncoding = { AudioEncoder() },
+        useDualTrack: Bool = true,
         outputDirectory: URL? = nil
     ) {
         self.permissions = permissions
         self.capture = capture
+        self.encoderFactory = encoderFactory
+        self.useDualTrack = useDualTrack
         self.outputDirectory = outputDirectory ?? Self.defaultOutputDirectory()
     }
 
@@ -98,18 +116,28 @@ final class RecordingManager: @unchecked Sendable {
         try ensureOutputDirectory()
         let fileURL = generateOutputURL()
 
-        // Set up encoder
-        let enc = AudioEncoder()
+        // Set up encoder in the requested mode. Note: setup() is called
+        // with an explicit EncoderMode either way so the recording path
+        // is observable from tests via the encoder's internal mode.
+        let enc = encoderFactory()
+        let mode: AudioEncoder.EncoderMode = useDualTrack ? .dualTrack : .legacyMixed
         do {
-            try enc.setup(outputURL: fileURL)
+            try enc.setup(outputURL: fileURL, mode: mode)
         } catch let error as AudioEncoder.EncoderError {
             throw RecordingError.encoderSetupFailed(error.localizedDescription)
         }
         encoder = enc
 
-        // Wire up capture → encoder pipeline
-        capture.onMixedSamples = { [weak self] samples in
-            self?.encoder?.encodeSamples(samples)
+        // Wire up capture → encoder pipeline. The two paths are
+        // mutually exclusive: dual installs raw callbacks only, legacy
+        // installs only onMixedSamples. AudioCaptureManager uses the
+        // mixed-callback presence to decide whether to arm the drain
+        // timer, so a stray onMixedSamples on the dual path would
+        // silently pay the mixer cost.
+        if useDualTrack {
+            wireDualCallbacks()
+        } else {
+            wireLegacyCallbacks()
         }
         capture.onStreamError = { [weak self] error in
             self?.handleStreamError(error)
@@ -123,6 +151,46 @@ final class RecordingManager: @unchecked Sendable {
         state = .recording
     }
 
+    private func wireDualCallbacks() {
+        capture.onRawSystemBuffer = { [weak self] buf in
+            self?.enqueueDualBuffer(buf, source: .system)
+        }
+        capture.onRawMicBuffer = { [weak self] buf in
+            self?.enqueueDualBuffer(buf, source: .mic)
+        }
+        capture.onMixedSamples = nil
+    }
+
+    private func wireLegacyCallbacks() {
+        capture.onMixedSamples = { [weak self] samples in
+            _ = self?.encoder?.encodeSamples(samples)
+        }
+        capture.onRawSystemBuffer = nil
+        capture.onRawMicBuffer = nil
+    }
+
+    /// Append a raw `CMSampleBuffer` to the dual-track encoder. Errors
+    /// — both `throw`s and a `false` return — are surfaced via
+    /// `lastError`; we do not stop the stream because finalize() will
+    /// also capture writer/flush failures and surface them at the same
+    /// place, so a brief enqueue blip does not necessarily mean the
+    /// whole recording is lost.
+    private func enqueueDualBuffer(_ buffer: CMSampleBuffer, source: AudioEncoder.Source) {
+        guard let enc = encoder else { return }
+        do {
+            let ok = try enc.enqueue(buffer, source: source)
+            if !ok {
+                lastError = AudioEncoder.EncoderError.writerFailed(
+                    "enqueue returned false for \(source.rawValue)"
+                )
+                Self.logger.error("Dual enqueue (\(source.rawValue)) returned false")
+            }
+        } catch {
+            lastError = error
+            Self.logger.error("Dual enqueue (\(source.rawValue)) threw: \(error.localizedDescription)")
+        }
+    }
+
     /// Stop the current recording and finalize the M4A file.
     ///
     /// - Returns: URL of the completed M4A file.
@@ -133,23 +201,42 @@ final class RecordingManager: @unchecked Sendable {
             throw RecordingError.notRecording
         }
 
-        // Stop capture (flushes remaining mixer samples via onMixedSamples)
+        // Stop capture (flushes remaining mixer samples via onMixedSamples
+        // when the legacy mixed path is active; dual path has nothing to
+        // flush since onMixedSamples is nil).
         try await capture.stopCapture()
 
-        // Finalize encoder
+        // Finalize encoder. Read `lastError` BEFORE nil-ing the
+        // encoder reference so a finalize failure (writer flush /
+        // status != .completed / late enqueue failure on the dual path)
+        // still reaches our own `lastError` surface.
         guard let fileURL = currentFileURL else {
             throw RecordingError.notRecording
         }
-        await encoder?.finalize()
+        let enc = encoder
+        await enc?.finalize()
+        if let err = enc?.lastError {
+            lastError = err
+            Self.logger.error("Encoder lastError on finalize: \(err.localizedDescription)")
+        }
         encoder = nil
 
-        // Reset state
+        cleanupCaptureCallbacks()
         state = .idle
         recordingStartTime = nil
-        capture.onMixedSamples = nil
-        capture.onStreamError = nil
 
         return fileURL
+    }
+
+    /// Centralised callback teardown so both the normal stop path and
+    /// the stream-error recovery path always clear the full set of
+    /// raw + legacy callbacks. Dropping any of these would leak a
+    /// closure capturing `self` past the recording's lifetime.
+    private func cleanupCaptureCallbacks() {
+        capture.onRawSystemBuffer = nil
+        capture.onRawMicBuffer = nil
+        capture.onMixedSamples = nil
+        capture.onStreamError = nil
     }
 
     // MARK: - Error Handling
@@ -170,15 +257,19 @@ final class RecordingManager: @unchecked Sendable {
                 )
             }
 
-            // Always finalize encoder to close the output file properly
-            await encoder?.finalize()
+            // Always finalize encoder to close the output file properly.
+            // Same lastError-before-nil pattern as stopRecording().
+            let enc = encoder
+            await enc?.finalize()
+            if let err = enc?.lastError {
+                lastError = err
+                Self.logger.error("Encoder lastError on stream-error finalize: \(err.localizedDescription)")
+            }
             encoder = nil
 
-            // Reset state
+            cleanupCaptureCallbacks()
             state = .idle
             recordingStartTime = nil
-            capture.onMixedSamples = nil
-            capture.onStreamError = nil
 
             Self.logger.info("Recording stopped after stream error, file may be partial")
         }

@@ -89,7 +89,11 @@ struct MainWindowView: View {
             }
 
             SwiftUI.Tab("Permissions", systemImage: "shield.checkered", value: SidebarTab.permissions) {
-                PermissionGuideView(permissions: recorder.permissions)
+                if let pm = recorder.permissionsObservable {
+                    PermissionGuideView(permissions: pm)
+                } else {
+                    Text("Permissions surface unavailable")
+                }
             }
 
             SwiftUI.Tab("Settings", systemImage: "gearshape", value: SidebarTab.settings) {
