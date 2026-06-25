@@ -20,6 +20,7 @@
 		6329A96A3ED4D8817CD5E9A1 /* AudioEncoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23F6AEC04C4D65B659CCA8D4 /* AudioEncoderTests.swift */; };
 		6955B2A8546957F6E6054A61 /* RecordingE2ETests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84479354E7634918D8CBADA9 /* RecordingE2ETests.swift */; };
 		734386A9E52FDC8D202FA087 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B117D6D713498A7716527C /* SmokeTests.swift */; };
+		7C24DB4797E55FD65D19B580 /* AudioEncoderHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6639EC9987ED06B56EFA3A91 /* AudioEncoderHelpers.swift */; };
 		7E5FC4E676D1D8F70794F464 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D832E17110F005B9AF3ADC /* Constants.swift */; };
 		865AC802B3238708D2353DB7 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FACC09867086EAC00C77EF3 /* APIClient.swift */; };
 		86F02626CC7AE13B64C82AA0 /* AudioEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 352A5709DDEEC9CDF6601914 /* AudioEncoder.swift */; };
@@ -67,6 +68,7 @@
 		4FD9C1C2B1DAFB998D03C2D8 /* PermissionManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManagerTests.swift; sourceTree = "<group>"; };
 		53AE445C51DDF5202FBDB02B /* AudioPlayerManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManagerTests.swift; sourceTree = "<group>"; };
 		5854B120C2D1FD845D584070 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
+		6639EC9987ED06B56EFA3A91 /* AudioEncoderHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEncoderHelpers.swift; sourceTree = "<group>"; };
 		6D97AB56A2DEA8A8D28AC461 /* RecordingManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManagerTests.swift; sourceTree = "<group>"; };
 		6EB02B42EFD504463A3B4EF1 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		6EF6BAE40EB51C3AF754AC56 /* RecordingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManager.swift; sourceTree = "<group>"; };
@@ -100,6 +102,7 @@
 			children = (
 				D335FDFB9ACAFBA6677C83E6 /* AudioCaptureManager.swift */,
 				352A5709DDEEC9CDF6601914 /* AudioEncoder.swift */,
+				6639EC9987ED06B56EFA3A91 /* AudioEncoderHelpers.swift */,
 				A5708B989E5F7501403FAB84 /* AudioMixer.swift */,
 				5854B120C2D1FD845D584070 /* PermissionManager.swift */,
 				6EF6BAE40EB51C3AF754AC56 /* RecordingManager.swift */,
@@ -332,6 +335,7 @@
 				E5F8BD47EECC4B4CA7922712 /* AppConfig.swift in Sources */,
 				EF857C38565155712D2AEA1F /* AudioCaptureManager.swift in Sources */,
 				86F02626CC7AE13B64C82AA0 /* AudioEncoder.swift in Sources */,
+				7C24DB4797E55FD65D19B580 /* AudioEncoderHelpers.swift in Sources */,
 				9D063CCD246FB23505FDD103 /* AudioMixer.swift in Sources */,
 				D01DAF341010AE4E658C89F6 /* AudioPlayerManager.swift in Sources */,
 				7E5FC4E676D1D8F70794F464 /* Constants.swift in Sources */,

@@ -93,18 +93,27 @@ totalSamplesWritten += Int64(frameCount)
    - 若保留 → 假设 B 成立。
    - 若被压缩 → 假设 B 不成立；触发 **Mitigation B**。
 
-**Mitigation A — 显式延迟首帧**：在 `startSessionLocked()` 中取**全局** min PTS（system + mic 之间的小者）作为 session start。
-若两路第一帧 PTS 相等或差距 < 一个 sample 周期，自然不需要处理；否则**晚到的那一路**在 session 启动后第一次 append 前，
-先合成一段从 `startPTS` 到 `firstActualPTS` 的 **silent PCM `CMSampleBuffer`**（ASBD 匹配该路第一个真实 buffer
-的格式 —— 同 sampleRate / channelCount / bit depth，PCM data 全零），直接 `input.append(silentPCMBuffer)`
-让 AAC encoder 自己压缩。**不**预先编 AAC：`AVAssetWriterInput` 在 AAC `outputSettings` 模式下期望
-未压缩 PCM 输入，append 已编码 AAC 会被拒（return false）或导致二次编码。让对应 track 的"开头空白"
-真正存在于音频流里，而不是依赖容器留空。
+**Mitigation A — 显式延迟首帧**：**❌ Not viable on current AVFoundation path (task #4, 2026-06-25).**
+原计划在 `startSessionLocked()` 中取**全局** min PTS（system + mic 之间的小者）作为 session start，
+晚到那路在 session 启动后第一次 append 前合成一段从 `startPTS` 到 `firstActualPTS` 的 silent PCM
+`CMSampleBuffer`，让 track 开头空白真正存在于音频流里。
+
+Phase 1A 实测：AAC `AVAssetWriterInput` 会把晚到 track 的 leading section（无论是 pure zero PCM、
+combined buffer 前置 silent prefix、还是带 sub-audible dither ε=1e-3 / 1e-1 的扰动 PCM）**全部 trim 掉**，
+晚到 track 第一帧仍被规整到 track time ~0。Reviewer 与 SDE 共同结论：在 task #4 时间窗口内，
+AVAssetWriter/AAC 这条 PCM input 路径无法可靠实现 Mitigation A。
+
+观察行为已固化为 `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter` 测试（不再尝试修复，仅 pin
+当前 AVFoundation 平台限制）。Mitigation B (silent gap fill) 不受影响、正常生效。
+
+**晚到首帧的真正修复路径**留给 task #5 / #6 评估：考虑 AVMutableComposition 离线合成 / 自定义
+AAC encoder 路径 / capture 层在 SCK 启动前就用 silent PCM warmup 两路 input。
 
 **Mitigation B — 显式补静默**：每路 encoder append 时记录 `expectedNextPTS = lastPTS + lastDuration`；
 若新 buffer 的 PTS > `expectedNextPTS + ε`（ε 取 10ms，吸收 host clock 抖动），先合成一个 ASBD 匹配的
 **silent PCM `CMSampleBuffer`** 覆盖 `[expectedNextPTS, newPTS)`，append 后再 append 新 buffer。
-PCM 输入由 AAC encoder 自动压缩，理由同 Mitigation A —— **不**预先编 AAC。**这是录制期行为，不依赖容器留空**。
+PCM 输入由 AAC encoder 自动压缩 —— **不**预先编 AAC。**这是录制期行为，不依赖容器留空**。
+(任务 #4 Phase 1A 实测有效：见 `mitigationBGapFillKeepsTrackDuration`。)
 
 **Mitigation 失败 → 兜底 (Final Fallback)**：如果 Mitigation A / B 探针二次验证仍不可靠
 （例如 silent prefix / silent fill 也被 AAC encoder 合并），**已写好的 m4a 不再包含原始时间信息**，
