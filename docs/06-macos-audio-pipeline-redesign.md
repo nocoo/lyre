@@ -660,7 +660,7 @@ func stopRecording() async throws -> URL {
 
 1. **No app-level sample mixing** → 没有 `min(sysCount, micCount)` 这类对齐 bug。
 2. **No app-level PTS generation** → 完全消除"时间被自增计数器拍平"的可能性。
-3. **No Float intermediate** → 不解包 PCM，CPU 占用降低，零拷贝直转发（Mitigation 路径仅对静默 prefix / gap 合成零填 PCM，主路径仍是零拷贝）。
+3. **No Float intermediate** → 不解包 PCM，CPU 占用降低，零拷贝直转发（Mitigation B 路径仅对 same-track gap 合成零填 PCM；Mitigation A 已证伪，不在路径里；主路径仍是零拷贝）。
 4. **No drain timer / no thread juggling** → SCK callback 直接 append，少一个线程协作点。
 5. **Per-input drop policy is local** → 一路 buffer 满了只丢自己的，不会污染另一路的时间轴。
 6. **Container handles alignment** → 主路径下 AVAssetWriter 用 PTS 在容器层对齐；mitigation 失败时由应用层在 PCM domain 显式对齐再编 AAC（B1 兜底）。
