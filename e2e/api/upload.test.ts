@@ -7,12 +7,17 @@ describe("upload endpoint", () => {
       fileName: "test.m4a",
       contentType: "audio/mp4",
     });
-    // 500 when OSS env vars are missing (expected in local E2E)
+    // 500 when OSS env vars are missing (expected in clean CI checkout)
     expect([200, 500]).toContain(res.status);
     if (res.status === 200) {
-      const body = await json<{ url: string; key: string }>(res);
-      expect(typeof body.url).toBe("string");
-      expect(typeof body.key).toBe("string");
+      const body = await json<{
+        uploadUrl: string;
+        ossKey: string;
+        recordingId: string;
+      }>(res);
+      expect(typeof body.uploadUrl).toBe("string");
+      expect(typeof body.ossKey).toBe("string");
+      expect(typeof body.recordingId).toBe("string");
     }
   });
 });

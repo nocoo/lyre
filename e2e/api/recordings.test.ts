@@ -44,8 +44,8 @@ describe("recordings endpoints", () => {
 
     // POST /api/recordings/:id/transcribe (mock ASR, no DASHSCOPE_API_KEY)
     const transcribeRes = await post(`/api/recordings/${body.id}/transcribe`);
-    // 200 (mock) or 500 (real ASR missing key) — both acceptable
-    expect([200, 500]).toContain(transcribeRes.status);
+    // 201 (job created, mock or real), 500 (real ASR missing key) — both acceptable
+    expect([201, 500]).toContain(transcribeRes.status);
 
     // POST /api/recordings/:id/summarize (needs AI key, may fail)
     const summarizeRes = await post(`/api/recordings/${body.id}/summarize`);
