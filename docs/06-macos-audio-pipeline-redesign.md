@@ -861,6 +861,78 @@ trigger fires after the operator runs the live 6DQ, re-open task #8
 and design the fallback at that point — the docs/06 "Risk & Fallback"
 section already sketches the offline downmix path.
 
+### Task #9 closeout retrospective (2026-06-25)
+
+Final snapshot of the docs/06 rollout. Twelve rollout commits plus
+this closeout docs commit (thirteen total) on `main`, none pushed
+to `origin/main` (per workspace convention — operator pushes when
+they are ready).
+
+**Phase mapping → commits**:
+
+| Phase | Tasks | Commits |
+|---|---|---|
+| Pre-req: signing hook fix | infra | `ff40885` |
+| Phase 0A: AVAssetWriter probes | #2 | `c2732df` |
+| Phase 0B: live ASR scaffold | #3 | `91b7ce2` |
+| Phase 0C: downstream readiness | #10 | `ca519e7` |
+| Phase 1A: dual-track encoder + sidecar | #4 | `210db62`, `38c9db8`, `bfad750` |
+| Phase 1B: capture + recording rewiring | #5 | `3ed2932`, `49934b8` |
+| Phase 2: test rewrites + gates | #6 | `2c608a2`, `39c7f28` |
+| Phase 2 manual 6DQ | #7 | `d202f49` (docs only — manual evidence deferred) |
+| Phase 3 conditional downmix | #8 | none (not triggered) |
+| Closeout: retrospective + final gates | #9 | this commit |
+
+**Final gates pin (2026-06-25)**:
+
+- `swiftlint --strict Lyre/ LyreTests/` → 0 violations across 36 Swift files.
+- `xcodebuild -project Lyre.xcodeproj -scheme Lyre test` on macOS →
+  155 tests in 15 suites passed, 3 known issues (all three are
+  `withKnownIssue` permission-skip paths in `RecordingE2ETests`;
+  none are real failures).
+- pre-commit hook (`bun run` chain): `web:lint` + `api:lint` +
+  `vitest run` 218/218 in 22 test files + `web:typecheck` +
+  `worker:typecheck` + `api:typecheck` + `xcodebuild test` +
+  `swiftlint --strict` — all green at HEAD.
+
+**Residual risks not closed by this rollout**:
+
+1. **Task #7 manual 6DQ deferred.** No live 30-second recording,
+   QuickTime listening, in-app `AVPlayer` listening, or production
+   DashScope multi-track transcript was provided in
+   `#lyre-macos-rebuild:f3202873`. The automated subset proves
+   container + sidecar + integration shape, but cannot prove
+   subjective listening quality, real `AVPlayer` rendering of two
+   tracks on a live machine, or live DashScope channel handling.
+2. **Task #8 fallback not triggered.** The single-track downmix /
+   capture-layer warmup remains unimplemented. If the operator's
+   live 6DQ reveals only one track audible, sidecar/ffprobe failing
+   to prove two tracks, ASR missing one channel, or Mitigation A
+   leading-trim subjectively unacceptable, task #8 must be
+   re-opened and the fallback implemented at that point.
+3. **Task #3 scaffold-only.** The Phase 0B ASR live-gate
+   (`e2e/api/asr-multitrack.test.ts`) requires `LYRE_RUN_LIVE_ASR=1`
+   and a live DashScope account — it has not been executed against
+   production in this rollout. The dual-track ASR fixture
+   (`e2e/fixtures/dual-track-asr.m4a`) is committed but a
+   production transcript matching it is not on file.
+4. **Mitigation A pinned as limitation.** Late-arriving track loses
+   ~0.5s of leading audio because AAC `AVAssetWriterInput` trims
+   the leading section regardless of any silent / dithered prefix.
+   Pinned by `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter`.
+   Real fix paths (capture-layer warmup / offline composition) are
+   out of scope for the current rollout.
+
+**Operator hand-off checklist**:
+
+- [ ] Run the manual 6DQ (DQ-1 through DQ-6) — script lives in
+      `#lyre-macos-rebuild:f3202873`.
+- [ ] If any DQ fails per the trigger list in `Task #7 6DQ status`,
+      re-open task #8 and design a fallback.
+- [ ] If 6DQ passes, push the twelve rollout commits plus this
+      closeout commit (thirteen total) to `origin/main` (or split
+      into PR(s) per local convention) at the operator's discretion.
+
 ## Non-goals
 
 - **不引入立体声混录**（左声道系统、右声道 mic 的 trick）— 那是音质优化，不是 bug 修复。
