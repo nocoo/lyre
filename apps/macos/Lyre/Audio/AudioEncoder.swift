@@ -17,15 +17,19 @@ import os
 /// - `.dualTrack`: two AAC `AVAssetWriterInput`s, `add(system)` then
 ///   `add(mic)` (the order locked in by Phase 0A's
 ///   `AVAssetWriterTrackOrderProbeTests`). Real `CMSampleBuffer`s come
-///   in via `enqueue(_:source:)` and are appended directly, with two
-///   mitigations:
+///   in via `enqueue(_:source:)` and are appended directly.
 ///
-///     - **Mitigation A — silent prefix on late first frame**:
-///       Phase 0A proved AVAssetWriter normalises a delayed first
-///       sample to track time ~0. When the second source finally
-///       arrives, we synthesize a zero-filled PCM buffer covering
-///       `[sessionStartPTS, sourceFirstPTS)` and append it immediately
-///       before the real first buffer, so the track timeline lines up.
+///     - **Mitigation A (silent prefix on late first frame) — NOT
+///       implemented on this path.** Phase 1A established that
+///       AAC `AVAssetWriterInput` trims the leading section of the
+///       late-arriving track regardless of any zero / padded /
+///       dithered PCM prefix, so the prefix approach cannot rescue
+///       the missing leading silence. The late-first-frame behaviour
+///       is pinned by `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter`
+///       in `AudioEncoderTests.swift` and documented in
+///       `docs/06-macos-audio-pipeline-redesign.md`. Any future fix
+///       belongs in capture-layer warmup or an offline composition
+///       path evaluated in task #5 / #6.
 ///
 ///     - **Mitigation B — silent gap fill**: Phase 0A proved
 ///       same-track PTS gaps are compressed into back-to-back audio.

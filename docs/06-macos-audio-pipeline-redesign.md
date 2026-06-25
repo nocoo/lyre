@@ -88,7 +88,7 @@ totalSamplesWritten += Int64(frameCount)
 
 1. **延迟首帧探针**：`startSession(atSourceTime: .zero)`，然后给一个 AAC `AVAssetWriterInput` append PTS 起点为 0.5s 的 1 秒 440Hz 正弦波 buffer 序列；`finishWriting` 后用 `AVAssetReader` 读出该 track 的第一个 sample PTS。
    - 若 ≈ 0.5s → 假设 A 成立，可走文档主路径。
-   - 若 ≈ 0 → 假设 A 不成立，main path 不修 Cause B；触发 **Mitigation A**。
+   - 若 ≈ 0 → 假设 A 不成立。**Phase 1A 实测：这是当前 macOS / AVFoundation 路径上的实际观察值，且 Mitigation A 已被证伪不可行（见下文）。** 后续修复需走 capture-layer warmup / 离线 composition 路径（task #5 / #6 评估）。
 2. **PTS gap 探针**：同一 AAC `AVAssetWriterInput` 先 append 0–500ms 的 buffer，再 append 1100–2000ms 的 buffer（600ms gap，**不补静默**）；读出 track sample 序列检查 600–1100ms 区间是否仍然是 600ms 静默。
    - 若保留 → 假设 B 成立。
    - 若被压缩 → 假设 B 不成立；触发 **Mitigation B**。
@@ -115,8 +115,9 @@ AAC encoder 路径 / capture 层在 SCK 启动前就用 silent PCM warmup 两路
 PCM 输入由 AAC encoder 自动压缩 —— **不**预先编 AAC。**这是录制期行为，不依赖容器留空**。
 (任务 #4 Phase 1A 实测有效：见 `mitigationBGapFillKeepsTrackDuration`。)
 
-**Mitigation 失败 → 兜底 (Final Fallback)**：如果 Mitigation A / B 探针二次验证仍不可靠
-（例如 silent prefix / silent fill 也被 AAC encoder 合并），**已写好的 m4a 不再包含原始时间信息**，
+**Mitigation 失败 → 兜底 (Final Fallback)**：如果 Mitigation B 探针二次验证仍不可靠
+（silent gap fill 也被 AAC encoder 合并；Mitigation A 已在 Phase 1A 证伪，不再纳入此条件），
+**已写好的 m4a 不再包含原始时间信息**，
 任何"`stopRecording()` 用 `AVAssetReader` 按 host-clock PTS 重渲染"的方案都救不回来 ——
 读出来的 sample PTS 已是被压缩后的轨内时间，而不是 host clock。兜底必须**在录制期**保留时间信息，
 选其一：
@@ -135,15 +136,15 @@ PCM 输入由 AAC encoder 自动压缩 —— **不**预先编 AAC。**这是录
 那个文件里的 PTS 已经是被 AAC encoder 压缩后的结果，不再是 host clock。这条路径**只在 Mitigation B 探针通过时**才可用
 （即 `Risk & Fallback` 章节的"离线 downmix"路径）。
 
-**决策树**：
+**决策树（Phase 1A 后已更新）**：
 
 | 假设 A | 假设 B | 行动 |
 |---|---|---|
 | ✅ | ✅ | 走文档主路径，无修改 |
-| ❌ | ✅ | 启用 Mitigation A（晚到路 silent prefix） |
+| ❌ | ✅ | ⚠️ Mitigation A **不可用**（Phase 1A 实测，见上文）→ 留作 limitation，由 task #7 6DQ 判断影响；如不可接受走 task #8 单轨 downmix 或 capture-layer warmup |
 | ✅ | ❌ | 启用 Mitigation B（gap silent fill） |
-| ❌ | ❌ | 启用 Mitigation A + B |
-| Mitigation A / B 二次探针**仍失败** | — | 走 **B1 中间 PCM 兜底**（**不能**用读已写 m4a 的离线渲染，时间信息已丢失） |
+| ❌ | ❌ | 启用 Mitigation B；A 同上格 — 留作 limitation |
+| Mitigation B 二次探针**仍失败** | — | 走 **B1 中间 PCM 兜底**（**不能**用读已写 m4a 的离线渲染，时间信息已丢失） |
 
 **禁止跳过**：不允许"先按主路径写代码，等手工验收再说"。Phase 0 探针的两个结论必须落在 PR 描述里。
 
@@ -171,10 +172,11 @@ PCM 输入由 AAC encoder 自动压缩 —— **不**预先编 AAC。**这是录
 
 ## Design Principles
 
-> 以下原则描述**主路径**（Phase 0 假设 A、B 均通过）。若探针失败 → Mitigation A / B 会在录制层
+> 以下原则描述**主路径**（Phase 0 假设 A、B 均通过）。若探针 B 失败 → **Mitigation B** 会在录制层
 > **合成 silent PCM `CMSampleBuffer`**（违反原则 3，但仅限静默样本，零拷贝主路径不变）；
-> 若 Mitigation 仍失败 → B1 兜底会写 **PCM 中间文件**（违反原则 6 的"容器层对齐"，改成应用层按
-> host-clock 对齐 PCM 再编 AAC）。这些是 mitigation 的代价，已在决策树里量化。
+> 若 Mitigation B 仍失败 → B1 兜底会写 **PCM 中间文件**（违反原则 6 的"容器层对齐"，改成应用层按
+> host-clock 对齐 PCM 再编 AAC）。**Mitigation A 在 Phase 1A 已被证明不可行**（见上文 Mitigation A 段落），
+> 留作 limitation；不再作为本节涉及的修复路径。这些是 mitigation 的代价，已在决策树里量化。
 
 1. **不在应用层混音**：让 ASR / 播放器 / 编辑器在解码层混。
 2. **不重打 PTS**：直接 `append` SCK 给的 `CMSampleBuffer`，PTS 由 `CMClockGetHostTimeClock` 提供。
@@ -215,8 +217,9 @@ AVAssetWriter 会将空 input 从输出文件中剔除（Phase 0 探针证实）
   在 `.m4a` 上**不可读回**。直接靠 `AVAssetTrack.metadata` 识别来源会失败。
 
 - ✅ **默认方案 — sidecar 映射文件**：encoder **不依赖容器** metadata 记录来源，**也不**用
-  `timeRange.start` 匹配 host-clock PTS（.m4a 会把 track 起点规整到容器时间轴，且 Mitigation A
-  的 silent prefix 会让晚到 track 也从 0 开始，PTS 匹配会失配或误判）。改用：
+  `timeRange.start` 匹配 host-clock PTS（.m4a 会把 track 起点规整到容器时间轴，晚到 track 的
+  leading section 会被 AAC 直接 trim 掉而非保留为静默 —— 见 Mitigation A "not viable" 段落；
+  PTS 匹配会失配或误判）。改用：
   - **per-source 锁存位**：`appendLocked()` 内 `input.append(buf) == true` 后置
     `systemDidAppend` / `micDidAppend`，per-source 一次置位、不会再变。
   - **AVAssetWriter `add()` 顺序约定**：先 `add(sys)` 再 `add(mic)` →
@@ -416,7 +419,8 @@ final class AudioEncoder: @unchecked Sendable {
 
     /// finalize 完成后，写出 {source: trackID} 的 sidecar。
     /// **不**用 timeRange.start 匹配 host-clock PTS —— .m4a 会把 track 起点规整到容器时间轴，
-    /// Mitigation A 的 silent prefix 也会让晚到 track 从 0 开始，PTS 匹配不可靠。
+    /// 晚到 track 的 leading section 也会被 AAC trim 掉（Mitigation A 不可行，见上文），
+    /// PTS 匹配不可靠。
     /// 映射规则改为：
     ///   - 单源：only system → 唯一 audio track 是 system；only mic → 唯一是 mic。
     ///   - 两源：依赖 AVAssetWriter 的 add() 顺序与最终 `asset.tracks(withMediaType: .audio)`
@@ -575,7 +579,8 @@ final class AudioEncoder: @unchecked Sendable {
             systemInput?.markAsFinished()
             micInput?.markAsFinished()
             // systemDidAppend / micDidAppend 在 appendLocked() 成功 append 后置 true，
-            // per-source 一次置位、不会再变。这比"首帧 PTS"可靠：silent prefix / .zero 启动都不影响。
+            // per-source 一次置位、不会再变。这比"首帧 PTS"可靠：.zero 启动 / 容器层 trim
+            // 都不影响 per-source 锁存位的语义。
             return (writer, outputURL, systemDidAppend, micDidAppend)
         }
         guard let w else { return }
@@ -593,8 +598,9 @@ final class AudioEncoder: @unchecked Sendable {
 
 > encoder 内需额外维护：`private var outputURL: URL?`（`setup()` 保存）、
 > `private var systemDidAppend = false` / `private var micDidAppend = false`
-> （`appendLocked()` 内 `input.append(buf) == true` 后 per-source 置位，silent prefix 也算
-> append 成功 —— sidecar 关心的是"这路有没有 track 出现在最终文件里"，而不是"是否含真实音频"）。
+> （`appendLocked()` 内 `input.append(buf) == true` 后 per-source 置位 ——
+> sidecar 关心的是"这路有没有 track 出现在最终文件里"，而不是"是否含真实音频"。
+> Mitigation B 的 gap-fill silent PCM append 也算 append 成功，符合该语义）。
 
 **关键变化**：
 
@@ -647,8 +653,9 @@ func stopRecording() async throws -> URL {
 
 ## Why this is the simplest correct design
 
-> 以下论断针对**主路径**。Mitigation A / B 会引入静默 PCM 合成（仍非"混音"），B1 兜底会引入
-> PCM 中间文件 + 离线对齐（仍非应用层 sample-by-sample 混音）。所有路径都比旧的实时 `min(sysCount, micCount)`
+> 以下论断针对**主路径**。Mitigation B 会引入静默 PCM 合成（仍非"混音"），B1 兜底会引入
+> PCM 中间文件 + 离线对齐（仍非应用层 sample-by-sample 混音）。Mitigation A 已被证伪
+> （见上文 not viable 段落），不在路径里。所有路径都比旧的实时 `min(sysCount, micCount)`
 > 混音简单。
 
 1. **No app-level sample mixing** → 没有 `min(sysCount, micCount)` 这类对齐 bug。
@@ -686,7 +693,7 @@ PTS 序列，作为真值断言（而不是依赖 encoder 内部状态 / `startS
 | 测试 | 操作 |
 |---|---|
 | `LyreTests/AudioMixerTests.swift` | **删除** |
-| `LyreTests/AudioEncoderTests.swift` 用例 1 — 双轨基本写入（**期望随假设 A 切换**） | 合成两路 `CMSampleBuffer`（system PTS 起点 = 1000ms，mic PTS 起点 = 1200ms），各写 1 秒，session 启动于 PTS = 1000ms。<br>**Main path（假设 A 通过）**：用 `AVAssetReader` 断言 ① `tracks(withMediaType: .audio).count == 2`；② mic track 第一个 sample PTS ≈ **1200ms**；③ 两 track 总时长 ≈ 1s。<br>**Mitigation A path（假设 A 失败 → silent PCM prefix）**：① count == 2；② mic track 第一个**有效音频** sample PTS ≈ 1200ms，但 200ms 前缀由 silent PCM `CMSampleBuffer` append → AAC encoder 压缩成静默 AAC frame（解码后能量 ≈ 0，不是空 timeline）；③ mic track 总时长 ≈ **1.2s**（含 silent prefix）。 |
+| `LyreTests/AudioEncoderTests.swift` 用例 1 — 双轨基本写入（**Phase 1A 已落地，假设 A 已证伪**） | 合成两路 `CMSampleBuffer`（system PTS 起点 = 1000ms，mic PTS 起点 = 1200ms），各写 1 秒，session 启动于 PTS = 1000ms。<br>**Main path（假设 A 通过 — 当前 macOS 未观察到）**：用 `AVAssetReader` 断言 ① `tracks(withMediaType: .audio).count == 2`；② mic track 第一个 sample PTS ≈ **1200ms**；③ 两 track 总时长 ≈ 1s。<br>**Limitation pin（假设 A 失败 — 当前实测路径，Mitigation A 不可行）**：① count == 2；② mic track 第一个有效音频 sample PTS ≈ **0**（晚到的 200ms 被 AAC trim，无 silent prefix 能挽回，见 `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter`）；③ mic track 总时长 ≈ **1.0s**（不含已 trim 的 200ms 前缀）；④ sidecar 仍正确记录 mic 角色，role↔trackID 映射不丢失；⑤ 真正修复需在 capture-layer warmup 或 offline composition 评估（task #5 / #6 输入）。 |
 | `LyreTests/AudioEncoderTests.swift` 用例 2 — PTS gap 处理（Cause B 回归，**期望随假设 B 切换**） | 合成 mic 轨：第 0–500ms append 5 个 100ms buffer（PTS 连续），跳过 500–600ms，再 append 6 个 100ms buffer（PTS 从 600ms 起，不回填）。<br>**Main path（假设 B 通过）**：用 `AVAssetReader` 断言第 6 个 sample 的 presentationTime ≈ **600ms**（gap 在容器层保留）。<br>**Mitigation B path（假设 B 失败 → silent PCM fill）**：encoder 在 600ms append 前应已合成 500–600ms 的 silent PCM `CMSampleBuffer` 并 append（由 AAC encoder 自动压缩成静默 AAC frame）；断言第 6 个**真实**音频 sample 在 600ms，500–600ms 区间解码后能量 ≈ 0。<br>**B 二次失败兜底（B1 PCM 中间文件）**：测试改为读 PCM 中间文件 + 重渲染后的单轨 m4a，断言 600ms 处仍是静默而非压贴。 |
 | `LyreTests/AudioEncoderTests.swift` 用例 3 — **Sample-rate mismatch 重采样**（Cause A 回归，新增） | 合成 mic `CMSampleBuffer`，ASBD 中 `mSampleRate = 44100`，写 5 秒 440Hz 正弦波。append 给 encoder。用 `AVAssetReader` 读输出 mic track：① 输出 ASBD `mSampleRate == 48000`（AAC encoder 已重采样）；② track duration ≈ **5 秒**（不是 44100/48000 × 5s = 4.59s）；③ （可选）解码前 100ms PCM 做 FFT，峰值频率仍 ≈ 440Hz（不是 ×48000/44100 后的 ≈ 479Hz）。这条用例失败 = Cause A 没被修。 |
 | `LyreTests/AudioEncoderTests.swift` 用例 4 — 单轨缺席启动 | 只喂 system，不喂 mic，等 500ms timer 触发后断言 ① 文件能 finalize；② **`tracks(withMediaType: .audio).count == 1`**（探针确认：AVAssetWriter 会把从未 append 数据的空 `AVAssetWriterInput` 从最终 `.m4a` 中剔除，不会保留为"空 track"）；③ **读 `Recording_xxx.tracks.json` sidecar**，断言 `{"system": <唯一 audio track 的 trackID>}` 存在，且 `"mic"` 不在 map 里（**不**依赖 `AVAssetTrack.metadata` —— 探针已证实 `AVAssetWriterInput.metadata` 在 `.m4a` 不可读回）；④ system track 在 timeout 前的所有 buffer 都被写入（验证 #1 修复：pre-session 不只缓存首帧）。**注意**：用例 1 的 track 0 / track 1 顺序约定只在"两路都有数据"时成立；下游若需可靠识别 track 来源，不能依赖 track 序号，应读 sidecar。 |
@@ -716,7 +723,7 @@ DashScope `qwen3-asr-flash-filetrans` 的接口只接受一个 `file_url`，没�
 |---|---|---|
 | DashScope 只读 track 0 | ASR 多轨 E2E 测试只命中 track 0 关键词 | 进入下面的"离线 downmix 方案"，最终上传 / 入库的是**单 audio track** m4a |
 | `AVAudioPlayer` 不混合多轨 | 手工验收时本机播放只听到一边 | 短期把 `AudioPlayerManager` 切到 `AVPlayer`；如果连 `AVPlayer` 也不能可靠混（少见），同样走"离线 downmix 方案" |
-| 双路首帧 PTS 差距 > timeout | 比如外接 USB 麦克风冷启动慢 >500ms | 500ms timer 用已到一路 PTS 启动 session，对侧首帧 PTS > sessionStart。**容器层不一定隐式留空**（Phase 0 假设 A 探针证伪即触发） → 走 Mitigation A：对侧 append 真实 buffer 前，先 append 一个 ASBD 匹配的 silent PCM `CMSampleBuffer` 覆盖 `[sessionStart, firstActualPTS)`（让 AAC encoder 自己压缩）。验收：晚到路 track 第一个有效 sample PTS ≈ `firstActualPTS`，前置为静默而非空 timeline。 |
+| 双路首帧 PTS 差距 > timeout | 比如外接 USB 麦克风冷启动慢 >500ms | 500ms timer 用已到一路 PTS 启动 session，对侧首帧 PTS > sessionStart。**Phase 1A 实测**：AAC `AVAssetWriterInput` 会把晚到 track 的 leading section trim 掉（zero / padded / dither prefix 均无效），即 Mitigation A 不可用。当前 dualTrack path 不补偿该 trim；行为由 `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter` pin 住。后续修复在 capture-layer warmup / 离线 composition 评估（task #5 / #6 输入）；如 6DQ 判断不可接受则走 task #8 single-track downmix 兜底。 |
 | SCK callback 并发进入 encoder | 注册 output 时误用 `.global(qos:)` 并发队列 | 单元测试无法捕获；以 code review + AudioCaptureManager 头部注释 + lint rule（禁用 `.global` 出现在 `addStreamOutput` 调用） 防回归。 |
 
 ### 离线 downmix 方案（明确化）
@@ -814,7 +821,7 @@ func downmixToSingleTrack(input: URL, output: URL) async throws {
 5. **跑 `LyreTests/AVAssetWriterPTSProbeTests.swift` 验证 AVAssetWriter PTS 行为**（详见前述章节）：
    - 延迟首帧探针：假设 A 是否成立
    - PTS gap 探针：假设 B 是否成立
-   - 把两条结论写进 PR 描述。任一为否 → 按"决策树"启用 Mitigation A / B；若 Mitigation A / B 二次探针仍失败，**只能**走 B1 PCM 中间文件兜底（**禁止**读已写好的 AAC m4a 做离线渲染，时间信息已丢失）。改 Phase 1 的 encoder 设计；Phase 2 用例 2 改测对应 mitigation。
+   - 把两条结论写进 PR 描述。**Phase 1A 已落地**：假设 A 当前实测为否、Mitigation A 不可行（见上文 not viable 段落），晚到首帧 trim 行为由测试 pin 住；假设 B 由 Mitigation B (gap silent fill) 兜住。若 Mitigation B 二次探针仍失败，**只能**走 B1 PCM 中间文件兜底（**禁止**读已写好的 AAC m4a 做离线渲染，时间信息已丢失）。task #7 6DQ 判断 trim 是否需要进一步补救（task #8 single-track downmix / capture-layer warmup）。
 6. **跑 `LyreTests/AVAssetWriterTrackOrderProbeTests.swift` 验证 track 顺序稳定性**（sidecar 双源映射的前提）：
    - 重复 N（≥ 20）次：建 writer → `add(sys)` → `add(mic)`（两路 outputSettings 相同）→ sys 写 1s 440Hz 正弦波、mic 写 1s 880Hz 正弦波 → finalize → 用 `AVAssetReader` 解码 `tracks(withMediaType: .audio)[0]` / `[1]` 各取 100ms PCM 做 FFT。
    - 断言每次 `tracks[0]` 主频 ≈ 440Hz、`tracks[1]` 主频 ≈ 880Hz（即 tracks 顺序与 add() 顺序一致）。**不**用 trackID 大小或 ASBD 判断 —— 两路相同 outputSettings 的 ASBD 必然相同，trackID 由 AVAssetWriter 内部分配，无序保证。
