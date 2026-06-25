@@ -14,6 +14,8 @@ struct AudioCaptureManagerTests {
         #expect(manager.selectedDeviceID == nil)
         #expect(manager.onMixedSamples == nil)
         #expect(manager.onStreamError == nil)
+        #expect(manager.onRawSystemBuffer == nil)
+        #expect(manager.onRawMicBuffer == nil)
     }
 
     // MARK: - Device Selection
@@ -116,6 +118,108 @@ struct AudioCaptureManagerTests {
         let testError = NSError(domain: "test", code: 42)
         manager.onStreamError?(testError)
         #expect((receivedError as? NSError)?.code == 42)
+    }
+
+    // MARK: - Raw buffer dispatch (dualTrack path)
+
+    @Test func handleSampleBufferRoutesAudioToRawSystemCallback() {
+        let manager = AudioCaptureManager()
+        let samples: [Float] = [0.1, 0.2, 0.3]
+        guard let buf = createTestSampleBuffer(from: samples) else {
+            Issue.record("Failed to create test sample buffer")
+            return
+        }
+        var received: CMSampleBuffer?
+        manager.onRawSystemBuffer = { received = $0 }
+        manager.handleSampleBuffer(buf, outputType: .audio)
+        #expect(received != nil)
+        #expect(CMSampleBufferGetNumSamples(received!) == 3)
+    }
+
+    @Test func handleSampleBufferRoutesMicToRawMicCallback() {
+        let manager = AudioCaptureManager()
+        guard let buf = createTestSampleBuffer(from: [0.5, -0.5]) else {
+            Issue.record("Failed to create test sample buffer")
+            return
+        }
+        var receivedSystem: CMSampleBuffer?
+        var receivedMic: CMSampleBuffer?
+        manager.onRawSystemBuffer = { receivedSystem = $0 }
+        manager.onRawMicBuffer = { receivedMic = $0 }
+        manager.handleSampleBuffer(buf, outputType: .microphone)
+        #expect(receivedMic != nil)
+        #expect(receivedSystem == nil, "mic buffer must not leak into system raw callback")
+    }
+
+    @Test func handleSampleBufferSkipsMixerWhenNoMixedConsumer() async throws {
+        // Dual-track recorder leaves onMixedSamples == nil. The legacy
+        // extract/mixer push path must be skipped entirely — we prove
+        // this black-box: push a buffer with no consumer set, then
+        // install a capture buffer for onMixedSamples and flush via
+        // stopCapture(). If the mixer was wrongly pushed earlier, the
+        // flush would deliver the leftover samples.
+        let manager = AudioCaptureManager()
+        guard let buf = createTestSampleBuffer(from: [0.1, 0.2, 0.3]) else {
+            Issue.record("Failed to create test sample buffer")
+            return
+        }
+        var rawHit = false
+        manager.onRawSystemBuffer = { _ in rawHit = true }
+        manager.onMixedSamples = nil
+        manager.handleSampleBuffer(buf, outputType: .audio)
+        #expect(rawHit)
+
+        // Now install a mixed callback and flush. Mixer should be empty.
+        var leakedMixed: [Float] = []
+        manager.onMixedSamples = { leakedMixed.append(contentsOf: $0) }
+        try await manager.stopCapture()
+        #expect(leakedMixed.isEmpty, "mixer must not retain samples pushed while onMixedSamples was nil")
+    }
+
+    @Test func handleSampleBufferStillFeedsMixerWhenMixedConsumerPresent() async throws {
+        // Legacy single-track path: with onMixedSamples set first,
+        // pushed buffers must end up in the mixer. We can't observe
+        // the mixer's internal queue directly, but stopCapture()'s
+        // flush will deliver any retained samples through the mixed
+        // callback. The internal mixer holds frames until both system
+        // and mic have data, so push both sides before flushing.
+        let manager = AudioCaptureManager()
+        guard let sysBuf = createTestSampleBuffer(from: Array(repeating: Float(0.4), count: 480)) else {
+            Issue.record("Failed to create sys sample buffer")
+            return
+        }
+        guard let micBuf = createTestSampleBuffer(from: Array(repeating: Float(-0.3), count: 480)) else {
+            Issue.record("Failed to create mic sample buffer")
+            return
+        }
+        var rawSysHit = false
+        var rawMicHit = false
+        var mixedReceived: [Float] = []
+        manager.onRawSystemBuffer = { _ in rawSysHit = true }
+        manager.onRawMicBuffer = { _ in rawMicHit = true }
+        manager.onMixedSamples = { mixedReceived.append(contentsOf: $0) }
+        manager.handleSampleBuffer(sysBuf, outputType: .audio)
+        manager.handleSampleBuffer(micBuf, outputType: .microphone)
+        try await manager.stopCapture()
+
+        #expect(rawSysHit)
+        #expect(rawMicHit)
+        #expect(!mixedReceived.isEmpty, "mixer flush must yield samples when both sides were pushed")
+    }
+
+    @Test func handleSampleBufferIgnoresUnrelatedOutputTypes() {
+        let manager = AudioCaptureManager()
+        guard let buf = createTestSampleBuffer(from: [0.1]) else {
+            Issue.record("Failed to create test sample buffer")
+            return
+        }
+        var rawSystemHit = false
+        var rawMicHit = false
+        manager.onRawSystemBuffer = { _ in rawSystemHit = true }
+        manager.onRawMicBuffer = { _ in rawMicHit = true }
+        manager.handleSampleBuffer(buf, outputType: .screen)
+        #expect(!rawSystemHit)
+        #expect(!rawMicHit)
     }
 
     // MARK: - CaptureError

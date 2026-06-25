@@ -1,3 +1,10 @@
+// swiftlint:disable file_length
+//
+// AudioCaptureManager owns SCK setup + the SCStreamOutput dispatch
+// (raw dualTrack callbacks + legacy mixer path) + PCM extraction
+// helpers + CoreAudio device enumeration. Splitting these into
+// multiple files would obscure the single-class lifecycle, so we
+// disable the file-length cap here.
 import AVFoundation
 import CoreAudio
 import os
@@ -16,7 +23,19 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "AudioCaptureManager")
 
     /// Callback invoked with mixed PCM samples ready for encoding.
+    /// **Legacy path.** Only invoked when non-nil; when nil the manager
+    /// skips PCM extraction, mixing, and mixer flush entirely so the
+    /// `.dualTrack` recorder pays no mixer cost.
     var onMixedSamples: (([Float]) -> Void)?
+
+    /// Raw system-audio `CMSampleBuffer` callback for the `.dualTrack`
+    /// recording path. Called before any extraction/mixing so the
+    /// AudioEncoder dual-track input receives untouched SCK PTS.
+    var onRawSystemBuffer: ((CMSampleBuffer) -> Void)?
+
+    /// Raw microphone `CMSampleBuffer` callback. Mirror of
+    /// `onRawSystemBuffer` for the mic track.
+    var onRawMicBuffer: ((CMSampleBuffer) -> Void)?
 
     /// Callback invoked when the stream stops unexpectedly.
     var onStreamError: ((Error) -> Void)?
@@ -150,10 +169,16 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         try await newStream.startCapture()
         stream = newStream
 
-        // Start drain timer on main thread (~20ms interval for low latency)
-        await MainActor.run {
-            drainTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
-                self?.drainMixer()
+        // Start drain timer only when the legacy mixed callback has a
+        // consumer. Dual-track recording leaves `onMixedSamples` nil
+        // and the timer never arms, so the manager pays no mixer cost.
+        // Caller contract: assign `onMixedSamples` before calling
+        // `startCapture()` if you need the legacy mixed path.
+        if onMixedSamples != nil {
+            await MainActor.run {
+                drainTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
+                    self?.drainMixer()
+                }
             }
         }
     }
@@ -172,10 +197,14 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         }
         stream = nil
 
-        // Flush remaining samples
-        let remaining = mixer.flush()
-        if !remaining.isEmpty {
-            onMixedSamples?(remaining)
+        // Flush remaining mixer samples only if the legacy mixed path
+        // has a consumer; .dualTrack recording does not push into the
+        // mixer and has no leftover PCM to deliver.
+        if onMixedSamples != nil {
+            let remaining = mixer.flush()
+            if !remaining.isEmpty {
+                onMixedSamples?(remaining)
+            }
         }
     }
 
@@ -338,15 +367,34 @@ extension AudioCaptureManager: SCStreamOutput {
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
         of outputType: SCStreamOutputType
     ) {
+        handleSampleBuffer(sampleBuffer, outputType: outputType)
+    }
+
+    /// Internal sample-buffer dispatch. Exposed for unit tests so the
+    /// raw-callback and legacy-mixer paths can be exercised without
+    /// constructing a real `SCStream`. Order matters:
+    ///   1. raw `CMSampleBuffer` callback (dualTrack path) — fires first
+    ///      so the encoder receives untouched SCK PTS.
+    ///   2. PCM extraction + mixer push — only when `onMixedSamples`
+    ///      has a consumer; the dual-track recorder leaves this nil
+    ///      and pays zero PCM/mixer cost.
+    func handleSampleBuffer(_ sampleBuffer: CMSampleBuffer, outputType: SCStreamOutputType) {
         guard sampleBuffer.isValid else { return }
         guard outputType == .audio || outputType == .microphone else { return }
 
         trackBufferCount(outputType, sampleBuffer: sampleBuffer)
 
+        // (1) Raw path — always first, untouched buffer.
+        if outputType == .audio {
+            onRawSystemBuffer?(sampleBuffer)
+        } else {
+            onRawMicBuffer?(sampleBuffer)
+        }
+
+        // (2) Legacy mixer path — skip entirely when no consumer.
+        guard onMixedSamples != nil else { return }
         guard let samples = Self.extractSamples(from: sampleBuffer) else { return }
-
         logAmplitudeIfNeeded(outputType, samples: samples)
-
         if outputType == .audio {
             mixer.pushSystemAudio(samples)
         } else {
