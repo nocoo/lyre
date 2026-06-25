@@ -801,6 +801,66 @@ func downmixToSingleTrack(input: URL, output: URL) async throws {
    - 两个 stream 的 `duration` 接近实际录制时长
    - `start_time` 接近 0 或两者一致
 
+### Task #7 6DQ status (2026-06-25)
+
+**Manual 6DQ evidence: deferred / not executed in this thread.** The
+manual acceptance plan above was scripted and sent to the operator
+(see `#lyre-macos-rebuild:f3202873`) but no real 30-second recording,
+QuickTime listening result, Lyre in-app playback impression, or
+production DashScope ASR transcript was provided back in this
+collaboration thread. This section is the audit trail for that
+deferral; it is **not** a "manual 6DQ passed" conclusion.
+
+**Automated subset that DID complete** (task #4 — task #6, plus task #10 downstream readiness):
+- `task #4`: dualTrack `AudioEncoder` + sidecar role→trackID map.
+  Pinned by `AudioEncoderDualTrackTests` + Mitigation A limitation
+  pinned by `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter`.
+- `task #5`: `RecordingManager` default `useDualTrack = true`;
+  raw `CMSampleBuffer` dispatch through `AudioCaptureManager` with
+  drain timer guarded by the legacy mixed-callback presence.
+  Covered by `RecordingManagerDualModeTests` + the extended
+  `AudioCaptureManagerTests` raw-dispatch suite.
+- `task #6`: deterministic `RecordingPipelineIntegrationTests`
+  (fake capture + real `AudioEncoder` + real .m4a + sidecar)
+  proves dual path produces 2 audio tracks, sidecar mapping is
+  consistent, and add() order is preserved. Live `RecordingE2ETests`
+  retains conditional sidecar consistency check (does not require
+  sidecar presence or two real tracks).
+- Cross-cutting: `AudioPlayerManager` switched to `AVPlayer` so
+  the in-app player can render every enabled track of a dual-track
+  .m4a (task #10); ASR pipeline merges all channels and exposes the
+  channel-1 stride evidence (`sentenceId >= SENTENCE_ID_CHANNEL_STRIDE`).
+
+**Manual subset that was NOT executed in this thread**:
+- DQ-1 (live 30s recording with both system audio + microphone),
+- DQ-4 (QuickTime Player listening — both tracks audible, no
+  speed/pitch artefacts, Mitigation A leading-trim subjectively
+  acceptable),
+- DQ-5 (Lyre in-app `AVPlayer` listening matches QuickTime),
+- DQ-6 (production DashScope multi-track transcription — content
+  layer + channel layer evidence).
+
+**Residual risks left open by the deferral**:
+- It is possible (but not yet observed) that QuickTime / `AVPlayer`
+  renders only one of the two tracks on the operator's machine.
+- It is possible the live DashScope account does not split / merge
+  the two AAC streams identically to the fixture used in
+  `e2e/api/asr-multitrack.test.ts`.
+- Mitigation A leading-trim (~0.5s on the late-arriving source) is
+  documented as a known limitation; whether it is subjectively
+  unacceptable for production use is a judgement only the operator
+  can make.
+
+**Task #8 fallback decision (single-track downmix / capture-layer
+warmup)**: not triggered. The triggers listed in the manual-acceptance
+script are all evidence-based (only one track audible, sidecar /
+ffprobe cannot prove two tracks, ASR only hits one track, or
+operator judges trim unacceptable). None of these are observed in
+this thread, so task #8 is **closed without implementation**. If any
+trigger fires after the operator runs the live 6DQ, re-open task #8
+and design the fallback at that point — the docs/06 "Risk & Fallback"
+section already sketches the offline downmix path.
+
 ## Non-goals
 
 - **不引入立体声混录**（左声道系统、右声道 mic 的 trick）— 那是音质优化，不是 bug 修复。
