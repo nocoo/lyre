@@ -263,6 +263,17 @@ AVAssetWriter 会将空 input 从输出文件中剔除（Phase 0 探针证实）
 - `CLAUDE.md`（Retrospective 更新）
 - `packages/api/src/services/asr.ts`（**不动**；仅作为外部依赖被验证）
 
+> **Implementation drift（落地后与文档示例的差异，权威以代码为准）**：
+>
+> - **Encoder ingress 单 API**：实际实现暴露统一入口 `func enqueue(_ buffer: CMSampleBuffer, source: AudioEncoder.Source) throws -> Bool`，**不分** `appendSystem/appendMic` 两个函数；文档下文的代码示例为可读性沿用旧名，二者语义等价。
+> - **Capture raw callbacks 命名**：实际命名为 `onRawSystemBuffer` / `onRawMicBuffer`（在 `AudioCaptureManager` 上）；与文档示例的 `onSystemSampleBuffer` / `onMicSampleBuffer` 等价。
+> - **Sidecar JSON 平铺**：写出的 `Recording_*.tracks.json` 内容形如 `{"system": <trackID>, "mic": <trackID>}`（缺席角色省略），**无** `version` / `tracks` 包装层 — 与本文 `writeTrackIdentitySidecarLocked` 段一致；任何 envelope 变动都要先回到本文档同步。
+> - **`finalize()` is throws**：`AudioEncoder.finalize() async throws`，writer / FIFO-flush 失败抛 `EncoderError.writerFailed`；`RecordingManager.stopRecording()` 用 `try await encoder.finalize()`，并在 `defer` 里清状态机，所以 throw 路径也保持 idle。
+>
+> **Codex 复审项已落地**：
+> - SCK 两路 output 注册到**专用 serial queue**（`AudioCaptureManager.sampleQueue`），SwiftLint custom rule `no_global_queue_on_addStreamOutput` 防回归。
+> - Mitigation B silent gap fill 用**输入 ASBD 的 sampleRate** 算 frame 数（44.1k mic 不再被拉长 8.8%），新增 `mitigationBGapFillSampleRateMatchesInputBuffer` 测试。
+
 核心目录改动：
 
 ```
@@ -709,12 +720,13 @@ DashScope `qwen3-asr-flash-filetrans` 的接口只接受一个 `file_url`，没�
 必须在合并前用真实样本端到端验证：
 
 1. 准备固定双轨样本 `e2e/fixtures/dual-track-asr.m4a`：
-   - Track 0（system）：朗读固定短语 A，例如 "the quick brown fox jumps over the lazy dog"
-   - Track 1（mic）：朗读固定短语 B，例如 "她说今天会议改到下午三点"
-   - 两轨内容不重叠、关键词差异明显
+   - Track 0（system）：朗读一组系统侧关键词，例如 "云计算 / 分布式 / 存储 / 索引"。
+   - Track 1（mic）：朗读一组麦克风侧关键词，例如 "机器学习 / 神经网络 / 深度学习"。
+   - 两轨内容不重叠、关键词差异明显（中文双轨在本仓库已落地，见 `e2e/api/asr-multitrack.test.ts`
+     的 `systemKeywords` / `micKeywords` 数组；早期文档示例使用中英文混合，已废弃）。
 2. 测试位置：`e2e/api/asr-multitrack.test.ts`（需要 `DASHSCOPE_API_KEY` 才跑，CI 上跳过、release 前本地必跑）。
 3. 流程：上传样本 → 提交 ASR → 轮询完成 → 取转写结果。
-4. 断言：转写文本同时包含两个短语的标志性关键词（"quick brown fox" **且** "下午三点"）。
+4. 断言：转写文本同时包含两组关键词（`systemKeywords` 与 `micKeywords` 各至少命中 1 个）。
 5. **失败处理**：如果只能转出 track 0 → 立刻进入下面的 Risk & Fallback 路径，不要合并多轨方案。
 
 ## Risk & Fallback

@@ -35,9 +35,9 @@ gitleaks → lint → test → typecheck → macOS
 test:e2e:api | gate:deps
 ```
 
-**Lyre pre-push**:
+**Lyre pre-push** (并行 — `scripts/pre-push.ts`):
 ```
-osv-scanner → lint → typecheck → test:coverage → web:build → macOS
+gate:deps | lint | typecheck | test:coverage + web:build | test:e2e (live) | macOS xcodebuild test | macOS swiftlint
 ```
 
 ### 缺失组件清单
@@ -53,7 +53,7 @@ osv-scanner → lint → typecheck → test:coverage → web:build → macOS
 | 6 | 统一安全门禁 | `scripts/gate-secrets.ts` + `scripts/gate-deps.ts` | ✅ |
 | 7 | Playwright 配置 | `playwright.config.ts` | ❌ 缺失 |
 | 8 | CD Workflow | `.github/workflows/release.yml` | ❌ 缺失 |
-| 9 | 并行 Hooks | `.husky/pre-commit` | ❌ 串行 |
+| 9 | 并行 Hooks | `.husky/pre-commit` | ⚠️ pre-push 已并行（`scripts/pre-push.ts`）；pre-commit 仍串行 |
 | 10 | 细粒度覆盖率 | vitest thresholds | ✅ apps/web vitest thresholds |
 
 ---
@@ -235,6 +235,8 @@ bun run gate:deps      # osv-scanner scan --lockfile=bun.lock (pre-push 语义)
 
 #### 5. 并行化 pre-commit hooks
 
+**状态**: pre-push 已并行 (`scripts/pre-push.ts`)。pre-commit 仍串行待并行化。
+
 **前置条件**: 先记录当前 pre-commit 基线耗时：
 
 ```bash
@@ -244,11 +246,12 @@ time git commit --allow-empty -m "benchmark"
 **注意**: 当前 pre-commit 包含 `xcodebuild test` 和 `swiftlint` (见 `.husky/pre-commit:15`)，
 并行后可能吃 CPU、拉长总耗时。建议：
 - pre-commit: gitleaks + lint + typecheck + test (并行)
-- pre-push: osv-scanner + coverage + web:build + macOS (保持串行，macOS 任务不适合 pre-commit)
+- pre-push: 已并行 (osv-scanner | lint | typecheck | test:coverage + web:build | test:e2e (live) | macOS test | macOS lint)
 
 **验收**:
-- [ ] 记录基线耗时
-- [ ] 并行化后对比提升
+- [x] pre-push 并行化落地 (`scripts/pre-push.ts`)
+- [ ] pre-commit 基线耗时记录
+- [ ] pre-commit 并行化后对比提升
 
 ---
 
