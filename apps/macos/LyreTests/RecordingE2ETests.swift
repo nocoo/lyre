@@ -125,8 +125,8 @@ struct RecordingE2ETests {
         audioTracks: [AVAssetTrack]
     ) throws {
         let data = try Data(contentsOf: sidecarURL)
-        let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-        let mapping = raw["tracks"] as? [String: Any] ?? [:]
+        // docs/06 sidecar contract: flat `{"role": trackID}` — no envelope.
+        let mapping = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
 
         let allowedRoles: Set<String> = ["system", "mic"]
         let actualTrackIDs = Set(audioTracks.map(\.trackID))

@@ -188,12 +188,11 @@ struct AudioEncoderDualTrackTests {
         let sidecarURL = url.deletingPathExtension().appendingPathExtension("tracks.json")
         #expect(FileManager.default.fileExists(atPath: sidecarURL.path))
         let payload = try Self.readSidecar(at: sidecarURL)
-        #expect(payload.version == 1)
-        #expect(payload.tracks.keys.sorted() == ["mic", "system"])
+        #expect(payload.keys.sorted() == ["mic", "system"])
         // Track IDs match the finalized asset's tracks in add() order.
         let assetTrackIDs = try await Self.audioTrackIDs(at: url)
-        #expect(payload.tracks["system"] == assetTrackIDs[0])
-        #expect(payload.tracks["mic"] == assetTrackIDs[1])
+        #expect(payload["system"] == assetTrackIDs[0])
+        #expect(payload["mic"] == assetTrackIDs[1])
     }
 
     @Test func singleSourceOnlyWritesPresentRoleInSidecar() async throws {
@@ -226,8 +225,8 @@ struct AudioEncoderDualTrackTests {
         #expect(FileManager.default.fileExists(atPath: sidecarURL.path))
         let payload = try Self.readSidecar(at: sidecarURL)
         // Mic role must be absent — it never had a real append.
-        #expect(payload.tracks["mic"] == nil)
-        #expect(payload.tracks["system"] != nil)
+        #expect(payload["mic"] == nil)
+        #expect(payload["system"] != nil)
     }
 
     @Test func lateSourceFirstFrameRemainsTrimmedByAVAssetWriter() async throws {
@@ -286,7 +285,7 @@ struct AudioEncoderDualTrackTests {
         // Sidecar still records mic because the real buffer landed.
         let sidecarURL = url.deletingPathExtension().appendingPathExtension("tracks.json")
         let payload = try Self.readSidecar(at: sidecarURL)
-        #expect(payload.tracks["mic"] != nil, "mic missing from sidecar after late-source real append")
+        #expect(payload["mic"] != nil, "mic missing from sidecar after late-source real append")
     }
 
     @Test func micOnlySingleSourceSidecarShape() async throws {
@@ -323,8 +322,8 @@ struct AudioEncoderDualTrackTests {
         // not mis-map mic as system.
         if FileManager.default.fileExists(atPath: sidecarURL.path) {
             let payload = try Self.readSidecar(at: sidecarURL)
-            #expect(payload.tracks["mic"] != nil)
-            #expect(payload.tracks["system"] == nil)
+            #expect(payload["mic"] != nil)
+            #expect(payload["system"] == nil)
         }
     }
 
@@ -466,14 +465,10 @@ struct AudioEncoderDualTrackTests {
         return sampleBuffer!
     }
 
-    struct SidecarPayload: Decodable {
-        let version: Int
-        let tracks: [String: Int32]
-    }
-
-    static func readSidecar(at url: URL) throws -> SidecarPayload {
+    static func readSidecar(at url: URL) throws -> [String: Int32] {
         let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(SidecarPayload.self, from: data)
+        // docs/06 sidecar contract: flat `{"role": trackID}` — no envelope.
+        return try JSONDecoder().decode([String: Int32].self, from: data)
     }
 
     static func audioTrackCount(at url: URL) throws -> Int {

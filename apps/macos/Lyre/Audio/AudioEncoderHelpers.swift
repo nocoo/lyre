@@ -523,10 +523,12 @@ extension AudioEncoder {
     /// downstream consumers (ASR speaker tagging, playback, debug
     /// tooling) can map the real role labels to the finalized
     /// AVAssetTrack `trackID`s.
-    struct SidecarPayload: Encodable {
-        let version: Int
-        let tracks: [String: Int32]
-    }
+    ///
+    /// docs/06 specifies a flat JSON shape: `{"system": <id>, "mic": <id>}`
+    /// (omit the absent role). Keep this contract stable — any envelope
+    /// change requires a doc update and a coordinated bump of every
+    /// external reader.
+    typealias SidecarPayload = [String: Int32]
 
     /// Reload the freshly-written asset, map role → finalized
     /// trackID, and write `Recording_*.tracks.json`. Failures are
@@ -571,12 +573,11 @@ extension AudioEncoder {
             return
         }
 
-        var tracksMap: [String: Int32] = [:]
+        var payload: SidecarPayload = [:]
         for (i, role) in rolesByIndex.enumerated() {
-            tracksMap[role.rawValue] = trackIDs[i]
+            payload[role.rawValue] = trackIDs[i]
         }
 
-        let payload = SidecarPayload(version: 1, tracks: tracksMap)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         guard let data = try? encoder.encode(payload) else {

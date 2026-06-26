@@ -137,10 +137,10 @@ struct RecordingPipelineIntegrationTests {
 
     private static func readSidecar(_ url: URL) throws -> [String: CMPersistentTrackID] {
         let data = try Data(contentsOf: url)
+        // docs/06 sidecar contract: flat `{"role": trackID}` — no envelope.
         let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-        let tracks = raw["tracks"] as? [String: Any] ?? [:]
         var out: [String: CMPersistentTrackID] = [:]
-        for (role, value) in tracks {
+        for (role, value) in raw {
             if let n = value as? NSNumber {
                 out[role] = CMPersistentTrackID(n.int32Value)
             }
