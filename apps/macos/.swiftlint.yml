@@ -45,3 +45,10 @@ identifier_name:
 nesting:
   type_level: 3
   function_level: 5
+
+custom_rules:
+  no_global_queue_on_addStreamOutput:
+    name: "no .global queue on addStreamOutput"
+    regex: 'addStreamOutput\([^)]*sampleHandlerQueue:\s*\.global'
+    message: "SCStream sample handlers must share a dedicated serial DispatchQueue (see docs/06-macos-audio-pipeline-redesign.md, AudioCaptureManager.sampleQueue). `.global(qos:)` is concurrent and lets `.audio` / `.microphone` callbacks race."
+    severity: error

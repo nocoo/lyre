@@ -17,7 +17,12 @@ struct AudioInputDevice: Identifiable, Equatable, Sendable {
 }
 
 /// Manages ScreenCaptureKit audio capture for both system audio and microphone.
-/// System audio (.audio) + microphone (.microphone) → AudioMixer → mixed PCM output.
+///
+/// Default dual-track path: forwards raw `CMSampleBuffer`s to the
+/// `AudioEncoder` (one per source) — no mixing, no PCM extraction.
+/// Legacy mixed path stays available behind `onMixedSamples` for callers
+/// that still want the in-app mixer; both paths share the same
+/// **dedicated serial** sample queue so callbacks are strictly ordered.
 @Observable
 final class AudioCaptureManager: NSObject, @unchecked Sendable {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "AudioCaptureManager")
@@ -50,6 +55,18 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     private let mixer = AudioMixer()
     private let sampleRate: Int = Constants.Audio.sampleRateInt
     private let channelCount: Int = Constants.Audio.channelCountInt
+
+    /// **Dedicated serial dispatch queue** for SCStream sample handlers.
+    /// Required by docs/06: both `.audio` and `.microphone` outputs must
+    /// share the same serial queue so `stream(_:didOutputSampleBuffer:of:)`
+    /// fires non-concurrently. Using `.global(qos:)` (a concurrent queue)
+    /// lets the two output types race into the downstream raw / mixer
+    /// callbacks and the encoder; the encoder's own serial queue is a
+    /// last-resort guard, not the primary correctness boundary.
+    private let sampleQueue = DispatchQueue(
+        label: "ai.hexly.lyre.AudioCapture.samples",
+        qos: .userInitiated
+    )
 
     /// Counters for debugging audio delivery.
     private var systemAudioBufferCount: Int = 0
@@ -160,8 +177,11 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         let newStream = SCStream(filter: filter, configuration: config, delegate: self)
 
         // Register separate output handlers for system audio and microphone
-        try newStream.addStreamOutput(self, type: .audio, sampleHandlerQueue: .global(qos: .userInitiated))
-        try newStream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: .global(qos: .userInitiated))
+        // on the SAME dedicated serial queue (see `sampleQueue` above).
+        // Lint rule `lyre_no_global_on_addStreamOutput` (.swiftlint.yml)
+        // guards against regressing to `.global(qos:)` here.
+        try newStream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
+        try newStream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: sampleQueue)
 
         let deviceLabel = selectedDeviceID ?? "default"
         Self.logger.info("Starting capture: mic=\(config.captureMicrophone), device=\(deviceLabel)")
