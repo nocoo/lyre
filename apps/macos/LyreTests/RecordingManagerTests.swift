@@ -1,3 +1,9 @@
+// swiftlint:disable file_length
+//
+// Aggregates manager state-machine tests, dual/legacy mode wiring,
+// callback teardown, defer-on-throw cleanup, and the shared fakes.
+// Splitting into multiple files would obscure the single test suite
+// against a single production type.
 import Testing
 import Foundation
 import AVFoundation
@@ -234,6 +240,35 @@ struct RecordingManagerDualModeTests {
         #expect(cap.onStreamError == nil)
     }
 
+    @Test func stopRecordingResetsStateEvenWhenStopCaptureThrows() async throws {
+        // Without the `defer` in stopRecording, a `stopCapture()` failure
+        // would leave state == .recording + dangling encoder + live
+        // callbacks. The defer path must clean everything regardless.
+        let cap = FakeCapture()
+        cap.stopShouldThrow = NSError(domain: "test", code: 7)
+        let enc = FakeEncoder()
+        let mgr = RecordingManager(
+            permissions: FakePermissions(allGranted: true),
+            capture: cap,
+            encoderFactory: { enc },
+            useDualTrack: true,
+            outputDirectory: tempDir()
+        )
+        try await mgr.startRecording()
+        do {
+            _ = try await mgr.stopRecording()
+            Issue.record("Expected stopCapture failure to propagate")
+        } catch {
+            // Expected — the underlying NSError from stopCapture rethrows.
+        }
+        #expect(mgr.state == .idle, "state must reset even when stopCapture throws")
+        #expect(mgr.recordingStartTime == nil, "recordingStartTime must clear")
+        #expect(cap.onRawSystemBuffer == nil, "raw system callback must be torn down")
+        #expect(cap.onRawMicBuffer == nil, "raw mic callback must be torn down")
+        #expect(cap.onMixedSamples == nil, "mixed callback must be torn down")
+        #expect(cap.onStreamError == nil, "stream error callback must be torn down")
+    }
+
     @Test func startWithDeniedPermissionsThrows() async {
         let mgr = RecordingManager(
             permissions: FakePermissions(allGranted: false),
@@ -324,10 +359,14 @@ private final class FakeCapture: AudioCapturing, @unchecked Sendable {
 
     var startCount = 0
     var stopCount = 0
+    var stopShouldThrow: Error?
 
     func refreshDevices() { /* no-op in tests */ }
     func startCapture() async throws { startCount += 1 }
-    func stopCapture() async throws { stopCount += 1 }
+    func stopCapture() async throws {
+        stopCount += 1
+        if let err = stopShouldThrow { throw err }
+    }
 }
 
 private final class FakeEncoder: AudioEncoding, @unchecked Sendable {

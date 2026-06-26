@@ -193,37 +193,40 @@ final class RecordingManager: @unchecked Sendable {
 
     /// Stop the current recording and finalize the M4A file.
     ///
+    /// Cleanup is wrapped in `defer` so state machine, encoder
+    /// reference, and capture callbacks all reset even when
+    /// `stopCapture()` or `finalize()` throws partway through. Without
+    /// this, a `stopCapture()` failure would leave `state == .recording`
+    /// + a dangling encoder + live capture callbacks, and the next
+    /// `startRecording()` would either hit the `.alreadyRecording`
+    /// guard or push buffers into a finalized encoder.
+    ///
     /// - Returns: URL of the completed M4A file.
     /// - Throws: `RecordingError` if not recording.
     @discardableResult
     func stopRecording() async throws -> URL {
-        guard state == .recording else {
+        guard state == .recording, let fileURL = currentFileURL else {
             throw RecordingError.notRecording
         }
 
-        // Stop capture (flushes remaining mixer samples via onMixedSamples
-        // when the legacy mixed path is active; dual path has nothing to
-        // flush since onMixedSamples is nil).
-        try await capture.stopCapture()
-
-        // Finalize encoder. Read `lastError` BEFORE nil-ing the
-        // encoder reference so a finalize failure (writer flush /
-        // status != .completed / late enqueue failure on the dual path)
-        // still reaches our own `lastError` surface.
-        guard let fileURL = currentFileURL else {
-            throw RecordingError.notRecording
-        }
         let enc = encoder
-        await enc?.finalize()
-        if let err = enc?.lastError {
-            lastError = err
-            Self.logger.error("Encoder lastError on finalize: \(err.localizedDescription)")
+        defer {
+            // Snapshot encoder.lastError before nil-ing the reference so
+            // a finalize-time failure (writer flush / status != .completed)
+            // still reaches our own `lastError` surface even when the
+            // caller never awaits.
+            if let err = enc?.lastError {
+                lastError = err
+                Self.logger.error("Encoder lastError on finalize: \(err.localizedDescription)")
+            }
+            encoder = nil
+            cleanupCaptureCallbacks()
+            state = .idle
+            recordingStartTime = nil
         }
-        encoder = nil
 
-        cleanupCaptureCallbacks()
-        state = .idle
-        recordingStartTime = nil
+        try await capture.stopCapture()
+        await enc?.finalize()
 
         return fileURL
     }
