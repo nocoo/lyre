@@ -550,33 +550,43 @@ extension AudioEncoder {
             return
         }
 
-        // Map roles to finalized tracks. The general path uses add()
-        // order (Phase 0A track-order probe pinned: tracks[0] == first
-        // add() target == system; tracks[1] == mic). Reviewer Finding 5
-        // flagged a single-source edge case: when only one role
-        // appends real frames, the writer may emit a single track in
-        // the finalized asset — and we cannot assume that track is the
-        // surviving role without explicit mapping. Be defensive: only
-        // write the sidecar when the role count exactly matches the
-        // asset track count.
-        var rolesByIndex: [Source] = []
-        if snapshot.systemAppendedReal { rolesByIndex.append(.system) }
-        if snapshot.micAppendedReal { rolesByIndex.append(.mic) }
-        guard !rolesByIndex.isEmpty else { return }
-
-        guard trackIDs.count == rolesByIndex.count else {
-            let trackCount = trackIDs.count
-            let roleCount = rolesByIndex.count
+        // Map roles to finalized tracks using the exact `(sysDid, micDid,
+        // audioTracks.count)` switch from docs/06 §writeTrackIdentitySidecarLocked.
+        // The switch is explicit so the legal combinations and the skip
+        // cases are visible at the call site; do not collapse it into a
+        // `rolesByIndex` loop — that hides which empty-input branch we
+        // are protecting against.
+        let payload: SidecarPayload?
+        switch (snapshot.systemAppendedReal, snapshot.micAppendedReal, trackIDs.count) {
+        case (true, false, 1):
+            payload = ["system": trackIDs[0]]
+        case (false, true, 1):
+            payload = ["mic": trackIDs[0]]
+        case (true, true, 2):
+            // add() order anchor (Phase 0A track-order probe):
+            //   tracks[0] == first add() target == system
+            //   tracks[1] == mic
+            payload = ["system": trackIDs[0], "mic": trackIDs[1]]
+        case (true, true, 1):
+            // One input survived final flush as a single track; without
+            // role identification on the surviving track we cannot
+            // attribute it safely. Skip rather than guess.
             Self.logger.warning(
-                "Sidecar: track count \(trackCount) != real role count \(roleCount) — skipping",
+                "Sidecar: both sources had real frames but asset has 1 track — skipping",
+            )
+            return
+        case (false, false, _):
+            return
+        default:
+            let trackCount = trackIDs.count
+            let sysDid = snapshot.systemAppendedReal
+            let micDid = snapshot.micAppendedReal
+            Self.logger.warning(
+                "Sidecar: unexpected (sysDid=\(sysDid), micDid=\(micDid), tracks=\(trackCount)) — skipping",
             )
             return
         }
-
-        var payload: SidecarPayload = [:]
-        for (i, role) in rolesByIndex.enumerated() {
-            payload[role.rawValue] = trackIDs[i]
-        }
+        guard let payload else { return }
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
