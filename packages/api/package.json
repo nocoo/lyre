@@ -29,8 +29,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@nocoo/next-ai": "^0.2.1",
-    "ai": "^6.0.116",
+    "@nocoo/next-ai": "^0.3.0",
+    "ai": "^7.0.2",
     "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
