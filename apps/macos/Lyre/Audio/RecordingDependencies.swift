@@ -41,12 +41,15 @@ extension AudioCaptureManager: AudioCapturing {}
 
 /// Encoder surface RecordingManager uses. `setup` always takes an
 /// explicit mode so the recording path is observable (legacy vs dual).
+/// `finalize()` throws so writer / FIFO-flush failures surface as
+/// `EncoderError.writerFailed` rather than silently completing with a
+/// partial file.
 protocol AudioEncoding: AnyObject {
     var lastError: Error? { get }
     func setup(outputURL: URL, mode: AudioEncoder.EncoderMode) throws
     @discardableResult func enqueue(_ buffer: CMSampleBuffer, source: AudioEncoder.Source) throws -> Bool
     @discardableResult func encodeSamples(_ samples: [Float]) -> Bool
-    func finalize() async
+    func finalize() async throws
 }
 
 extension AudioEncoder: AudioEncoding {}

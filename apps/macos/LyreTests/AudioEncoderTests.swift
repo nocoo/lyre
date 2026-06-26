@@ -74,9 +74,9 @@ struct AudioEncoderTests {
 
     // MARK: - Finalize
 
-    @Test func finalizeWithoutSetupDoesNotCrash() async {
+    @Test func finalizeWithoutSetupDoesNotCrash() async throws {
         let encoder = AudioEncoder()
-        await encoder.finalize()
+        try await encoder.finalize()
         #expect(encoder.isWriting == false)
     }
 
@@ -87,7 +87,7 @@ struct AudioEncoderTests {
         #expect(encoder.isWriting == true)
         // Write some samples first
         encoder.encodeSamples([0.1, 0.2, 0.3])
-        await encoder.finalize()
+        try await encoder.finalize()
         #expect(encoder.isWriting == false)
         // File should exist
         #expect(FileManager.default.fileExists(atPath: url.path))
@@ -98,7 +98,7 @@ struct AudioEncoderTests {
         let url = makeTemporaryURL()
         try encoder.setup(outputURL: url)
         encoder.encodeSamples([0.1, 0.2])
-        await encoder.finalize()
+        try await encoder.finalize()
         let result = encoder.encodeSamples([0.3, 0.4])
         #expect(result == false)
     }
@@ -178,7 +178,7 @@ struct AudioEncoderDualTrackTests {
         _ = try encoder.enqueue(sysBuf, source: .system)
         _ = try encoder.enqueue(micBuf, source: .mic)
 
-        await encoder.finalize()
+        try await encoder.finalize()
 
         // .m4a has two audio tracks.
         let trackCount = try Self.audioTrackCount(at: url)
@@ -220,7 +220,7 @@ struct AudioEncoderDualTrackTests {
         )
         _ = try encoder.enqueue(sysBuf2, source: .system)
 
-        await encoder.finalize()
+        try await encoder.finalize()
 
         let sidecarURL = url.deletingPathExtension().appendingPathExtension("tracks.json")
         #expect(FileManager.default.fileExists(atPath: sidecarURL.path))
@@ -268,7 +268,7 @@ struct AudioEncoderDualTrackTests {
         let micBuf = Self.makeSineBuffer(freq: 880, durationSeconds: 0.5, startPTS: micStart)
         _ = try encoder.enqueue(micBuf, source: .mic)
 
-        await encoder.finalize()
+        try await encoder.finalize()
 
         let durations = try await Self.audioTrackDurations(at: url)
         #expect(durations.count == 2)
@@ -312,7 +312,7 @@ struct AudioEncoderDualTrackTests {
         )
         _ = try encoder.enqueue(micBuf2, source: .mic)
 
-        await encoder.finalize()
+        try await encoder.finalize()
 
         let sidecarURL = url.deletingPathExtension().appendingPathExtension("tracks.json")
         // The sidecar may be skipped entirely if the finalized asset
@@ -346,7 +346,7 @@ struct AudioEncoderDualTrackTests {
         let seg2 = Self.makeSineBuffer(freq: 440, durationSeconds: 0.9, startPTS: seg2Start)
         _ = try encoder.enqueue(seg2, source: .system)
 
-        await encoder.finalize()
+        try await encoder.finalize()
 
         let durations = try await Self.audioTrackDurations(at: url)
         // Track should run from session start (PTS 0) to the end of
@@ -391,7 +391,7 @@ struct AudioEncoderDualTrackTests {
         // Drop returns false from enqueue → writeRealBufferLocked.
         #expect(okReverse == false)
 
-        await encoder.finalize()
+        try await encoder.finalize()
     }
 
     // MARK: - Helpers

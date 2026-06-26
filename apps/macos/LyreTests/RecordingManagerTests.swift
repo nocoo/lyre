@@ -218,7 +218,13 @@ struct RecordingManagerDualModeTests {
             outputDirectory: tempDir()
         )
         try await mgr.startRecording()
-        _ = try await mgr.stopRecording()
+        do {
+            _ = try await mgr.stopRecording()
+            Issue.record("Expected finalize failure to propagate as a throw")
+        } catch {
+            // finalize() now both throws and sets lastError — the defer
+            // path mirrors the encoder.lastError onto the manager.
+        }
         #expect(mgr.lastError as? AudioEncoder.EncoderError == finalizeFailure)
         #expect(mgr.state == .idle)
     }
@@ -382,6 +388,11 @@ private final class FakeEncoder: AudioEncoding, @unchecked Sendable {
     var enqueueResult: EnqueueResult = .returnTrue
     var encodeSamplesCalls: [[Float]] = []
     var finalizeLastError: Error?
+    /// Force finalize() to throw the given error after recording it as
+    /// `lastError`. When nil, `finalizeLastError` (if set) is both
+    /// stored AND thrown — matches the production contract that writer
+    /// failures surface via both channels.
+    var finalizeShouldThrow: Error?
 
     private var lastErrorStorage: Error?
     var lastError: Error? { lastErrorStorage }
@@ -405,7 +416,12 @@ private final class FakeEncoder: AudioEncoding, @unchecked Sendable {
         return true
     }
 
-    func finalize() async {
+    func finalize() async throws {
         lastErrorStorage = finalizeLastError
+        if let err = finalizeShouldThrow ?? finalizeLastError {
+            // Match the production contract: writer failures both set
+            // `lastError` and throw.
+            throw err
+        }
     }
 }

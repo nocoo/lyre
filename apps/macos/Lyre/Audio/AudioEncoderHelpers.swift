@@ -21,12 +21,15 @@ extension AudioEncoder {
     /// Finalize the writer, write the sidecar if applicable, and close
     /// the file.
     ///
-    /// Does not throw — task #5 still owns the encoder/capture
-    /// re-wiring, and the existing `RecordingManager.stopRecording()`
-    /// callsite expects a non-throwing call. Writer failures are
-    /// logged and surfaced via `lastError`; the encoder state is
-    /// always reset so the next setup is clean.
-    func finalize() async {
+    /// Throws `EncoderError.writerFailed(...)` if any of:
+    ///   - `beginSessionLocked()` during pre-finalize state machine
+    ///   - `writeRealBufferLocked()` during the FIFO flush
+    ///   - `AVAssetWriter.finishWriting()` itself
+    /// reported a failure. `lastError` always mirrors the thrown value
+    /// for callers that prefer the surface-and-keep-going pattern.
+    /// State is reset under `queue.sync` either way so the next
+    /// `setup()` starts clean.
+    func finalize() async throws {
         let snapshot = queue.sync { () -> FinalizeSnapshot in
             preFinalizeStateMachineLocked()
             let snap = makeFinalizeSnapshotLocked()
@@ -37,7 +40,14 @@ extension AudioEncoder {
             return snap
         }
 
-        guard let writer = snapshot.writer else { return }
+        guard let writer = snapshot.writer else {
+            // No writer at all — clear any cached state and return.
+            queue.sync { resetStateLocked(preserveLastError: true) }
+            if let err = queue.sync(execute: { lastErrorInternal }) {
+                throw err
+            }
+            return
+        }
 
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             writer.finishWriting { cont.resume() }
@@ -46,11 +56,12 @@ extension AudioEncoder {
         if writer.status == .failed {
             let detail = writer.error?.localizedDescription ?? "unknown"
             Self.logger.error("Writer finalization failed: \(detail)")
+            let thrown: Error = writer.error ?? EncoderError.writerFailed(detail)
             queue.sync {
-                lastErrorInternal = writer.error ?? EncoderError.writerFailed(detail)
+                lastErrorInternal = thrown
                 resetStateLocked(preserveLastError: true)
             }
-            return
+            throw thrown
         }
 
         // Sidecar (dual mode only; at least one real source).
@@ -60,7 +71,18 @@ extension AudioEncoder {
             await writeSidecarIfPossible(outputURL: outputURL, snapshot: snapshot)
         }
 
-        queue.sync { resetStateLocked(preserveLastError: true) }
+        // Propagate any error captured during pre-finalize FIFO flush
+        // (beginSessionLocked → writeRealBufferLocked) since the writer
+        // itself may still report `.completed` even if a buffer was
+        // dropped mid-flush.
+        let pending = queue.sync { () -> Error? in
+            let err = lastErrorInternal
+            resetStateLocked(preserveLastError: true)
+            return err
+        }
+        if let pending {
+            throw pending
+        }
     }
 
     /// Pre-finalize state-machine handling for dualTrack:

@@ -202,7 +202,11 @@ final class RecordingManager: @unchecked Sendable {
     /// guard or push buffers into a finalized encoder.
     ///
     /// - Returns: URL of the completed M4A file.
-    /// - Throws: `RecordingError` if not recording.
+    /// - Throws: `RecordingError.notRecording` if not currently
+    ///   recording. Re-throws the underlying `EncoderError.writerFailed`
+    ///   when `finalize()` reports a writer / flush failure so the
+    ///   caller can surface the failure to the user instead of treating
+    ///   a partial file as success.
     @discardableResult
     func stopRecording() async throws -> URL {
         guard state == .recording, let fileURL = currentFileURL else {
@@ -214,7 +218,7 @@ final class RecordingManager: @unchecked Sendable {
             // Snapshot encoder.lastError before nil-ing the reference so
             // a finalize-time failure (writer flush / status != .completed)
             // still reaches our own `lastError` surface even when the
-            // caller never awaits.
+            // caller does not catch the rethrown error.
             if let err = enc?.lastError {
                 lastError = err
                 Self.logger.error("Encoder lastError on finalize: \(err.localizedDescription)")
@@ -226,7 +230,7 @@ final class RecordingManager: @unchecked Sendable {
         }
 
         try await capture.stopCapture()
-        await enc?.finalize()
+        try await enc?.finalize()
 
         return fileURL
     }
@@ -262,8 +266,19 @@ final class RecordingManager: @unchecked Sendable {
 
             // Always finalize encoder to close the output file properly.
             // Same lastError-before-nil pattern as stopRecording().
+            // `finalize()` is `throws` now; swallow here because the
+            // stream-error recovery path is best-effort — we want to
+            // close the file no matter what — but still surface the
+            // failure through `lastError` for the UI.
             let enc = encoder
-            await enc?.finalize()
+            do {
+                try await enc?.finalize()
+            } catch {
+                lastError = error
+                Self.logger.error(
+                    "Encoder finalize threw during stream-error recovery: \(error.localizedDescription)"
+                )
+            }
             if let err = enc?.lastError {
                 lastError = err
                 Self.logger.error("Encoder lastError on stream-error finalize: \(err.localizedDescription)")
