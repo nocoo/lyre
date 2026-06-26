@@ -403,54 +403,72 @@ export async function wordsHandler(
   const ossKey = makeResultKey(job.id, "transcription.json");
   const ossUrl = presignGet(ossKey, 300, undefined, undefined, ctx.env);
 
+  let response: Response;
   try {
-    const response = await fetch(ossUrl);
-    if (!response.ok) {
-      return json({ error: "Failed to fetch transcription data from storage" }, 502);
-    }
-    const raw = (await response.json()) as AsrTranscriptionResult;
-    const transcripts = raw.transcripts ?? [];
-    if (transcripts.length === 0) return json({ sentences: [] });
-
-    // Merge sentences from every channel. The composite `sentenceId`
-    // uses the same `SENTENCE_ID_CHANNEL_STRIDE` formula as
-    // `parseTranscriptionResult` so the front-end karaoke can correlate
-    // word rows back to the persisted sentence rows by id. Ordering
-    // matches the parser exactly — sentence-level `(begin_time,
-    // channelId, sentenceId)` — so the `/words` order lines up 1:1 with
-    // the persisted sentence order.
-    type SentenceWithSort = SentenceWords & { sortBeginTime: number };
-    const ranked: SentenceWithSort[] = [];
-    for (const transcript of transcripts) {
-      const channelId = transcript.channel_id;
-      for (const s of transcript.sentences) {
-        ranked.push({
-          sentenceId: channelId * SENTENCE_ID_CHANNEL_STRIDE + s.sentence_id,
-          channelId,
-          words: s.words.map((w) => ({
-            begin_time: w.begin_time,
-            end_time: w.end_time,
-            text: w.text,
-            punctuation: w.punctuation,
-          })),
-          sortBeginTime: s.begin_time,
-        });
-      }
-    }
-    ranked.sort((a, b) => {
-      if (a.sortBeginTime !== b.sortBeginTime) return a.sortBeginTime - b.sortBeginTime;
-      if (a.channelId !== b.channelId) return a.channelId - b.channelId;
-      return a.sentenceId - b.sentenceId;
-    });
-    const sentences: SentenceWords[] = ranked.map((r) => ({
-      sentenceId: r.sentenceId,
-      channelId: r.channelId,
-      words: r.words,
-    }));
-    return json({ sentences });
+    response = await fetch(ossUrl);
   } catch {
     return serverError("Failed to load word data");
   }
+  if (!response.ok) {
+    return json({ error: "Failed to fetch transcription data from storage" }, 502);
+  }
+  let raw: AsrTranscriptionResult;
+  try {
+    raw = (await response.json()) as AsrTranscriptionResult;
+  } catch {
+    // Malformed JSON from a successful 200 OSS read is a storage-side
+    // contract problem, not a server error — surface as 502 so
+    // observability separates "OSS down" from "OSS gave us garbage".
+    return json({ error: "Malformed transcription payload" }, 502);
+  }
+  const transcripts = raw.transcripts ?? [];
+  if (transcripts.length === 0) return json({ sentences: [] });
+
+  // Merge sentences from every channel. The composite `sentenceId`
+  // uses the same `SENTENCE_ID_CHANNEL_STRIDE` formula as
+  // `parseTranscriptionResult` so the front-end karaoke can correlate
+  // word rows back to the persisted sentence rows by id. Ordering
+  // matches the parser exactly — sentence-level `(begin_time,
+  // channelId, sentenceId)` — so the `/words` order lines up 1:1 with
+  // the persisted sentence order.
+  type SentenceWithSort = SentenceWords & { sortBeginTime: number };
+  const ranked: SentenceWithSort[] = [];
+  for (const transcript of transcripts) {
+    const channelId = transcript.channel_id;
+    for (const s of transcript.sentences) {
+      // DashScope occasionally returns sentences with no `words` array
+      // (very short utterances, older models). Default to `[]` instead
+      // of throwing — the `/words` consumer treats an empty list as
+      // "no word-level data for this sentence".
+      const words = (s.words ?? []).map((w) => ({
+        begin_time: w.begin_time,
+        end_time: w.end_time,
+        text: w.text,
+        punctuation: w.punctuation,
+      }));
+      ranked.push({
+        sentenceId: channelId * SENTENCE_ID_CHANNEL_STRIDE + s.sentence_id,
+        channelId,
+        words,
+        // `s.begin_time` is required by the DashScope schema but the
+        // sort tolerates `undefined` defensively — `NaN - n` propagates
+        // through `sort()` and breaks order stability if a field is ever
+        // missing.
+        sortBeginTime: s.begin_time ?? 0,
+      });
+    }
+  }
+  ranked.sort((a, b) => {
+    if (a.sortBeginTime !== b.sortBeginTime) return a.sortBeginTime - b.sortBeginTime;
+    if (a.channelId !== b.channelId) return a.channelId - b.channelId;
+    return a.sentenceId - b.sentenceId;
+  });
+  const sentences: SentenceWords[] = ranked.map((r) => ({
+    sentenceId: r.sentenceId,
+    channelId: r.channelId,
+    words: r.words,
+  }));
+  return json({ sentences });
 }
 
 /**

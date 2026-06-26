@@ -417,6 +417,88 @@ describe("wordsHandler", () => {
     );
     expect(res.status).toBe(200);
   });
+  it("tolerates sentences with no words array", async () => {
+    // DashScope occasionally omits `words` on short / older-model
+    // sentences. The handler used to crash on `s.words.map(...)`;
+    // the defensive default to `[]` should let it pass through.
+    const { user } = await setupAuthedCtx();
+    const ctx = makeCtx(user, { env: ossEnv });
+    const created = await createRecordingHandler(ctx, {
+      title: "X",
+      fileName: "x.m4a",
+      ossKey: "uploads/u/r/x.m4a",
+    });
+    if (created.kind !== "json") throw new Error();
+    const recId = (created.body as { id: string }).id;
+    await testRepos().jobs.create({
+      id: "job-w-nowords",
+      recordingId: recId,
+      taskId: "task-nowords",
+      requestId: null,
+      status: "SUCCEEDED",
+    });
+    const fakeAsr = {
+      transcripts: [
+        {
+          channel_id: 0,
+          sentences: [
+            {
+              sentence_id: 0,
+              begin_time: 0,
+              end_time: 100,
+              text: "no words here",
+              // intentionally NO `words` field
+            },
+          ],
+        },
+      ],
+    };
+    const res = await withMockedFetch(
+      async () =>
+        new Response(JSON.stringify(fakeAsr), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      () => wordsHandler(ctx, recId),
+    );
+    expect(res.status).toBe(200);
+    if (res.kind !== "json") throw new Error();
+    const body = res.body as {
+      sentences: Array<{ sentenceId: number; words: unknown[] }>;
+    };
+    expect(body.sentences).toHaveLength(1);
+    expect(body.sentences[0]?.words).toEqual([]);
+  });
+  it("502 when OSS body is not valid JSON", async () => {
+    // Malformed payload from a successful 200 is a storage-side
+    // contract problem — should surface as 502 (upstream) rather than
+    // 500 (handler crash).
+    const { user } = await setupAuthedCtx();
+    const ctx = makeCtx(user, { env: ossEnv });
+    const created = await createRecordingHandler(ctx, {
+      title: "X",
+      fileName: "x.m4a",
+      ossKey: "uploads/u/r/x.m4a",
+    });
+    if (created.kind !== "json") throw new Error();
+    const recId = (created.body as { id: string }).id;
+    await testRepos().jobs.create({
+      id: "job-w-bad",
+      recordingId: recId,
+      taskId: "task-bad",
+      requestId: null,
+      status: "SUCCEEDED",
+    });
+    const res = await withMockedFetch(
+      async () =>
+        new Response("<<not json>>", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      () => wordsHandler(ctx, recId),
+    );
+    expect(res.status).toBe(502);
+  });
 });
 
 describe("batch delete with owned recording", () => {
