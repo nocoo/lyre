@@ -295,7 +295,15 @@ extension AudioEncoder {
         let gap = CMTimeSubtract(ctx.nextPTS, ctx.lastEnd)
         let gapMs = CMTimeGetSeconds(gap) * 1_000
         guard gapMs > Self.gapFillThresholdMs else { return }
-        let gapFrames = framesBetween(start: ctx.lastEnd, end: ctx.nextPTS)
+        // The silent buffer is built from the reference buffer's ASBD
+        // (`makeSilentPCMBuffer(matching:)`) so its frame count MUST use
+        // the input sample rate, not the encoder's output sample rate.
+        // Using `self.sampleRate` (48 kHz) for a 44.1 kHz mic stretches
+        // the silent span by ~8.8 % — the exact failure docs/06 §Cause A
+        // is fixing. Fall back to encoder rate only if the ref ASBD is
+        // unreadable (theoretically impossible for SCK output).
+        let inputRate = Self.inputSampleRate(of: ctx.ref) ?? sampleRate
+        let gapFrames = Int(CMTimeGetSeconds(gap) * inputRate)
         guard gapFrames > 0,
               let silent = Self.makeSilentPCMBuffer(
                   matching: ctx.ref,
@@ -306,13 +314,11 @@ extension AudioEncoder {
         let ok = ctx.input.append(silent)
         if ok {
             setAppendedAny(source: ctx.source)
-            setLastEndPTS(
-                source: ctx.source,
-                end: CMTimeAdd(
-                    ctx.lastEnd,
-                    CMTime(value: CMTimeValue(gapFrames), timescale: CMTimeScale(sampleRate)),
-                ),
-            )
+            // After a successful fill the timeline is exactly at the
+            // real buffer's start; using `nextPTS` avoids accumulating
+            // sub-frame rounding error that an `lastEnd + gapFrames /
+            // inputRate` calculation would inject.
+            setLastEndPTS(source: ctx.source, end: ctx.nextPTS)
         } else {
             let detail = ctx.writer.error?.localizedDescription ?? "unknown"
             throw EncoderError.writerFailed("silent gap fill append failed: \(detail)")
@@ -324,13 +330,30 @@ extension AudioEncoder {
         if CMTIME_IS_VALID(duration), duration.value > 0 {
             return CMTimeAdd(startPTS, duration)
         }
+        // Fallback uses the buffer's own ASBD sample rate so endPTS
+        // matches the real timeline of a 44.1 kHz mic stream as well
+        // as the 48 kHz system stream.
         let frames = CMSampleBufferGetNumSamples(buffer)
-        return CMTimeAdd(startPTS, CMTime(value: CMTimeValue(frames), timescale: CMTimeScale(sampleRate)))
+        let rate = Self.inputSampleRate(of: buffer) ?? sampleRate
+        return CMTimeAdd(startPTS, CMTime(value: CMTimeValue(frames), timescale: CMTimeScale(rate)))
     }
 
     func framesBetween(start: CMTime, end: CMTime) -> Int {
         let seconds = max(0, CMTimeGetSeconds(end) - CMTimeGetSeconds(start))
         return Int(seconds * sampleRate)
+    }
+
+    /// Read the ASBD sample rate of a `CMSampleBuffer`. Used by gap
+    /// fill / endPTS math so the time line stays in the input domain
+    /// even when input and encoder rates differ (44.1 kHz mic vs
+    /// 48 kHz encoder output).
+    static func inputSampleRate(of buffer: CMSampleBuffer) -> Double? {
+        guard let fd = CMSampleBufferGetFormatDescription(buffer),
+              let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(fd) else {
+            return nil
+        }
+        let rate = asbdPtr.pointee.mSampleRate
+        return rate > 0 ? rate : nil
     }
 
     // MARK: - Per-source bookkeeping accessors

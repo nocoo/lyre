@@ -358,6 +358,52 @@ struct AudioEncoderDualTrackTests {
         )
     }
 
+    @Test func mitigationBGapFillSampleRateMatchesInputBuffer() async throws {
+        // Codex finding (docs/06 §Cause A risk): `framesBetween` used
+        // the ENCODER output sample rate (48 kHz) to size the silent
+        // PCM filler, but the silent buffer is built from the INPUT
+        // ASBD. For a 44.1 kHz mic the silent region was stretched by
+        // ~8.8 % (48000/44100), the same factor that would re-introduce
+        // the Cause A pitch/speed bug. Verify that a 44.1 kHz source
+        // with a 600 ms PTS gap finalizes at ≈ realDuration, not a
+        // stretched value.
+        let url = Self.makeTemporaryURL()
+        defer { Self.cleanup(url) }
+
+        let encoder = AudioEncoder(sampleRate: Self.sampleRate, channelCount: 1, bitRate: 64_000)
+        try encoder.setup(outputURL: url, mode: .dualTrack)
+
+        // Feed mic only at 44.1 kHz. Segment 1 covers 0–500 ms.
+        let inputRate: Double = 44_100
+        let seg1 = Self.makeSineBufferAt(
+            rate: inputRate, freq: 880, durationSeconds: 0.5, startPTS: .zero,
+        )
+        _ = try encoder.enqueue(seg1, source: .mic)
+        // Segment 2 starts at 1100 ms → 600 ms gap, well above the
+        // 10 ms gap fill threshold so Mitigation B fires.
+        let seg2Start = CMTime(value: CMTimeValue(1.1 * inputRate), timescale: CMTimeScale(inputRate))
+        let seg2 = Self.makeSineBufferAt(
+            rate: inputRate, freq: 880, durationSeconds: 0.9, startPTS: seg2Start,
+        )
+        _ = try encoder.enqueue(seg2, source: .mic)
+        // Bootstrap session by waiting past the 500 ms first-frame
+        // timeout (mic-only path).
+        try await Task.sleep(nanoseconds: 700_000_000)
+        try await encoder.finalize()
+
+        // mic is the only source, so it lands in `durations[0]`.
+        let durations = try await Self.audioTrackDurations(at: url)
+        let micDuration = durations[0]
+        // Expected real timeline: 0 → 2.0 s. With the old bug the
+        // silent fill would consume 600 ms × (48000/44100) ≈ 653 ms,
+        // pushing total duration past ~2.05 s. Allow the same ±0.15 s
+        // window used by `mitigationBGapFillKeepsTrackDuration`.
+        #expect(
+            micDuration >= 1.85 && micDuration <= 2.15,
+            "44.1 kHz gap fill produced duration \(micDuration)s — expected ≈ 2.0 s",
+        )
+    }
+
     @Test func reversePTSBufferIsDropped() async throws {
         let url = Self.makeTemporaryURL()
         defer { Self.cleanup(url) }
@@ -412,8 +458,23 @@ struct AudioEncoderDualTrackTests {
     /// track encoder tests can simulate SCK output without a real SCK
     /// stream.
     static func makeSineBuffer(freq: Double, durationSeconds: Double, startPTS: CMTime) -> CMSampleBuffer {
-        let frameCount = AVAudioFrameCount(durationSeconds * sampleRate)
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1) else {
+        makeSineBufferAt(
+            rate: sampleRate, freq: freq, durationSeconds: durationSeconds, startPTS: startPTS,
+        )
+    }
+
+    /// Same as `makeSineBuffer` but with an explicit sample rate so
+    /// tests can drive the encoder with off-encoder-rate input (44.1 kHz
+    /// mic vs 48 kHz output) to exercise Mitigation B's input-domain
+    /// math.
+    static func makeSineBufferAt(
+        rate: Double,
+        freq: Double,
+        durationSeconds: Double,
+        startPTS: CMTime,
+    ) -> CMSampleBuffer {
+        let frameCount = AVAudioFrameCount(durationSeconds * rate)
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1) else {
             preconditionFailure("AVAudioFormat init failed")
         }
         guard let pcm = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
@@ -423,7 +484,7 @@ struct AudioEncoderDualTrackTests {
         let amplitude: Float = 0.4
         let channelData = pcm.floatChannelData![0]
         for i in 0..<Int(frameCount) {
-            let t = Double(i) / sampleRate
+            let t = Double(i) / rate
             channelData[i] = amplitude * Float(sin(2 * .pi * freq * t))
         }
 
