@@ -77,7 +77,7 @@
       "name": "@lyre/api",
       "version": "1.6.8",
       "dependencies": {
-        "@nocoo/next-ai": "^0.3.0",
+        "@nocoo/next-ai": "^0.4.0",
         "ai": "^7.0.2",
         "drizzle-orm": "^0.45.1",
       },
@@ -325,7 +325,7 @@
 
     "@lyre/web": ["@lyre/web@workspace:apps/web"],
 
-    "@nocoo/next-ai": ["@nocoo/next-ai@0.3.0", "", { "dependencies": { "@ai-sdk/anthropic": "^4.0.0", "@ai-sdk/openai": "^4.0.0", "ai": "^7.0.2" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "server-only": "^0.0.1", "tailwindcss": "^3.4.0 || ^4.0.0", "zod": "^3.25.76 || ^4.1.8" }, "optionalPeers": ["react", "react-dom", "server-only", "tailwindcss"] }, "sha512-H3yAMbQfQoYmoeXFg4BMdKY+nzOYNsyQ9REi3aKQRDbY9scR8eaT7eH9RFEWwbgjLP3x3pvLtAK+9oNLSNamQQ=="],
+    "@nocoo/next-ai": ["@nocoo/next-ai@0.4.0", "", { "dependencies": { "@ai-sdk/anthropic": "^4.0.0", "@ai-sdk/openai": "^4.0.0", "ai": "^7.0.2" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "server-only": "^0.0.1", "tailwindcss": "^3.4.0 || ^4.0.0", "zod": "^3.25.76 || ^4.1.8" }, "optionalPeers": ["react", "react-dom", "server-only", "tailwindcss"] }, "sha512-qePpWtno2i+HOYQfM0+VCI3HDGvw4NWbtuMOVt+BiWea1RmJ+vGOkHjAeY0v928paY6dZHW6JVPgH7/vU09peA=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.0", "", {}, "sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg=="],
 
