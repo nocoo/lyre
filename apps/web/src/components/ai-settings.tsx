@@ -11,6 +11,7 @@ import {
   CUSTOM_PROVIDER_INFO,
   type AiProvider,
   type SdkType,
+  type AuthType,
 } from "@lyre/api/contracts/ai";
 
 interface AiSettings {
@@ -21,6 +22,7 @@ interface AiSettings {
   autoSummarize: boolean;
   baseURL: string;
   sdkType: SdkType | "";
+  authType: AuthType | "";
 }
 
 type TestStatus = "idle" | "testing" | "success" | "error";
@@ -37,6 +39,7 @@ export function AiSettingsSection() {
     autoSummarize: false,
     baseURL: "",
     sdkType: "",
+    authType: "",
   });
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [apiKeyChanged, setApiKeyChanged] = useState(false);
@@ -97,6 +100,7 @@ export function AiSettingsSection() {
       if (isCustomProvider) {
         body.baseURL = settings.baseURL;
         body.sdkType = settings.sdkType;
+        body.authType = settings.authType;
       }
       const res = await fetch("/api/settings/ai", {
         method: "PUT",
@@ -125,7 +129,20 @@ export function AiSettingsSection() {
     setTestError("");
     try {
       const res = await fetch("/api/settings/ai/test", { method: "POST" });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: { success?: boolean; error?: string } = {};
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        // Edge / gateway returned non-JSON (HTML error page). Surface the
+        // status code + the first chunk of text instead of a JSON parse error.
+        setTestStatus("error");
+        setTestError(
+          `HTTP ${res.status}: ${raw.slice(0, 160).trim() || "(empty)"}`,
+        );
+        setTimeout(() => setTestStatus("idle"), 4000);
+        return;
+      }
       if (data.success) {
         setTestStatus("success");
       } else {
@@ -147,7 +164,7 @@ export function AiSettingsSection() {
     setCustomModelInput("");
 
     if (!provider) {
-      setSettings((s) => ({ ...s, provider: "", model: "", baseURL: "", sdkType: "" }));
+      setSettings((s) => ({ ...s, provider: "", model: "", baseURL: "", sdkType: "", authType: "" }));
       return;
     }
 
@@ -343,6 +360,26 @@ export function AiSettingsSection() {
             >
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+        )}
+
+        {/* Custom provider: Auth Header */}
+        {isCustomProvider && (
+          <div>
+            <Label className="text-sm">Auth Header</Label>
+            <select
+              value={settings.authType}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  authType: e.target.value as AuthType | "",
+                }))
+              }
+              className="mt-1 h-9 w-full rounded-md border border-border bg-secondary px-3 pr-8 text-sm"
+            >
+              <option value="">Default (x-api-key / Bearer)</option>
+              <option value="bearer">Force Bearer</option>
             </select>
           </div>
         )}

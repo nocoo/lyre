@@ -208,6 +208,9 @@ async function autoSummarize(
   const model = map.get("ai.model") ?? "";
   const baseURL = map.get("ai.baseURL") ?? "";
   const sdkType = map.get("ai.sdkType") ?? "";
+  const rawAuth = map.get("ai.authType") ?? "";
+  const authType =
+    rawAuth === "bearer" || rawAuth === "apiKey" ? rawAuth : undefined;
 
   if (!provider || !apiKey) return;
 
@@ -217,6 +220,7 @@ async function autoSummarize(
     model,
     ...(baseURL ? { baseURL } : {}),
     ...(sdkType ? { sdkType: sdkType as SdkType } : {}),
+    ...(authType ? { authType } : {}),
   });
 
   const client = createAiModel(config);

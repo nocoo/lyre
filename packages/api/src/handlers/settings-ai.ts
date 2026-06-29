@@ -11,6 +11,7 @@ import {
   type AiProvider,
   type SdkType,
 } from "../services/ai";
+import type { AuthType } from "@nocoo/next-ai";
 import type { RuntimeContext } from "../runtime/context";
 import {
   json,
@@ -26,6 +27,7 @@ interface AiSettings {
   autoSummarize: boolean;
   baseURL: string;
   sdkType: SdkType | "";
+  authType: AuthType | "";
 }
 
 async function readAiSettings(
@@ -34,6 +36,9 @@ async function readAiSettings(
 ): Promise<AiSettings> {
   const all = await settings.findByUserId(userId);
   const map = new Map(all.map((s) => [s.key, s.value]));
+  const rawAuth = map.get("ai.authType") ?? "";
+  const authType: AuthType | "" =
+    rawAuth === "bearer" || rawAuth === "apiKey" ? rawAuth : "";
   return {
     provider: (map.get("ai.provider") ?? "") as AiProvider | "",
     apiKey: map.get("ai.apiKey") ?? "",
@@ -41,6 +46,7 @@ async function readAiSettings(
     autoSummarize: map.get("ai.autoSummarize") === "true",
     baseURL: map.get("ai.baseURL") ?? "",
     sdkType: (map.get("ai.sdkType") ?? "") as SdkType | "",
+    authType,
   };
 }
 
@@ -69,6 +75,7 @@ export interface UpdateAiSettingsInput {
   autoSummarize?: boolean;
   baseURL?: string;
   sdkType?: string;
+  authType?: string;
 }
 
 export async function updateAiSettingsHandler(
@@ -86,6 +93,11 @@ export async function updateAiSettingsHandler(
       return badRequest(`Invalid SDK type: ${body.sdkType}`);
     }
   }
+  if (body.authType !== undefined && body.authType !== "") {
+    if (body.authType !== "apiKey" && body.authType !== "bearer") {
+      return badRequest(`Invalid auth type: ${body.authType}`);
+    }
+  }
   const userId = ctx.user.id;
   const { settings } = makeRepos(ctx.db);
   if (body.provider !== undefined)
@@ -100,6 +112,8 @@ export async function updateAiSettingsHandler(
     await settings.upsert(userId, "ai.baseURL", body.baseURL);
   if (body.sdkType !== undefined)
     await settings.upsert(userId, "ai.sdkType", body.sdkType);
+  if (body.authType !== undefined)
+    await settings.upsert(userId, "ai.authType", body.authType);
 
   const updated = await readAiSettings(settings, userId);
   return json({
@@ -121,6 +135,9 @@ export async function testAiSettingsHandler(
   const model = map.get("ai.model") ?? "";
   const baseURL = map.get("ai.baseURL") ?? "";
   const sdkType = map.get("ai.sdkType") ?? "";
+  const rawAuth = map.get("ai.authType") ?? "";
+  const authType: AuthType | undefined =
+    rawAuth === "bearer" || rawAuth === "apiKey" ? rawAuth : undefined;
 
   if (!provider || !apiKey) {
     return badRequest("AI provider and API key must be configured first");
@@ -133,6 +150,7 @@ export async function testAiSettingsHandler(
       model,
       ...(baseURL ? { baseURL } : {}),
       ...(sdkType ? { sdkType: sdkType as SdkType } : {}),
+      ...(authType ? { authType } : {}),
     });
     const client = createAiModel(config);
     const { text } = await generateText({
@@ -146,8 +164,40 @@ export async function testAiSettingsHandler(
       model: config.model,
       provider: config.provider,
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return json({ success: false, error: message }, 502);
+  } catch (err) {
+    // Surface the upstream provider's status + message so the client sees
+    // "401 Authentication failed" instead of a generic 502 (which the
+    // edge can render as HTML and break res.json() with 'Unexpected token <').
+    type UpstreamError = Error & {
+      statusCode?: number;
+      responseBody?: string;
+      url?: string;
+    };
+    const e = err as UpstreamError;
+    const statusCode = typeof e.statusCode === "number" ? e.statusCode : 502;
+    const baseMessage = e.message ?? "Unknown error";
+    let detail = baseMessage;
+    if (e.responseBody) {
+      try {
+        const parsed = JSON.parse(e.responseBody) as {
+          error?: { message?: string } | string;
+          message?: string;
+        };
+        const inner =
+          typeof parsed.error === "string"
+            ? parsed.error
+            : parsed.error?.message ?? parsed.message;
+        if (inner) detail = inner;
+      } catch {
+        // responseBody not JSON — keep baseMessage
+      }
+    }
+    return json(
+      {
+        success: false,
+        error: e.url ? `${detail} (upstream: ${e.url})` : detail,
+      },
+      statusCode,
+    );
   }
 }

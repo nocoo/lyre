@@ -47,6 +47,28 @@ describe("settings-ai sync handlers", () => {
       (await updateAiSettingsHandler(ctx, { sdkType: "weird" })).status,
     ).toBe(400);
   });
+  it("400 invalid authType", async () => {
+    const { ctx } = await setupAuthedCtx();
+    expect(
+      (await updateAiSettingsHandler(ctx, { authType: "weird" })).status,
+    ).toBe(400);
+  });
+  it("update persists authType and GET returns it", async () => {
+    const { user, ctx } = await setupAuthedCtx();
+    const upd = await updateAiSettingsHandler(ctx, { authType: "bearer" });
+    expect(upd.status).toBe(200);
+    if (upd.kind !== "json") throw new Error();
+    expect((upd.body as { authType: string }).authType).toBe("bearer");
+
+    const persisted = await testRepos().settings.findByUserId(user.id);
+    expect(
+      persisted.find((s) => s.key === "ai.authType")?.value,
+    ).toBe("bearer");
+
+    const get = await getAiSettingsHandler(ctx);
+    if (get.kind !== "json") throw new Error();
+    expect((get.body as { authType: string }).authType).toBe("bearer");
+  });
   it("update saves and masks key", async () => {
     const { ctx } = await setupAuthedCtx();
     const res = await updateAiSettingsHandler(ctx, {
@@ -87,7 +109,7 @@ describe("settings-ai sync handlers", () => {
     if (res.kind !== "json") throw new Error();
     expect((res.body as { success: boolean }).success).toBe(false);
   });
-  it("test handler 502 on 4xx api error (no retries)", async () => {
+  it("test handler surfaces upstream 4xx status + message (no retries)", async () => {
     const { user, ctx } = await setupAuthedCtx();
     await testRepos().settings.upsert(user.id, "ai.provider", "anthropic");
     await testRepos().settings.upsert(user.id, "ai.apiKey", "sk-test");
@@ -101,6 +123,10 @@ describe("settings-ai sync handlers", () => {
         ),
       () => testAiSettingsHandler(ctx),
     );
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(400);
+    if (res.kind !== "json") throw new Error();
+    const body = res.body as { success: boolean; error: string };
+    expect(body.success).toBe(false);
+    expect(body.error).toContain("bad");
   }, 10000);
 });

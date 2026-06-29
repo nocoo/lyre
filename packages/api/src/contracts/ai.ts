@@ -13,6 +13,7 @@ export {
   isValidProvider,
   type AiProviderInfo,
   type SdkType,
+  type AuthType,
   type AiConfig,
   type AiSettingsInput,
 } from "@nocoo/next-ai";
