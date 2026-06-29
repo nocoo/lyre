@@ -1,5 +1,66 @@
 # Changelog
 
+## v1.6.9 (2026-06-29)
+
+### 🚀 Features
+
+- feat(macos): RecordingManager dual-track wiring + protocol seam (49934b8)
+- feat(macos): AudioCaptureManager raw dualTrack buffer dispatch (3ed2932)
+- feat(macos): AudioEncoder dual-track + sidecar (Phase 1A) (210db62)
+- feat: multi-channel transcript parser + words handler + AVPlayer-based AudioPlayerManager (ca519e7)
+
+### 🐛 Bug Fixes
+
+- fix(api): wordsHandler defends against missing words + malformed JSON (e9be690)
+- fix(macos): Mitigation B silent fill uses input ASBD sample rate (f6b8fea)
+- fix(macos): explicit role↔track switch in sidecar writer (d10cac7)
+- fix(macos): flatten sidecar JSON to match docs/06 contract (cc54b14)
+- fix(macos): AudioEncoder.finalize() throws on writer failure (1da2317)
+- fix(macos): defer cleanup in stopRecording (e7c51e4)
+- fix(macos): SCK outputs on dedicated serial queue + lint guard (8bc6de4)
+- fix(api): add same-origin guard for cookie-authenticated writes (STU-645) (b1a5415)
+- fix(api): verify Cloudflare Access JWT signature, issuer, and audience (87fabd9)
+- fix(deps): upgrade ws to resolve CVEs (6f59eb9)
+- fix(e2e): auto-build static assets when missing (worktree-friendly) (e854d47)
+
+### 📝 Other Changes
+
+- chore(deps): bump @nocoo/next-ai 0.3.0 -> 0.4.0 (4ed699f)
+- chore(deps): bump @nocoo/next-ai 0.2.1 -> 0.3.0 (ai 6 -> 7) (5f0a7a1)
+- docs: sync docs/06 implementation drift + docs/04 hook status (e1e5103)
+- docs(macos): add audio pipeline phase retrospective (d216406)
+- docs(macos): record task #7 6DQ deferral and task #8 not-triggered decision (d202f49)
+- test(macos): live E2E conditional sidecar consistency check (39c7f28)
+- test(macos): deterministic dual+legacy recording pipeline integration (2c608a2)
+- docs(macos): collapse last "Mitigation prefix" reference (bfad750)
+- docs(macos): collapse stale Mitigation A references to limitation pin (38c9db8)
+- test(e2e): add dual-track ASR live-gate scaffold for Phase 0B (91b7ce2)
+- test(macos): pin AVAssetWriter PTS normalisation, gap compression, and track-order behaviour (c2732df)
+- chore(macos): allow hook tests without signing cert (ff40885)
+- test(e2e): align api expectations with actual handler contracts (a5f3f25)
+- docs(macos): align sidecar prose with did-append algorithm + content-based track-order probe (86472b6)
+- docs(macos): rebase sidecar mapping on did-append + add() order, narrow fallback (13e856d)
+- docs(macos): replace AVAssetWriterInput.metadata with tracks.json sidecar (4a8f422)
+- docs(macos): clear recordingStartTime in stopRecording defer (220e8de)
+- docs(macos): preserve stopRecording URL return + unify metadata identifier (507f60a)
+- docs(macos): fix PCM settings, track metadata, stop defer, silent PCM wording (6a85e0b)
+- docs(macos): refine audio pipeline plan — silent PCM, trackID, fallback (3b3575f)
+- docs(macos): add audio pipeline redesign plan (AVAssetWriter dual-track) (8f06244)
+- chore(security): pin trustedDependencies to better-sqlite3, husky (2e40ab7)
+- chore(security): add quarterly ignoreUntil + grouping to osv-scanner suppressions (4cd5862)
+- chore(deps): bump @babel/core, js-yaml, undici, vite, ws to OSV-clean versions (bd65393)
+- chore(ci): pin base-ci reusable workflow to v2026.5 SHA (16bf1e1)
+- test(e2e): send same-origin Origin from cookie-auth E2E clients (STU-645) (c20050b)
+- test(api): isolate access-auth tests from the per-teamDomain JWKS cache (949cfb7)
+- chore(deps): override esbuild to ^0.28.1 (GHSA-gv7w-rqvm-qjhr, GHSA-g7r4-m6w7-qqqr) (ee2a2fd)
+- ci: upgrade base-ci to v2026.4 (daffd4b)
+- chore(deps): bump hono 4.12.18 -> 4.12.25 and react-router 7.1.1 -> 7.17.0 (64868d1)
+- chore(deps): bump apps/web vitest 3.2.4 -> 4.1.8 (GHSA-5xrq-8626-4rwp) (6e847de)
+- ci(security): pass --ignore-scripts to bun install (Shai-Hulud defense) (3ea3a5b)
+- chore(hooks): add L2 API E2E to pre-push gate (dbc9e01)
+- test: align e2e suites after AI settings rename and add display-skip (4b1b9e2)
+
+
 ## v1.6.8 (2026-05-12)
 
 ### 🚀 Features
