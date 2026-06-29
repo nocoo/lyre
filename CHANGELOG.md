@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.6.10 (2026-06-29)
+
+### 🚀 Features
+
+- feat(ai): add authType (apiKey | bearer) for custom provider (d84a3e4)
+
+
 ## v1.6.9 (2026-06-29)
 
 ### 🚀 Features
