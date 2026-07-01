@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.6.11 (2026-07-01)
+
+### 📝 Other Changes
+
+- chore(macos): add ad-hoc DMG build pipeline (bun run macos:dmg) (6fbf12c)
+
+
 ## v1.6.10 (2026-06-29)
 
 ### 🚀 Features
