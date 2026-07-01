@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.13 (2026-07-01)
+
+### 🐛 Bug Fixes
+
+- fix(dev): point worker:dev at [env.test] to break /api/me 401 loop (d6da321)
+- fix(web): apply destructuring esbuild override to dep pre-bundling (51e2b17)
+
+### 📝 Other Changes
+
+- revert(playback): drop response-content-type override on play-url (19745c0)
+
+
 ## v1.6.12 (2026-07-01)
 
 ### 🐛 Bug Fixes
