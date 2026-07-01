@@ -36,6 +36,8 @@ not_found_handling = "single-page-application"
 [env.test]
 
 [env.test.vars]
+NODE_ENV = "development"
+OSS_BUCKET = "lyre"
 E2E_SKIP_AUTH = "true"
 
 [[env.test.d1_databases]]
