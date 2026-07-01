@@ -19,7 +19,7 @@ enum Constants {
         static let channelCount: UInt32 = 1
         static let channelCountInt: Int = 1
         static let aacBitRate: Int = 128_000
-        static let mimeType = "audio/x-m4a"
+        static let mimeType = "audio/mp4"
         static let fileExtension = "m4a"
     }
 }
