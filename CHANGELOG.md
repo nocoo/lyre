@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.6.14 (2026-07-01)
+
+### 🐛 Bug Fixes
+
+- fix(macos): enable AVAssetWriter faststart so browsers can decode M4A (7d6233f)
+
+
 ## v1.6.13 (2026-07-01)
 
 ### 🐛 Bug Fixes
