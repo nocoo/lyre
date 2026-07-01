@@ -32,7 +32,8 @@
     "gate:deps": "bun run scripts/gate-deps.ts",
     "pre-push": "bun run scripts/pre-push.ts",
     "prepare": "husky",
-    "release": "bun run scripts/release.ts"
+    "release": "bun run scripts/release.ts",
+    "macos:dmg": "bash scripts/build-dmg.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",

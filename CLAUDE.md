@@ -85,6 +85,7 @@ bun run test:coverage         # @lyre/api coverage gate
 
 # Deploy
 bun run deploy                # build SPA + publish Worker
+bun run macos:dmg             # build macOS release DMG (ad-hoc signed)
 ```
 
 ### macOS app commands (run from `apps/macos/`)
@@ -133,6 +134,11 @@ Version is managed from the **root `package.json`** as the single source of trut
 2. Run `xcodegen generate` from `apps/macos/` to sync `project.pbxproj`.
 3. Update `CHANGELOG.md` with changes since last version.
 4. Commit, push, then tag and release via `gh`.
+5. Build the macOS DMG and attach it to the GitHub release:
+   ```bash
+   bun run macos:dmg                         # → build/Lyre-<version>.dmg
+   gh release upload v<version> build/Lyre-<version>.dmg
+   ```
 
 ## Project Layout Detail
 
