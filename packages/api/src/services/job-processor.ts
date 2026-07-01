@@ -119,14 +119,16 @@ export async function pollJob(
       // Update recording status
       await recordings.update(job.recordingId, { status: "completed" });
 
-      // Auto-summarize if enabled (best-effort)
+      // Auto-summarize if enabled. We deliberately AWAIT this — Cloudflare
+      // Workers will abort detached promises once the surrounding
+      // `waitUntil` resolves, which was the root cause of the "first
+      // auto-summary silently fails, manual retry works" bug.
+      // autoSummarize is fully guarded (any user-facing failure is
+      // persisted to `aiSummaryStatus`/`aiSummaryError`) and rate-limited
+      // by a hard AbortSignal timeout so this await cannot hang the tick.
       const recording = await recordings.findById(job.recordingId);
       if (recording) {
-        autoSummarize(recording.userId, job.recordingId, parsed.fullText, db).catch(
-          (err) => {
-            console.warn("[auto-summarize] Failed:", err);
-          },
-        );
+        await autoSummarize(recording.userId, job.recordingId, parsed.fullText, db);
       }
     } catch (err) {
       console.error("Failed to process transcription result:", err);
@@ -189,18 +191,34 @@ async function archiveRawResult(
 
 /**
  * Auto-summarize a recording after transcription completes.
+ *
+ * This function is FULLY GUARDED — no error escapes the top-level try.
+ * Instead every failure is persisted to `recordings.aiSummaryStatus`
+ * and `aiSummaryError` so the UI can surface it. The caller is
+ * expected to `await` this so the surrounding `ctx.waitUntil` on the
+ * Cloudflare scheduled handler keeps the isolate alive until the AI
+ * call finishes.
+ *
+ * The `generate` parameter defaults to Vercel AI SDK's `generateText`
+ * but is injectable so tests can drive it without a live LLM.
  */
-async function autoSummarize(
+export async function autoSummarize(
   userId: string,
   recordingId: string,
   fullText: string,
   db: LyreDb,
+  generate: typeof generateText = generateText,
 ): Promise<void> {
   const settings = makeSettingsRepo(db);
   const recordings = makeRecordingsRepo(db);
   const all = await settings.findByUserId(userId);
-  const map = new Map<string, string>(all.map((s: { key: string; value: string }) => [s.key, s.value]));
+  const map = new Map<string, string>(
+    all.map((s: { key: string; value: string }) => [s.key, s.value]),
+  );
 
+  // Preflight gates: never touch aiSummaryStatus if auto-summarize is
+  // simply not applicable — leaving status=null preserves the "never
+  // attempted" signal so the UI shows a plain Generate button.
   if (map.get("ai.autoSummarize") !== "true") return;
 
   const provider = map.get("ai.provider") ?? "";
@@ -213,27 +231,65 @@ async function autoSummarize(
     rawAuth === "bearer" || rawAuth === "apiKey" ? rawAuth : undefined;
 
   if (!provider || !apiKey) return;
+  if (!fullText.trim()) return;
 
-  const config = resolveAiConfig({
-    provider: provider as AiProvider,
-    apiKey,
-    model,
-    ...(baseURL ? { baseURL } : {}),
-    ...(sdkType ? { sdkType: sdkType as SdkType } : {}),
-    ...(authType ? { authType } : {}),
+  // From here on the run is committed: mark it running, clear any prior
+  // error, and drop the previous summary so the UI shows a fresh state.
+  await recordings.update(recordingId, {
+    aiSummaryStatus: "running",
+    aiSummaryError: null,
+    aiSummary: null,
   });
 
-  const client = createAiModel(config);
-  const prompt = buildSummaryPrompt(fullText);
+  try {
+    const config = resolveAiConfig({
+      provider: provider as AiProvider,
+      apiKey,
+      model,
+      ...(baseURL ? { baseURL } : {}),
+      ...(sdkType ? { sdkType: sdkType as SdkType } : {}),
+      ...(authType ? { authType } : {}),
+    });
 
-  const { text } = await generateText({
-    model: client,
-    prompt,
-    maxOutputTokens: 2048,
-  });
+    const client = createAiModel(config);
+    const prompt = buildSummaryPrompt(fullText);
 
-  await recordings.update(recordingId, { aiSummary: text.trim() });
-  console.log(
-    `[auto-summarize] Summary generated for recording ${recordingId}`,
-  );
+    // Hard timeout so this await can never wedge the cron tick. 60s
+    // is generous — a real generation usually finishes in <10s.
+    const { text } = await generate({
+      model: client,
+      prompt,
+      maxOutputTokens: 2048,
+      abortSignal: AbortSignal.timeout(60_000),
+    });
+
+    const summary = text.trim();
+    if (!summary) {
+      throw new Error("AI returned an empty response");
+    }
+
+    await recordings.update(recordingId, {
+      aiSummary: summary,
+      aiSummaryStatus: "succeeded",
+      aiSummaryError: null,
+    });
+    console.log(
+      `[auto-summarize] Summary generated for recording ${recordingId}`,
+    );
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.name === "TimeoutError" || err.name === "AbortError"
+          ? "AI request timed out after 60s"
+          : err.message
+        : String(err);
+    console.warn(
+      `[auto-summarize] Failed for recording ${recordingId}: ${message}`,
+    );
+    await recordings.update(recordingId, {
+      aiSummaryStatus: "failed",
+      aiSummaryError: message,
+      aiSummary: null,
+    });
+  }
 }

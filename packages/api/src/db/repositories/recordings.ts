@@ -150,6 +150,8 @@ export function makeRecordingsRepo(db: LyreDb) {
         folderId: string | null;
         notes: string | null;
         aiSummary: string | null;
+        aiSummaryStatus: "running" | "succeeded" | "failed" | null;
+        aiSummaryError: string | null;
         recordedAt: number | null;
       }>,
     ): Promise<DbRecording | undefined> {
@@ -163,6 +165,10 @@ export function makeRecordingsRepo(db: LyreDb) {
       if (data.folderId !== undefined) updateData.folderId = data.folderId;
       if (data.notes !== undefined) updateData.notes = data.notes;
       if (data.aiSummary !== undefined) updateData.aiSummary = data.aiSummary;
+      if (data.aiSummaryStatus !== undefined)
+        updateData.aiSummaryStatus = data.aiSummaryStatus;
+      if (data.aiSummaryError !== undefined)
+        updateData.aiSummaryError = data.aiSummaryError;
       if (data.recordedAt !== undefined)
         updateData.recordedAt = data.recordedAt;
 

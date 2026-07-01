@@ -57,6 +57,10 @@ export const recordings = sqliteTable("recordings", {
   tags: text("tags").notNull().default("[]"), // Legacy JSON array (kept for migration compat)
   notes: text("notes"),
   aiSummary: text("ai_summary"),
+  aiSummaryStatus: text("ai_summary_status", {
+    enum: ["running", "succeeded", "failed"],
+  }),
+  aiSummaryError: text("ai_summary_error"),
   recordedAt: integer("recorded_at"), // Unix ms — defaults to file lastModified on upload
   status: text("status", {
     enum: ["uploaded", "transcribing", "completed", "failed"],

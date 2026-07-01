@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS recordings (
   tags TEXT NOT NULL DEFAULT '[]',
   notes TEXT,
   ai_summary TEXT,
+  ai_summary_status TEXT,
+  ai_summary_error TEXT,
   recorded_at INTEGER,
   status TEXT NOT NULL CHECK(status IN ('uploaded','transcribing','completed','failed')),
   created_at INTEGER NOT NULL,

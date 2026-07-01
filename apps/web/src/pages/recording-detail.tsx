@@ -112,9 +112,27 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [downloading, setDownloading] = useState(false);
 
   // AI summary
+  //
+  // `aiSummary` / `aiSummaryStatus` / `aiSummaryError` mirror the server-side
+  // recording columns. They are refreshed from GET /recordings/:id on load,
+  // on any status-changing event, and (while status === "running") by a
+  // bounded polling loop below.
+  //
+  // `manualStreamingText` holds the incrementally-decoded response body from
+  // the manual POST /summarize call so the user sees text stream in. When
+  // the stream finishes the server has already persisted the summary to the
+  // DB, and a follow-up poll swaps `aiSummary` in from the authoritative
+  // server copy.
   const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [summarizing, setSummarizing] = useState(false);
-  const [summarizeError, setSummarizeError] = useState<string | null>(null);
+  const [aiSummaryStatus, setAiSummaryStatus] = useState<
+    "running" | "succeeded" | "failed" | null
+  >(null);
+  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
+  const [manualStreamingText, setManualStreamingText] = useState<string | null>(
+    null,
+  );
+  /** User-facing phase label ("Requesting AI…", "Streaming…", etc.). */
+  const [summaryPhase, setSummaryPhase] = useState<string | null>(null);
 
   // AI settings (for info sidebar + auto-summarize)
   const [aiProvider, setAiProvider] = useState("");
@@ -145,6 +163,8 @@ function RecordingDetailContent({ id }: { id: string }) {
         setDetail(data);
         // Sync editable fields
         setAiSummary(data.aiSummary ?? null);
+        setAiSummaryStatus(data.aiSummaryStatus ?? null);
+        setAiSummaryError(data.aiSummaryError ?? null);
         setEditTitle(data.title);
         setNotes(data.notes ?? "");
         setRecordedAtDate(
@@ -167,6 +187,8 @@ function RecordingDetailContent({ id }: { id: string }) {
         const data = (await res.json()) as RecordingDetail;
         setDetail(data);
         setAiSummary(data.aiSummary ?? null);
+        setAiSummaryStatus(data.aiSummaryStatus ?? null);
+        setAiSummaryError(data.aiSummaryError ?? null);
         setSelectedTagIds(data.resolvedTags.map((t) => t.id));
         setSelectedFolderId(data.folderId);
         setRecordedAtDate(
@@ -261,74 +283,82 @@ function RecordingDetailContent({ id }: { id: string }) {
 
         if (event.status === "SUCCEEDED" || event.status === "FAILED") {
           setActiveJobId(null);
-          const data = await loadDetail();
-
-          // If auto-summarize is enabled and summary isn't ready yet, poll for it
-          if (
-            event.status === "SUCCEEDED" &&
-            autoSummarize &&
-            !data?.aiSummary
-          ) {
-            setSummarizing(true);
-          }
+          // Refresh detail; the transcription-completion side effect on the
+          // server sets aiSummaryStatus=running before starting the AI call
+          // (when auto-summarize is enabled), and the polling effect below
+          // will keep the UI in sync from there.
+          await loadDetail();
         }
       },
-      [id, loadDetail, autoSummarize],
+      [id, loadDetail],
     ),
     jobId: activeJobId,
     enabled: !!activeJobId,
   });
 
-  // ── Poll for auto-generated summary ──
-  // When summarizing=true but there's no active streaming (auto-summarize case),
-  // poll the recording detail until aiSummary appears.
+  // ── Poll for summary status while a run is in flight ──
+  //
+  // Fires only when `aiSummaryStatus === "running"` and there's no active
+  // manual stream (that path already renders text incrementally). Refreshes
+  // detail every 3s until status leaves "running", or after
+  // MAX_POLL_ATTEMPTS (~4 minutes wall-clock, exceeds the 60s server-side
+  // AbortSignal budget by ~4x to cover clock drift and network jitter).
+  //
+  // Every code path that exits this effect clears the timer — the cleanup
+  // is guaranteed by React, but the internal early-return branches also
+  // clear so an orphaned interval never survives a re-render.
   useEffect(() => {
-    // Only poll when summarizing flag is set by auto-summarize trigger
-    // (manual streaming sets summarizing too, but also sets aiSummary to "")
-    if (!summarizing || aiSummary !== null) return;
+    if (aiSummaryStatus !== "running") return;
+    // Manual streaming path is responsible for its own progress display.
+    if (manualStreamingText !== null) return;
 
+    let cancelled = false;
     let timer: ReturnType<typeof setInterval> | null = null;
     let attempts = 0;
-    const MAX_ATTEMPTS = 60; // ~3 minutes at 3s intervals
+    const MAX_POLL_ATTEMPTS = 80; // 80 × 3s ≈ 4 minutes
 
-    const pollSummary = async () => {
-      attempts++;
-      try {
-        const res = await fetch(`/api/recordings/${id}`);
-        if (res.ok) {
-          const data = (await res.json()) as RecordingDetail;
-          if (data.aiSummary) {
-            setAiSummary(data.aiSummary);
-            setSummarizing(false);
-            if (timer) {
-              clearInterval(timer);
-              timer = null;
-            }
-            return;
-          }
-        }
-      } catch {
-        // Retry on next interval
-      }
-
-      if (attempts >= MAX_ATTEMPTS) {
-        setSummarizing(false);
-        if (timer) {
-          clearInterval(timer);
-          timer = null;
-        }
-      }
-    };
-
-    timer = setInterval(() => void pollSummary(), POLL_INTERVAL_MS);
-
-    return () => {
-      if (timer) {
+    const stopPolling = () => {
+      if (timer !== null) {
         clearInterval(timer);
         timer = null;
       }
     };
-  }, [summarizing, aiSummary, id]);
+
+    const pollOnce = async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/recordings/${id}`);
+        if (cancelled) return;
+        if (res.ok) {
+          const data = (await res.json()) as RecordingDetail;
+          setAiSummary(data.aiSummary ?? null);
+          setAiSummaryStatus(data.aiSummaryStatus ?? null);
+          setAiSummaryError(data.aiSummaryError ?? null);
+          if (data.aiSummaryStatus !== "running") {
+            stopPolling();
+            return;
+          }
+        }
+      } catch {
+        // Transient — try again on the next tick.
+      }
+
+      if (attempts >= MAX_POLL_ATTEMPTS) {
+        setAiSummaryStatus("failed");
+        setAiSummaryError(
+          "Summary generation did not complete in time. Try again.",
+        );
+        stopPolling();
+      }
+    };
+
+    timer = setInterval(() => void pollOnce(), POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+    };
+  }, [aiSummaryStatus, manualStreamingText, id]);
 
   // ── Handlers ──
   const handleTranscribe = useCallback(async () => {
@@ -395,48 +425,80 @@ function RecordingDetailContent({ id }: { id: string }) {
   }, [id]);
 
   // ── AI Summarize handler (streaming) ──
+  //
+  // Optimistic state flow:
+  //   1. Set aiSummaryStatus="running", clear error, clear old summary.
+  //      manualStreamingText="" tells the polling effect to stand down.
+  //   2. Read the response body as a text stream and append into
+  //      manualStreamingText so the UI renders words as they arrive.
+  //   3. When the stream ends, clear manualStreamingText. The server-side
+  //      onFinish handler has persisted the final summary and set status
+  //      back to "succeeded" — the polling effect (which will now start
+  //      because manualStreamingText === null and status === "running")
+  //      picks it up on the next tick.
+  //   4. On any error path we set status="failed" + a helpful message so
+  //      the user isn't stranded.
   const handleSummarize = useCallback(async () => {
-    setSummarizing(true);
-    setSummarizeError(null);
-    setAiSummary("");
+    setAiSummaryStatus("running");
+    setAiSummaryError(null);
+    setAiSummary(null);
+    setManualStreamingText("");
+    setSummaryPhase("Requesting AI…");
+
     try {
       const res = await fetch(`/api/recordings/${id}/summarize`, {
         method: "POST",
       });
 
-      // Non-streaming error responses come back as JSON
+      // Non-streaming error responses come back as JSON before the stream
+      // starts. The server also flipped status back to "failed" already.
       if (!res.ok) {
-        const data = (await res.json()) as { error: string };
-        setSummarizeError(data.error ?? "Unknown error");
+        let message = "Unknown error";
+        try {
+          const data = (await res.json()) as { error?: string };
+          message = data.error ?? message;
+        } catch {
+          // response body might not be JSON — fall back to statusText
+          message = res.statusText || message;
+        }
+        setAiSummaryStatus("failed");
+        setAiSummaryError(message);
+        setManualStreamingText(null);
+        setSummaryPhase(null);
         return;
       }
 
-      // Stream the text response
       const reader = res.body?.getReader();
       if (!reader) {
-        setSummarizeError("Streaming not supported by browser.");
+        setAiSummaryStatus("failed");
+        setAiSummaryError("Streaming not supported by browser.");
+        setManualStreamingText(null);
+        setSummaryPhase(null);
         return;
       }
 
+      setSummaryPhase("Streaming response…");
       const decoder = new TextDecoder();
       let accumulated = "";
-
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         accumulated += decoder.decode(value, { stream: true });
-        setAiSummary(accumulated);
+        setManualStreamingText(accumulated);
       }
-
-      // Final decode flush
       accumulated += decoder.decode();
-      if (accumulated) {
-        setAiSummary(accumulated);
-      }
+      setManualStreamingText(accumulated);
+      setSummaryPhase("Saving…");
+
+      // Hand off to the polling effect for the authoritative server copy.
+      // We keep `aiSummaryStatus === "running"` locally; the next poll
+      // reads the persisted summary and status flips to "succeeded".
+      setManualStreamingText(null);
     } catch {
-      setSummarizeError("Network error — could not reach the server.");
-    } finally {
-      setSummarizing(false);
+      setAiSummaryStatus("failed");
+      setAiSummaryError("Network error — could not reach the server.");
+      setManualStreamingText(null);
+      setSummaryPhase(null);
     }
   }, [id]);
 
@@ -791,8 +853,11 @@ function RecordingDetailContent({ id }: { id: string }) {
           <div className="lg:col-span-2">
             <AiSummaryCard
               summary={aiSummary}
-              loading={summarizing}
-              error={summarizeError}
+              streamingText={manualStreamingText}
+              status={aiSummaryStatus}
+              phase={summaryPhase}
+              error={aiSummaryError}
+              autoSummarizeEnabled={autoSummarize}
               onGenerate={handleSummarize}
             />
           </div>
@@ -1064,17 +1129,42 @@ function JobInfoCard({
 
 // ── AI Summary Card ──
 
+/**
+ * AI summary card with a state-machine-driven display:
+ *   status === "succeeded" or (streamingText non-null)   → render markdown
+ *   status === "running"                                 → spinner + phase text
+ *   status === "failed"                                  → error + retry
+ *   status === null (never attempted)                    → generate button
+ */
 function AiSummaryCard({
   summary,
-  loading,
+  streamingText,
+  status,
+  phase,
   error,
+  autoSummarizeEnabled,
   onGenerate,
 }: {
   summary: string | null;
-  loading: boolean;
+  streamingText: string | null;
+  status: "running" | "succeeded" | "failed" | null;
+  phase: string | null;
   error: string | null;
+  autoSummarizeEnabled: boolean;
   onGenerate: () => void;
 }) {
+  const isRunning = status === "running";
+  // While the manual stream is arriving we render its incremental text.
+  // Otherwise fall back to the authoritative server copy.
+  const display = streamingText ?? summary;
+  const hasContent = display !== null && display.length > 0;
+
+  const runningLabel = phase
+    ? phase
+    : autoSummarizeEnabled && !hasContent
+      ? "Auto-summarizing after transcription…"
+      : "Generating summary…";
+
   return (
     <div className="rounded-card bg-secondary p-4 h-full">
       <div className="flex items-center justify-between mb-3">
@@ -1083,15 +1173,20 @@ function AiSummaryCard({
           AI Summary
         </p>
 
-        {/* Generate / Regenerate button */}
-        {!loading && (
+        {/* Generate / Regenerate / Retry button — hidden while running */}
+        {!isRunning && (
           <Button
             size="sm"
             variant="outline"
             className="gap-1.5 h-7 text-xs"
             onClick={onGenerate}
           >
-            {summary ? (
+            {status === "failed" ? (
+              <>
+                <RotateCcw className="h-3 w-3" strokeWidth={1.5} />
+                Retry
+              </>
+            ) : summary ? (
               <>
                 <RefreshCw className="h-3 w-3" strokeWidth={1.5} />
                 Regenerate
@@ -1106,40 +1201,42 @@ function AiSummaryCard({
         )}
       </div>
 
-      {/* Loading indicator (no text yet) */}
-      {loading && !summary && (
+      {/* Running: spinner + phase text (shown even when partial content is available) */}
+      {isRunning && !hasContent && (
         <div className="flex items-center gap-2 py-3 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Generating summary...</span>
+          <span className="text-sm">{runningLabel}</span>
         </div>
       )}
 
       {/* Error state */}
-      {error && !loading && (
+      {status === "failed" && !isRunning && (
         <div className="flex items-start gap-2 py-2">
           <AlertCircle
             className="h-4 w-4 shrink-0 text-destructive mt-0.5"
             strokeWidth={1.5}
           />
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="text-sm text-destructive">
+            {error ?? "Summary generation failed. Try Retry."}
+          </p>
         </div>
       )}
 
-      {/* Summary content (shown during streaming and after completion) */}
-      {summary && (
+      {/* Content: streaming text (manual) or persisted summary (auto or historical). */}
+      {hasContent && (
         <div>
-          <Markdown>{summary}</Markdown>
-          {loading && (
+          <Markdown>{display ?? ""}</Markdown>
+          {isRunning && (
             <div className="flex items-center gap-1.5 mt-2 text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              <span className="text-xs">Generating...</span>
+              <span className="text-xs">{runningLabel}</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Empty state (no summary, not loading, no error) */}
-      {!summary && !loading && !error && (
+      {/* Empty state (never attempted, no error) */}
+      {!hasContent && !isRunning && status !== "failed" && (
         <p className="text-sm text-muted-foreground py-2">
           No summary yet. Click &ldquo;Generate Summary&rdquo; to create one
           from the transcription.

@@ -53,6 +53,16 @@ export interface Recording {
   ossKey: string;
   notes: string | null;
   aiSummary: string | null;
+  /**
+   * Lifecycle of the AI summary generation.
+   * `null` = never attempted (default for fresh recordings and pre-migration rows).
+   * `running` = auto or manual generation in flight.
+   * `succeeded` = `aiSummary` is populated with the final text.
+   * `failed` = generation errored; see `aiSummaryError`. `aiSummary` is null.
+   */
+  aiSummaryStatus: "running" | "succeeded" | "failed" | null;
+  /** Human-readable error message when `aiSummaryStatus === "failed"`. */
+  aiSummaryError: string | null;
   recordedAt: number | null;
   status: RecordingStatus;
   createdAt: number;
