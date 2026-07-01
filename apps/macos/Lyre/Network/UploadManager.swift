@@ -129,6 +129,28 @@ final class UploadManager {
         let fileName = file.url.lastPathComponent
         let contentType = Constants.Audio.mimeType
 
+        // Step 0: downmix any dual-track source into a single-track M4A
+        // suitable for HTML5 <audio>. Falls through to the original file
+        // if downmix fails — a dual-track upload is a "no audio in dashboard"
+        // bug, but it's still a valid file the user can download.
+        let (uploadURL, tempURL) = await prepareUploadFile(originalURL: file.url)
+        defer {
+            if let temp = tempURL {
+                try? FileManager.default.removeItem(at: temp)
+            }
+        }
+
+        // Recompute file size after downmix; re-encoded output has a
+        // different byte count than the source, and the server stores
+        // this in the recording metadata for display.
+        let uploadFileSize: Int64
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: uploadURL.path),
+           let size = attrs[.size] as? Int64 {
+            uploadFileSize = size
+        } else {
+            uploadFileSize = file.fileSize
+        }
+
         // Step 1: Presign
         guard let presign = await stepPresign(
             client: client, fileName: fileName, contentType: contentType
@@ -137,8 +159,11 @@ final class UploadManager {
 
         // Step 2: Upload to OSS
         let uploaded = await stepUploadToOSS(
-            client: client, file: file,
-            presignResponse: presign, contentType: contentType
+            client: client,
+            fileURL: uploadURL,
+            fileSize: uploadFileSize,
+            presignResponse: presign,
+            contentType: contentType
         )
         guard uploaded else { return }
         guard !Task.isCancelled else { state = .idle; return }
@@ -146,8 +171,30 @@ final class UploadManager {
         // Step 3: Create recording
         await stepCreateRecording(
             client: client, file: file,
+            fileSize: uploadFileSize,
             fileName: fileName, presignResponse: presign
         )
+    }
+
+    /// Return the URL the upload step should read from. If the source has
+    /// multiple audio tracks, downmix into a temp file; otherwise return
+    /// the original URL untouched.
+    ///
+    /// The second element is the temp file URL when a downmix ran, so the
+    /// caller can clean it up in a `defer` — nil when we passed through.
+    private func prepareUploadFile(originalURL: URL) async -> (upload: URL, temp: URL?) {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lyre-upload-\(UUID().uuidString).m4a")
+        do {
+            try await AudioDownmixer.downmix(source: originalURL, destination: temp)
+            // AudioDownmixer copies verbatim for single-track sources, so
+            // treat the returned temp file as the upload input either way.
+            return (temp, temp)
+        } catch {
+            Self.logger.error("Downmix failed, uploading original: \(error.localizedDescription)")
+            try? FileManager.default.removeItem(at: temp)
+            return (originalURL, nil)
+        }
     }
 
     private func stepPresign(
@@ -166,18 +213,19 @@ final class UploadManager {
 
     private func stepUploadToOSS(
         client: APIClient,
-        file: RecordingFile,
+        fileURL: URL,
+        fileSize: Int64,
         presignResponse: APIClient.PresignResponse,
         contentType: String
     ) async -> Bool {
         state = .uploading(progress: 0)
-        Self.logger.info("Step 2/3: Uploading to OSS (\(file.fileSize) bytes)")
+        Self.logger.info("Step 2/3: Uploading to OSS (\(fileSize) bytes)")
 
         do {
             state = .uploading(progress: 0.1)
             try await client.uploadToOSS(
                 uploadURL: presignResponse.uploadUrl,
-                fileURL: file.url,
+                fileURL: fileURL,
                 contentType: contentType
             )
             state = .uploading(progress: 0.9)
@@ -191,6 +239,7 @@ final class UploadManager {
     private func stepCreateRecording(
         client: APIClient,
         file: RecordingFile,
+        fileSize: Int64,
         fileName: String,
         presignResponse: APIClient.PresignResponse
     ) async {
@@ -206,7 +255,7 @@ final class UploadManager {
                     title: recordingTitle,
                     fileName: fileName,
                     ossKey: presignResponse.ossKey,
-                    fileSize: file.fileSize,
+                    fileSize: fileSize,
                     duration: file.duration,
                     format: Constants.Audio.fileExtension,
                     sampleRate: Constants.Audio.sampleRateInt,
