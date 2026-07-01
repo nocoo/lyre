@@ -85,7 +85,7 @@ export function CassettePlayer({
           tabIndex={0}
         >
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-foreground transition-[width] duration-75"
+            className="absolute inset-y-0 left-0 rounded-full bg-foreground"
             style={{ width: `${vm.progress}%` }}
           />
           <div
