@@ -181,6 +181,13 @@ final class AudioEncoder: @unchecked Sendable {
             throw EncoderError.setupFailed(error.localizedDescription)
         }
 
+        // Move the moov atom to the head of the file (faststart). Without
+        // this, AVAssetWriter writes moov at the tail, and Chromium's
+        // <audio preload="metadata"> can't decode the sample tables on a
+        // single Range request — the file plays fine locally but arrives
+        // silently in the browser even though loadedmetadata fires.
+        writer.shouldOptimizeForNetworkUse = true
+
         switch mode {
         case .legacyMixed:
             try setupLegacy(writer: writer)
