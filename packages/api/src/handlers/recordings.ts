@@ -349,13 +349,7 @@ export async function playUrlHandler(
   if (!recording || recording.userId !== ctx.user.id) {
     return notFound("Recording not found");
   }
-  const playUrl = presignGet(
-    recording.ossKey,
-    3600,
-    { "response-content-type": "audio/mp4" },
-    undefined,
-    ctx.env,
-  );
+  const playUrl = presignGet(recording.ossKey, 3600, undefined, undefined, ctx.env);
   return json({ playUrl });
 }
 
