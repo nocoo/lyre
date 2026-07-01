@@ -5,29 +5,26 @@ import Foundation
 @Suite("AppConfig Tests")
 struct AppConfigTests {
 
-    /// Isolated test context with temporary file path and unique Keychain key.
+    /// Isolated test context with temporary file path.
     private struct TestContext {
         let config: AppConfig
         let dir: URL
-        let keychainKey: String
 
         var configURL: URL { dir.appendingPathComponent("config.json") }
 
         func cleanup() {
             try? FileManager.default.removeItem(at: dir)
-            KeychainHelper.delete(key: keychainKey)
         }
     }
 
-    /// Create a config with a temporary file path and unique Keychain key for isolated testing.
+    /// Create a config with a temporary file path for isolated testing.
     private func makeContext(suffix: String = UUID().uuidString) -> TestContext {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyre-test-\(suffix)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
-        let keychainKey = "lyre-test-auth-\(suffix)"
-        let config = AppConfig(configURL: configURL, keychainKey: keychainKey)
-        return TestContext(config: config, dir: tempDir, keychainKey: keychainKey)
+        let config = AppConfig(configURL: configURL)
+        return TestContext(config: config, dir: tempDir)
     }
 
     // MARK: - Defaults
@@ -36,11 +33,15 @@ struct AppConfigTests {
         let ctx = makeContext()
         defer { ctx.cleanup() }
 
-        #expect(ctx.config.serverURL == "")
+        #expect(ctx.config.serverURL == AppConfig.defaultServerURL)
         #expect(ctx.config.authToken == "")
         #expect(ctx.config.outputDirectory == AppConfig.defaultOutputDirectory())
         #expect(ctx.config.selectedInputDeviceID == nil)
         #expect(!ctx.config.isServerConfigured)
+    }
+
+    @Test func defaultServerURLIsHexly() {
+        #expect(AppConfig.defaultServerURL == "https://lyre.hexly.ai")
     }
 
     // MARK: - isServerConfigured
@@ -49,7 +50,7 @@ struct AppConfigTests {
         let ctx = makeContext()
         defer { ctx.cleanup() }
 
-        ctx.config.serverURL = "https://example.com"
+        // Default serverURL is set, but token is empty
         #expect(!ctx.config.isServerConfigured)
 
         ctx.config.authToken = "tok_123"
@@ -72,16 +73,16 @@ struct AppConfigTests {
         ctx.config.outputDirectory = customDir
         ctx.config.save()
 
-        // Load into a fresh instance with the same Keychain key
-        let loaded = AppConfig(configURL: ctx.configURL, keychainKey: ctx.keychainKey)
+        // Load into a fresh instance
+        let loaded = AppConfig(configURL: ctx.configURL)
         #expect(loaded.serverURL == "https://lyre.test")
         #expect(loaded.authToken == "secret-token")
         #expect(loaded.outputDirectory == customDir)
     }
 
-    // MARK: - Auth token stored in Keychain, not JSON
+    // MARK: - Auth token persisted in JSON
 
-    @Test func authTokenNotInJSON() {
+    @Test func authTokenStoredInJSON() {
         let ctx = makeContext()
         defer { ctx.cleanup() }
 
@@ -89,7 +90,7 @@ struct AppConfigTests {
         ctx.config.authToken = "secret-token"
         ctx.config.save()
 
-        // Read the raw JSON and verify authToken is nil
+        // Read the raw JSON and verify authToken is present
         guard let data = try? Data(contentsOf: ctx.configURL),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
@@ -97,58 +98,7 @@ struct AppConfigTests {
             return
         }
 
-        // authToken must not be in the JSON file
-        let jsonToken = json["authToken"]
-        #expect(jsonToken == nil || jsonToken is NSNull)
-
-        // But it should be readable from Keychain
-        let keychainToken = KeychainHelper.read(key: ctx.keychainKey)
-        #expect(keychainToken == "secret-token")
-    }
-
-    // MARK: - Migration from old JSON format
-
-    @Test func migratesAuthTokenFromJSONToKeychain() {
-        let suffix = UUID().uuidString
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("lyre-test-\(suffix)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        let configURL = tempDir.appendingPathComponent("config.json")
-        let keychainKey = "lyre-test-auth-\(suffix)"
-        defer {
-            try? FileManager.default.removeItem(at: tempDir)
-            KeychainHelper.delete(key: keychainKey)
-        }
-
-        // Write an old-format JSON with authToken embedded
-        let oldJSON: [String: String] = [
-            "serverURL": "https://old.test",
-            "authToken": "legacy-token-123",
-            "outputDirectory": "/tmp/recordings",
-        ]
-        guard let data = try? JSONEncoder().encode(oldJSON) else {
-            Issue.record("Failed to encode old JSON")
-            return
-        }
-        try? data.write(to: configURL)
-
-        // Loading should migrate the token to Keychain
-        let config = AppConfig(configURL: configURL, keychainKey: keychainKey)
-        #expect(config.authToken == "legacy-token-123")
-        #expect(config.serverURL == "https://old.test")
-
-        // Verify token is now in Keychain
-        #expect(KeychainHelper.read(key: keychainKey) == "legacy-token-123")
-
-        // Verify JSON no longer contains the token (migration re-saved)
-        guard let updatedData = try? Data(contentsOf: configURL),
-              let updatedJSON = try? JSONSerialization.jsonObject(with: updatedData) as? [String: Any]
-        else {
-            Issue.record("Failed to read migrated JSON")
-            return
-        }
-        let tokenInJSON = updatedJSON["authToken"]
-        #expect(tokenInJSON == nil || tokenInJSON is NSNull)
+        #expect(json["authToken"] as? String == "secret-token")
     }
 
     // MARK: - Missing config file
@@ -158,11 +108,10 @@ struct AppConfigTests {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("lyre-test-\(suffix)", isDirectory: true)
         let configURL = tempDir.appendingPathComponent("nonexistent.json")
-        let keychainKey = "lyre-test-auth-\(suffix)"
-        defer { KeychainHelper.delete(key: keychainKey) }
+        defer { try? FileManager.default.removeItem(at: tempDir) }
 
-        let config = AppConfig(configURL: configURL, keychainKey: keychainKey)
-        #expect(config.serverURL == "")
+        let config = AppConfig(configURL: configURL)
+        #expect(config.serverURL == AppConfig.defaultServerURL)
         #expect(config.authToken == "")
     }
 
@@ -174,8 +123,8 @@ struct AppConfigTests {
 
         try? Data("not json".utf8).write(to: ctx.configURL)
 
-        let config = AppConfig(configURL: ctx.configURL, keychainKey: ctx.keychainKey)
-        #expect(config.serverURL == "")
+        let config = AppConfig(configURL: ctx.configURL)
+        #expect(config.serverURL == AppConfig.defaultServerURL)
         #expect(config.authToken == "")
     }
 
@@ -185,6 +134,9 @@ struct AppConfigTests {
         let ctx = makeContext()
         defer { ctx.cleanup() }
 
+        // Force serverURL to empty (overrides default) so we can verify the
+        // "empty string → null in JSON" contract independent of the default.
+        ctx.config.serverURL = ""
         ctx.config.save()
 
         guard let data = try? Data(contentsOf: ctx.configURL) else {
@@ -198,7 +150,7 @@ struct AppConfigTests {
 
         // serverURL should be null when empty
         #expect(json["serverURL"] == nil)
-        // authToken should never be in JSON
+        // authToken should be null when empty (never set in this test)
         #expect(json["authToken"] == nil)
         // outputDirectory should always be stored
         #expect(json["outputDirectory"] != nil)
@@ -215,7 +167,7 @@ struct AppConfigTests {
         ctx.config.selectedInputDeviceID = "BuiltInMic:12345"
         ctx.config.save()
 
-        let loaded = AppConfig(configURL: ctx.configURL, keychainKey: ctx.keychainKey)
+        let loaded = AppConfig(configURL: ctx.configURL)
         #expect(loaded.selectedInputDeviceID == "BuiltInMic:12345")
     }
 
@@ -226,20 +178,23 @@ struct AppConfigTests {
         ctx.config.selectedInputDeviceID = nil
         ctx.config.save()
 
-        let loaded = AppConfig(configURL: ctx.configURL, keychainKey: ctx.keychainKey)
+        let loaded = AppConfig(configURL: ctx.configURL)
         #expect(loaded.selectedInputDeviceID == nil)
     }
 
     // MARK: - Auth token clearing
 
-    @Test func clearingAuthTokenDeletesFromKeychain() {
+    @Test func clearingAuthTokenPersistsAsNull() {
         let ctx = makeContext()
         defer { ctx.cleanup() }
 
         ctx.config.authToken = "some-token"
-        #expect(KeychainHelper.read(key: ctx.keychainKey) == "some-token")
+        ctx.config.save()
 
         ctx.config.authToken = ""
-        #expect(KeychainHelper.read(key: ctx.keychainKey) == nil)
+        ctx.config.save()
+
+        let loaded = AppConfig(configURL: ctx.configURL)
+        #expect(loaded.authToken == "")
     }
 }

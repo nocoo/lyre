@@ -17,7 +17,7 @@ struct SettingsView: View {
         Form {
             // Server Connection
             Section("Server Connection") {
-                TextField("Server URL", text: $config.serverURL, prompt: Text("https://lyre.example.com"))
+                TextField("Server URL", text: $config.serverURL, prompt: Text(AppConfig.defaultServerURL))
                     .textFieldStyle(.roundedBorder)
 
                 HStack {

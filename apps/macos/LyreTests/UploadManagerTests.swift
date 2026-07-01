@@ -8,8 +8,8 @@ struct UploadManagerTests {
 
     // MARK: - Helpers
 
-    /// Creates an isolated AppConfig that writes to a temp directory and a unique Keychain key.
-    /// Returns `(config, cleanup)` — call `cleanup()` when done to remove the Keychain entry.
+    /// Creates an isolated AppConfig that writes to a temp directory.
+    /// Returns `(config, cleanup)` — call `cleanup()` when done.
     private func makeConfig(
         serverURL: String = "https://lyre.test",
         authToken: String = "test-token"
@@ -18,11 +18,10 @@ struct UploadManagerTests {
             .appendingPathComponent("lyre-upload-test-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
-        let keychainKey = "lyre-test-upload-\(UUID().uuidString)"
-        let config = AppConfig(configURL: configURL, keychainKey: keychainKey)
+        let config = AppConfig(configURL: configURL)
         config.serverURL = serverURL
         config.authToken = authToken
-        let cleanup = { _ = KeychainHelper.delete(key: keychainKey) }
+        let cleanup = { _ = try? FileManager.default.removeItem(at: tempDir) }
         return (config, cleanup)
     }
 

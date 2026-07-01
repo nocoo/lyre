@@ -1,29 +1,30 @@
 import Foundation
 import os
 
-/// Persistent configuration stored as JSON in Application Support.
+/// Persistent configuration stored as JSON on disk.
 ///
-/// Stores server connection details and recording preferences.
-/// The auth token is stored securely in the Keychain, not in the JSON file.
-/// Thread-safe via actor-like manual serialization (all mutations on MainActor).
+/// Everything (including the auth token) lives in the same file. The app is
+/// ad-hoc signed, so previously-used Keychain items get evicted on every
+/// reinstall — a much worse tradeoff than the marginal security of storing
+/// the token in the Keychain. The token is a per-user bearer for our own
+/// API; the file is scoped to the user's Application Support directory.
 @Observable
 final class AppConfig: @unchecked Sendable {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "AppConfig")
 
-    /// Keychain account key for the auth token.
-    static let authTokenKeychainKey = "authToken"
+    /// Default server URL. Users can override in Settings.
+    static let defaultServerURL = "https://lyre.hexly.ai"
 
     // MARK: - Persisted properties
 
-    /// Lyre web server URL (e.g. "https://lyre.example.com").
-    var serverURL: String = "" {
+    /// Lyre web server URL. Defaults to `defaultServerURL`.
+    var serverURL: String = defaultServerURL {
         didSet { scheduleSave() }
     }
 
     /// Authentication token for the Lyre API.
-    /// Stored in Keychain, not in the JSON config file.
     var authToken: String = "" {
-        didSet { saveAuthToken() }
+        didSet { scheduleSave() }
     }
 
     /// Directory where recordings are saved.
@@ -51,27 +52,17 @@ final class AppConfig: @unchecked Sendable {
 
     private let configURL: URL
 
-    /// Keychain key used for this instance. Overridable for testing.
-    let keychainKey: String
-
     private var saveTask: Task<Void, Never>?
 
-    init(configURL: URL? = nil, keychainKey: String = authTokenKeychainKey) {
+    init(configURL: URL? = nil) {
         self.configURL = configURL ?? Self.defaultConfigURL()
-        self.keychainKey = keychainKey
         load()
     }
 
     // MARK: - Persistence
 
-    /// Load configuration from disk + Keychain. Falls back to defaults if missing.
+    /// Load configuration from disk. Falls back to defaults if missing.
     func load() {
-        // Delete Keychain entries from the old bundle ID (one-time, idempotent)
-        KeychainHelper.deleteLegacyService("com.lyre.app")
-
-        // Load auth token from Keychain
-        authToken = KeychainHelper.read(key: keychainKey) ?? ""
-
         guard FileManager.default.fileExists(atPath: configURL.path) else {
             Self.logger.info("No config file found, using defaults")
             return
@@ -80,20 +71,12 @@ final class AppConfig: @unchecked Sendable {
         do {
             let data = try Data(contentsOf: configURL)
             let stored = try JSONDecoder().decode(StoredConfig.self, from: data)
-            serverURL = stored.serverURL ?? ""
+            serverURL = stored.serverURL ?? Self.defaultServerURL
+            authToken = stored.authToken ?? ""
             if let dirPath = stored.outputDirectory {
                 outputDirectory = URL(fileURLWithPath: dirPath, isDirectory: true)
             }
             selectedInputDeviceID = stored.selectedInputDeviceID
-
-            // Migration: if authToken exists in JSON, move it to Keychain
-            if let jsonToken = stored.authToken, !jsonToken.isEmpty {
-                Self.logger.info("Migrating auth token from JSON to Keychain")
-                authToken = jsonToken
-                KeychainHelper.save(key: keychainKey, value: jsonToken)
-                // Re-save JSON without the token
-                save()
-            }
 
             Self.logger.info("Config loaded from \(self.configURL.lastPathComponent)")
         } catch {
@@ -101,11 +84,11 @@ final class AppConfig: @unchecked Sendable {
         }
     }
 
-    /// Save configuration to disk (JSON only, no auth token).
+    /// Save configuration to disk.
     func save() {
         let stored = StoredConfig(
             serverURL: serverURL.isEmpty ? nil : serverURL,
-            authToken: nil,  // Never store in JSON
+            authToken: authToken.isEmpty ? nil : authToken,
             outputDirectory: outputDirectory.path,
             selectedInputDeviceID: selectedInputDeviceID
         )
@@ -119,15 +102,6 @@ final class AppConfig: @unchecked Sendable {
             Self.logger.info("Config saved")
         } catch {
             Self.logger.error("Failed to save config: \(error.localizedDescription)")
-        }
-    }
-
-    /// Save auth token to Keychain immediately.
-    private func saveAuthToken() {
-        if authToken.isEmpty {
-            KeychainHelper.delete(key: keychainKey)
-        } else {
-            KeychainHelper.save(key: keychainKey, value: authToken)
         }
     }
 
@@ -161,8 +135,6 @@ final class AppConfig: @unchecked Sendable {
 
 // MARK: - Codable representation
 
-/// JSON structure for on-disk config.
-/// `authToken` is kept for backward compatibility (migration reads it, but never writes it).
 private struct StoredConfig: Codable {
     var serverURL: String?
     var authToken: String?
