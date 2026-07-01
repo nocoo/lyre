@@ -34,4 +34,13 @@ export default defineConfig({
     // natively. Pin support explicitly until upstream restores defaults.
     supported: { destructuring: true },
   },
+  optimizeDeps: {
+    // Same regression bites the dep pre-bundling pass (used for
+    // node_modules like class-variance-authority, radix-ui) — without
+    // this override, `bun run dev` prints ~1700 destructuring errors
+    // on cold start.
+    esbuildOptions: {
+      supported: { destructuring: true },
+    },
+  },
 });
