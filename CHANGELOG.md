@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.6.15 (2026-07-01)
+
+### 🚀 Features
+
+- feat(macos): store auth token in config.json + default server URL (a3e8946)
+
+### 🐛 Bug Fixes
+
+- fix(macos): downmix dual-track M4A to single track before upload (0364206)
+
+
 ## v1.6.14 (2026-07-01)
 
 ### 🐛 Bug Fixes
