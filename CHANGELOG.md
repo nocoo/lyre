@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.6.12 (2026-07-01)
+
+### 🐛 Bug Fixes
+
+- fix(web): remove progress bar CSS transition for smooth RAF updates (bb990f9)
+- fix(playback): serve M4A with audio/mp4 Content-Type (4496d18)
+
+
 ## v1.6.11 (2026-07-01)
 
 ### 📝 Other Changes
