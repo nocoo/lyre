@@ -72,6 +72,13 @@ export interface BackupData {
     tags: string;
     notes: string | null;
     aiSummary: string | null;
+    /**
+     * Auto-summary lifecycle state. Added after v1 shipped, so older
+     * backups omit it — importers must tolerate `undefined` and treat
+     * it as `null` ("never attempted").
+     */
+    aiSummaryStatus?: "running" | "succeeded" | "failed" | null;
+    aiSummaryError?: string | null;
     recordedAt: number | null;
     status: string;
     createdAt: number;
@@ -248,6 +255,8 @@ export async function exportBackup(
       tags: r.tags,
       notes: r.notes,
       aiSummary: r.aiSummary,
+      aiSummaryStatus: r.aiSummaryStatus,
+      aiSummaryError: r.aiSummaryError,
       recordedAt: r.recordedAt,
       status: r.status,
       createdAt: r.createdAt,
@@ -400,6 +409,11 @@ export async function importBackup(
 
     // 3. Recordings
     for (const r of backup.recordings) {
+      // Older backups predate ai_summary_status/error — coerce absent
+      // fields to null so we don't accidentally leave stale values on an
+      // existing row during an upsert.
+      const aiSummaryStatus = r.aiSummaryStatus ?? null;
+      const aiSummaryError = r.aiSummaryError ?? null;
       if (recordingExists.get(r.id)) {
         stmts.push(
           h
@@ -417,6 +431,8 @@ export async function importBackup(
               tags: r.tags,
               notes: r.notes,
               aiSummary: r.aiSummary,
+              aiSummaryStatus,
+              aiSummaryError,
               recordedAt: r.recordedAt,
               status: r.status,
               updatedAt: r.updatedAt,
@@ -440,6 +456,8 @@ export async function importBackup(
             tags: r.tags,
             notes: r.notes,
             aiSummary: r.aiSummary,
+            aiSummaryStatus,
+            aiSummaryError,
             recordedAt: r.recordedAt,
             status: r.status,
             createdAt: r.createdAt,
