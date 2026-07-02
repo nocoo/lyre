@@ -47,6 +47,21 @@ accent: Color(hex: "#FFA054")   // dark — softer orange for reduced contrast
 - ❌ **不引入** 任何第三方 UI 库
 - ❌ **不改** `TabView(sidebar)` 顶层导航结构
 
+### 关于动态视觉效果的边界
+
+Shimmer / gradient text sweep 类装饰在 SwiftUI 里可以做得很专业
+（`TimelineView(.animation)` + `Canvas` + `accessibilityReduceMotion` +
+offscreen / scroll / background pause 门 + activity gate 清理 task），但
+**本次不引入**。理由：
+
+- Lyre 是菜单栏录音工具，视觉主职责是"快速扫描 + 定位录音"，装饰性动效
+  会增加认知噪音
+- shimmer 用在标题、列表行、常驻状态上会形成持续注意力吸引，与"低调工具"
+  定位冲突
+
+**未来**如果确实需要（例如"AI 正在生成摘要"的 loading 文本），仅作为
+**局部、临时、单次**的过程反馈使用，不用于品牌装饰、常驻标题或长期状态。
+
 ## 现状 Audit（按页面）
 
 按 Basalt B-6 反模式清单扫描 `apps/macos/Lyre/Views/*.swift` + `LyreApp.swift`。
@@ -94,6 +109,16 @@ apps/macos/Lyre/
 
 每个页面单独一节：**当前问题 → 目标视觉 → 具体动作**。所有页面共用 §Token
 层，页面之间不复制组件。
+
+### palette.input 边界（贯穿全页面）
+
+`palette.input` 只用于**自造**的可交互元素 —— chip、icon button、自造 badge
+底、自造 segmented 底。**系统控件不套 `basaltField`**：`TextField` /
+`SecureField` / `Picker` / 系统 `Button` 的焦点环、圆角、hover 反馈都来自
+AppKit 层，覆盖它们会破坏 macOS 键盘导航和 VoiceOver 语义。
+
+判定：如果一个元素**已经是 SwiftUI 系统控件**，只改文字色 / label 色（用
+palette），底色和圆角保持默认。只有**手写的 View**才用 `basaltField`。
 
 ### RecordingsView
 
@@ -167,8 +192,9 @@ Finder` 全部与升级前**行为一致**。
    `palette.accent` fg；unselected → `palette.input` + `palette.muted`
 3. 上传态引入 `PhaseBadge`：presigning → "Preparing…" / uploading → "Uploading
    {%}…" / creating → "Registering…"；每阶段都可见
-4. 错误从 `.orange` Label 改为 `palette.destructive` 文字 + `AlertCircle`
-   icon，与 §PermissionGuideView 的失败态用同一套视觉语言
+4. 错误从 `.orange` Label 改为 `palette.destructive` 文字 +
+   `Image(systemName: "exclamationmark.triangle.fill")`，与 §PermissionGuideView
+   的失败态用同一套视觉语言
 5. 成功态：`palette.success` + `checkmark.circle.fill`，文案不变
 
 ### PermissionGuideView
@@ -229,7 +255,8 @@ Finder` 全部与升级前**行为一致**。
 
 ### Stage 1 — Token 骨架（估 1 天，零视觉变化）
 
-范围：只加基础设施，不 touch 任何 view 文件。
+范围：只加基础设施 + `LyreApp.swift` 根节点注入 palette。**不改任何业务页面**
+（`Views/*.swift` 保持不变）。
 
 - [ ] `Theme/Spacing.swift` `Radius.swift` `Color+Hex.swift` `Palette.swift`
       `PaletteEnvironment.swift` `BasaltMotion.swift` `Surfaces.swift`
@@ -254,8 +281,16 @@ Finder` 全部与升级前**行为一致**。
 - [ ] `LyreApp.swift` root 注入 `.environment(\.palette, .resolved(scheme))`
 - [ ] `LyreTests/BasaltTokenTests.swift`：
     - palette L0 < L1 < L2 亮度关系断言（防退化）
-    - `BasaltFont` 每个 role 在 `.xSmall` / `.large` / `.accessibility3` 三档
-      Dynamic Type 下都能获取到 `Font` 实例（防未来有人用固定 `size:`）
+    - **Dynamic Type 渲染冒烟**：一个 `DemoView` 里堆叠 6 个 role
+      (`pageTitle` / `cardTitle` / `body` / `caption` / `sectionLabel` /
+      `stat`) 各一行文字 + 一段 3-line 的段落，在 `.dynamicTypeSize(.xSmall)`
+      / `.large` / `.accessibility3` 三档下：
+        - render 通过（不 crash / 不 assert）
+        - 主信息文字**不被截断**（长文本设 `lineLimit(nil)`，短 label 允许
+          `truncationMode(.tail)` 但不能丢主谓）
+        - 未强制固定 `frame(width:)` / `frame(height:)`
+    - 断言方式：`ViewInspector` 或直接 `body` 求值确认无异常；截断检测通过
+      `Text` 的 `TruncationMode` 或对固定高度 `frame` 的 grep 检查
 
 **验收**：
 - macOS xcodebuild test 全绿（新增 1 个 suite）
@@ -316,6 +351,26 @@ PR 描述里）。
 6. `TextField` / `SecureField` / `Picker` / `Form.Section`：保留系统默认外观
 7. `List(selection:)` 的多选 / 键盘导航 / hover：不覆盖
 8. Menu bar tray 与 `MenuBarExtra` 内的所有 UI：不动
+
+### 原生性审查（每个页面 rollout 前逐条过）
+
+每个新增或改造的视觉元素，进 PR 前必须逐条通过：
+
+- **键盘导航**：Tab / Shift-Tab 遍历所有可交互元素；`Space` / `Return` 触发；
+  `↑↓` 在列表内移动；`Cmd+A` 全选（如适用）
+- **焦点环**：所有可获焦元素在 Tab 到时**可见**焦点环（系统 focus ring
+  未被自定义 background 遮挡）
+- **VoiceOver**：Cmd+F5 打开，`VO+右方向` 遍历，每个元素读出**有意义
+  的 label** + **正确的 trait**（button / heading / selected / disabled）
+- **系统 destructive 语义**：删除类按钮的红色由 `role: .destructive`
+  提供，不硬编码
+- **Menu bar 原生外观**：`MenuBarExtra` 与其 popover 保持系统 vibrancy /
+  字体 / 间距，不套 palette
+- **Right-click / context menu**：如原本存在，仍然工作
+- **Dark ↔ Light 即时切换**：System Settings → Appearance 切换时，界面
+  立刻响应，不残留旧色
+
+这套审查比 grep 更能保证最终像一个专业 macOS App。
 
 ### Dynamic Type & Accessibility
 
