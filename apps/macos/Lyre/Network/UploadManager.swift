@@ -13,6 +13,10 @@ final class UploadManager {
 
     enum UploadState: Equatable {
         case idle
+        /// Downmixing / any local preprocessing before we hit the network.
+        /// Emitted immediately when the user clicks Upload so the UI has
+        /// something to show for the first 0.5–2 s of AVAssetWriter work.
+        case preparing
         case presigning
         case uploading(progress: Double)
         case creating
@@ -129,6 +133,13 @@ final class UploadManager {
         let fileName = file.url.lastPathComponent
         let contentType = Constants.Audio.mimeType
 
+        // Flip state BEFORE any await so the UI switches to the
+        // progress view on the same click cycle. Downmix is
+        // AVAssetWriter work that can take a second or two, and
+        // during that window the user was previously staring at
+        // the same form with no feedback.
+        state = .preparing
+
         // Step 0: downmix any dual-track source into a single-track M4A
         // suitable for HTML5 <audio>. Falls through to the original file
         // if downmix fails — a dual-track upload is a "no audio in dashboard"
@@ -139,6 +150,7 @@ final class UploadManager {
                 try? FileManager.default.removeItem(at: temp)
             }
         }
+        guard !Task.isCancelled else { state = .idle; return }
 
         // Recompute file size after downmix; re-encoded output has a
         // different byte count than the source, and the server stores

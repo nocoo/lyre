@@ -20,7 +20,7 @@ struct UploadView: View {
             switch uploadManager.state {
             case .idle, .failed:
                 uploadForm
-            case .presigning, .uploading, .creating:
+            case .preparing, .presigning, .uploading, .creating:
                 progressView
             case .completed(let recordingId):
                 completedView(recordingId: recordingId)
@@ -141,10 +141,16 @@ struct UploadView: View {
                 Text("Uploading to server...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } else if case .preparing = uploadManager.state {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Preparing recording...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else if case .presigning = uploadManager.state {
                 ProgressView()
                     .controlSize(.small)
-                Text("Preparing upload...")
+                Text("Requesting upload URL...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if case .creating = uploadManager.state {
