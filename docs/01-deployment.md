@@ -49,13 +49,25 @@ Copy the returned `database_id` into `apps/api/wrangler.toml` under the
 
 ### Apply the schema
 
+Migrations live in `packages/api/migrations/`. Apply them in order to a
+fresh database:
+
 ```bash
-bunx wrangler d1 execute lyre-db --remote --file packages/api/src/db/schema.sql
+for f in packages/api/migrations/*.sql; do
+  bunx wrangler d1 execute lyre-db --remote --file "$f"
+done
 ```
 
-(If you change Drizzle schema, regenerate the SQL and re-apply via
-`wrangler d1 execute --remote --file <new.sql>`. There is no auto-migration
-on `wrangler deploy`.)
+The shell glob sorts lexically, which matches the intended apply order
+(`0000_baseline.sql`, `0001_ai_summary_status.sql`, …).
+
+When you change the Drizzle schema, add a new numbered migration
+(`NNNN_<name>.sql`) with the required `ALTER`/`CREATE` and apply it
+before deploying the Worker that depends on the new shape — there is no
+auto-migration on `wrangler deploy`.
+
+See `packages/api/migrations/README.md` for the naming rules and
+SQLite ALTER TABLE limits.
 
 ## 3. Aliyun OSS
 
