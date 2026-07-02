@@ -285,12 +285,17 @@ Finder` 全部与升级前**行为一致**。
       (`pageTitle` / `cardTitle` / `body` / `caption` / `sectionLabel` /
       `stat`) 各一行文字 + 一段 3-line 的段落，在 `.dynamicTypeSize(.xSmall)`
       / `.large` / `.accessibility3` 三档下：
-        - render 通过（不 crash / 不 assert）
-        - 主信息文字**不被截断**（长文本设 `lineLimit(nil)`，短 label 允许
-          `truncationMode(.tail)` 但不能丢主谓）
-        - 未强制固定 `frame(width:)` / `frame(height:)`
-    - 断言方式：`ViewInspector` 或直接 `body` 求值确认无异常；截断检测通过
-      `Text` 的 `TruncationMode` 或对固定高度 `frame` 的 grep 检查
+        - **编译级 smoke**：test 里实例化 view + 求值 `body` 一次，不
+          crash 即通过（这是"零依赖"路线；SwiftUI 视图对象是值类型，
+          获取 `body` 触发一遍 `ViewBuilder` 树的构造）
+        - **静态 grep 守卫**：`grep -rn "Font\.system(size:" Theme/`
+          必须返回空（禁止固定字号）；`grep -rn "\.frame(height:"
+          apps/macos/Lyre/` 命中的每一处，人工审查是否会锁死 Dynamic
+          Type 缩放（预计只在 icon 容器等固定尺寸场景合理出现）
+        - **视觉验收**：三档 Dynamic Type × dark/light 6 张截图归档到
+          PR 描述，人工确认主信息不被截断
+    - **不引入** `ViewInspector` / snapshot testing 依赖（本项目零第三方
+      UI 依赖策略）
 
 **验收**：
 - macOS xcodebuild test 全绿（新增 1 个 suite）
@@ -305,7 +310,9 @@ Finder` 全部与升级前**行为一致**。
       `basaltShadow()`
 - [ ] `Components/EmptyStateCard.swift`（RecordingsView 空态用）
 - [ ] `Components/PhaseBadge.swift`（UploadView 上传阶段用）
-- [ ] `LyreTests` 新增：三个 modifier 挂到 dummy view 上编译通过 + snapshot 结构
+- [ ] `LyreTests` 新增：三个 modifier 挂到 dummy view 上**编译通过 +
+      body 求值不 crash**（无 snapshot 库依赖）；dark/light 两张截图归档
+      到 PR 描述作为视觉基线
 
 **不加**：BasaltSegmented / BasaltSlider / CopyableField / StatCard。真的需要
 再加。
@@ -377,8 +384,13 @@ PR 描述里）。
 9. 所有文字用 `BasaltFont` 语义 role（`relativeTo`），不用固定 `size:`
    （除非有注释说明必须固定）
 10. 所有动画 `withAnimation` / `.animation` 检查 `accessibilityReduceMotion`
-11. VoiceOver：所有自造按钮 / badge 有 `accessibilityLabel`；状态变化用
-    `accessibilityValue` 或 `accessibilityChanged` 广播
+11. VoiceOver：所有自造按钮 / badge 提供 `accessibilityLabel`（是什么） +
+    `accessibilityValue`（当前状态） + `accessibilityHint`（可选，动作提示）。
+    优先靠这三个静态描述**表达状态**，不主动播报。
+    只有**非频繁的关键状态迁移**（例如"上传完成" / "上传失败" / "录音
+    已开始"）才用 AppKit 的 `NSAccessibility.post(element:notification:)`
+    主动播报；禁止在高频事件（如进度条 tick、hover）上播报，避免
+    VoiceOver 噪音。
 
 ### 生命周期（顺手清）
 
