@@ -1,19 +1,21 @@
 # macOS UI Basalt Upgrade
 
-> 按 **Basalt 规范 (B-6): macOS SwiftUI 落地**（`nmem` id `36f15892`）给
+> 按 **Basalt 规范 (B-6): macOS SwiftUI 现代视觉体系**（`nmem` id `36f15892`）给
 > `apps/macos/Lyre` 做视觉体系升级。目标是**在保持 macOS 原生效率的前提下**
-> 把 UI 从"SwiftUI 系统默认"升级到带 Basalt 家族识别度的表面语言，与网页端
-> 视觉基调一致，但**不追求同款布局**。
+> 把 UI 从"SwiftUI 系统默认"升级到有可辨识 App 身份的表面语言，同时严格遵守
+> Apple Human Interface Guidelines。
 
 ## Motivation
 
 现状：`apps/macos/Lyre/Views/*.swift` + `LyreApp.swift` 全部走系统默认样式。
 颜色只用 `.primary` / `.secondary` / `.accentColor`；间距全部 magic number；
-零阴影、零动效、零字号阶梯。跟 Web 端并排看，像不同项目的两个产品。
+零阴影、零动效、零字号阶梯。做出来的界面**功能可用但缺乏 App 身份** ——
+像一个没做过设计的原型。
 
-问题**不是**"要把 Web 布局搬过来"，而是"要让 macOS App 有可辨识的**表面
-语言**"—— 卡片背景色、边线、软阴影、状态色、字体 rounded、accent hue —— 那些
-一眼能认出"是这一家的"东西。**布局、导航结构、控件语义全部保留 macOS 原生**。
+问题**不是**"要更多装饰"，而是"要让 macOS App 具备可辨识的**表面语言**"
+—— 卡片背景色、边线、软阴影、状态色、字体 rounded、accent hue —— 那些
+让用户"一眼认出这是 Lyre"的东西。**布局、导航结构、控件语义全部保留
+macOS 原生**。
 
 ### 品牌 Accent
 
@@ -33,21 +35,21 @@ accent: Color(hex: "#FFA054")   // dark — softer orange for reduced contrast
 - 建立 Token 层（Spacing / Radius / Palette / Font / Motion）作为**单一出口**
 - 给自定义 surface 一致的外观：卡片背景、软阴影、`.continuous` 圆角、细边框
 - 状态色（成功 / 警告 / 失败 / 录音中）从 palette 出，不再散落 `.orange`/`.red`/`.green`
-- 每个页面按**自身特性**做细化，不搞"全站化 dashboard"
+- 每个页面按**自身特性**做细化 —— 一个菜单栏工具不做全站化 metric 汇总
 
 **非目标**：
 
 - ❌ **不把系统 `List` / `Form` / `Picker` 换成自造控件**。macOS 用户的肌肉记忆和
   Finder-style 扫描效率优先于视觉统一
-- ❌ **不放大字号/大 StatCard/顶栏汇总卡** —— 那是 web dashboard 语言，套到菜单栏
-  工具会显得冗余
+- ❌ **不放大字号 / 不加顶栏 StatCard 汇总卡** —— 那是数据仪表盘语言，
+  套到菜单栏工具会显得冗余
 - ❌ **不动** 录音 / 上传 / 权限 / DMG / menu bar tray 五条业务链路
 - ❌ **不引入** 任何第三方 UI 库
 - ❌ **不改** `TabView(sidebar)` 顶层导航结构
 
 ## 现状 Audit（按页面）
 
-按 B-6 反模式扫描 `apps/macos/Lyre/Views/*.swift` + `LyreApp.swift`。
+按 Basalt B-6 反模式清单扫描 `apps/macos/Lyre/Views/*.swift` + `LyreApp.swift`。
 
 ### 通用违规
 
@@ -166,7 +168,7 @@ Finder` 全部与升级前**行为一致**。
 3. 上传态引入 `PhaseBadge`：presigning → "Preparing…" / uploading → "Uploading
    {%}…" / creating → "Registering…"；每阶段都可见
 4. 错误从 `.orange` Label 改为 `palette.destructive` 文字 + `AlertCircle`
-   icon（与 Web `AiSummaryCard` failed 态视觉对齐）
+   icon，与 §PermissionGuideView 的失败态用同一套视觉语言
 5. 成功态：`palette.success` + `checkmark.circle.fill`，文案不变
 
 ### PermissionGuideView
