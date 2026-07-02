@@ -88,6 +88,12 @@ export async function pollJob(
     updateData.usageSeconds = pollResult.usage.seconds;
   }
 
+  // Track whether we successfully processed a SUCCEEDED result and should
+  // fire auto-summarize AFTER the job has been persisted as terminal. We
+  // deliberately do NOT run summarize inside the ASR try/catch below —
+  // summarize failures must not roll the job/recording back to FAILED.
+  let summarizeInput: { userId: string; fullText: string } | null = null;
+
   // Handle SUCCEEDED
   if (newStatus === "SUCCEEDED" && pollResult.output.result) {
     updateData.resultUrl = pollResult.output.result.transcription_url;
@@ -119,16 +125,12 @@ export async function pollJob(
       // Update recording status
       await recordings.update(job.recordingId, { status: "completed" });
 
-      // Auto-summarize if enabled. We deliberately AWAIT this — Cloudflare
-      // Workers will abort detached promises once the surrounding
-      // `waitUntil` resolves, which was the root cause of the "first
-      // auto-summary silently fails, manual retry works" bug.
-      // autoSummarize is fully guarded (any user-facing failure is
-      // persisted to `aiSummaryStatus`/`aiSummaryError`) and rate-limited
-      // by a hard AbortSignal timeout so this await cannot hang the tick.
       const recording = await recordings.findById(job.recordingId);
       if (recording) {
-        await autoSummarize(recording.userId, job.recordingId, parsed.fullText, db);
+        summarizeInput = {
+          userId: recording.userId,
+          fullText: parsed.fullText,
+        };
       }
     } catch (err) {
       console.error("Failed to process transcription result:", err);
@@ -138,6 +140,7 @@ export async function pollJob(
           ? `Result processing failed: ${err.message}`
           : "Result processing failed";
       await recordings.update(job.recordingId, { status: "failed" });
+      summarizeInput = null;
     }
   }
 
@@ -148,8 +151,25 @@ export async function pollJob(
     await recordings.update(job.recordingId, { status: "failed" });
   }
 
+  // Persist the terminal job state BEFORE running auto-summarize. This
+  // closes a race where the next cron tick (fires every minute) would
+  // still see PENDING/RUNNING during the up-to-60s summary window, re-poll
+  // the same job, and re-run transcription persistence + summary.
   const updatedJob = await jobs.update(job.id, updateData);
   const finalJob = updatedJob ?? job;
+
+  // Auto-summarize AFTER the job is terminal, on its own path. Awaited so
+  // the surrounding `waitUntil` keeps the isolate alive; guarded internally
+  // so nothing thrown here can escape and mislead the caller into thinking
+  // the ASR step failed.
+  if (summarizeInput) {
+    await autoSummarize(
+      summarizeInput.userId,
+      job.recordingId,
+      summarizeInput.fullText,
+      db,
+    );
+  }
 
   return {
     job: finalJob,
