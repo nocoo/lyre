@@ -18,7 +18,8 @@
 
 - [ ] 视觉零变化确认
 - [ ] `xcodegen generate` 已把 Theme/ 扫入 project
-- [ ] `elapsedTimer` 审计结论记录（可接受泄漏）
+- [ ] `elapsedTimer` 审计结论作为 Swift 源码注释记录（技术债标记，
+      **不进 CHANGELOG / Release notes**）
 
 ---
 
@@ -67,7 +68,8 @@
   - [ ] `TagChip` palette 化（selected/unselected）
   - [ ] `progressView` 三态（presigning / uploading / creating）用 `PhaseBadge`
   - [ ] `.failed` 用 `PhaseBadge(.failed(...))`
-  - [ ] `completedView` 用 `PhaseBadge(.succeeded)` + palette.success 图标
+  - [ ] `completedView` 保留 40pt `checkmark.circle.fill` +
+        `palette.success`（不套 PhaseBadge，避免视觉重复）
   - [ ] `grep "\.orange\|\.green" UploadView.swift` 空
   - [ ] 原生性审查：Tab 遍历 / Space 触发 chip / VoiceOver
   - [ ] 视觉验收矩阵 8 截图（4 上传态 × dark/light）

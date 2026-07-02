@@ -128,9 +128,15 @@ Stage 1 pass 后再进 Stage 2。
 
 1. 三个 modifier 独立编译通过
 2. Tests：一个 `DemoStack` view 挂三个 modifier，body 求值不 crash（无 snapshot 库）
-3. 三层阴影确认：`basaltShadow` 用 3 层 `.shadow` 叠加（0.5px + 6px + 18px）
-4. `basaltCard` 默认 radius = `Radius.card` (14)；`basaltField` 默认 = `Radius.widget` (10)
-5. Modifier 内部通过 `@Environment(\.palette)` 消费色板
+3. **Lyre 项目对 B-6 阴影默认的克制覆盖**：`basaltShadow` 用 3 层 `.shadow`
+   叠加 `0.5px + 3px + 8px`（而非 B-6 默认的 `0.5px + 6px + 18px`）—
+   macOS 菜单栏工具视觉要更贴地，避免 web dashboard 卡片墙感
+4. **Lyre 项目对 B-6 radius 默认的克制覆盖**：`basaltCard` 默认 radius =
+   `Radius.widget` (10)（而非 B-6 默认的 `Radius.card = 14`）—
+   `Radius.card / island` 常量仍在 Token 层保留（未来页面级容器需要更大
+   圆角时可显式指定），但**本次 rollout 全部页面统一走 widget (10)**
+5. `basaltField` 默认 radius = `Radius.widget` (10)
+6. Modifier 内部通过 `@Environment(\.palette)` 消费色板
 
 **验证步骤**：
 
@@ -247,9 +253,10 @@ Stage 2 pass 后再进 Stage 3。
    "No Recordings", subtitle: "…")`
 2. `RecordingRow`（`:187`）视觉改造：
    - **播放按钮（保守方案，默认）**：保持原 28pt SF Symbol 尺寸和结构，
-     只把颜色从硬编码 `.orange` / `.accentColor` 换成 `palette.accent`
-     （播放中态可以 `.orange` → `palette.accent` 加 `.symbolEffect(.pulse)`
-     强调，或保持同色）。**不改容器形状 / 不引入 44pt 圆背景** —— macOS
+     只把颜色从硬编码 `.orange` / `.accentColor` 换成 `palette.accent`。
+     **不加** `.symbolEffect` 类动画 —— 如未来要加，必须先 gate 于
+     `@Environment(\.accessibilityReduceMotion)`（对齐 docs/07 §动效规范）；
+     本次范围内保持静态。**不改容器形状 / 不引入 44pt 圆背景** —— macOS
      List row 密度对大按钮敏感，改结构会拉长 row 降低扫描效率
    - **升级方案（仅当截图对比确实需要更强视觉锚点时启用）**：44pt 圆容器
      `Circle().fill(palette.input)` + `palette.accent` 图标；播放中态改
@@ -323,10 +330,15 @@ grep -n "\.orange\|\.red\|\.blue\|\.green" Lyre/Views/RecordingsView.swift
 4. `.failed` 错误态（在 `uploadForm` 里的错误 label，不在 `progressView`）：
    `.orange` Label + `exclamationmark.triangle.fill` →
    `PhaseBadge(phase: .failed(errorMessage))`
-5. `completedView`（`:169`）：
-   - `Image("checkmark.circle.fill").foregroundStyle(.green)` →
-     `PhaseBadge(phase: .succeeded("Upload Complete"))` +
-     `palette.success` icon 40pt
+5. `completedView`（`:169`）— **不用 `PhaseBadge`**（会和 40pt checkmark
+   视觉重复）。走 macOS completion state 惯例：
+   - `Image(systemName: "checkmark.circle.fill")` 40pt +
+     `.foregroundStyle(palette.success)` （替换原 `.green`）
+   - "Upload Complete" 用 `BasaltFont.cardTitle` + `palette.fg`
+   - 下方 summary 保留原结构，只把 `.caption` + `.secondary` 换成
+     `BasaltFont.caption` + `palette.muted`
+   - `PhaseBadge(.succeeded)` **只用在** in-line 状态标签场景（如列表
+     行末），不用在这种大居中完成页
 
 **Acceptance**：
 

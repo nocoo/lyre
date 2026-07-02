@@ -137,8 +137,13 @@ palette），底色和圆角保持默认。只有**手写的 View**才用 `basal
 1. 空态换 `EmptyStateCard`（外层容器，SF Symbol + 标题 + 副标题，
    `basaltCard` 底），文案不变。
 2. `RecordingRow` 视觉改造（**结构不改**，仍是 `HStack`）：
-   - 播放按钮圆背景 `palette.input` + `palette.accent` icon，播放中态改
-     `palette.accent` fill；不再 `.orange`
+   - 播放按钮**默认（保守）**：保留原 28pt SF Symbol 尺寸和结构，只把
+     颜色从硬编码 `.orange` / `.accentColor` 换成 `palette.accent`。macOS
+     List row 密度对按钮尺寸敏感，改结构会拉长 row 降低扫描效率
+   - 播放按钮**升级选项**（仅当截图对比确实需要更强视觉锚点时启用，
+     不进本次 rollout，作为独立后续 commit）：44pt 圆容器
+     `Circle().fill(palette.input)` + `palette.accent` 图标；播放中态
+     `Circle().fill(palette.accent)` + 白色图标
    - 时间 / 大小 / 日期用 `BasaltFont.caption` + `palette.muted`
    - 当前播放时长换 `BasaltFont.mono.monospacedDigit()`
    - selection 高亮由 `List` 默认给（保留 macOS 语义），**不覆盖**
