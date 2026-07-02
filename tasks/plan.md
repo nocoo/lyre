@@ -563,4 +563,8 @@ bun run lint
 - 未来"AI 生成摘要"loading 文本 shimmer 效果（`docs/07` §动态视觉效果的
   边界 已标为未来考虑）
 - Menu bar tray 内的 elapsed display 从 Timer 迁移到 `TimelineView(.periodic)`
-  以彻底消除泄漏可能（当前进程即将退出所以无影响）
+  以彻底消除泄漏可能（当前进程即将退出所以无影响）。
+  **反模式警告**：不要用"给 `TrayMenu` 加 `.onDisappear { stopElapsedTimer() }`"
+  作为兜底 —— `MenuBarExtra` popover 的 lifecycle 与主窗口不同，菜单
+  关闭时会触发 `.onDisappear`，反而会在录音中停掉 elapsed 显示。彻底
+  方案必须走 `TimelineView(.periodic)` 或明确的 lifecycle 重构

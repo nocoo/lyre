@@ -216,8 +216,9 @@ Finder` 全部与升级前**行为一致**。
 
 1. Header icon 色从 `.blue` 换 `palette.accent`
 2. `PermissionRow` 外层套 `basaltCard`（radius 10 widget 级别），内部结构不改
-3. 权限状态色：granted → `palette.success` / denied → `palette.destructive` /
-   notDetermined → `palette.muted`
+3. 权限状态色（对齐 `PermissionManager.Status` 实际枚举 `.unknown` /
+   `.granted` / `.denied`）：granted → `palette.success` / denied →
+   `palette.destructive` / unknown → `palette.muted`
 4. "All permissions granted" 那行的 `.green` 换 `palette.success`
 5. `pollTimer` 已有 `stopPolling()`，无需变动
 
@@ -253,8 +254,15 @@ Finder` 全部与升级前**行为一致**。
 1. Root scene 注入 `.environment(\.palette, .resolved(scheme))`
 2. `TabView` detail 区域 `.background(palette.bg)`
 3. Tray menu 保留系统外观（menu bar 的语义色是系统级别，改了破坏一致性）
-4. `elapsedTimer` 生命周期审计：确认 `.onDisappear` 有 invalidate，如有
-   泄漏则修补（不属于视觉升级，属顺手清理）
+4. `elapsedTimer` 生命周期审计：`stopElapsedTimer()` 只在 stopRecording
+   路径 invalidate。**审计结论**：录音中直接 Quit 会泄漏 timer，但进程
+   即将退出所以无用户可见影响。**本次不修**，只在 Swift 源码里加技术债
+   注释；不进 CHANGELOG / Release notes（用户不可见）。
+   —— **不给 `TrayMenu` 加普通 `.onDisappear` 兜底**：`MenuBarExtra`
+   popover 的生命周期与主窗口不同，菜单关闭时会触发 `.onDisappear`，
+   反而会在录音中停掉 elapsed 显示。彻底方案是把 elapsed 显示迁到
+   `TimelineView(.periodic)` 或做明确的 lifecycle 重构，作为独立后续
+   任务，不进本次 rollout（见 `tasks/plan.md` §Non-Blocking Follow-ups）
 
 ## 3 阶段落地路径
 
