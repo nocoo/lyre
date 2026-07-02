@@ -16,19 +16,29 @@ import ScreenCaptureKit
 @Suite("E2E Recording Lifecycle")
 struct RecordingE2ETests {
 
-    /// Check if the required permissions are available.
+    /// Check if the required permissions are available **without triggering
+    /// any system permission dialog**. Uses TCC preflight for Screen Recording
+    /// and AVFoundation's read-only status for Microphone. If either is not
+    /// already granted, the test skips — the user grants permission from the
+    /// UI (Permissions tab), not from a test-suite prompt that appears in the
+    /// middle of `git commit` or CI.
     private static func hasPermissions() async -> Bool {
-        let permissions = PermissionManager()
-        await permissions.checkAll()
-        print(
-            "[E2E] Screen Recording: \(permissions.screenRecording), " +
-            "Microphone: \(permissions.microphone), allGranted: \(permissions.allGranted)"
-        )
-        guard permissions.allGranted else { return false }
+        // Screen Recording: read-only preflight, no dialog.
+        guard PermissionManager.hasScreenRecordingPreauthorized() else {
+            print("[E2E] Screen Recording not preauthorized — skipping")
+            return false
+        }
 
-        // Even with permissions granted, the runner may have no display
-        // available (headless CI / locked screen). SCShareableContent.displays
-        // is empty in that case, and the recorder fails with `noDisplayFound`.
+        // Microphone: read-only authorization status, no dialog.
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard micStatus == .authorized else {
+            print("[E2E] Microphone status = \(micStatus.rawValue) — skipping")
+            return false
+        }
+
+        // Both preauthorized; SCShareableContent.current no longer triggers a
+        // dialog once the grant is in place, so a headless-display probe is
+        // safe here.
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(
                 false,

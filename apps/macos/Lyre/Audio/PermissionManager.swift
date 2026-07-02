@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreGraphics
 import os
 import ScreenCaptureKit
 
@@ -30,6 +31,21 @@ final class PermissionManager: @unchecked Sendable {
         screenRecording != .granted || microphone != .granted
     }
 
+    /// Non-interactive probe for Screen Recording permission. Returns
+    /// `true` only when TCC has already recorded a grant for this app;
+    /// **never triggers a system dialog**.
+    ///
+    /// Uses `CGPreflightScreenCaptureAccess()`, Apple's documented
+    /// read-only check. Prefer this in tests / CI / any code path where
+    /// spawning a permission prompt would be surprising or destructive
+    /// (pre-commit hooks, headless test runs).
+    ///
+    /// UI paths that legitimately want to prompt the user should keep
+    /// using `checkScreenRecording()` / `requestScreenRecording()`.
+    static func hasScreenRecordingPreauthorized() -> Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
     // MARK: - Check
 
     /// Check both permissions without triggering system prompts (where possible).
@@ -40,6 +56,12 @@ final class PermissionManager: @unchecked Sendable {
 
     /// Check screen recording permission by attempting to enumerate shareable content.
     /// ScreenCaptureKit will throw if the user has denied permission.
+    ///
+    /// **Side effect**: the first call on a freshly-installed app triggers the
+    /// macOS Screen Recording TCC dialog. This is intentional for UI flows
+    /// (About / Permissions tab) — the dialog IS the ask. Do NOT call this
+    /// from test code or any headless path; use
+    /// `hasScreenRecordingPreauthorized()` instead.
     func checkScreenRecording() async {
         do {
             let content = try await SCShareableContent.current
