@@ -1,238 +1,374 @@
 # macOS UI Basalt Upgrade
 
 > 按 **Basalt 规范 (B-6): macOS SwiftUI 落地**（`nmem` id `36f15892`）给
-> `apps/macos/Lyre` 做视觉体系升级。目标是在**不改变导航结构**、**不引入新依赖**、
-> **不影响录音/上传核心路径**的前提下，把 UI 从"系统默认克制"升级到"Basalt 家族
-> 视觉身份"，与网页端（`apps/web`）保持一致的品牌感。
+> `apps/macos/Lyre` 做视觉体系升级。目标是**在保持 macOS 原生效率的前提下**
+> 把 UI 从"SwiftUI 系统默认"升级到带 Basalt 家族识别度的表面语言，与网页端
+> 视觉基调一致，但**不追求同款布局**。
 
 ## Motivation
 
-### 症状
+现状：`apps/macos/Lyre/Views/*.swift` + `LyreApp.swift` 全部走系统默认样式。
+颜色只用 `.primary` / `.secondary` / `.accentColor`；间距全部 magic number；
+零阴影、零动效、零字号阶梯。跟 Web 端并排看，像不同项目的两个产品。
 
-`apps/macos/Lyre/Views/` 5 个页面 + `LyreApp.swift` 全部采用 SwiftUI **系统默认策略**：
+问题**不是**"要把 Web 布局搬过来"，而是"要让 macOS App 有可辨识的**表面
+语言**"—— 卡片背景色、边线、软阴影、状态色、字体 rounded、accent hue —— 那些
+一眼能认出"是这一家的"东西。**布局、导航结构、控件语义全部保留 macOS 原生**。
 
-- 颜色只用 `.primary` / `.secondary` / `.accentColor` / `.orange` / `.blue` / `.red`
-- 间距全靠 magic number：`padding(24)`、`spacing: 12`、`padding(30)`
-- 阴影：**零**
-- 圆角：默认（未指定 `.continuous`）
-- 卡片/面板：`Form { Section }` + `.formStyle(.grouped)` 系统组框
-- 排版：`.title` / `.headline` / `.caption` dynamic type token，无精调字号
-- 动效：无
+### 品牌 Accent
 
-对照 Basalt Web 端（`apps/web` 的 dashboard/recordings/settings 三大页面）已经建立的
-14px card radius、精细 palette、fade-up 动画、多层字号 —— macOS App **明显被落下一代**。
-用户第一印象是"Web 是一个精心设计的产品，macOS 是配套的小工具"。
+**橙色系**（Lyre 视觉主色）：
 
-### 目标
-
-对齐 **Basalt 规范 (B-6)** 的十一章内容：
-
-1. Token 系统（Spacing / Radius / Palette）单一出口
-2. Surface 三种 modifier（`basaltCard` / `basaltField` / `basaltShadow`）
-3. 字体系统（对齐 Web `text-*` 阶梯）
-4. 五个核心组件（Segmented / Slider / CopyableField / StatCard / EmptyStateCard）
-5. macOS 原生导航壳保留（`NavigationSplitView` + `Form(.grouped)` + `.scrollContentBackground(.hidden)`）
-6. 动效规范（时长常量 + `accessibilityReduceMotion` + Symbol replace）
-7. 内存生命周期审计（Timer / Task / Observer / AV）
-
-### 非目标
-
-- ❌ **不重构** `TabView` sidebar 结构（保留 `Tab("Recordings"/"Permissions"/"Settings"/"About")`）
-- ❌ **不动** 录音 / 上传 / 权限管理三条业务链路
-- ❌ **不引入** 第三方 UI 库（`GradientShimmer` 等留给未来考虑，不在本次范围）
-- ❌ **不改** menu bar tray 结构与快捷键
-- ❌ **不改** DMG 打包流程
-
-## 现状 Audit
-
-按 B-6 反模式扫描（见 B-6 第十章）覆盖 `apps/macos/Lyre/Views/*.swift` + `LyreApp.swift`。
-
-### 每个页面的具体问题
-
-| 页面 | 行数 | 问题清单 |
-|------|-----:|---------|
-| `LyreApp.swift` | 309 | `TabView` 详细页外壳无 palette 注入；tray menu 无字号规范 |
-| `RecordingsView.swift` | 267 | `List(.inset(alternatesRowBackgrounds:))` 系统外观；`RecordingRow` 无 card 化；播放按钮 `.orange` / `.accentColor` 直接硬编码；空态 `waveform.circle` 48pt secondary，无 basaltCard |
-| `SettingsView.swift` | 139 | `Form(.grouped)` 无 `.scrollContentBackground(.hidden)`；status badge 用 `.foregroundStyle(.green/.red)` 硬编码；`.roundedBorder` 无自定义 field |
-| `UploadView.swift` | 304 | 唯一使用 `.roundedBorder` + system Picker 的页面；progress state 无 phase label；error 直接文字 |
-| `PermissionGuideView.swift` | 151 | `Image(systemName:).foregroundStyle(.blue)` 硬编码色；`PermissionRow` 手撸小组件缺乏一致性 |
-| `AboutView.swift` | 62 | 结构简洁但 `.font(.title/.caption/.caption2)` 全靠系统 token，无字号阶梯 |
-
-### 命中的 B-6 反模式
-
-```
-grep -rn "Color(red:" apps/macos/Lyre → 0（好，未硬写 sRGB 色）
-grep -rn "cornerRadius:" apps/macos/Lyre → 0（现有 UI 未显式指定圆角，全是控件默认）
-grep -rn "padding(" apps/macos/Lyre    → 40+ 处 magic number
-grep -rn "\.shadow(" apps/macos/Lyre   → 0（无阴影 = 无层次）
-grep -rn "foregroundStyle(\." apps/macos/Lyre | grep -Ev "primary|secondary|tertiary"
-  → .orange / .red / .blue / .green 至少 6 处硬编码
-grep -rn "font(\.system(" apps/macos/Lyre → 5 处 (permission icon 40pt / recording icon 48pt 等)
-grep -rn "\.animation(" apps/macos/Lyre  → 0（无动效）
+```swift
+accent: Color(hex: "#F58A2A")   // light — warm orange
+accent: Color(hex: "#FFA054")   // dark — softer orange for reduced contrast
 ```
 
-### 内存生命周期检查（B-6 第八章）
+`success` / `warning` / `destructive` 使用 B-6 默认。
 
-预扫已发现的 hold：
+### 目标 vs 非目标
 
-| 位置 | 类型 | 现状 | 需要 |
-|------|------|------|------|
-| `PermissionGuideView.swift:9` | `@State private var pollTimer: Timer?` | ⚠️ 需确认 `onDisappear` 有 `invalidate()` | 审计 |
-| `LyreApp.swift:119` | `@State private var elapsedTimer: Timer?` | ⚠️ 同上 | 审计 |
-| `RecordingsView.swift:29` | `.task(id:)` on store | ✅ 自动 cancel | OK |
-| `RecordingsView.swift:33` | `onDisappear { store.stopWatching(); player.stop() }` | ✅ | OK |
+**目标**：
 
-Timer 类是升级过程中**顺手也要审一遍**的项 —— 之前 CLAUDE.md 明确要求"注意内存泄漏"。
+- 建立 Token 层（Spacing / Radius / Palette / Font / Motion）作为**单一出口**
+- 给自定义 surface 一致的外观：卡片背景、软阴影、`.continuous` 圆角、细边框
+- 状态色（成功 / 警告 / 失败 / 录音中）从 palette 出，不再散落 `.orange`/`.red`/`.green`
+- 每个页面按**自身特性**做细化，不搞"全站化 dashboard"
+
+**非目标**：
+
+- ❌ **不把系统 `List` / `Form` / `Picker` 换成自造控件**。macOS 用户的肌肉记忆和
+  Finder-style 扫描效率优先于视觉统一
+- ❌ **不放大字号/大 StatCard/顶栏汇总卡** —— 那是 web dashboard 语言，套到菜单栏
+  工具会显得冗余
+- ❌ **不动** 录音 / 上传 / 权限 / DMG / menu bar tray 五条业务链路
+- ❌ **不引入** 任何第三方 UI 库
+- ❌ **不改** `TabView(sidebar)` 顶层导航结构
+
+## 现状 Audit（按页面）
+
+按 B-6 反模式扫描 `apps/macos/Lyre/Views/*.swift` + `LyreApp.swift`。
+
+### 通用违规
+
+```
+grep -rn "padding("  → 40+ 处 magic number
+grep -rn ".shadow("  → 0（无阴影 = 无层次）
+grep -rn ".animation(" → 0（无动效）
+grep -rn "cornerRadius:" → 0（全靠系统控件默认圆角，未显式指定 .continuous）
+grep -rn "foregroundStyle(\.orange\|\.red\|\.blue\|\.green" → 6+ 处硬编码
+```
+
+### 内存生命周期
+
+| 位置 | 状态 |
+|------|------|
+| `PermissionGuideView.swift:9` 的 `pollTimer` | ✅ `onDisappear { stopPolling() }` 已存在（`:73`），无需处理 |
+| `LyreApp.swift:119` 的 `elapsedTimer` | ⚠️ Stage 1 顺手审计一次 |
+| `RecordingsView.swift:29-36` 的 `store.stopWatching()` + `player.stop()` | ✅ 已 OK |
 
 ## Token 与文件规划
 
-新建目录 `apps/macos/Lyre/Theme/`：
-
 ```
-Theme/
-├── Spacing.swift          # enum Spacing (xxs xs sm md lg xl xxl section)
-├── Radius.swift           # enum Radius (widget card island pill)
-├── Palette.swift          # struct Palette + Palette.resolved(scheme)
-├── PaletteEnvironment.swift  # EnvironmentKey + Environment(\.palette)
-├── Color+Hex.swift        # Color(hex: "#XXXXXX")
-├── BasaltFont.swift       # enum BasaltFont + SectionHeader view
-├── BasaltMotion.swift     # enum Motion (quick regular smooth stagger)
-└── Surfaces.swift         # View extensions: basaltCard / basaltField / basaltShadow
-```
-
-新建目录 `apps/macos/Lyre/Components/`（B-6 第五章）：
-
-```
-Components/
-├── BasaltSegmented.swift  # 泛型 SegmentedControl<T: Hashable>
-├── BasaltSlider.swift     # 带 tabular readout
-├── CopyableField.swift    # 单击复制 + symbol replace
-├── StatCard.swift         # 大数字卡片（用于 Recordings 顶部汇总）
-├── EmptyStateCard.swift   # 空态标准
-└── PhaseBadge.swift       # running / succeeded / failed 状态标签（借鉴前端 AiSummaryCard）
+apps/macos/Lyre/
+├── Theme/
+│   ├── Spacing.swift          # enum Spacing
+│   ├── Radius.swift           # enum Radius (widget / card / island / pill)
+│   ├── Color+Hex.swift        # Color(hex:) init
+│   ├── Palette.swift          # struct Palette + .resolved(scheme)
+│   ├── PaletteEnvironment.swift  # @Environment(\.palette)
+│   ├── BasaltFont.swift       # 语义 Font roles（relativeTo Dynamic Type）
+│   ├── BasaltMotion.swift     # enum Motion (quick / regular / smooth / stagger)
+│   └── Surfaces.swift         # View extensions: basaltCard / basaltField / basaltShadow
+└── Components/
+    ├── EmptyStateCard.swift   # 空态一致外观
+    ├── PhaseBadge.swift       # running/succeeded/failed 状态标签
+    └── ... (按消费场景**懒引入**，见 §逐页面章节)
 ```
 
-`xcodegen` 会自动扫描新目录，无需手改 `project.yml`（当前 `sources: [Lyre]` 已经是全递归）。
+不预先建"5 个通用组件"—— 组件按**每个页面实际需要**再落。避免过早抽象。
 
-### Palette 品牌色决策
+## 逐页面章节
 
-B-6 palette 里 `accent` 是**项目唯一强色**（承担按钮、focus ring、录音状态指示）。
-建议：
+每个页面单独一节：**当前问题 → 目标视觉 → 具体动作**。所有页面共用 §Token
+层，页面之间不复制组件。
 
-```swift
-// Lyre 品牌 accent（延续现有 tray 图标绿色系）
-accent: Color(hex: "#3B9E62")  // light
-accent: Color(hex: "#6EE7A8")  // dark（B-6 里 success 用的色，正好复用）
-```
+### RecordingsView
 
-`success` / `warning` / `destructive` 用 B-6 默认值。品牌色是**唯一需要哥拍板的决策**，
-其他 palette 全 copy B-6 默认。
+**当前**（`apps/macos/Lyre/Views/RecordingsView.swift`）：
 
-## 落地路径（3 阶段）
+- `List(selection:)` + `.listStyle(.inset(alternatesRowBackgrounds: true))` — 系统外观
+- `RecordingRow`：`play.circle.fill` 28pt + `.orange` 播放色硬编码、`.accentColor` 待机
+- 空态：`waveform.circle` 48pt + `.secondary` 文字，纯默认
+- toolbar 里 batch delete button `.foregroundStyle(.red)`
 
-对齐 B-6 第十章。每阶段一个原子提交，阶段之间 review + 视觉截图确认。
+**目标**：保留 `List(selection:)` 外壳（多选、键盘导航、Finder 式扫描效率一律
+不动），只重构 **row 内部**的密度、颜色、hover / selection 视觉。
 
-### 阶段 1 — Token 骨架（估 1 天）
+**动作**：
 
-**范围**：只加基础设施，不改任何 view。
+1. 空态换 `EmptyStateCard`（外层容器，SF Symbol + 标题 + 副标题，
+   `basaltCard` 底），文案不变。
+2. `RecordingRow` 视觉改造（**结构不改**，仍是 `HStack`）：
+   - 播放按钮圆背景 `palette.input` + `palette.accent` icon，播放中态改
+     `palette.accent` fill；不再 `.orange`
+   - 时间 / 大小 / 日期用 `BasaltFont.caption` + `palette.muted`
+   - 当前播放时长换 `BasaltFont.mono.monospacedDigit()`
+   - selection 高亮由 `List` 默认给（保留 macOS 语义），**不覆盖**
+3. `List` 底色：`.scrollContentBackground(.hidden)` + `palette.bg`（macOS 13+）
+4. 批量删除按钮保留 `role: .destructive`，**不硬写 `.red`**（系统会根据 role
+   给正确的语义色，dark/light + 高对比度模式都自动处理）
+5. **不加**顶部 StatCard 汇总（"总录音数 / 总时长" 对本地工具不是高频决策
+   信息，会吃掉默认窗口首屏）
 
-- [ ] 新增 `Theme/Spacing.swift`
-- [ ] 新增 `Theme/Radius.swift`
-- [ ] 新增 `Theme/Color+Hex.swift`
-- [ ] 新增 `Theme/Palette.swift`（含品牌 accent 决策）
-- [ ] 新增 `Theme/PaletteEnvironment.swift`
-- [ ] 新增 `Theme/BasaltFont.swift`（含 `SectionHeader`）
-- [ ] 新增 `Theme/BasaltMotion.swift`
-- [ ] 新增 `Theme/Surfaces.swift`（`basaltCard/basaltField/basaltShadow` 三 modifier）
-- [ ] `LyreApp.swift` 根节点注入 `.environment(\.palette, .resolved(scheme))`
-- [ ] `LyreTests/BasaltTokenTests.swift`：palette L0<L1<L2<L3 亮度关系断言（防退化）
+**验收**：Cmd+A 全选、Shift+Click 范围选、↑/↓ 键盘导航、右键菜单、`Reveal in
+Finder` 全部与升级前**行为一致**。
+
+### SettingsView
+
+**当前**（`apps/macos/Lyre/Views/SettingsView.swift`）：
+
+- `Form { Section }` + `.formStyle(.grouped)` — macOS 用户预期
+- Status badge：`.foregroundStyle(.green / .red)` 硬编码
+- Token 输入：`.roundedBorder` + 右侧眼睛切换按钮
+- "Test Connection" 用系统按钮
+
+**目标**：保留 `Form(.grouped)` 骨架（macOS 用户熟悉的设置页样式），只统一
+底色与状态色。
+
+**动作**：
+
+1. `Form` 加 `.scrollContentBackground(.hidden)` + `.background(palette.bg)`
+2. Status badge 状态色从 palette 取：`palette.success` / `palette.destructive` /
+   `palette.muted`（测试中态）；**不再** `.green` / `.red`
+3. `TextField` / `SecureField` 保留 `.roundedBorder`（系统 field 有自带的
+   focus ring / 拼写检查行为，自造 field 得不偿失）
+4. 按钮全部保留系统按钮，不换。`Test Connection` 用默认 style
+5. Section header 字体保留系统（`Form(.grouped)` 会应用 macOS 原生的
+   uppercase small-caps）
+
+### UploadView
+
+**当前**（`apps/macos/Lyre/Views/UploadView.swift`）：
+
+- 表单区 `.roundedBorder` textfield + system `Picker` + 自造 `TagChip` + `FlowLayout`
+- 上传态：4 段 switch (idle/presigning/uploading/creating/completed/failed)
+  但**只显示一段进度条**，没有 phase 文字
+- 错误：`.orange` label + text
+
+**目标**：把上传过程"看得见"（阶段文字），错误明确，其他保持不动。
+
+**动作**：
+
+1. `TextField` / `Picker` / `SecureField` 全部保留原样
+2. `TagChip` 用 palette 重刷：selected → `palette.accent.opacity(0.15)` bg +
+   `palette.accent` fg；unselected → `palette.input` + `palette.muted`
+3. 上传态引入 `PhaseBadge`：presigning → "Preparing…" / uploading → "Uploading
+   {%}…" / creating → "Registering…"；每阶段都可见
+4. 错误从 `.orange` Label 改为 `palette.destructive` 文字 + `AlertCircle`
+   icon（与 Web `AiSummaryCard` failed 态视觉对齐）
+5. 成功态：`palette.success` + `checkmark.circle.fill`，文案不变
+
+### PermissionGuideView
+
+**当前**（`apps/macos/Lyre/Views/PermissionGuideView.swift`）：
+
+- Header `shield.checkered` 40pt `.blue`
+- 每个权限 `PermissionRow`（自造）—— 视觉一致性还行
+- "All permissions granted" label `.green`
+
+**目标**：把硬编码色换 palette，`PermissionRow` 卡片化提升层次感。
+
+**动作**：
+
+1. Header icon 色从 `.blue` 换 `palette.accent`
+2. `PermissionRow` 外层套 `basaltCard`（radius 10 widget 级别），内部结构不改
+3. 权限状态色：granted → `palette.success` / denied → `palette.destructive` /
+   notDetermined → `palette.muted`
+4. "All permissions granted" 那行的 `.green` 换 `palette.success`
+5. `pollTimer` 已有 `stopPolling()`，无需变动
+
+### AboutView
+
+**当前**（`apps/macos/Lyre/Views/AboutView.swift`）：
+
+- 结构简洁：icon + name + version + description + divider + links + copyright
+- 字体全系统 token（`.title / .caption / .caption2`）
+
+**目标**：字号阶梯用 `BasaltFont`（`relativeTo` 保留 Dynamic Type 缩放），
+链接维持原生 `Link`（`CopyableField` 不适用 GitHub URL 场景）。
+
+**动作**：
+
+1. 字号换 `BasaltFont.pageTitle` / `BasaltFont.body` / `BasaltFont.caption`
+2. Divider 换 `palette.border` 0.5px `Rectangle`（视觉更细）
+3. 版权行用 `palette.mutedSubtle`
+4. `Link` 保留系统样式（原生按钮 hover / focus 行为最优）
+
+### LyreApp（Root + TrayMenu）
+
+**当前**（`apps/macos/Lyre/LyreApp.swift`）：
+
+- `TabView(sidebar)` — 保留
+- Tray menu 全系统外观
+- `elapsedTimer` @ `:119` — 需审计
+
+**目标**：Root 注入 palette，Tray 保留 macOS 原生 menu bar 交互。
+
+**动作**：
+
+1. Root scene 注入 `.environment(\.palette, .resolved(scheme))`
+2. `TabView` detail 区域 `.background(palette.bg)`
+3. Tray menu 保留系统外观（menu bar 的语义色是系统级别，改了破坏一致性）
+4. `elapsedTimer` 生命周期审计：确认 `.onDisappear` 有 invalidate，如有
+   泄漏则修补（不属于视觉升级，属顺手清理）
+
+## 3 阶段落地路径
+
+### Stage 1 — Token 骨架（估 1 天，零视觉变化）
+
+范围：只加基础设施，不 touch 任何 view 文件。
+
+- [ ] `Theme/Spacing.swift` `Radius.swift` `Color+Hex.swift` `Palette.swift`
+      `PaletteEnvironment.swift` `BasaltMotion.swift` `Surfaces.swift`
+- [ ] `Theme/BasaltFont.swift` — **从 Stage 1 开始就用 `.system(_:size:relativeTo:)`
+      和 semantic role**（不是固定字号）：
+
+    ```swift
+    public enum BasaltFont {
+        // 标题走 rounded；正文/微标签走 default，全部 relativeTo semantic role
+        public static let pageTitle    = Font.system(.title,     design: .rounded).weight(.semibold)
+        public static let cardTitle    = Font.system(.headline,  design: .rounded).weight(.semibold)
+        public static let body         = Font.system(.body)
+        public static let caption      = Font.system(.caption)
+        public static let sectionLabel = Font.system(.caption).weight(.semibold)  // uppercase + tracking 由 View 层加
+        public static let mono         = Font.system(.body, design: .monospaced)
+        public static let stat         = Font.system(.title, design: .rounded).weight(.semibold).monospacedDigit()
+    }
+    ```
+
+    这样 Dynamic Type 缩放天然生效；如果哪一处必须用固定字号（例如极小的
+    utility label），必须在注释里说明**为什么不能用 semantic role**。
+- [ ] `LyreApp.swift` root 注入 `.environment(\.palette, .resolved(scheme))`
+- [ ] `LyreTests/BasaltTokenTests.swift`：
+    - palette L0 < L1 < L2 亮度关系断言（防退化）
+    - `BasaltFont` 每个 role 在 `.xSmall` / `.large` / `.accessibility3` 三档
+      Dynamic Type 下都能获取到 `Font` 实例（防未来有人用固定 `size:`）
 
 **验收**：
-- macOS xcodebuild test 全绿（新增 1 个 test suite）
-- 视觉零变化（因为没 view 消费 palette）
+- macOS xcodebuild test 全绿（新增 1 个 suite）
+- 视觉零变化（没 view 消费 palette）
 - swiftlint 0 violations
 
-**风险**：无，纯新增。
+### Stage 2 — Surfaces + Components 基础套件（估 1–2 天）
 
-### 阶段 2 — 样板页重构（估 2–3 天）
+范围：加**这次真正会用到**的组件。不加投机性组件。
 
-选**最主要的一个页面**做样板：**RecordingsView**（用户使用频率最高，最能验证方向）。
+- [ ] `Theme/Surfaces.swift` 三个 modifier：`basaltCard()` / `basaltField()` /
+      `basaltShadow()`
+- [ ] `Components/EmptyStateCard.swift`（RecordingsView 空态用）
+- [ ] `Components/PhaseBadge.swift`（UploadView 上传阶段用）
+- [ ] `LyreTests` 新增：三个 modifier 挂到 dummy view 上编译通过 + snapshot 结构
 
-- [ ] 新增 6 个组件（`BasaltSegmented` / `BasaltSlider` / `CopyableField` /
-      `StatCard` / `EmptyStateCard` / `PhaseBadge`）
-- [ ] `RecordingsView` 重构：
-    - 空态换 `EmptyStateCard`
-    - `RecordingRow` 从 `List` row 改为 `basaltCard` 卡片，垂直堆叠或 grid
-    - 播放按钮换成 palette.accent 主色
-    - 顶部加 `StatCard` 汇总（总录音数 / 总时长 / 已上传数）
-- [ ] `LyreApp.swift` detail 区域 `.background(palette.bg)`
-- [ ] `LyreTests` 新增快照/结构断言（不做像素比对，只测组件挂载）
+**不加**：BasaltSegmented / BasaltSlider / CopyableField / StatCard。真的需要
+再加。
 
-**验收**：
-- `RecordingsView` 与其他 3 个未升级页面视觉对比明显（不违和 = 目标）
-- 空态、有数据、多选批量删除、上传全流程手工验证一次
-- 全部 Timer / Task 生命周期审计
-- swiftlint / xcodebuild test 全绿
+**验收**：所有新增文件独立可编译；仍无 view 消费；swiftlint 0 violations。
 
-**风险**：
-- `List(selection:)` 系统多选逻辑 → 换成自造 grid 需要重实现 selection binding。**如果**
-  发现 selection 太复杂，回退到"保留 List 外壳，只重构 row 视觉"。
-- 空态图标 `waveform.circle` 48pt → 换成 `EmptyStateCard` 后可能显得空。可加副标题
-  说明"点菜单栏图标开始录音"。
+### Stage 3 — 逐页面 rollout（估 2–3 天）
 
-### 阶段 3 — 全页面 rollout（估 2 天）
+按用户使用频率排序：
 
-按用户使用频率排序，逐页面替换：
+- [ ] **RecordingsView**（最先做，验证方向；出 dark/light 两张截图给哥）
+- [ ] **UploadView**（依赖 PhaseBadge）
+- [ ] **SettingsView**（Form 底色 + status 色）
+- [ ] **PermissionGuideView**（每个 row 卡片化）
+- [ ] **AboutView**（字号阶梯）
+- [ ] **LyreApp**（root 底色 + elapsedTimer 生命周期审计）
 
-- [ ] `SettingsView`：`Form(.grouped)` + `.scrollContentBackground(.hidden)` + palette.bg 底；
-      status badge 换 palette 色；输入框换 `basaltField`；测试连接按钮 palette.accent
-- [ ] `UploadView`：`.roundedBorder` → `basaltField`；进度状态用 `PhaseBadge`；
-      folder Picker 换 `BasaltSegmented`（如果选项 ≤ 4 个）或保持 Picker 但配 palette
-- [ ] `PermissionGuideView`：header icon 从 `.blue` 换 palette.accent；`PermissionRow`
-      重构为 `basaltCard`；`pollTimer` 生命周期确认
-- [ ] `AboutView`：字号阶梯用 `BasaltFont`；GitHub / Issue 链接换 `CopyableField` 变体
-      或保持 `Link`；居中卡片背景用 `basaltCard`
-- [ ] `LyreApp.swift` TrayMenu：录音状态文字用 `BasaltFont.body`；elapsed 用 `BasaltFont.mono`
+每个页面独立 commit，方便回滚。每个 commit 附一张 dark 一张 light 截图（贴到
+PR 描述里）。
 
-**验收**：
-- 4 个页面视觉一致
-- Dark / Light 切换即时无残留
-- Reduce Motion 全局有效（关掉动画）
-- swiftlint / xcodebuild test 全绿
-- 手工冒烟：录音 → 停止 → 上传 → 播放 → 删除 全链路
-
-**风险**：
-- 打字号 downgrade（`.headline` → `BasaltFont.cardTitle`）可能让 dynamic type 用户不适。
-  保留 `.dynamicTypeSize(.small ... .accessibility1)` 允许缩放。
+**验收**：见下 §视觉验收矩阵。
 
 ## Acceptance Criteria
 
-阶段 3 结束后，以下全部为真：
+原则：**自定义 surface / 状态色不出现未命名 literal**；**系统控件保留原生
+语义**；**palette 只接管品牌 surface 和状态 badge**。不做机械的 grep 100%。
 
-1. **零硬编码色**：`grep -rn "Color(red:\|foregroundStyle(\.orange\|\.red\|\.blue\|\.green"` 全部替换为 palette
-2. **零 magic number spacing**：`grep -rn "padding(" | grep -Ev "Spacing\.|padding()"` 只剩 `.padding()` 无参形式
-3. **所有圆角 `.continuous`**：`grep -rn "cornerRadius"` 全部 `RoundedRectangle(cornerRadius: Radius.xxx, style: .continuous)`
-4. **所有动画显式 `value:`**：`grep -rn "\.animation("` 每处都有 `value:` 参数
-5. **所有动画尊重 `accessibilityReduceMotion`**：新组件全部 `@Environment(\.accessibilityReduceMotion)`
-6. **Timer / Task 无泄漏**：`pollTimer` / `elapsedTimer` 显式 `invalidate()` on disappear
-7. **测试 all green**：`bun run test` 229/229 + macOS xcodebuild test 153+ 全绿
-8. **swiftlint 0 violations**
-9. **pre-commit / pre-push hook 全过**
-10. **手工冒烟**：录音 → 停止 → 上传 → 播放 → 删除 → 权限重开 → 设置改 → 切 dark/light 全路径无回归
+### 命名规范（强制）
+
+1. 自定义 palette / surface / shadow / motion 全部经过 Token 层，`grep -rn
+   "Color(red:"` 在 non-Theme 目录返回 0
+2. 状态色（success/warning/destructive/accent）经过 palette，`grep -rn
+   "\.foregroundStyle(\.orange\|\.red\|\.blue\|\.green" | grep -v Theme/`
+   返回 0
+3. 所有**新**自定义 `RoundedRectangle` 用 `.continuous` + `Radius.*` 常量。
+   系统控件 (`.roundedBorder`, `Button`, `Picker`) 的默认圆角**不动**
+4. 所有**新**动画显式带 `value:` 且 `@Environment(\.accessibilityReduceMotion)`
+   守卫。已有零动画代码不追溯
+
+### 系统语义（强制保留）
+
+5. `role: .destructive` 按钮：**不覆盖颜色**（系统会给正确的语义色）
+6. `TextField` / `SecureField` / `Picker` / `Form.Section`：保留系统默认外观
+7. `List(selection:)` 的多选 / 键盘导航 / hover：不覆盖
+8. Menu bar tray 与 `MenuBarExtra` 内的所有 UI：不动
+
+### Dynamic Type & Accessibility
+
+9. 所有文字用 `BasaltFont` 语义 role（`relativeTo`），不用固定 `size:`
+   （除非有注释说明必须固定）
+10. 所有动画 `withAnimation` / `.animation` 检查 `accessibilityReduceMotion`
+11. VoiceOver：所有自造按钮 / badge 有 `accessibilityLabel`；状态变化用
+    `accessibilityValue` 或 `accessibilityChanged` 广播
+
+### 生命周期（顺手清）
+
+12. Timer 类 `@State` 变量：`onDisappear` 显式 invalidate（`pollTimer` 已 OK；
+    `elapsedTimer` Stage 3 审计）
+13. Task 类：优先 `.task(id:)`，手写 Task 得有 cancel
+
+### 测试
+
+14. `bun run test` 229/229 全绿
+15. `xcodebuild test` 全绿
+16. `swiftlint lint apps/macos/Lyre` 0 violations
+17. pre-commit / pre-push hook 全过
+
+### 视觉验收矩阵
+
+每个改过的页面提交前，人工过一遍这个矩阵（截图归到 PR 描述）：
+
+|                | Light | Dark |
+|----------------|:-----:|:----:|
+| Empty state    |  ▢    |  ▢   |
+| Loaded / data  |  ▢    |  ▢   |
+| Loading        |  ▢    |  ▢   |
+| Error          |  ▢    |  ▢   |
+| 默认窗口 (~600×500) | ▢ |  ▢   |
+| 窄窗口 (~400 宽)    | ▢ |  ▢   |
+| Reduce Motion on    | ▢ |  ▢   |
+| Dynamic Type XL     | ▢ |  ▢   |
+
+其中 UploadView 需要额外过一遍 4 个上传阶段（idle / uploading / completed /
+failed），RecordingsView 需要过一遍多选 + 播放中状态。
 
 ## Retrospective 预留
 
-预计会撞的坑，先记下来，实际遇到时对应到 retrospective：
+**已知会遇到的坑**（macOS 原生 UI 层，AppKit 而非 UIKit）：
 
-- **`NavigationSplitView` sidebar 无法直接注入 palette bg** → macOS 15 sidebar 走 vibrancy。
-  可能需要 `.toolbarBackground(palette.bg, for: .windowToolbar)`。
-- **`Form(.grouped)` 的 Section header 颜色** → 系统会强制加透明层。
-  `.scrollContentBackground(.hidden)` 只处理 body 底色，header 需要 `UITableView.appearance()`
-  或 `NSTableView.appearance()` 桥接（macOS 15 有原生 API 但 API 面窄）。
-- **`Picker` 在自定义 palette 下的 focus ring** → focus ring 是 AppKit 层，
-  `.tint()` 只影响部分控件。需要试 `NSAppearance` 桥接。
-- **`List(.inset(alternatesRowBackgrounds:))` 的 alternates 底色不受 palette 控制** →
-  改用自造 grid 或接受这个 fallback。
+- **`NavigationSplitView` sidebar 的 vibrancy 底色** — macOS 15 sidebar 走
+  `NSVisualEffectView` 磨砂层，`.background(palette.bg)` 只作用于 detail 区。
+  可以接受（sidebar 使用系统 vibrancy 与其他 macOS App 一致，更协调）
+- **`Form(.grouped)` 的 section header 底色** — macOS 系统会强制加透明层。
+  `.scrollContentBackground(.hidden)` 只处理 body 底色。如果 header 底色需要
+  改，可以用 `NSAppearance` 桥接或 `NSTableView.appearance()`（AppKit，非
+  UIKit）；本次**不改**，保留系统默认
+- **`Picker` 的 focus ring** — focus ring 来自 AppKit，`.tint()` 只影响部分
+  控件。UploadView 的 folder Picker 我们**不动**，focus ring 保持系统色
+- **`List(.inset(alternatesRowBackgrounds:))` 的间隔条** — 底色不受 palette
+  控制，是 NSTableView 层。接受这个 fallback；如果视觉太违和，改成不 alternate
 
 ## 参考
 
