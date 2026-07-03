@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Calendar,
   Check,
+  CheckCircle2,
   ChevronsUpDown,
   Cpu,
   Download,
@@ -144,6 +145,20 @@ function RecordingDetailContent({ id }: { id: string }) {
   // Regenerate on an existing summary — first-time Generate and Retry
   // stay one-click. Feedback is one-shot; not persisted anywhere.
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+
+  // Persistence badge shown in the summary card header. Drives the
+  // small corner indicator that replaces the old blocking "Saving…"
+  // full-card state. Lifecycle:
+  //   null      → hidden
+  //   "saving"  → optimistic write is on screen, server round-trip in
+  //               flight (either the manual stream just finished or a
+  //               poll tick expected but hasn't confirmed yet)
+  //   "saved"   → server confirmed persisted; auto-clears after 2.5s
+  //   "failed"  → server reported failure; sticky until the next run
+  //               so the user has time to see it
+  const [saveIndicator, setSaveIndicator] = useState<
+    "saving" | "saved" | "failed" | null
+  >(null);
 
   // Editable fields
   const [editTitle, setEditTitle] = useState("");
@@ -304,15 +319,26 @@ function RecordingDetailContent({ id }: { id: string }) {
 
   // ── Poll for summary status while a run is in flight ──
   //
-  // Fires only when `aiSummaryStatus === "running"` and there's no active
-  // manual stream (that path already renders text incrementally). Refreshes
-  // detail every 3s until status leaves "running", or after
-  // MAX_POLL_ATTEMPTS (~4 minutes wall-clock, exceeds the 60s server-side
-  // AbortSignal budget by ~4x to cover clock drift and network jitter).
+  // Fires whenever the summary is `running` and there's no live manual
+  // stream on screen. The manual stream path renders text incrementally
+  // itself; the poll takes over from the moment the stream finishes
+  // (manualStreamingText set back to null) and drives the corner save
+  // indicator until the server confirms the summary is persisted.
   //
-  // Every code path that exits this effect clears the timer — the cleanup
-  // is guaranteed by React, but the internal early-return branches also
-  // clear so an orphaned interval never survives a re-render.
+  // Two subtleties worth calling out because they killed the previous UX:
+  //
+  //   1. We DO NOT overwrite `aiSummary` while the server still shows
+  //      `running`. The manual stream has already written an optimistic
+  //      copy locally; the server row is still null during that window,
+  //      so blindly mirroring the server would wipe the streamed text
+  //      off screen (the old "Saving…" blank state).
+  //   2. When the server flips to a terminal state, we prefer the server
+  //      copy if it's non-empty (final wording may differ from what the
+  //      client accumulated); on `failed` with no persisted text we
+  //      leave the optimistic copy on screen so the user still has the
+  //      draft they saw, plus a red badge and error message.
+  //
+  // Every exit path clears the timer.
   useEffect(() => {
     if (aiSummaryStatus !== "running") return;
     // Manual streaming path is responsible for its own progress display.
@@ -337,13 +363,29 @@ function RecordingDetailContent({ id }: { id: string }) {
         if (cancelled) return;
         if (res.ok) {
           const data = (await res.json()) as RecordingDetail;
-          setAiSummary(data.aiSummary ?? null);
-          setAiSummaryStatus(data.aiSummaryStatus ?? null);
+          const serverStatus = data.aiSummaryStatus ?? null;
           setAiSummaryError(data.aiSummaryError ?? null);
-          if (data.aiSummaryStatus !== "running") {
-            stopPolling();
+          if (serverStatus === "running") {
+            // Server still working. Keep the optimistic aiSummary on
+            // screen; don't touch status either (it's already
+            // "running").
             return;
           }
+          // Terminal state — merge the server copy into local state.
+          setAiSummaryStatus(serverStatus);
+          if (serverStatus === "succeeded") {
+            // Server copy wins (it may have canonical wording), but if
+            // it comes back oddly empty keep whatever we have on screen.
+            if (data.aiSummary) setAiSummary(data.aiSummary);
+            setSaveIndicator("saved");
+          } else if (serverStatus === "failed") {
+            setSaveIndicator("failed");
+            // Deliberately do NOT set aiSummary to null here — the
+            // optimistic text remains visible so the user still sees
+            // what was streamed, alongside the red badge / error.
+          }
+          stopPolling();
+          return;
         }
       } catch {
         // Transient — try again on the next tick.
@@ -354,6 +396,7 @@ function RecordingDetailContent({ id }: { id: string }) {
         setAiSummaryError(
           "Summary generation did not complete in time. Try again.",
         );
+        setSaveIndicator("failed");
         stopPolling();
       }
     };
@@ -365,6 +408,15 @@ function RecordingDetailContent({ id }: { id: string }) {
       stopPolling();
     };
   }, [aiSummaryStatus, manualStreamingText, id]);
+
+  // Auto-dismiss the "saved" badge after a short window. "failed" stays
+  // sticky because the user needs a chance to notice it; the next run
+  // will reset the indicator explicitly.
+  useEffect(() => {
+    if (saveIndicator !== "saved") return;
+    const t = setTimeout(() => setSaveIndicator(null), 2500);
+    return () => clearTimeout(t);
+  }, [saveIndicator]);
 
   // ── Handlers ──
   const handleTranscribe = useCallback(async () => {
@@ -432,18 +484,22 @@ function RecordingDetailContent({ id }: { id: string }) {
 
   // ── AI Summarize handler (streaming) ──
   //
-  // Optimistic state flow:
-  //   1. Set aiSummaryStatus="running", clear error, clear old summary.
-  //      manualStreamingText="" tells the polling effect to stand down.
-  //   2. Read the response body as a text stream and append into
-  //      manualStreamingText so the UI renders words as they arrive.
-  //   3. When the stream ends, clear manualStreamingText. The server-side
-  //      onFinish handler has persisted the final summary and set status
-  //      back to "succeeded" — the polling effect (which will now start
-  //      because manualStreamingText === null and status === "running")
-  //      picks it up on the next tick.
-  //   4. On any error path we set status="failed" + a helpful message so
-  //      the user isn't stranded.
+  // State flow with optimistic display:
+  //   1. Reset: status="running", clear error/summary/badge, mark
+  //      manualStreamingText="" so the poll effect stands down. This
+  //      keeps the request phase spinner visible while we wait for the
+  //      first byte.
+  //   2. Stream body chunks into manualStreamingText; UI renders them
+  //      incrementally.
+  //   3. On stream end: OPTIMISTICALLY commit the accumulated text to
+  //      aiSummary and clear manualStreamingText in a single tick. The
+  //      card content stays visible — no blank "Saving…" gap. Flip the
+  //      corner badge to "saving" so the user knows the server round-
+  //      trip is still in flight, and let the poll effect drive it to
+  //      "saved" / "failed" when the server confirms.
+  //   4. Error paths flip status to "failed", surface a message, and
+  //      set the badge to "failed" so the user sees it in the same
+  //      spot as a successful save would have appeared.
   //
   // `feedback` is only set when the user came in through the Regenerate
   // dialog. It is sent one-shot to the server (see the summarize route)
@@ -453,6 +509,7 @@ function RecordingDetailContent({ id }: { id: string }) {
       setAiSummaryStatus("running");
       setAiSummaryError(null);
       setAiSummary(null);
+      setSaveIndicator(null);
       setManualStreamingText("");
       setSummaryPhase("Requesting AI…");
 
@@ -479,6 +536,7 @@ function RecordingDetailContent({ id }: { id: string }) {
           setAiSummaryError(message);
           setManualStreamingText(null);
           setSummaryPhase(null);
+          setSaveIndicator("failed");
           return;
         }
 
@@ -488,6 +546,7 @@ function RecordingDetailContent({ id }: { id: string }) {
           setAiSummaryError("Streaming not supported by browser.");
           setManualStreamingText(null);
           setSummaryPhase(null);
+          setSaveIndicator("failed");
           return;
         }
 
@@ -501,18 +560,21 @@ function RecordingDetailContent({ id }: { id: string }) {
           setManualStreamingText(accumulated);
         }
         accumulated += decoder.decode();
-        setManualStreamingText(accumulated);
-        setSummaryPhase("Saving…");
 
-        // Hand off to the polling effect for the authoritative server copy.
-        // We keep `aiSummaryStatus === "running"` locally; the next poll
-        // reads the persisted summary and status flips to "succeeded".
+        // Optimistic commit: promote the streamed text into `aiSummary`
+        // and drop the streaming buffer in one tick. The card keeps
+        // rendering the same text without flicker. Badge flips to
+        // "saving" while the poll effect confirms with the server.
+        setAiSummary(accumulated);
         setManualStreamingText(null);
+        setSummaryPhase(null);
+        setSaveIndicator("saving");
       } catch {
         setAiSummaryStatus("failed");
         setAiSummaryError("Network error — could not reach the server.");
         setManualStreamingText(null);
         setSummaryPhase(null);
+        setSaveIndicator("failed");
       }
     },
     [id],
@@ -874,6 +936,7 @@ function RecordingDetailContent({ id }: { id: string }) {
               phase={summaryPhase}
               error={aiSummaryError}
               autoSummarizeEnabled={autoSummarize}
+              saveIndicator={saveIndicator}
               onGenerate={() => void handleSummarize()}
               onRegenerate={() => setFeedbackOpen(true)}
             />
@@ -1158,11 +1221,23 @@ function JobInfoCard({
 // ── AI Summary Card ──
 
 /**
- * AI summary card with a state-machine-driven display:
- *   status === "succeeded" or (streamingText non-null)   → render markdown
- *   status === "running"                                 → spinner + phase text
- *   status === "failed"                                  → error + retry
- *   status === null (never attempted)                    → generate button
+ * AI summary card. Display precedence:
+ *   - Any streamed / persisted / optimistic text goes into `display` and
+ *     is rendered as markdown. Once we have content, we keep showing it
+ *     — including after a failed persist — so the user never watches
+ *     their result vanish.
+ *   - `status === "running"` with no content yet shows the phase
+ *     spinner (request → stream). Once the stream commits optimistically
+ *     the running spinner steps aside and the corner save badge takes
+ *     over.
+ *   - `saveIndicator` renders a compact chip in the header
+ *     ("Saving…" / "Saved" / "Save failed") so persistence state is
+ *     acknowledged without hijacking the body.
+ *   - `status === "failed"` shows an inline error line BELOW the
+ *     content (not replacing it) so the user still has the draft plus
+ *     a clear reason and Retry button.
+ *   - Never-attempted (status null, no content) shows the empty-state
+ *     hint and Generate button.
  */
 function AiSummaryCard({
   summary,
@@ -1171,6 +1246,7 @@ function AiSummaryCard({
   phase,
   error,
   autoSummarizeEnabled,
+  saveIndicator,
   onGenerate,
   onRegenerate,
 }: {
@@ -1180,14 +1256,16 @@ function AiSummaryCard({
   phase: string | null;
   error: string | null;
   autoSummarizeEnabled: boolean;
+  /** Header corner chip: "saving" / "saved" / "failed" / null. */
+  saveIndicator: "saving" | "saved" | "failed" | null;
   /** Retry (from failed state) and first-time Generate. One-click. */
   onGenerate: () => void;
   /** Regenerate an existing summary. Opens the feedback dialog. */
   onRegenerate: () => void;
 }) {
   const isRunning = status === "running";
-  // While the manual stream is arriving we render its incremental text.
-  // Otherwise fall back to the authoritative server copy.
+  // Optimistic-first display: while manual streaming is arriving, show
+  // that; otherwise show the persisted (or committed-optimistic) copy.
   const display = streamingText ?? summary;
   const hasContent = display !== null && display.length > 0;
 
@@ -1206,10 +1284,13 @@ function AiSummaryCard({
   return (
     <div className="rounded-card bg-secondary p-4 h-full">
       <div className="flex items-center justify-between mb-3">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
-          AI Summary
-        </p>
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
+            AI Summary
+          </p>
+          <SaveIndicatorChip indicator={saveIndicator} error={error} />
+        </div>
 
         {/* Generate / Regenerate / Retry button — hidden while running */}
         {!isRunning && (
@@ -1239,7 +1320,9 @@ function AiSummaryCard({
         )}
       </div>
 
-      {/* Running: spinner + phase text (shown even when partial content is available) */}
+      {/* Running: spinner + phase text (only while we don't have any
+          content yet — once streaming starts producing text the body
+          renders markdown and the running hint moves inline below it). */}
       {isRunning && !hasContent && (
         <div className="flex items-center gap-2 py-3 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -1247,20 +1330,9 @@ function AiSummaryCard({
         </div>
       )}
 
-      {/* Error state */}
-      {status === "failed" && !isRunning && (
-        <div className="flex items-start gap-2 py-2">
-          <AlertCircle
-            className="h-4 w-4 shrink-0 text-destructive mt-0.5"
-            strokeWidth={1.5}
-          />
-          <p className="text-sm text-destructive">
-            {error ?? "Summary generation failed. Try Retry."}
-          </p>
-        </div>
-      )}
-
-      {/* Content: streaming text (manual) or persisted summary (auto or historical). */}
+      {/* Content: streaming text (manual), optimistic commit, or
+          persisted summary. Shown even in `failed` state so the user
+          keeps the draft they saw. */}
       {hasContent && (
         <div>
           <Markdown>{display ?? ""}</Markdown>
@@ -1273,6 +1345,26 @@ function AiSummaryCard({
         </div>
       )}
 
+      {/* Error state — inline note below the content (or standalone
+          when there's nothing to show). Text is kept on screen; the
+          badge in the header is the primary signal. */}
+      {status === "failed" && !isRunning && (
+        <div
+          className={cn(
+            "flex items-start gap-2",
+            hasContent ? "mt-3" : "py-2",
+          )}
+        >
+          <AlertCircle
+            className="h-4 w-4 shrink-0 text-destructive mt-0.5"
+            strokeWidth={1.5}
+          />
+          <p className="text-sm text-destructive">
+            {error ?? "Summary generation failed. Try Retry."}
+          </p>
+        </div>
+      )}
+
       {/* Empty state (never attempted, no error) */}
       {!hasContent && !isRunning && status !== "failed" && (
         <p className="text-sm text-muted-foreground py-2">
@@ -1281,6 +1373,48 @@ function AiSummaryCard({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Compact chip that sits next to the "AI Summary" title. Renders one
+ * of three visual states; nothing when `indicator` is null. Failure
+ * hover shows the server error message so the user has actionable
+ * context without needing to scroll.
+ */
+function SaveIndicatorChip({
+  indicator,
+  error,
+}: {
+  indicator: "saving" | "saved" | "failed" | null;
+  error: string | null;
+}) {
+  if (indicator === null) return null;
+  if (indicator === "saving") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
+        Saving…
+      </span>
+    );
+  }
+  if (indicator === "saved") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+        <CheckCircle2 className="h-3 w-3" strokeWidth={1.5} />
+        Saved
+      </span>
+    );
+  }
+  // failed
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive"
+      title={error ?? "Save failed"}
+    >
+      <AlertCircle className="h-3 w-3" strokeWidth={1.5} />
+      Save failed
+    </span>
   );
 }
 
