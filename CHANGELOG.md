@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.17 (2026-07-03)
+
+### 🚀 Features
+
+- feat(web): optimistic summary display + corner save badge (a9bcc52)
+- feat(api): pin summary output language to Simplified Chinese (4dc20a1)
+
+### 🐛 Bug Fixes
+
+- fix(web): cap cassette cover art at 200px, enforce full-width fit (2432120)
+
+
 ## v1.6.16 (2026-07-03)
 
 ### 🚀 Features
