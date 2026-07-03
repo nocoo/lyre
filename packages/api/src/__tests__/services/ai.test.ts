@@ -19,6 +19,14 @@ describe("buildSummaryPrompt", () => {
     expect(out).toContain("<transcript>\nLine one.\nLine two.\n</transcript>");
   });
 
+  it("pins output language to Simplified Chinese regardless of transcript language", () => {
+    // Product decision: audience reads Chinese. English-only transcripts
+    // still get a Chinese summary. If someone tweaks the prompt in the
+    // future this pin trips immediately.
+    const out = buildSummaryPrompt("Hello world.");
+    expect(out).toMatch(/Simplified Chinese|简体中文/);
+  });
+
   it("throws when the transcript is only whitespace", () => {
     expect(() => buildSummaryPrompt("   \n\t")).toThrow(/empty/i);
   });
@@ -100,5 +108,19 @@ describe("buildSummaryPromptWithFeedback", () => {
     expect(() =>
       buildSummaryPromptWithFeedback("  ", { feedback: "anything" }),
     ).toThrow(/empty/i);
+  });
+
+  it("pins output language to Simplified Chinese on all fold combinations", () => {
+    // Same product pin as the base prompt. Test all three non-degenerate
+    // branches so a future edit to just one instruction line can't
+    // silently drop the language directive.
+    for (const opts of [
+      { previousSummary: "old" },
+      { feedback: "shorter please" },
+      { previousSummary: "old", feedback: "shorter" },
+    ] as const) {
+      const out = buildSummaryPromptWithFeedback(T, opts);
+      expect(out).toMatch(/Simplified Chinese|简体中文/);
+    }
   });
 });

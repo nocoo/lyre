@@ -60,7 +60,19 @@ export function getProviderConfig(
 
 // ── Summary generation (lyre-specific) ──
 
-const SUMMARY_PROMPT = `Summarize the following transcript concisely in the same language as the transcript.
+// Output language is pinned to Chinese regardless of the transcript's
+// language. This is a product decision: the app's audience reads
+// Chinese, so a mixed-language transcript should still yield a Chinese
+// summary rather than the LLM defaulting to whichever language felt
+// dominant in the audio. English proper nouns / code / model names are
+// left untranslated — that's what "keep names verbatim" enforces.
+const OUTPUT_LANGUAGE_INSTRUCTION =
+  "Always write the summary in Simplified Chinese (简体中文), regardless of what language the transcript is in. " +
+  "Keep proper nouns, product names, and code identifiers verbatim in their original form (do not translate them).";
+
+const SUMMARY_PROMPT = `Summarize the following transcript concisely.
+
+${OUTPUT_LANGUAGE_INSTRUCTION}
 
 <transcript>
 {transcript}
@@ -126,7 +138,8 @@ export function buildSummaryPromptWithFeedback(
   }
 
   const sections: string[] = [
-    "Summarize the following transcript concisely in the same language as the transcript.",
+    "Summarize the following transcript concisely.",
+    OUTPUT_LANGUAGE_INSTRUCTION,
     instruction,
   ];
   if (prev) {
