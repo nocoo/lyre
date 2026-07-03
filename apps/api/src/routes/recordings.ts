@@ -16,7 +16,7 @@ import { makeRepos } from "@lyre/api/db/repositories";
 import {
   resolveAiConfig,
   createAiModel,
-  buildSummaryPrompt,
+  buildSummaryPromptWithFeedback,
   type AiProvider,
   type SdkType,
 } from "@lyre/api/services/ai";
@@ -109,6 +109,13 @@ recordings.post("/:id/transcribe", async (c) =>
  * Streaming AI summarize. Bypasses HandlerResponse because streamText
  * needs to return a native streaming Response.
  *
+ * Optional JSON body: `{ feedback?: string }` — a one-shot user complaint
+ * about the previous summary. Not persisted; folded into the prompt via
+ * `buildSummaryPromptWithFeedback` alongside the previous summary text
+ * (also folded in when non-empty). Cron/auto callers don't hit this
+ * route — they go through `pollJob` → `runAutoSummary` which uses the
+ * plain `buildSummaryPrompt`.
+ *
  * Lifecycle mirrored to `recordings.aiSummaryStatus`:
  *   entry            → status=running, error=null, aiSummary=null
  *   onFinish(text)   → status=succeeded, aiSummary=text
@@ -118,6 +125,8 @@ recordings.post("/:id/transcribe", async (c) =>
  * Errors that occur mid-stream flow through `onError` and are persisted
  * to the DB — the client detects them by polling GET /recordings/:id.
  */
+const MAX_FEEDBACK_LEN = 2000;
+
 recordings.post("/:id/summarize", async (c) => {
   const ctx = c.get("runtime");
   if (!ctx.user) return c.json({ error: "Unauthorized" }, 401);
@@ -134,6 +143,39 @@ recordings.post("/:id/summarize", async (c) => {
       400,
     );
   }
+
+  // Body is optional — legacy clients POST empty. Only decode JSON when
+  // Content-Type actually announces it, so an unrelated content type or
+  // empty body doesn't 500 on the parser.
+  let feedback: string | null = null;
+  const contentType = c.req.header("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+    const raw = (body as { feedback?: unknown } | null)?.feedback;
+    if (raw !== undefined && raw !== null) {
+      if (typeof raw !== "string") {
+        return c.json({ error: "feedback must be a string" }, 400);
+      }
+      if (raw.length > MAX_FEEDBACK_LEN) {
+        return c.json(
+          { error: `Feedback too long (max ${MAX_FEEDBACK_LEN} chars)` },
+          400,
+        );
+      }
+      feedback = raw;
+    }
+  }
+
+  // Capture the previous summary BEFORE we mark the run running (which
+  // wipes `aiSummary` to null). Empty/whitespace is fine — the builder
+  // treats it as "no prior version" and omits the section.
+  const previousSummary = recording.aiSummary;
+
   const all = await repos.settings.findByUserId(ctx.user.id);
   const map = new Map(all.map((s) => [s.key, s.value]));
   const provider = map.get("ai.provider") ?? "";
@@ -177,7 +219,10 @@ recordings.post("/:id/summarize", async (c) => {
   });
 
   try {
-    const prompt = buildSummaryPrompt(transcription.fullText);
+    const prompt = buildSummaryPromptWithFeedback(transcription.fullText, {
+      previousSummary,
+      feedback,
+    });
     const result = streamText({
       model: client,
       prompt,
