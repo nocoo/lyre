@@ -267,7 +267,7 @@ function makeSuccessProvider(): AsrProvider {
 }
 
 describe("pollJob scheduling seam", () => {
-  it("background mode returns as soon as job is terminal, defers summary to waitUntil", async () => {
+  it("background mode marks aiSummaryStatus=running BEFORE returning, defers AI call to waitUntil", async () => {
     const user = await seedTestUser();
     await seedRecording(user.id);
     await configureAi(user.id);
@@ -285,11 +285,6 @@ describe("pollJob scheduling seam", () => {
       status: "RUNNING",
     });
 
-    // Sanity check the scheduling seam without stubbing the AI SDK
-    // module (ESM exports are readonly). autoSummarize will call the
-    // real generateText, which throws quickly on the "sk-test" key. The
-    // property being tested is timing: pollJob must return promptly
-    // regardless of what the summary promise does.
     const backgroundTasks: Promise<unknown>[] = [];
     const t0 = performance.now();
     const result = await pollJob(jobRow, makeSuccessProvider(), env, db, {
@@ -298,24 +293,59 @@ describe("pollJob scheduling seam", () => {
     });
     const elapsed = performance.now() - t0;
 
-    // pollJob returned before waiting on the summary work. Bound is
-    // generous so slow CI doesn't false-positive; the meaningful
-    // signal is "waitUntil was handed a promise and it hasn't
-    // resolved yet by the time pollJob returned."
+    // pollJob returned before waiting on the AI call. Bound is generous
+    // so slow CI doesn't false-positive; the meaningful signal is
+    // "waitUntil was handed a promise and it hasn't been awaited."
     expect(elapsed).toBeLessThan(500);
     expect(result.job.status).toBe("SUCCEEDED");
     expect(result.changed).toBe(true);
     expect(backgroundTasks).toHaveLength(1);
 
-    // The recording is durably marked completed already — the summary
-    // may still be resolving in the background task.
+    // Both durable-before-return signals must hold:
+    //   1. Recording status is `completed` (ASR terminal).
+    //   2. aiSummaryStatus is `running` — the SPA's post-SUCCEEDED
+    //      reload can now start its 3s summary poll without racing
+    //      the background AI call.
     const midRec = await testRepos().recordings.findById("rec-1");
     expect(midRec?.status).toBe("completed");
+    expect(midRec?.aiSummaryStatus).toBe("running");
+    expect(midRec?.aiSummary).toBeNull();
 
     // Drain background work so the test doesn't leak an in-flight
     // promise. We don't care whether the AI call succeeded or failed;
-    // autoSummarize is fully guarded either way.
+    // runAutoSummary is fully guarded either way.
     await Promise.allSettled(backgroundTasks);
+  });
+
+  it("background mode with auto-summary disabled leaves aiSummaryStatus null and skips waitUntil", async () => {
+    // Preflight-skip path: no config means no run committed, so nothing
+    // is handed to waitUntil. The SPA sees aiSummaryStatus=null and
+    // shows a plain Generate button.
+    const user = await seedTestUser();
+    await seedRecording(user.id);
+    // Deliberately DO NOT configure AI.
+    const env = makeTestEnv({ SKIP_OSS_ARCHIVE: "1" });
+    const db = getTestDb();
+
+    const jobRow = await testRepos().jobs.create({
+      id: "job-1",
+      recordingId: "rec-1",
+      taskId: "task-1",
+      requestId: null,
+      status: "RUNNING",
+    });
+
+    const backgroundTasks: Promise<unknown>[] = [];
+    const result = await pollJob(jobRow, makeSuccessProvider(), env, db, {
+      mode: "background",
+      waitUntil: (p) => backgroundTasks.push(p),
+    });
+
+    expect(result.job.status).toBe("SUCCEEDED");
+    expect(backgroundTasks).toHaveLength(0);
+    const rec = await testRepos().recordings.findById("rec-1");
+    expect(rec?.status).toBe("completed");
+    expect(rec?.aiSummaryStatus).toBeNull();
   });
 
   it("await mode blocks until autoSummarize completes", async () => {

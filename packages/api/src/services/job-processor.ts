@@ -173,29 +173,39 @@ export async function pollJob(
   const updatedJob = await jobs.update(job.id, updateData);
   const finalJob = updatedJob ?? job;
 
-  // Auto-summarize AFTER the job is terminal, on its own path. Guarded
-  // internally, so nothing thrown here can escape and mislead the caller
-  // into thinking the ASR step failed.
+  // Auto-summarize AFTER the job is terminal, on its own path. Both
+  // sub-steps are guarded internally so nothing thrown here can escape
+  // and mislead the caller into thinking the ASR step failed.
   //
   // Scheduling depends on the caller:
-  //   - cron tick awaits so the surrounding `ctx.waitUntil` covers the
-  //     AI call end-to-end;
-  //   - HTTP handlers hand the promise to their own `waitUntil` so the
-  //     response returns as soon as the job is terminal, and the SPA
-  //     starts its own status-driven summary polling (see
-  //     recording-detail.tsx). The 60s AbortSignal inside autoSummarize
-  //     bounds the background work either way.
+  //   - cron tick awaits the combined `autoSummarize` so the enclosing
+  //     `ctx.waitUntil` covers the whole chain end-to-end;
+  //   - HTTP handlers await ONLY `beginAutoSummarize` (cheap: settings
+  //     read + config resolve + one row update flipping the status to
+  //     "running"), then hand the long `runAutoSummary` LLM call to the
+  //     caller's `waitUntil`. This makes the "running" marker durable
+  //     BEFORE the response returns, so the SPA's post-SUCCEEDED reload
+  //     never races the background write and always sees "running" in
+  //     time to start its summary polling. The 60s AbortSignal inside
+  //     `runAutoSummary` bounds the background work either way.
   if (summarizeInput) {
-    const promise = autoSummarize(
-      summarizeInput.userId,
-      job.recordingId,
-      summarizeInput.fullText,
-      db,
-    );
     if (scheduling.mode === "background") {
-      scheduling.waitUntil(promise);
+      const reservation = await beginAutoSummarize(
+        summarizeInput.userId,
+        job.recordingId,
+        summarizeInput.fullText,
+        db,
+      );
+      if (reservation.kind === "started") {
+        scheduling.waitUntil(runAutoSummary(reservation, db));
+      }
     } else {
-      await promise;
+      await autoSummarize(
+        summarizeInput.userId,
+        job.recordingId,
+        summarizeInput.fullText,
+        db,
+      );
     }
   }
 
@@ -238,25 +248,52 @@ async function archiveRawResult(
 }
 
 /**
- * Auto-summarize a recording after transcription completes.
+ * Result of the preflight+mark-running phase of auto-summarize.
  *
- * This function is FULLY GUARDED — no error escapes the top-level try.
- * Instead every failure is persisted to `recordings.aiSummaryStatus`
- * and `aiSummaryError` so the UI can surface it. The caller is
- * expected to `await` this so the surrounding `ctx.waitUntil` on the
- * Cloudflare scheduled handler keeps the isolate alive until the AI
- * call finishes.
- *
- * The `generate` parameter defaults to Vercel AI SDK's `generateText`
- * but is injectable so tests can drive it without a live LLM.
+ * - `skipped`: preflight gates said this recording isn't a candidate
+ *   (feature off, provider unset, empty transcript). `aiSummaryStatus`
+ *   was left at whatever it was before — usually `null`.
+ * - `bad-config`: the provider config threw when building the AI client.
+ *   The run is already marked `failed` in the DB with the error message.
+ *   No follow-up work — callers should NOT invoke `runAutoSummary`.
+ * - `started`: `aiSummaryStatus="running"` has been persisted. The
+ *   caller MUST invoke `runAutoSummary(reservation, ...)` (either
+ *   awaited or via `waitUntil`) so the run doesn't hang in "running"
+ *   forever.
  */
-export async function autoSummarize(
+export type AutoSummarizeReservation =
+  | { kind: "skipped" }
+  | { kind: "bad-config" }
+  | {
+      kind: "started";
+      recordingId: string;
+      prompt: string;
+      config: ReturnType<typeof resolveAiConfig>;
+    };
+
+/**
+ * Preflight + reserve "running" for an auto-summary attempt.
+ *
+ * Everything up to (but NOT including) the LLM call happens here:
+ * settings read, gate evaluation, AI config resolution, and — if we
+ * decide to run — the DB write that flips `aiSummaryStatus="running"`.
+ *
+ * Splitting this out matters for the HTTP path: `GET /api/jobs/:id`
+ * only returns after this promise resolves, so by the time the SPA
+ * receives SUCCEEDED and reloads the recording detail, the "running"
+ * marker is already durable. Without this split the SPA would race
+ * the background summary and could miss the transition entirely.
+ *
+ * Fully guarded — any thrown error is caught and persisted as a failed
+ * run. The return value tells the caller whether to invoke
+ * `runAutoSummary` next.
+ */
+export async function beginAutoSummarize(
   userId: string,
   recordingId: string,
   fullText: string,
   db: LyreDb,
-  generate: typeof generateText = generateText,
-): Promise<void> {
+): Promise<AutoSummarizeReservation> {
   const settings = makeSettingsRepo(db);
   const recordings = makeRecordingsRepo(db);
   const all = await settings.findByUserId(userId);
@@ -267,7 +304,7 @@ export async function autoSummarize(
   // Preflight gates: never touch aiSummaryStatus if auto-summarize is
   // simply not applicable — leaving status=null preserves the "never
   // attempted" signal so the UI shows a plain Generate button.
-  if (map.get("ai.autoSummarize") !== "true") return;
+  if (map.get("ai.autoSummarize") !== "true") return { kind: "skipped" };
 
   const provider = map.get("ai.provider") ?? "";
   const apiKey = map.get("ai.apiKey") ?? "";
@@ -278,19 +315,15 @@ export async function autoSummarize(
   const authType =
     rawAuth === "bearer" || rawAuth === "apiKey" ? rawAuth : undefined;
 
-  if (!provider || !apiKey) return;
-  if (!fullText.trim()) return;
+  if (!provider || !apiKey) return { kind: "skipped" };
+  if (!fullText.trim()) return { kind: "skipped" };
 
-  // From here on the run is committed: mark it running, clear any prior
-  // error, and drop the previous summary so the UI shows a fresh state.
-  await recordings.update(recordingId, {
-    aiSummaryStatus: "running",
-    aiSummaryError: null,
-    aiSummary: null,
-  });
-
+  // Config resolution can throw on bad user input (unknown provider,
+  // etc.). Treat it as a failed run so the UI surfaces the reason
+  // instead of the recording sitting at status=null forever.
+  let config: ReturnType<typeof resolveAiConfig>;
   try {
-    const config = resolveAiConfig({
+    config = resolveAiConfig({
       provider: provider as AiProvider,
       apiKey,
       model,
@@ -298,9 +331,60 @@ export async function autoSummarize(
       ...(sdkType ? { sdkType: sdkType as SdkType } : {}),
       ...(authType ? { authType } : {}),
     });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[auto-summarize] Config invalid for recording ${recordingId}: ${message}`,
+    );
+    await recordings.update(recordingId, {
+      aiSummaryStatus: "failed",
+      aiSummaryError: `AI configuration invalid: ${message}`,
+      aiSummary: null,
+    });
+    return { kind: "bad-config" };
+  }
 
+  // From here on the run is committed: mark it running, clear any prior
+  // error, and drop the previous summary so the UI shows a fresh state.
+  // This write MUST land before the HTTP response returns in the
+  // background path — the SPA's post-SUCCEEDED reload keys on it.
+  await recordings.update(recordingId, {
+    aiSummaryStatus: "running",
+    aiSummaryError: null,
+    aiSummary: null,
+  });
+
+  return {
+    kind: "started",
+    recordingId,
+    prompt: buildSummaryPrompt(fullText),
+    config,
+  };
+}
+
+/**
+ * Run the actual LLM call for a reservation from `beginAutoSummarize`.
+ *
+ * Only accepts a `started` reservation — the type system prevents
+ * callers from firing this without the "running" marker in place.
+ *
+ * Fully guarded: any thrown error is caught and persisted to
+ * `aiSummaryStatus="failed"`. Safe to hand to `waitUntil` on the HTTP
+ * path.
+ *
+ * `generate` defaults to Vercel AI SDK's `generateText` but is
+ * injectable so tests can drive it without a live LLM.
+ */
+export async function runAutoSummary(
+  reservation: Extract<AutoSummarizeReservation, { kind: "started" }>,
+  db: LyreDb,
+  generate: typeof generateText = generateText,
+): Promise<void> {
+  const recordings = makeRecordingsRepo(db);
+  const { recordingId, prompt, config } = reservation;
+
+  try {
     const client = createAiModel(config);
-    const prompt = buildSummaryPrompt(fullText);
 
     // Hard timeout so this await can never wedge the cron tick. 60s
     // is generous — a real generation usually finishes in <10s.
@@ -340,4 +424,31 @@ export async function autoSummarize(
       aiSummary: null,
     });
   }
+}
+
+/**
+ * Auto-summarize a recording after transcription completes.
+ *
+ * Combines `beginAutoSummarize` + `runAutoSummary` end-to-end. This is
+ * the callable used by the cron path (where the enclosing
+ * `ctx.waitUntil` covers the whole chain) and by anything that wants
+ * the "old" all-in-one shape. HTTP callers should invoke the two
+ * halves separately so the "running" marker is durable before the
+ * response returns.
+ *
+ * Fully guarded — no error escapes the top-level try.
+ *
+ * The `generate` parameter defaults to Vercel AI SDK's `generateText`
+ * but is injectable so tests can drive it without a live LLM.
+ */
+export async function autoSummarize(
+  userId: string,
+  recordingId: string,
+  fullText: string,
+  db: LyreDb,
+  generate: typeof generateText = generateText,
+): Promise<void> {
+  const reservation = await beginAutoSummarize(userId, recordingId, fullText, db);
+  if (reservation.kind !== "started") return;
+  await runAutoSummary(reservation, db, generate);
 }
