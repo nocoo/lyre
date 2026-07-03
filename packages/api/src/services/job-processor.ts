@@ -45,6 +45,20 @@ export interface JobPollResult {
   changed: boolean;
 }
 
+/**
+ * How the caller wants pollJob to schedule the auto-summary follow-up.
+ *
+ * - `await` (default) — resolve the returned promise only after
+ *   autoSummarize finishes. Used by the cron tick so its surrounding
+ *   `ctx.waitUntil` keeps the isolate alive for the whole chain.
+ * - `background` — pollJob returns the terminal job immediately and
+ *   hands the summary promise to the caller's `waitUntil`. Used by HTTP
+ *   handlers so `GET /api/jobs/:id` never blocks on a 60s AI call.
+ */
+export type SummarizeScheduling =
+  | { mode: "await" }
+  | { mode: "background"; waitUntil: (promise: Promise<unknown>) => void };
+
 // ── Core poll function ──
 
 /**
@@ -59,6 +73,7 @@ export async function pollJob(
   provider: AsrProvider,
   env: LyreEnv,
   db: LyreDb,
+  scheduling: SummarizeScheduling = { mode: "await" },
 ): Promise<JobPollResult> {
   const jobs = makeJobsRepo(db);
   const recordings = makeRecordingsRepo(db);
@@ -158,17 +173,30 @@ export async function pollJob(
   const updatedJob = await jobs.update(job.id, updateData);
   const finalJob = updatedJob ?? job;
 
-  // Auto-summarize AFTER the job is terminal, on its own path. Awaited so
-  // the surrounding `waitUntil` keeps the isolate alive; guarded internally
-  // so nothing thrown here can escape and mislead the caller into thinking
-  // the ASR step failed.
+  // Auto-summarize AFTER the job is terminal, on its own path. Guarded
+  // internally, so nothing thrown here can escape and mislead the caller
+  // into thinking the ASR step failed.
+  //
+  // Scheduling depends on the caller:
+  //   - cron tick awaits so the surrounding `ctx.waitUntil` covers the
+  //     AI call end-to-end;
+  //   - HTTP handlers hand the promise to their own `waitUntil` so the
+  //     response returns as soon as the job is terminal, and the SPA
+  //     starts its own status-driven summary polling (see
+  //     recording-detail.tsx). The 60s AbortSignal inside autoSummarize
+  //     bounds the background work either way.
   if (summarizeInput) {
-    await autoSummarize(
+    const promise = autoSummarize(
       summarizeInput.userId,
       job.recordingId,
       summarizeInput.fullText,
       db,
     );
+    if (scheduling.mode === "background") {
+      scheduling.waitUntil(promise);
+    } else {
+      await promise;
+    }
   }
 
   return {

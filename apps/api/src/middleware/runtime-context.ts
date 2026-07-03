@@ -23,6 +23,8 @@ export function runtimeContext(): MiddlewareHandler<{
       db,
       user: null,
       headers: c.req.raw.headers,
+      waitUntil: (promise: Promise<unknown>) =>
+        c.executionCtx.waitUntil(promise),
     });
     await next();
   };

@@ -32,4 +32,12 @@ export interface RuntimeContext {
    * (e.g. to read `X-Webhook-Key` on the Backy pull endpoint).
    */
   headers: Headers;
+  /**
+   * Cloudflare Workers `waitUntil` from the request's ExecutionContext,
+   * when available. Handlers use this to hand off follow-up work (e.g.
+   * auto-summary after an ASR result lands) so the HTTP response returns
+   * as soon as the primary work is durable. Absent in cron and test
+   * contexts — callers must fall back to `await` when this is not set.
+   */
+  waitUntil?: (promise: Promise<unknown>) => void;
 }

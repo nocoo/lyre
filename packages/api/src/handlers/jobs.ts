@@ -66,7 +66,18 @@ export async function getJobHandler(
 
   try {
     const provider = getAsrProvider(ctx.env);
-    const result = await pollJob(job, provider, ctx.env, ctx.db);
+    // HTTP path: fire auto-summary via waitUntil so the response returns
+    // as soon as the job is terminal. The SPA drives its own polling for
+    // `aiSummaryStatus` once it sees SUCCEEDED, so a 60s AI call cannot
+    // wedge this endpoint. Falls back to `await` (default) if the runtime
+    // context doesn't expose waitUntil (tests, edge cases).
+    const scheduling = ctx.waitUntil
+      ? ({
+          mode: "background",
+          waitUntil: ctx.waitUntil,
+        } as const)
+      : ({ mode: "await" } as const);
+    const result = await pollJob(job, provider, ctx.env, ctx.db, scheduling);
     return json(result.job);
   } catch (error) {
     console.error("Failed to poll ASR job:", error);
