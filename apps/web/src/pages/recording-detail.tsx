@@ -72,6 +72,7 @@ import {
 import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
 import { getTagColor } from "@/lib/badge-colors";
 import { cn } from "@/lib/utils";
+import { RegenerateFeedbackDialog } from "@/components/regenerate-feedback-dialog";
 import type {
   RecordingDetail,
   TranscriptionJob,
@@ -138,6 +139,11 @@ function RecordingDetailContent({ id }: { id: string }) {
   const [aiProvider, setAiProvider] = useState("");
   const [aiModel, setAiModel] = useState("");
   const [autoSummarize, setAutoSummarize] = useState(false);
+
+  // Regenerate-feedback dialog. Opens only when the user clicks
+  // Regenerate on an existing summary — first-time Generate and Retry
+  // stay one-click. Feedback is one-shot; not persisted anywhere.
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // Editable fields
   const [editTitle, setEditTitle] = useState("");
@@ -438,69 +444,79 @@ function RecordingDetailContent({ id }: { id: string }) {
   //      picks it up on the next tick.
   //   4. On any error path we set status="failed" + a helpful message so
   //      the user isn't stranded.
-  const handleSummarize = useCallback(async () => {
-    setAiSummaryStatus("running");
-    setAiSummaryError(null);
-    setAiSummary(null);
-    setManualStreamingText("");
-    setSummaryPhase("Requesting AI…");
+  //
+  // `feedback` is only set when the user came in through the Regenerate
+  // dialog. It is sent one-shot to the server (see the summarize route)
+  // and never stored locally.
+  const handleSummarize = useCallback(
+    async (feedback?: string) => {
+      setAiSummaryStatus("running");
+      setAiSummaryError(null);
+      setAiSummary(null);
+      setManualStreamingText("");
+      setSummaryPhase("Requesting AI…");
 
-    try {
-      const res = await fetch(`/api/recordings/${id}/summarize`, {
-        method: "POST",
-      });
-
-      // Non-streaming error responses come back as JSON before the stream
-      // starts. The server also flipped status back to "failed" already.
-      if (!res.ok) {
-        let message = "Unknown error";
-        try {
-          const data = (await res.json()) as { error?: string };
-          message = data.error ?? message;
-        } catch {
-          // response body might not be JSON — fall back to statusText
-          message = res.statusText || message;
+      try {
+        const init: RequestInit = { method: "POST" };
+        if (feedback && feedback.length > 0) {
+          init.headers = { "content-type": "application/json" };
+          init.body = JSON.stringify({ feedback });
         }
-        setAiSummaryStatus("failed");
-        setAiSummaryError(message);
-        setManualStreamingText(null);
-        setSummaryPhase(null);
-        return;
-      }
+        const res = await fetch(`/api/recordings/${id}/summarize`, init);
 
-      const reader = res.body?.getReader();
-      if (!reader) {
-        setAiSummaryStatus("failed");
-        setAiSummaryError("Streaming not supported by browser.");
-        setManualStreamingText(null);
-        setSummaryPhase(null);
-        return;
-      }
+        // Non-streaming error responses come back as JSON before the stream
+        // starts. The server also flipped status back to "failed" already.
+        if (!res.ok) {
+          let message = "Unknown error";
+          try {
+            const data = (await res.json()) as { error?: string };
+            message = data.error ?? message;
+          } catch {
+            // response body might not be JSON — fall back to statusText
+            message = res.statusText || message;
+          }
+          setAiSummaryStatus("failed");
+          setAiSummaryError(message);
+          setManualStreamingText(null);
+          setSummaryPhase(null);
+          return;
+        }
 
-      setSummaryPhase("Streaming response…");
-      const decoder = new TextDecoder();
-      let accumulated = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        accumulated += decoder.decode(value, { stream: true });
+        const reader = res.body?.getReader();
+        if (!reader) {
+          setAiSummaryStatus("failed");
+          setAiSummaryError("Streaming not supported by browser.");
+          setManualStreamingText(null);
+          setSummaryPhase(null);
+          return;
+        }
+
+        setSummaryPhase("Streaming response…");
+        const decoder = new TextDecoder();
+        let accumulated = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          accumulated += decoder.decode(value, { stream: true });
+          setManualStreamingText(accumulated);
+        }
+        accumulated += decoder.decode();
         setManualStreamingText(accumulated);
-      }
-      accumulated += decoder.decode();
-      setManualStreamingText(accumulated);
-      setSummaryPhase("Saving…");
+        setSummaryPhase("Saving…");
 
-      // Hand off to the polling effect for the authoritative server copy.
-      // We keep `aiSummaryStatus === "running"` locally; the next poll
-      // reads the persisted summary and status flips to "succeeded".
-      setManualStreamingText(null);
-    } catch {
-      setAiSummaryStatus("failed");
-      setAiSummaryError("Network error — could not reach the server.");
-      setManualStreamingText(null);
-      setSummaryPhase(null);
-    }
-  }, [id]);
+        // Hand off to the polling effect for the authoritative server copy.
+        // We keep `aiSummaryStatus === "running"` locally; the next poll
+        // reads the persisted summary and status flips to "succeeded".
+        setManualStreamingText(null);
+      } catch {
+        setAiSummaryStatus("failed");
+        setAiSummaryError("Network error — could not reach the server.");
+        setManualStreamingText(null);
+        setSummaryPhase(null);
+      }
+    },
+    [id],
+  );
 
   // ── Save field via PUT ──
   const updateRecording = useCallback(
@@ -858,7 +874,8 @@ function RecordingDetailContent({ id }: { id: string }) {
               phase={summaryPhase}
               error={aiSummaryError}
               autoSummarizeEnabled={autoSummarize}
-              onGenerate={handleSummarize}
+              onGenerate={() => void handleSummarize()}
+              onRegenerate={() => setFeedbackOpen(true)}
             />
           </div>
           <div className="lg:col-span-1">
@@ -927,6 +944,17 @@ function RecordingDetailContent({ id }: { id: string }) {
           )}
         </div>
       )}
+
+      <RegenerateFeedbackDialog
+        open={feedbackOpen}
+        onOpenChange={setFeedbackOpen}
+        onSubmit={(feedback) => {
+          setFeedbackOpen(false);
+          // Empty string is fine — handleSummarize treats "" the same
+          // as undefined and skips the JSON body.
+          void handleSummarize(feedback);
+        }}
+      />
     </div>
   );
 }
@@ -1144,6 +1172,7 @@ function AiSummaryCard({
   error,
   autoSummarizeEnabled,
   onGenerate,
+  onRegenerate,
 }: {
   summary: string | null;
   streamingText: string | null;
@@ -1151,7 +1180,10 @@ function AiSummaryCard({
   phase: string | null;
   error: string | null;
   autoSummarizeEnabled: boolean;
+  /** Retry (from failed state) and first-time Generate. One-click. */
   onGenerate: () => void;
+  /** Regenerate an existing summary. Opens the feedback dialog. */
+  onRegenerate: () => void;
 }) {
   const isRunning = status === "running";
   // While the manual stream is arriving we render its incremental text.
@@ -1164,6 +1196,12 @@ function AiSummaryCard({
     : autoSummarizeEnabled && !hasContent
       ? "Auto-summarizing after transcription…"
       : "Generating summary…";
+
+  // Regenerate is the ONLY action that opens the feedback dialog; Retry
+  // and first-time Generate stay one-click so nothing surprises users
+  // who never had a previous summary to react to.
+  const isRegenerate = summary !== null && status !== "failed";
+  const buttonHandler = isRegenerate ? onRegenerate : onGenerate;
 
   return (
     <div className="rounded-card bg-secondary p-4 h-full">
@@ -1179,7 +1217,7 @@ function AiSummaryCard({
             size="sm"
             variant="outline"
             className="gap-1.5 h-7 text-xs"
-            onClick={onGenerate}
+            onClick={buttonHandler}
           >
             {status === "failed" ? (
               <>
