@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.6.16 (2026-07-03)
+
+### 🚀 Features
+
+- feat(web): Regenerate opens a one-shot feedback dialog (f573f7d)
+- feat(api): /summarize accepts one-shot feedback + folds in previous summary (0156f19)
+
+### 🐛 Bug Fixes
+
+- fix(api): mark aiSummaryStatus=running before HTTP response returns (d3f3910)
+- fix(api): don't block GET /api/jobs/:id on auto-summarize (f9689ea)
+- fix(backup): include ai_summary_status/error in export + import (9d09f60)
+- fix(api): persist job terminal state before auto-summarize (a5a21c8)
+- fix(macos): show progress state during pre-upload preparation (59b9f49)
+- fix(macos): stop pre-commit tests from triggering the Screen Recording TCC dialog (54d9ade)
+- fix(ai-summary): persist status/error so auto-summary is observable (b085a64)
+
+### 📝 Other Changes
+
+- refactor(types): re-export lib/types from contracts to kill drift (86f4a5b)
+- docs(deploy): point apply-schema at packages/api/migrations/ (7a34a76)
+- chore(db): add D1 migrations directory with baseline + ai_summary columns (3de43b4)
+- docs: drop docs/07 + Basalt B-6 references (ed49ee6)
+- docs(macos): reconcile spec with plan on Status enum + elapsedTimer policy (78a0aea)
+- docs(macos): reconcile plan + spec on conservative play button, dedupe completion visual (611d24e)
+- docs(macos): plan Basalt UI upgrade rollout (Stage 1-3, 10 atomic commits) (c544835)
+- docs(macos): drop ViewInspector, sharpen VoiceOver rule (948093a)
+- docs(macos): tighten UI plan per review — SF Symbols, palette scope, native audit (03dd998)
+- docs(macos): drop cross-platform framing from UI upgrade plan (498dde0)
+- docs(macos): rewrite UI upgrade plan around macOS-native constraints (4b83a35)
+- docs(macos): plan Basalt B-6 UI upgrade for the macOS app (1b12fef)
+
+
 ## v1.6.15 (2026-07-01)
 
 ### 🚀 Features
