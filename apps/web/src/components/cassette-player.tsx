@@ -45,16 +45,17 @@ export function CassettePlayer({
 }: CassettePlayerProps) {
   return (
     <div className="flex flex-col gap-3 h-full select-none">
-      {/* ── Cover art panel — fills remaining height from container ── */}
-      <div className="relative flex-1 min-h-0 rounded-lg overflow-hidden border border-border">
+      {/* ── Cover art panel — grows to fill available column height but
+           capped at 200px so it aligns with the right-hand card without
+           stretching indefinitely on tall recording detail pages.
+           Full-width, center-cropped: the image is stretched to fill
+           and cropped as needed (never letterboxed). ── */}
+      <div className="relative w-full flex-1 min-h-0 max-h-[200px] rounded-lg overflow-hidden border border-border">
         {/* Background image */}
         <img src={COVER_URL}
           alt=""
-          
-          
-          className="object-cover"
+          className="w-full h-full object-cover object-center"
           draggable={false}
-          
         />
 
         {/* Title overlay — bottom-aligned with ink-bleed gradient backdrop */}
