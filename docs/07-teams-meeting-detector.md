@@ -13,9 +13,9 @@
 
 ## Status
 
-- 阶段：设计（v1.1，已合并 Reviewer 二轮意见）
+- 阶段：设计（v1.2，已合并 Reviewer 三轮意见）
 - 作者：MBP-SDE-A
-- 审查：MBP-Reviewer-A（v0、v1 均已审查，见"审查记录"）
+- 审查：MBP-Reviewer-A（v0、v1、v1.1 均已审查，见"审查记录"）
 - 决策人：@zheng-li
 
 ## Motivation
@@ -682,11 +682,19 @@ final class TeamsMeetingWatcher {
 import Foundation
 import os
 
+// v1.1 修订（Reviewer 三轮 #1）：coordinator 依赖窄协议 MeetingEventProviding，
+// 允许测试用 fake watcher 实现 protocol 并暴露 feedEvent(_:) yield 事件。
+@MainActor
+protocol MeetingEventProviding: AnyObject {
+    var meetingEvents: AsyncStream<Bool> { get }
+}
+extension TeamsMeetingWatcher: MeetingEventProviding {}
+
 @MainActor
 final class MeetingPromptCoordinator {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "MeetingPromptCoordinator")
 
-    private let watcher: TeamsMeetingWatcher
+    private let watcher: MeetingEventProviding
     private let action: RecordingActionHandling
     private let alertPresenter: AlertPresenting
     private let settings: MeetingDetectionSettings
@@ -699,7 +707,7 @@ final class MeetingPromptCoordinator {
     private var stopPromptShownForCurrentMeeting: Bool = false
 
     init(
-        watcher: TeamsMeetingWatcher,
+        watcher: MeetingEventProviding,
         action: RecordingActionHandling,
         alertPresenter: AlertPresenting,
         settings: MeetingDetectionSettings
@@ -805,10 +813,10 @@ final class MeetingDetectionSettings {
 ```
 
 **关闭开关后的行为**（Reviewer 反馈"建议调整"；v1.1 收紧所有权，Reviewer 二轮 #5）：
-- **LyreApp 是唯一的 lifecycle owner**：只有 LyreApp 用 `.onChange(of: meetingSettings.isEnabled)` 观察开关变化，负责调 `watcher.suspend()` / `watcher.resume()` 与 `coordinator.start()` / `coordinator.stop()`（见下节 [LyreApp 接线](#lyreapp-接线v1-明确reviewer-反馈-2v11-明确-lifecycle-owner)）。
-- **Coordinator 不负责 watcher 生命周期**：只在收到 event 时用 `settings.isEnabled` 做静默保护（防止 lifecycle 更新与 in-flight event 之间的赛跑）。
+- **LyreApp 是唯一的 lifecycle owner**：只有 LyreApp 用 `.onChange(of: meetingSettings.isEnabled)` 观察开关变化，负责调 `watcher.suspend()` / `watcher.resume()`（见下节 [LyreApp 接线](#lyreapp-接线v1-明确reviewer-反馈-2v11-明确-lifecycle-owner)）。**Coordinator 不受开关直接控制**，在 App 生命周期内保持 `start()` 状态。
+- **Coordinator 不负责 watcher 生命周期**，也不响应开关的 start/stop：只在收到 event 时用 `settings.isEnabled` 做静默保护（防止 lifecycle 更新与 in-flight event 之间的赛跑）。
 - **Settings 类只写 UserDefaults**：不知道 watcher 也不知道 coordinator。
-- 效果：**关掉开关 = detector 完全停机（watcher suspend + coordinator stop）**，静态功耗归零，与 Teams 未安装等价；重新开启 = `resume + start`。stream 本身在 App 存活期间不 finish，避免"finish 后 resume 无法 yield"的问题（Reviewer 二轮 #4）。
+- 效果：**关掉开关 = detector 完全停机（watcher suspend）**，静态功耗归零，与 Teams 未安装等价；重新开启 = `resume`。stream 本身在 App 存活期间不 finish，避免"finish 后 resume 无法 yield"的问题（Reviewer 二轮 #4）。
 
 ### SettingsView 追加（v1 修订，Reviewer 反馈 #2）
 
@@ -1039,7 +1047,7 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 | C5 | `feat(macos): add meeting detection settings + settings ui toggle` | `Meeting/MeetingDetectionSettings.swift` + `SettingsView.swift` 追加 Section + `LyreApp` 持有 `MeetingDetectionSettings` 并传入 `SettingsView` | `xcodebuild build`；打开 Settings 看到开关 |
 | C6 | `feat(macos): add teams meeting watcher with provider seams` | `Meeting/TeamsMeetingWatcher.swift` + `Meeting/ShareableWindow.swift` + 两个 provider concrete impl；watcher 用 `start()` / `suspend()` / `resume()` / `stopAndFinish()` 生命周期，`meetingEvents: AsyncStream<Bool>` 只 yield 已确认的状态变化；SCK 未授权时读 `permissions.screenCaptureGranted` 静默。新增 `TeamsMeetingWatcherTests` 全部用例（judge / debounce / baseline 不 yield / SCK 未授权静默 / didTerminate 强制 false / suspend 后 resume 能继续消费） | `xcodebuild test` — 新测试全绿 |
 | C7 | `feat(macos): add prompt coordinator with alert presenter tests` | `Meeting/MeetingPromptCoordinator.swift` + 复用 `AlertPresenter.swift`；`MeetingPromptCoordinatorTests` 全部用例；测试用 fake watcher + fake presenter + fake action | `xcodebuild test` — 新测试全绿 |
-| C8 | `feat(macos): wire meeting detector into LyreApp with off-switch handling` | `LyreApp.swift` 构造 watcher/coordinator，`onChange(of: meetingSettings.isEnabled)` 驱动 start/stop；DQ-1/DQ-6 打点 log | `xcodebuild build & test`；DQ-1/DQ-6 手动 |
+| C8 | `feat(macos): wire meeting detector into LyreApp with off-switch handling` | `LyreApp.swift` 构造 watcher/coordinator（coordinator init 后始终 start），`onChange(of: meetingSettings.isEnabled)` 驱动 **watcher suspend/resume**；DQ-1/DQ-6 打点 log | `xcodebuild build & test`；DQ-1/DQ-6 手动 |
 | C9 | `docs(macos): record DQ manual acceptance results` | DQ-1 到 DQ-9 手工验收记录写入 docs/07 附录；若发现假阳性率高，跟随一个 tightening commit | 文档 review |
 | C10（条件） | `feat(macos): tighten meeting judgement heuristic` | 只有 DQ-4 假阳性率高时才提；调整 `excludedTitles` 或改用严格标题判据 | 相应新单测 + `xcodebuild test` |
 | C11 | `chore: update CLAUDE.md retrospective (if any macOS API learnings)` | 若 C6/C7/C8 学到 `SCShareableContent` / `AsyncStream` / `NSAlert` 的坑，写到 retrospective | — |
@@ -1064,6 +1072,21 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 - Granola [Permissions FAQ](https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time) — "不需要 Accessibility 也能做会议感知"的产品先例
 
 ## 审查记录
+
+### v1.1 → v1.2 修订项
+
+来自 @MBP-Reviewer-A 2026-07-06 三轮审查（本 lyre-teams 线程 msg=586708d0），已合并：
+
+1. **Coordinator 依赖窄协议 `MeetingEventProviding`**（Reviewer 三轮 #1）：v1.1 里 coordinator init 参数是 concrete `TeamsMeetingWatcher`（final class），与"测试用 fake watcher + `feedEvent(_:)`" 冲突。新增：
+   ```swift
+   @MainActor
+   protocol MeetingEventProviding: AnyObject {
+       var meetingEvents: AsyncStream<Bool> { get }
+   }
+   extension TeamsMeetingWatcher: MeetingEventProviding {}
+   ```
+   Coordinator 内部持 `MeetingEventProviding` 类型。C7 测试的 fake watcher 只实现该 protocol 并暴露 `feedEvent(_:)`。
+2. **Settings lifecycle 文案统一**（Reviewer 三轮 #2）：撤掉"LyreApp 调 coordinator.start/stop"残留矛盾。定案统一为：**Coordinator 一次 start 就 App 生命周期内不停**；LyreApp 的 `.onChange` **只驱动 watcher suspend/resume**。C8 提交描述同步更新。
 
 ### v1 → v1.1 修订项
 
