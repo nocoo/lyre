@@ -13,9 +13,9 @@
 
 ## Status
 
-- 阶段：设计（v1，已合并 Reviewer 首轮意见 + 我的 A-D 补充点 + Q1/Q2 定案）
+- 阶段：设计（v1.1，已合并 Reviewer 二轮意见）
 - 作者：MBP-SDE-A
-- 审查：MBP-Reviewer-A
+- 审查：MBP-Reviewer-A（v0、v1 均已审查，见"审查记录"）
 - 决策人：@zheng-li
 
 ## Motivation
@@ -63,17 +63,37 @@ detector 会跟着常驻。如果检测机制在 Teams 未运行时也持续消�
 
 **结论**：`NSWorkspace`（控制轮询档位） + `SCShareableContent`（做 Teams 窗口识别）。
 
-### Screen Recording 授权状态处理（v1 明确，来自 Reviewer 反馈 #4）
+### Screen Recording 授权状态处理（v1 明确，来自 Reviewer 反馈 #4；v1.1 补齐 protocol 面）
 
-Lyre 的 `PermissionManager` 已经维护 SCK 授权判定。detector 在启动/每次 warm tick 前
-读取该判定：
+Lyre 的 `PermissionManager` 已经维护 SCK 授权判定（`screenRecording: Status = .granted / .denied / .unknown`）。但当前 `RecordingPermissions` protocol 只暴露 `allGranted / needsSetup / checkAll()`，**没有对外暴露 `screenCaptureGranted` 单一字段**（见 `apps/macos/Lyre/Audio/RecordingDependencies.swift:14-18`）。
+
+**v1.1 修订**（Reviewer 二轮 #3）：在 C6 之前的 C4 里扩展 `RecordingPermissions`：
+
+```swift
+// apps/macos/Lyre/Audio/RecordingDependencies.swift
+protocol RecordingPermissions: AnyObject {
+    var allGranted: Bool { get }
+    var needsSetup: Bool { get }
+    var screenCaptureGranted: Bool { get }   // v1.1 新增
+    func checkAll() async
+}
+
+// apps/macos/Lyre/Audio/PermissionManager.swift 内追加
+extension PermissionManager {
+    var screenCaptureGranted: Bool { screenRecording == .granted }
+}
+
+// 测试里的 fake permissions 同步补字段
+```
+
+Detector 在启动 / 每次 warm tick 前读该字段：
 
 - **未授权**：watcher 保持 warm/cold 档位不变，**跳过** `SCShareableContent.current` 调用，
   静默判 inactive，**不重复打日志**（每次会话最多一条 info），**不触发系统引导 alert**，
   **不弹会议提示**。Screen Recording 的引导流程仍走现有 `PermissionGuideView`，
   由录音动作触发，不因 detector 而额外拉起。
 - **首次授权变化**（撤销 → 授予或授予 → 撤销）：watcher 观察 `PermissionManager` 的
-  `screenCaptureGranted` 变化，state 变化后下一次 tick 自然重新走判定。
+  `screenRecording` 变化，state 变化后下一次 tick 自然重新走判定。
 - **调用抛错**（授权被撤销但状态还没同步、SCK 挂了）：一次性 `warning` 日志 +
   保守判 inactive；不主动弹 alert 打扰用户。
 
@@ -226,17 +246,44 @@ apps/macos/LyreTests/
 `project.yml` 无需改动（`Lyre` target 的 `sources: [path: Lyre]` 已包含全目录，见
 `apps/macos/project.yml:24-25`）。
 
-### RecordingActionController（Q1 定案，v1 新增）
+### RecordingActionController（Q1 定案，v1 新增；v1.1 收紧协议边界）
 
 **Reviewer 定案**：coordinator 不能直接调 `RecordingManager` —— tray 现在还挂了 elapsed
 timer 与 `recordingsStore.refresh(url:)` 副作用；直接绕过会造成录音成功但 tray 计时不动、
 Recordings 列表不刷新的可见 bug。抽 `RecordingActionController` 统一入口。
+
+**v1.1 修订**（Reviewer 二轮 #1 + #2）：为了让 TrayMenu 的 SwiftUI 观察 `elapsedDisplay`
+的 `@Observable` 变化能正常触发，`TrayMenu` 依赖 **concrete `RecordingActionController`**
+（`@Bindable`）；`MeetingPromptCoordinator` 只依赖 **窄协议 `RecordingActionHandling`**
+以便注入测试 fake。同时把 `RecordingManager` / `RecordingsStore` 通过两个新窄协议注入，
+避免测试里 subclass final class。
 
 ```swift
 import AppKit
 import Foundation
 import Observation
 import os
+
+// MARK: - New narrow seams (v1.1)
+// v1.1 新增：为 RecordingActionController 测试专门抽最小面，避免 subclass final class。
+// PermissionManager / RecordingManager / RecordingsStore 保持 final，直接 extension conform。
+
+@MainActor
+protocol RecordingLifecycleManaging: AnyObject {
+    var state: RecordingManager.State { get }
+    var elapsedSeconds: TimeInterval { get }
+    func startRecording() async throws
+    @discardableResult func stopRecording() async throws -> URL
+}
+extension RecordingManager: RecordingLifecycleManaging {}
+
+@MainActor
+protocol RecordingsRefreshing: AnyObject {
+    func refresh(url: URL) async
+}
+extension RecordingsStore: RecordingsRefreshing {}
+
+// MARK: - Coordinator-facing protocol (窄面：只暴露 start/stop，不暴露 elapsedDisplay)
 
 @MainActor
 protocol RecordingActionHandling: AnyObject {
@@ -245,21 +292,26 @@ protocol RecordingActionHandling: AnyObject {
     func requestStop() async
 }
 
+// MARK: - Concrete controller
+
 @Observable
 @MainActor
 final class RecordingActionController: RecordingActionHandling {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "RecordingActionController")
 
-    // Owned dependencies
-    let recorder: RecordingManager
-    let recordingsStore: RecordingsStore
+    private let recorder: RecordingLifecycleManaging
+    private let recordingsStore: RecordingsRefreshing
     private let alertPresenter: AlertPresenting
 
-    // MARK: - Elapsed surface（TrayMenu 从这里读，不再自己维护 Timer）
+    /// TrayMenu 直接读这个（走 concrete controller + @Bindable）
     private(set) var elapsedDisplay: String = "00:00"
     private var elapsedTimer: Timer?
 
-    init(recorder: RecordingManager, recordingsStore: RecordingsStore, alertPresenter: AlertPresenting) {
+    init(
+        recorder: RecordingLifecycleManaging,
+        recordingsStore: RecordingsRefreshing,
+        alertPresenter: AlertPresenting
+    ) {
         self.recorder = recorder
         self.recordingsStore = recordingsStore
         self.alertPresenter = alertPresenter
@@ -268,7 +320,7 @@ final class RecordingActionController: RecordingActionHandling {
     var state: RecordingManager.State { recorder.state }
 
     func requestStart() async {
-        guard recorder.state == .idle else { return }  // 并发防御，coordinator + tray 同时点也不会双开
+        guard recorder.state == .idle else { return }  // coordinator + tray 同时点也不双开
         do {
             try await recorder.startRecording()
             startElapsedTimer()
@@ -311,11 +363,14 @@ final class RecordingActionController: RecordingActionHandling {
 ```
 
 **TrayMenu 侧改造**（同一 commit 内）：
-- 移除 `elapsedTimer` / `elapsedDisplay` / `startRecording()` / `stopRecording()` 私有方法与
-  自持的 `recordingsStore`；
-- 改成从 `controller: RecordingActionHandling` 读 `state` + `elapsedDisplay`，按钮直接调
-  `controller.requestStart()` / `controller.requestStop()`；
-- `showErrorAlert` 走 `AlertPresenting`。
+- 依赖类型改为 `@Bindable var actionController: RecordingActionController`（**concrete**，
+  非 protocol —— 让 SwiftUI 观察 `elapsedDisplay` 与 `state` 变化能正常触发）；
+- 移除 `elapsedTimer` / `elapsedDisplay` / `startRecording()` / `stopRecording()` 私有方法
+  与自持的 `recordingsStore` 引用；
+- 按钮直接调 `Task { await actionController.requestStart() }` / `requestStop()`；
+- `showErrorAlert` 也走 `alertPresenter`（通过 controller 或 LyreApp 提供）。
+
+**Coordinator 侧**：只拿 `action: RecordingActionHandling`（**protocol**），便于注入 fake。
 
 ### AlertPresenter
 
@@ -445,16 +500,41 @@ final class TeamsMeetingWatcher {
     }
 
     // MARK: - Lifecycle
+    // v1.1 修订（Reviewer 二轮 #4）：分成 start() / suspend() / stopAndFinish()。
+    // AsyncStream 一旦 finish 就无法再被同一个 for-await 消费，因此"开关关闭 = 无轮询/无 SCK
+    // 查询，但同一 stream 之后还能恢复消费" 必须走 suspend，而不是 stop+start。
+
+    /// 首次启动：装 NSWorkspace observers、跑 baseline、启动 tick timer。
+    /// 与 stopAndFinish 是配对操作；App 生命周期内通常只调用一次。
     func start() {
         installWorkspaceObservers()
         recomputeTier(runBaselineTickImmediately: true)
     }
 
-    func stop() {
+    /// 暂停：停 tick timer、撤 NSWorkspace observers、清 baseline/debounce 状态，
+    /// **但不 finish stream**。同一 continuation 保留，coordinator 的 for-await
+    /// 阻塞在 stream 上等待下一次 resume 后的 event。
+    /// 用于"用户关掉 detector 开关"场景。
+    func suspend() {
         tickTimer?.invalidate(); tickTimer = nil
         if let o = launchObserver { NSWorkspace.shared.notificationCenter.removeObserver(o) }
         if let o = terminateObserver { NSWorkspace.shared.notificationCenter.removeObserver(o) }
         launchObserver = nil; terminateObserver = nil
+        tier = .cold
+        baselineDone = false
+        lastRawJudgement = nil
+        confirmedActive = nil
+        sckUnauthorizedLogged = false
+        // 注意：不调 eventContinuation.finish()
+    }
+
+    /// 从 suspend 状态恢复。等价于一次全新的 start（重新装 observers、重新跑 baseline）。
+    func resume() { start() }
+
+    /// 永久关停：suspend 之后 finish stream。App terminate / 单元测试拆 teardown 时用。
+    /// finish 后 coordinator 的 for-await 会自然结束。
+    func stopAndFinish() {
+        suspend()
         eventContinuation.finish()
     }
 
@@ -724,12 +804,11 @@ final class MeetingDetectionSettings {
 }
 ```
 
-**关闭开关后的行为**（Reviewer 反馈"建议调整"）：
-- **Coordinator 不再弹提示**（handle 首行 guard）。
-- **Watcher 保持运行但降到 cold 档并停 SCK 查询**：为了避免"关掉功能仍有 SCK 权限压力"，
-  开关关闭时 `MeetingPromptCoordinator` 除了不弹之外，还调 `watcher.stop()` 完全停止
-  轮询；重新开启时 `watcher.start()`。文档明确：**关掉开关 = detector 完全停机**，
-  静态功耗归零，与 Teams 未安装等价。
+**关闭开关后的行为**（Reviewer 反馈"建议调整"；v1.1 收紧所有权，Reviewer 二轮 #5）：
+- **LyreApp 是唯一的 lifecycle owner**：只有 LyreApp 用 `.onChange(of: meetingSettings.isEnabled)` 观察开关变化，负责调 `watcher.suspend()` / `watcher.resume()` 与 `coordinator.start()` / `coordinator.stop()`（见下节 [LyreApp 接线](#lyreapp-接线v1-明确reviewer-反馈-2v11-明确-lifecycle-owner)）。
+- **Coordinator 不负责 watcher 生命周期**：只在收到 event 时用 `settings.isEnabled` 做静默保护（防止 lifecycle 更新与 in-flight event 之间的赛跑）。
+- **Settings 类只写 UserDefaults**：不知道 watcher 也不知道 coordinator。
+- 效果：**关掉开关 = detector 完全停机（watcher suspend + coordinator stop）**，静态功耗归零，与 Teams 未安装等价；重新开启 = `resume + start`。stream 本身在 App 存活期间不 finish，避免"finish 后 resume 无法 yield"的问题（Reviewer 二轮 #4）。
 
 ### SettingsView 追加（v1 修订，Reviewer 反馈 #2）
 
@@ -749,7 +828,7 @@ Section("Meeting Detection") {
 
 `SettingsView` 签名扩展一个 `@Bindable var meetingSettings: MeetingDetectionSettings`。
 
-### LyreApp 接线（v1 明确，Reviewer 反馈 #2）
+### LyreApp 接线（v1 明确，Reviewer 反馈 #2；v1.1 明确 lifecycle owner，Reviewer 二轮 #4/#5）
 
 需要新增的 `@State`：
 - `meetingSettings: MeetingDetectionSettings`
@@ -766,7 +845,11 @@ init() {
     mgr.outputDirectory = cfg.outputDirectory
     let store = RecordingsStore(directory: cfg.outputDirectory)
     let presenter = NSAlertPresenter()
-    let action = RecordingActionController(recorder: mgr, recordingsStore: store, alertPresenter: presenter)
+    let action = RecordingActionController(
+        recorder: mgr,             // conforms to RecordingLifecycleManaging
+        recordingsStore: store,    // conforms to RecordingsRefreshing
+        alertPresenter: presenter
+    )
 
     let mtgSettings = MeetingDetectionSettings()
     let watcher = TeamsMeetingWatcher(
@@ -781,10 +864,10 @@ init() {
         settings: mtgSettings
     )
 
-    if mtgSettings.isEnabled {
-        watcher.start()
-        coord.start()
-    }
+    // Coordinator 无论开关状态都 start（它内部只在收到 event 时用 settings.isEnabled 做静默保护）。
+    // Watcher 的 lifecycle 由 body 里的 .onChange 唯一驱动，避免两处竞争。
+    coord.start()
+    if mtgSettings.isEnabled { watcher.start() }
 
     _config = State(initialValue: cfg)
     _recorder = State(initialValue: mgr)
@@ -797,9 +880,32 @@ init() {
 }
 ```
 
-TrayMenu 改成从 `actionController` 拿 state / elapsedDisplay / requestStart / requestStop。
-`SettingsView` 传入 `meetingSettings` 用于 Section 开关；开关的 `didSet` 应该驱动
-watcher/coordinator 的 start/stop，具体接线放在 LyreApp 的 `.onChange(of: meetingSettings.isEnabled)`。
+**body 内接线**（LyreApp 为唯一 lifecycle owner）：
+
+```swift
+// Main window scene
+Window("Lyre", id: "main") {
+    MainWindowView(
+        recorder: recorder,
+        config: config,
+        recordingsStore: recordingsStore,
+        actionController: actionController,
+        meetingSettings: meetingSettings,
+        selectedTab: $selectedTab
+    )
+    .onChange(of: config.outputDirectory) { _, newDir in
+        recorder.outputDirectory = newDir
+        recordingsStore = RecordingsStore(directory: newDir)
+    }
+    .onChange(of: meetingSettings.isEnabled) { _, isEnabled in
+        if isEnabled { meetingWatcher.resume() }
+        else         { meetingWatcher.suspend() }
+    }
+}
+```
+
+TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requestStart / requestStop（`@Bindable var actionController: RecordingActionController`）。
+`SettingsView` 只接收 `meetingSettings` 用于 Section 开关；开关的 `didSet` **只写** UserDefaults，不动 watcher。
 
 ### 并发说明（v1 新增，来自我的补充点 B/D）
 
@@ -825,7 +931,7 @@ watcher/coordinator 的 start/stop，具体接线放在 LyreApp 的 `.onChange(o
    期间新 event 直接丢弃。
 7. **Baseline 静默**：启动时的会议状态只作 baseline，不弹提示；哥要的"启动时也提示"若
    将来需要，走独立 first-change event，不动去抖流程。
-8. **Off-switch = full stop**：关掉开关 = detector 完全停机（watcher stop + coord stop）。
+8. **Off-switch = full stop**：关掉开关 = detector 完全停机（watcher **suspend** + coordinator 保留但静默）；stream 不 finish，重新开启走 `resume`，无需重建 watcher / coordinator。
 9. **Testable seams**：provider protocol + AlertPresenter + RecordingActionHandling +
    AsyncStream。测试无 Teams / 无 SCK / 无真 alert 依赖。
 
@@ -847,23 +953,26 @@ watcher/coordinator 的 start/stop，具体接线放在 LyreApp 的 `.onChange(o
 | `MeetingPromptCoordinatorTests.no_stop_when_idle` | action.state=.idle → 塞 false event → 不调 presenter |
 | `MeetingPromptCoordinatorTests.one_prompt_per_meeting` | idle → 塞 true → 弹一次；再塞 true → 不弹（同一场会议内被抑制） |
 | `MeetingPromptCoordinatorTests.single_alert_gate` | 让 presenter 的 `presentChoice` 阻塞 → 期间塞第二个 event → 不弹第二次；presenter 返回后再塞事件走正常流程 |
-| `MeetingPromptCoordinatorTests.settings_disabled_silent` | settings.isEnabled=false → 塞事件 → 不弹（并且不改变 lastObservedActive，因为 v1 已改为"关掉 = watcher 完全停机"，coordinator 内不再需要跟踪 lastObservedActive） |
+| `MeetingPromptCoordinatorTests.settings_disabled_silent` | settings.isEnabled=false → 塞事件 → 不弹（coordinator 内 handle 首行 guard 直接吞掉；watcher lifecycle 由 LyreApp 负责，coordinator 只做静默） |
 | `RecordingActionControllerTests.start_updates_elapsed` | requestStart 成功 → elapsedTimer 启动、elapsedDisplay 更新序列可观察 |
 | `RecordingActionControllerTests.stop_refreshes_store` | requestStop 成功 → recordingsStore.refresh 被调，参数是 recorder 返回的 URL |
 | `RecordingActionControllerTests.start_alerts_on_error` | mock recorder 抛错 → alertPresenter.presentError 被调 |
 | `RecordingActionControllerTests.double_start_is_noop` | recorder.state=.recording → requestStart 直接 return，不调 recorder.startRecording |
 | `AlertPresenterTests`（optional） | 保持 NSAlertPresenter 只是薄封装；如引入正式测试，用 UI test 或跳过 |
 
-**注入策略**：
+**注入策略**（v1.1 修订，Reviewer 二轮 #2）：
 - `TeamsMeetingWatcher`：`RunningAppsProviding` / `ShareableContentProviding` /
   `RecordingPermissions` 全 protocol 注入。
 - `MeetingPromptCoordinator`：`AlertPresenting` / `RecordingActionHandling` /
   `MeetingDetectionSettings` 全 protocol / concrete-with-defaults 注入；watcher 传一个
   fake watcher，暴露 `feedEvent(_ active: Bool)` 直接向 stream yield。
-- `RecordingActionController`：`RecordingManager` 因为是 concrete final class，测试里
-  用一个 lightweight subclass override + `internal(set)` 状态直接改；或者引入
-  `RecordingLifecycle` protocol 但 v1 优先保留 controller 直持 concrete manager（协议
-  仅在必要时抽出）。
+- `RecordingActionController`：**通过新窄协议 `RecordingLifecycleManaging` +
+  `RecordingsRefreshing` 注入 fake**（不 subclass `RecordingManager` / `RecordingsStore`，
+  两者仍是 `final class`）。fake 直接暴露 `state` / `elapsedSeconds` 可写字段与
+  spy 计数，覆盖 start/stop 顺序、store refresh、error alert、double-start no-op 全部路径。
+- `AlertPresenter`：`AlertPresenting` protocol，测试用 double 记录 `presentChoice` /
+  `presentError` 调用序列与参数。`NSAlertPresenter` 作为薄封装通常不测；如未来需要，
+  用 UI test 或 snapshot 测试。
 
 ### Manual acceptance（release 前必跑）
 
@@ -874,8 +983,7 @@ watcher/coordinator 的 start/stop，具体接线放在 LyreApp 的 `.onChange(o
    显示，用户可手动 Start Recording。
 4. **DQ-4 假阳性**：Teams 打开 Chat 独立窗口、Calendar 弹窗 → 观察误弹率。>1/day 则收紧判据。
 5. **DQ-5 会议结束提示**：录音中，主持人 End Meeting → 5–15 秒内弹 "Stop recording"。
-6. **DQ-6 关掉开关**：Settings 关掉 → 开会不弹，且 Activity Monitor 上 watcher 完全停机
-   （无 5s SCK 查询）。重新开启 → 下一场会议正常弹。
+6. **DQ-6 关掉开关**：Settings 关掉 → 开会不弹，且 Activity Monitor 上 watcher **完全 suspended**（无 5s SCK 查询、无 tick timer）。重新开启 → `resume` 后下一场会议正常弹。
 7. **DQ-7 SCK 未授权**：临时撤销 Screen Recording → Teams 中开会 → 不弹、无骚扰、日志
    最多 1 条 info。重新授予 → 下一场会议正常弹。
 8. **DQ-8 Single-alert**：弹起 Start prompt 后立即结束会议（人为在 Teams 里 leave）→
@@ -927,9 +1035,9 @@ watcher/coordinator 的 start/stop，具体接线放在 LyreApp 的 `.onChange(o
 | C1 | `docs(macos): draft teams meeting detector spec` | 现有 `docs/07-teams-meeting-detector.md` v0（已提交 `3d600f9`） | 文档评审 |
 | C2 | `docs(macos): refine teams detector spec after joint review` | 本文档 v1 | 文档评审 |
 | C3 | `chore(macos): capture teams window shape probe results` | Phase 0 探针脚本 + 附录（Teams 主/会议/Chat/Settings/Calendar 窗口 title 观察值），落到 docs/07 附录 | 文档 review |
-| C4 | `refactor(macos): extract RecordingActionController for tray + detector` | 新增 `Recording/RecordingActionController.swift` + `Meeting/AlertPresenter.swift`；把 tray 现有 elapsed timer / store refresh / error alert 迁进 controller；TrayMenu 改成从 controller 读取 & 调用；`LyreApp` 在 init 里构造 controller 并传入 tray | `xcodebuild build & test`（不新增测试就位，但现有 tray/manager 测试仍绿）；本机手动录一段验证 tray 显示、Recordings 刷新 |
+| C4 | `refactor(macos): extract RecordingActionController and recording seams for tray + detector` | v1.1 修订：扩展 `RecordingPermissions` 增加 `screenCaptureGranted`（`PermissionManager` extension 实现）；新增 `RecordingLifecycleManaging` / `RecordingsRefreshing` 两个窄协议（`RecordingManager` / `RecordingsStore` 通过 extension conform）；新增 `Recording/RecordingActionController.swift` + `Meeting/AlertPresenter.swift`；把 tray 现有 elapsed timer / store refresh / error alert 迁进 controller；TrayMenu 依赖 `@Bindable var actionController: RecordingActionController`（concrete，让 SwiftUI 观察生效）；`LyreApp` 在 init 里构造 controller 并传入 tray。同时补 `RecordingActionControllerTests`（走新协议 fake）。 | `xcodebuild build & test` — 新单测全绿 + 现有 tray/manager 测试仍绿；本机手动录一段验证 tray 显示、Recordings 刷新 |
 | C5 | `feat(macos): add meeting detection settings + settings ui toggle` | `Meeting/MeetingDetectionSettings.swift` + `SettingsView.swift` 追加 Section + `LyreApp` 持有 `MeetingDetectionSettings` 并传入 `SettingsView` | `xcodebuild build`；打开 Settings 看到开关 |
-| C6 | `feat(macos): add teams meeting watcher with provider seams` | `Meeting/TeamsMeetingWatcher.swift` + `Meeting/ShareableWindow.swift` + 两个 provider concrete impl；新增 `TeamsMeetingWatcherTests` 全部用例（judge / debounce / baseline / SCK 未授权 / didTerminate 强制 false） | `xcodebuild test` — 新测试全绿 |
+| C6 | `feat(macos): add teams meeting watcher with provider seams` | `Meeting/TeamsMeetingWatcher.swift` + `Meeting/ShareableWindow.swift` + 两个 provider concrete impl；watcher 用 `start()` / `suspend()` / `resume()` / `stopAndFinish()` 生命周期，`meetingEvents: AsyncStream<Bool>` 只 yield 已确认的状态变化；SCK 未授权时读 `permissions.screenCaptureGranted` 静默。新增 `TeamsMeetingWatcherTests` 全部用例（judge / debounce / baseline 不 yield / SCK 未授权静默 / didTerminate 强制 false / suspend 后 resume 能继续消费） | `xcodebuild test` — 新测试全绿 |
 | C7 | `feat(macos): add prompt coordinator with alert presenter tests` | `Meeting/MeetingPromptCoordinator.swift` + 复用 `AlertPresenter.swift`；`MeetingPromptCoordinatorTests` 全部用例；测试用 fake watcher + fake presenter + fake action | `xcodebuild test` — 新测试全绿 |
 | C8 | `feat(macos): wire meeting detector into LyreApp with off-switch handling` | `LyreApp.swift` 构造 watcher/coordinator，`onChange(of: meetingSettings.isEnabled)` 驱动 start/stop；DQ-1/DQ-6 打点 log | `xcodebuild build & test`；DQ-1/DQ-6 手动 |
 | C9 | `docs(macos): record DQ manual acceptance results` | DQ-1 到 DQ-9 手工验收记录写入 docs/07 附录；若发现假阳性率高，跟随一个 tightening commit | 文档 review |
@@ -956,6 +1064,32 @@ watcher/coordinator 的 start/stop，具体接线放在 LyreApp 的 `.onChange(o
 - Granola [Permissions FAQ](https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time) — "不需要 Accessibility 也能做会议感知"的产品先例
 
 ## 审查记录
+
+### v1 → v1.1 修订项
+
+来自 @MBP-Reviewer-A 2026-07-06 二轮审查（本 lyre-teams 线程 msg=3b0d5c04），全部合并：
+
+1. **`RecordingActionHandling` 少 `elapsedDisplay` + TrayMenu 不应只拿 protocol**（Reviewer 二轮 #1）：
+   - TrayMenu 依赖类型改为 concrete `@Bindable var actionController: RecordingActionController`，让 SwiftUI 对 `elapsedDisplay` / `state` 的 `@Observable` 观察生效。
+   - `RecordingActionHandling` protocol 保留窄面（`state / requestStart / requestStop`），只给 coordinator 用。
+2. **测试不能 subclass final class**（Reviewer 二轮 #2）：
+   - 新增窄协议 `RecordingLifecycleManaging`（`state / elapsedSeconds / startRecording / stopRecording`）与 `RecordingsRefreshing`（`refresh(url:)`）。
+   - `RecordingManager` / `RecordingsStore` 通过 extension conform（不改现有 concrete class）。
+   - Controller 内部持 protocol 类型，测试注入 fake。
+3. **`RecordingPermissions.screenCaptureGranted` 不存在**（Reviewer 二轮 #3）：
+   - 在 C4 里扩展 `RecordingPermissions` protocol 增加 `var screenCaptureGranted: Bool { get }`；`PermissionManager` extension 实现（`screenRecording == .granted`）。
+   - 测试 fake permissions 同步补字段。
+4. **watcher stop finish stream 与"关掉 = 停机 + 重开"冲突**（Reviewer 二轮 #4）：
+   - Watcher lifecycle 拆成 `start()` / `suspend()` / `resume()` / `stopAndFinish()`。
+   - `suspend()` 停 timer / 撤 observers / 清 baseline，但**不 finish stream**；同一 continuation 保留，coordinator 的 for-await 阻塞等 resume。
+   - `stopAndFinish()` 用于 App terminate / teardown。
+   - 关掉开关 = suspend；重新开启 = resume；stream 不 finish。
+5. **Settings 开关所有权模糊**（Reviewer 二轮 #5）：
+   - **LyreApp 是唯一 lifecycle owner**：body 上 `.onChange(of: meetingSettings.isEnabled)` 调 `watcher.suspend()` / `watcher.resume()`。
+   - Coordinator **不管** watcher 生命周期，只在收到 event 时用 `settings.isEnabled` 做静默保护，防止 lifecycle 切换与 in-flight event 之间的赛跑。
+   - Settings 类只写 UserDefaults-backed value，不知道 watcher / coordinator。
+
+**其余通过项**（Reviewer 明列）：RecordingActionController 统一入口、AsyncStream 事件模型、baseline 不 yield、SCK 未授权静默、SettingsView 现有路径、Logger 使用 `Constants.subsystem`、原子提交 C1-C11 全部保持。
 
 ### v0 → v1 修订项
 
