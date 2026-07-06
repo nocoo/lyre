@@ -3,6 +3,7 @@ import SwiftUI
 /// Settings view for configuring server connection and recording preferences.
 struct SettingsView: View {
     @Bindable var config: AppConfig
+    @Bindable var meetingSettings: MeetingDetectionSettings
     @State private var showTokenField = false
     @State private var connectionStatus: ConnectionStatus = .untested
 
@@ -67,6 +68,23 @@ struct SettingsView: View {
                         inFileViewerRootedAtPath: config.outputDirectory.path
                     )
                 }
+            }
+
+            // Meeting detection (Teams)
+            Section("Meeting Detection") {
+                Toggle(
+                    "Detect Teams meetings and prompt to record",
+                    isOn: $meetingSettings.isEnabled
+                )
+                Text(
+                    """
+                    When enabled, Lyre pops up a small confirmation when a Microsoft Teams \
+                    meeting starts or ends. Lyre never starts or stops recording without \
+                    your confirmation.
+                    """
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

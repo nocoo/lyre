@@ -7,6 +7,7 @@ struct LyreApp: App {
     @State private var config: AppConfig
     @State private var recordingsStore: RecordingsStore
     @State private var actionController: RecordingActionController
+    @State private var meetingSettings: MeetingDetectionSettings
     @State private var selectedTab: MainWindowView.SidebarTab = .recordings
     @Environment(\.openWindow) private var openWindow
 
@@ -21,10 +22,12 @@ struct LyreApp: App {
             recordingsStore: store,
             alertPresenter: presenter
         )
+        let mtgSettings = MeetingDetectionSettings()
         _config = State(initialValue: cfg)
         _recorder = State(initialValue: mgr)
         _recordingsStore = State(initialValue: store)
         _actionController = State(initialValue: action)
+        _meetingSettings = State(initialValue: mtgSettings)
     }
 
     var body: some Scene {
@@ -52,6 +55,7 @@ struct LyreApp: App {
                 recorder: recorder,
                 config: config,
                 recordingsStore: resolvedStore,
+                meetingSettings: meetingSettings,
                 selectedTab: $selectedTab
             )
             .onChange(of: config.outputDirectory) { _, newDir in
@@ -87,6 +91,7 @@ struct MainWindowView: View {
     @Bindable var recorder: RecordingManager
     @Bindable var config: AppConfig
     @Bindable var recordingsStore: RecordingsStore
+    @Bindable var meetingSettings: MeetingDetectionSettings
 
     enum SidebarTab: Hashable {
         case recordings
@@ -112,7 +117,7 @@ struct MainWindowView: View {
             }
 
             SwiftUI.Tab("Settings", systemImage: "gearshape", value: SidebarTab.settings) {
-                SettingsView(config: config)
+                SettingsView(config: config, meetingSettings: meetingSettings)
             }
 
             SwiftUI.Tab("About", systemImage: "info.circle", value: SidebarTab.about) {
