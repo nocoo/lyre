@@ -6,6 +6,7 @@ struct LyreApp: App {
     @State private var recorder: RecordingManager
     @State private var config: AppConfig
     @State private var recordingsStore: RecordingsStore
+    @State private var actionController: RecordingActionController
     @State private var selectedTab: MainWindowView.SidebarTab = .recordings
     @Environment(\.openWindow) private var openWindow
 
@@ -13,9 +14,17 @@ struct LyreApp: App {
         let cfg = AppConfig()
         let mgr = RecordingManager()
         mgr.outputDirectory = cfg.outputDirectory
+        let store = RecordingsStore(directory: cfg.outputDirectory)
+        let presenter = NSAlertPresenter()
+        let action = RecordingActionController(
+            recorder: mgr,
+            recordingsStore: store,
+            alertPresenter: presenter
+        )
         _config = State(initialValue: cfg)
         _recorder = State(initialValue: mgr)
-        _recordingsStore = State(initialValue: RecordingsStore(directory: cfg.outputDirectory))
+        _recordingsStore = State(initialValue: store)
+        _actionController = State(initialValue: action)
     }
 
     var body: some Scene {
@@ -25,6 +34,7 @@ struct LyreApp: App {
                 recorder: recorder,
                 config: config,
                 recordingsStore: resolvedStore,
+                actionController: actionController,
                 onOpenWindow: { openWindow(id: "main") },
                 onOpenPermissions: {
                     selectedTab = .permissions
@@ -46,7 +56,12 @@ struct LyreApp: App {
             )
             .onChange(of: config.outputDirectory) { _, newDir in
                 recorder.outputDirectory = newDir
-                recordingsStore = RecordingsStore(directory: newDir)
+                let newStore = RecordingsStore(directory: newDir)
+                recordingsStore = newStore
+                // Keep the controller pointing at the current store so
+                // post-stop refresh lands on the visible list rather than
+                // the stale directory's list.
+                actionController.setRecordingsStore(newStore)
             }
         }
         .defaultSize(width: 600, height: 500)
@@ -114,26 +129,27 @@ struct TrayMenu: View {
     @Bindable var recorder: RecordingManager
     @Bindable var config: AppConfig
     @Bindable var recordingsStore: RecordingsStore
+    /// Owned by LyreApp; the tray reads state / elapsedDisplay from here and
+    /// delegates start/stop to it. See docs/07-teams-meeting-detector.md C4.
+    @Bindable var actionController: RecordingActionController
     var onOpenWindow: () -> Void
     var onOpenPermissions: () -> Void
-    @State private var elapsedTimer: Timer?
-    @State private var elapsedDisplay: String = "00:00"
     @State private var hasCheckedPermissions = false
 
     var body: some View {
         Group {
             // Recording control
-            if recorder.state == .recording {
-                Text("Recording — \(elapsedDisplay)")
+            if actionController.state == .recording {
+                Text("Recording — \(actionController.elapsedDisplay)")
                     .font(.headline)
 
                 Button("Stop Recording") {
-                    Task { await stopRecording() }
+                    Task { await actionController.requestStop() }
                 }
                 .keyboardShortcut("r")
             } else {
                 Button("Start Recording") {
-                    Task { await startRecording() }
+                    Task { await actionController.requestStart() }
                 }
                 .keyboardShortcut("r")
                 .disabled(recorder.permissions.needsSetup)
@@ -211,56 +227,6 @@ struct TrayMenu: View {
                 recorder.capture.selectedDeviceID = nil
             }
         }
-    }
-
-    private func startRecording() async {
-        do {
-            try await recorder.startRecording()
-            startElapsedTimer()
-        } catch {
-            Self.logger.error("Start recording failed: \(error.localizedDescription)")
-            showErrorAlert(title: "Recording Failed", message: error.localizedDescription)
-        }
-    }
-
-    private func stopRecording() async {
-        stopElapsedTimer()
-        do {
-            let url = try await recorder.stopRecording()
-            Self.logger.info("Recording saved: \(url.lastPathComponent)")
-            await recordingsStore.refresh(url: url)
-        } catch {
-            Self.logger.error("Stop recording failed: \(error.localizedDescription)")
-            showErrorAlert(title: "Recording Error", message: error.localizedDescription)
-        }
-    }
-
-    /// Show an error alert to the user via NSAlert (works from menu bar apps).
-    private func showErrorAlert(title: String, message: String) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = title
-        alert.informativeText = message
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
-    }
-
-    // MARK: - Elapsed Timer
-
-    private func startElapsedTimer() {
-        elapsedDisplay = "00:00"
-        elapsedTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            let seconds = Int(recorder.elapsedSeconds)
-            let mins = seconds / 60
-            let secs = seconds % 60
-            elapsedDisplay = String(format: "%02d:%02d", mins, secs)
-        }
-    }
-
-    private func stopElapsedTimer() {
-        elapsedTimer?.invalidate()
-        elapsedTimer = nil
-        elapsedDisplay = "00:00"
     }
 }
 

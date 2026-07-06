@@ -220,6 +220,7 @@ struct RecordingPipelineIntegrationTests {
 private final class IntegrationFakePermissions: RecordingPermissions, @unchecked Sendable {
     let allGranted: Bool
     var needsSetup: Bool { !allGranted }
+    var screenCaptureGranted: Bool { allGranted }
 
     init(allGranted: Bool) { self.allGranted = allGranted }
     func checkAll() async {}

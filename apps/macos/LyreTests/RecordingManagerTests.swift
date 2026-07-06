@@ -346,6 +346,10 @@ private func tempDir() -> URL {
 private final class FakePermissions: RecordingPermissions, @unchecked Sendable {
     var allGranted: Bool
     var needsSetup: Bool { !allGranted }
+    /// Mirrors the real `PermissionManager.screenCaptureGranted`: the SCK
+    /// grant flips when the composite `allGranted` flag flips (mic is
+    /// orthogonal but the RecordingManager tests don't exercise that split).
+    var screenCaptureGranted: Bool { allGranted }
     var checkAllCount = 0
 
     init(allGranted: Bool) {

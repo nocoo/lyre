@@ -31,6 +31,13 @@ final class PermissionManager: @unchecked Sendable {
         screenRecording != .granted || microphone != .granted
     }
 
+    /// Convenience accessor exposed by `RecordingPermissions` so consumers
+    /// (e.g. `TeamsMeetingWatcher`) can check SCK-only grants without knowing
+    /// about the concrete `Status` enum.
+    var screenCaptureGranted: Bool {
+        screenRecording == .granted
+    }
+
     /// Non-interactive probe for Screen Recording permission. Returns
     /// `true` only when TCC has already recorded a grant for this app;
     /// **never triggers a system dialog**.

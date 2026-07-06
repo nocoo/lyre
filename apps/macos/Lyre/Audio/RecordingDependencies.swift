@@ -14,6 +14,10 @@ import ScreenCaptureKit
 protocol RecordingPermissions: AnyObject {
     var allGranted: Bool { get }
     var needsSetup: Bool { get }
+    /// True when Screen Recording (SCK) has been granted. Read by
+    /// TeamsMeetingWatcher to skip SCShareableContent calls when the user has
+    /// not granted the permission; see docs/07-teams-meeting-detector.md.
+    var screenCaptureGranted: Bool { get }
     func checkAll() async
 }
 
