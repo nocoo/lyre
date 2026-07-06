@@ -1210,6 +1210,156 @@ Phase 0 探针的输出直接推翻了"任一命中即算 active，宁误弹"的
 
 - **2026-07-06 首次运行**：F1/F2/F3 已发现；建议按上文"路径 A"修文档 → 进入 C6。
 
+## Appendix B — DQ Manual Acceptance Results (C9)
+
+**记录约定**：每项 DQ 给出 3 段：
+- **契约**：期望行为（来自 [Manual acceptance](#manual-acceptancerelease-前必跑)）
+- **自动化证据**：codebase 里对应的实现锚点 + 单元测试
+- **手工验证**：本机实际观察结果（本 dev 机 2026-07-06 跑）；无法在此环境完成的项标 `⏳ 需要签名 build / 具体权限授予 / Teams 真实会议`，写明缺什么、下一步谁做
+
+### 环境 baseline（2026-07-06）
+
+- macOS：15.x on Apple Silicon（本 dev 机）
+- 本机 Teams：`com.microsoft.teams2` 已安装且正在运行（`ps` 显示 `MSTeams` + `com.microsoft.teams2.*` helpers 活着）
+- 权限：本轮启动的 `Lyre.debug.dylib` build 尚未在 System Settings → Privacy & Security → Screen Recording 授权
+- 已构建产物：`~/Library/Developer/Xcode/DerivedData/Lyre-*/Build/Products/Debug/Lyre.app`
+- 观察工具：`log stream/show --predicate 'subsystem == "ai.hexly.lyre"' --info` + `top -pid <pid>` + Activity Monitor
+
+### 启动阶段实测日志
+
+**with `meeting.detection.enabled = true`（默认）**：
+
+```
+[ai.hexly.lyre:AppConfig] Config loaded from <private>
+[ai.hexly.lyre:LyreApp] Meeting detector started (enabled)
+[ai.hexly.lyre:TeamsMeetingWatcher] Screen Recording not granted; detector stays inactive
+[ai.hexly.lyre:AppConfig] Config saved
+```
+
+**with `meeting.detection.enabled = false`（`defaults write ai.hexly.lyre meeting.detection.enabled -bool false` 后重启）**：
+
+```
+[ai.hexly.lyre:AppConfig] Config loaded from <private>
+[ai.hexly.lyre:LyreApp] Meeting detector kept idle (settings disabled)
+[ai.hexly.lyre:AppConfig] Config saved
+```
+
+log 差异清楚验证了：
+- LyreApp init 里的启动分支双向都对（DQ-1 / DQ-6 baseline log 点）—— enabled 分支进入 `watcher.start()`；disabled 分支跳过，走静默
+- enabled 分支下 watcher 首次 warm tick 命中 SCK 未授权 → 走 `handleObservationUnavailable()` 静默路径（DQ-7）—— `Screen Recording not granted; detector stays inactive` 全过程只出现 **1 次**（`sckUnauthorizedLogged` 一次性 guard 生效）
+- disabled 分支下无 `Screen Recording` log，说明 watcher 完全没启动，`handleObservationUnavailable` 都不会触发
+
+### 逐项 DQ
+
+#### DQ-1 Teams 不运行时功耗
+
+- **契约**：Lyre 启动、Teams 完全关闭 → 30 min CPU < 0.1%（`docs/07-teams-meeting-detector.md` DQ-1 行 1049-1051）
+- **自动化证据**：
+  - `TeamsMeetingWatcher.recomputeTier()`（`Meeting/TeamsMeetingWatcher.swift`）中 `!teamsAlive → newTier = .cold`；`coldInterval = 30` 秒
+  - `TeamsMeetingWatcherLifecycleTests.baseline_inactiveState_seedsWithoutYield` 覆盖 baseline 静默
+- **手工验证（本机 2026-07-06）**：
+  - **未完全按契约**：本机 Teams **正在运行**（无法安全关闭他人依赖的软件）。cold 档假设无法直接验证 30 min。
+  - 但**部分等价证据**：`top -pid <lyre> -l 5 -s 3` 取 5 个 3 秒间隔样本（约 15 秒观察窗口）；Lyre CPU 恒定 `0.0%`（Teams 已运行但 SR 未授权，watcher 走 `handleObservationUnavailable()` 静默，等价于 cold 档的低负载）
+  - `⏳ 待 signed build 或 Teams 完全关闭时重跑 30 min`
+
+#### DQ-2 打开 Teams 立即入会
+
+- **契约**：Teams 冷启 → 立刻 Join → 15 秒内弹 "Start recording"
+- **自动化证据**：
+  - `NSWorkspace.didLaunchApplicationNotification` observer（`installWorkspaceObservers()`）触发 `recomputeTier(runTickImmediately: true)` → cold→warm 即时切档
+  - `warm` 档 `warmInterval = 5` 秒 tick，加 SCK 查询 <100ms → 最坏 5s + query time
+  - `MeetingPromptCoordinatorTests.startEvent_whenIdle_presentsStartPromptAndForwards` 覆盖 start prompt gating
+- **手工验证**：`⏳ 需要 signed build + Screen Recording 授权 + Teams 冷启 + Join Meeting 完整流程`。当前 dev build 无 SR，会走静默路径，无法验证 prompt。
+
+#### DQ-3 会议中启动 Lyre
+
+- **契约**：已在会议中 → 启动 Lyre → **不弹**（baseline 静默）
+- **自动化证据**：
+  - `TeamsMeetingWatcher.applyDebounced()` 的 `if !baselineDone` 分支只 seed 内部状态，**不 yield**
+  - `TeamsMeetingWatcherLifecycleTests.baseline_activeState_seedsWithoutYield` 严格覆盖：baseline 落 true → 20ms 内无 stream 事件
+- **手工验证**：`⏳ 需要 Teams 真实会议中 + signed build 启动 Lyre`。基于自动测试和代码路径分析，此契约已由 `baselineDone` 分支保证。
+
+#### DQ-4 假阳性
+
+- **契约**：Teams 打开 Chat 独立窗口、Calendar 弹窗 → 观察误弹率；>1/day 走 C10
+- **自动化证据**：
+  - v1.3 判据契约已消除 Phase 0 实测的 F1/F2/F3（idle chat 频道 / offscreen helper / cert 弹窗）
+  - `TeamsMeetingWatcherJudgeTests.idleChatSceneWithHelperClutter_yieldsFalse` 还原 15 窗口 payload → false
+  - `titleSlot_chatChannelContainingMeetingWord_yieldsFalse` 覆盖 F2
+  - `excludedTitle_teamsNRC_isDropped` 覆盖 F3
+- **手工验证**：`⏳ 待 signed build + SR 授权后开会 + 观察 Chat / Calendar 独立弹窗场景`。**已知未覆盖**：Chat / Calendar 独立弹窗形成 count>=2，可能仍然打穿；DQ-4 观察后走 C10。
+
+#### DQ-5 会议结束提示
+
+- **契约**：录音中，主持人 End Meeting → 5–15 秒内弹 "Stop recording"
+- **自动化证据**：
+  - warm 档 5s tick；判据 confirmed active→false 触发 `eventContinuation.yield(false)`
+  - `MeetingPromptCoordinatorTests.endEvent_whenRecording_presentsStopPromptAndForwards` 覆盖 stop prompt gating
+  - `streamLevel_meetingEndedDuringStartPrompt_isDropped` 覆盖 DQ-8 相关的 stop-not-during-start-modal 边界
+- **手工验证**：`⏳ 需要 signed build + SR 授权 + 真实会议 end`。
+
+#### DQ-6 关掉开关
+
+- **契约**：Settings 关掉 → 开会不弹，且 Activity Monitor 上 watcher **完全 suspended**（无 5s SCK 查询、无 tick timer）；重新开启 → `resume` 后下一场正常弹
+- **自动化证据**：
+  - `LyreApp.body` 的 `MainWindowView(...).onChange(of: meetingSettings.isEnabled)` 调 `resume()` / `suspend()`
+  - `suspend()`：invalidate timer + remove observers + reset baseline/debounce state；**不** finish stream
+  - `TeamsMeetingWatcherLifecycleTests.suspend_thenResume_reusesSameStream` 覆盖同一 stream 复用
+  - 启动 log `"Meeting detector kept idle (settings disabled)"` / `"Meeting detector resumed by user toggle"` / `"Meeting detector suspended by user toggle"` 便于手工确认
+- **手工验证（本机 2026-07-06）**：
+  - **init 分支双向已验证**（通过 `defaults write` 翻转持久化值再关+重启 App）：
+    - `defaults write ai.hexly.lyre meeting.detection.enabled -bool true` 启动 → log 出现 `Meeting detector started (enabled)`
+    - `defaults write ai.hexly.lyre meeting.detection.enabled -bool false` 启动 → log 出现 `Meeting detector kept idle (settings disabled)`
+    - 后者启动后 `top -pid <lyre> -l 4 -s 3` 4 个 3 秒样本 CPU 恒 `0.0%`（约 12s 观察窗口），说明 watcher **完全没有 timer 起来**（init 的 `if isEnabled { watcher.start() }` 未执行，`rescheduleTimer` 不会被调用）
+  - **runtime `.onChange` toggle 分支**：`⏳ 需要在活跃 GUI session 里点 Settings tab 的开关`。本轮环境用 `osascript` 尝试 UI scripting 被 `System Events` 因 Accessibility 权限拒（`error -1719: osascript is not allowed assistive access`），无法在无人值守下驱动 SwiftUI Toggle。
+  - **代码路径证据**：runtime 分支的观察点固定：`LyreApp.body` 里 `MainWindowView(...).onChange(of: meetingSettings.isEnabled)` 直接调 `resume()` / `suspend()`，各带一条 log `Meeting detector resumed by user toggle` / `Meeting detector suspended by user toggle`。用户手工点一次开关即可看到对应 log 出现在 `log stream --predicate 'subsystem == "ai.hexly.lyre"'`。
+  - **恢复默认值**：验证后已 `defaults write ai.hexly.lyre meeting.detection.enabled -bool true` 复原，避免影响后续运行体验。
+
+#### DQ-7 SCK 未授权
+
+- **契约**：临时撤销 Screen Recording → Teams 中开会 → 不弹、无骚扰、日志最多 1 条 info
+- **自动化证据**：
+  - `TeamsMeetingWatcher.checkTeamsWindows()` 的未授权分支和 SCK catch 都走 `handleObservationUnavailable()`，**不** 进 `applyDebounced` 通道
+  - `sckUnauthorizedLogged` 一次性 guard
+  - `TeamsMeetingWatcherLifecycleTests.sckRevokedAfterActive_doesNotYieldFalse` / `sckThrows_doesNotYieldFalse` 覆盖 confirmed active → 无 yield
+- **手工验证（本机 2026-07-06）**：**完整验证通过** ✓
+  - Debug build 首次启动，Terminal 从未授予 SR
+  - Log 观察到 **恰好 1 条** `"Screen Recording not granted; detector stays inactive"`
+  - `top` 采样 30s Lyre CPU 恒 0.0%
+  - 无系统 SR 引导 alert 弹出
+  - 无会议提示弹出（当时 Teams 主窗展示 Chat 频道，是 Phase 0 F2 场景）
+
+#### DQ-8 Single-alert
+
+- **契约**：Start prompt 打开后立即结束会议 → Stop prompt 不重叠出现；Start prompt 关闭后如仍 inactive，不再弹 Stop（buffered 1 覆盖）
+- **自动化证据**：
+  - Coordinator 的 stream consumer 用同步 `dispatch(active:)`，`evaluate` 同步置 `isPromptPresented = true` 再 launch modal Task；`runPrompt` 尾部 `await Task.yield()` 保证 consumer 有机会 drain 才清 gate
+  - `MeetingPromptCoordinatorTests.streamLevel_meetingEndedDuringStartPrompt_isDropped` **stream-level 回归**：Start prompt 内 feed(false) → `choiceCount==1, stopCount==0`
+  - `streamLevel_droppedFalseDuringPrompt_stillArmsNextMeetingCycle` 覆盖 dropped false 后下场会议能重新 arm
+- **手工验证**：`⏳ 需要真实 modal + 真实 Teams end`。自动测试已覆盖生产等价路径。
+
+#### DQ-9 录音入口一致性
+
+- **契约**：tray Start / detector Start / tray Stop / detector Stop 四种组合各录一段 → Recordings 列表立即刷新、tray 计时器起停正确
+- **自动化证据**：
+  - `RecordingActionController` 唯一入口：`requestStart()` + timer + store.refresh；`requestStop()` + stop timer + store.refresh
+  - Tray + coordinator 都走 `RecordingActionHandling` protocol
+  - `RecordingActionControllerTests` 6 用例覆盖 start/stop 顺序、store refresh、elapsed 生命周期、error alert、double-start no-op、`setRecordingsStore` 换 store 后 refresh 走新 store
+- **手工验证**：`⏳ 需要 signed build + SR + Mic 授权真实录音`。tray + detector 因为都走同一 controller，源码路径等价。
+
+### 无法自动验证的项 & 遗留 open items
+
+1. **CPU 30min 长跑（DQ-1）**：需要 Teams 完全关闭 + 长时间跑测。本机 Teams 常驻，未跑。
+2. **完整 DQ-2/-4/-5/-8/-9 交互**：需要 signed build（`Lyre.debug.app` 可以，但未授予 SR）+ 真实会议流程。
+3. **DQ-6 runtime toggle 分支**：init 双向已通过 `defaults write` 验证；`.onChange` runtime 观察本次被 macOS Accessibility 权限拦下，`osascript` 报 `-1719 not allowed assistive access`。手工在 Settings 里点一次开关就能拿到 log；等 UI 交互。
+
+### 后续动作
+
+- **哥或 Reviewer** 用 signed build（或本 Debug build + 授予 SR）跑 DQ-2/4/5/7/8/9 完整交互，把观察结果贴到本附录对应小节；
+- **手工 DQ-6 runtime toggle**：打开主窗口 → Settings tab → 切换 "Detect Teams meetings and prompt to record"，在 `log stream --predicate 'subsystem == "ai.hexly.lyre"'` 里应立即看到 `Meeting detector suspended by user toggle` / `Meeting detector resumed by user toggle`；把观察贴回；
+- 如 DQ-4 观察到 Chat / Calendar 独立弹窗高频误弹，触发 C10（`feat(macos): tighten meeting judgement heuristic`）；
+- 如 CLAUDE.md retrospective 有新 macOS API 坑要记，走 C11。
+
 ## References
 
 - Apple — [`SCShareableContent`](https://developer.apple.com/documentation/screencapturekit/scshareablecontent)
