@@ -1060,6 +1060,91 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 - C4 是承载 Reviewer #1 修正的关键；如 C4 复审发现 tray 显示回归，先滚回 C4 再往下走。
 - C6/C7 的测试必须 100% 绿才能进入 C8。
 
+## Appendix A — Phase 0 SCK/Teams Window Probe (C3)
+
+### Probe 位置
+
+`scripts/probe/teams-window-probe.swift`。**不随 App 发布**，仅供 Phase 0 及后续 Teams 更新版本时手动重跑。
+
+用法：
+
+```
+swift scripts/probe/teams-window-probe.swift
+```
+
+需要授予运行该命令的 Terminal（Terminal.app / iTerm.app / VS Code Terminal / 等）Screen Recording 权限，否则 `SCShareableContent.current` 抛 `The user declined TCCs for application, window, display capture` 并退出 code=2。
+
+### 探针功能
+
+- 枚举 `SCShareableContent.current.windows`，过滤 `owningApplication.bundleIdentifier ∈ {com.microsoft.teams, com.microsoft.teams2}`。
+- 每条窗口输出：bundle / isOnScreen / title / frame / 是否命中 `excludedTitles` / 是否命中 `meetingTitleKeywords` / 是否命中 `meetingTitleSuffix`。
+- 用与 `TeamsMeetingWatcher.judgeMeeting(from:)` **完全一致**的规则计算 `active`：既能验证判据、又能采集 title 样本。
+- 末尾输出 JSON 便于直接贴进本附录未来的观察记录。
+
+### 本机首次运行结果（2026-07-06）
+
+- 环境：macOS 15.x on Apple Silicon（本 dev 机）。
+- 观察前提：Teams（`com.microsoft.teams2`，New Teams）已运行、已授权 Screen Recording，**当前无正在进行的会议**（idle 状态，只是打开了主界面 + 一个 Chat 频道）。
+- 探针输出（15 个 Teams 窗口）：
+
+```
+=== Teams windows visible to SCShareableContent (15) ===
+bundle                    onscr  title                                    excl kw  suf frame
+com.microsoft.teams2      no     Microsoft Teams                          yes  no  no  800x600
+com.microsoft.teams2      no                                              yes  no  no  3360x30
+com.microsoft.teams2      no                                              yes  no  no  3360x30      (×8 全空 title 的 offscreen renderer)
+com.microsoft.teams2      no     Select a certificate for authentication  no   no  no  512x286
+com.microsoft.teams2      no     Select a certificate for authentication  no   no  no  512x286
+com.microsoft.teams2      no                                              yes  no  no  45x19        (小 helper)
+com.microsoft.teams2      no                                              yes  no  no  84x77        (小 helper)
+com.microsoft.teams2      no     Teams NRC                                no   no  no  1x1          (helper 1x1)
+com.microsoft.teams2      yes    Chat | Calling/Meeting/Devices | Gene... no   yes yes 1680x1860    (主窗，一个 Chat 频道)
+
+=== judgeMeeting result ===
+- non-excluded candidates: 4 → count>=2 : true
+- any keyword/suffix hit  : true
+- final active            : true   ← 假阳性！当前没有开会
+```
+
+### 观察结论（**必须回到设计文档修正判据**）
+
+Phase 0 就是为暴露这类问题而存在。以下发现直接影响 C6 / C10 判据实现：
+
+**F1. 判据规则漏了"仅计入 on-screen 窗口"** — 探针里 15 个窗口中只有 1 个 `isOnScreen=true`。offscreen 的 renderer / helper 一堆，但对用户而言"会议正在进行"应该只看 on-screen 窗口。当前 `TeamsMeetingWatcher.judgeMeeting(from:)` 完全没读 `isOnScreen`，会把 offscreen helper 也算成 candidates → 直接把 `count >= 2` 判据打穿。
+
+**F2. Chat 频道命名可轻易触发关键词/后缀判据** — 观察到的 `"Chat | Calling/Meeting/Devices | General | Microsoft Teams"`：一个团队中恰好有一个叫 "Calling/Meeting/Devices" 的 Chat 频道，被展示为主窗标题。它同时命中 `meetingTitleKeywords`（"meeting"）与 `meetingTitleSuffix`（" | microsoft teams"）。**这意味着：只要 Teams 主窗切到任何一个含 "meeting" 字样的频道 / 消息线程，detector 就会 fire。** 这是产品级的 false positive，用户会被无缘无故弹提示。
+
+**F3. 部分小 helper / 1×1 窗口未被 `excludedTitles` 覆盖** — `"Teams NRC"`、`"Select a certificate for authentication"` 都不在白名单。前者是常驻 1×1 helper，后者是登录/证书选择弹窗（用户签退再登录时会出现）；两者叠加就已经能让 `count>=2` 命中。
+
+### 建议的判据修正（写进 C6 或 C10 决策依据）
+
+Phase 0 探针的输出直接推翻了"任一命中即算 active，宁误弹"的定案；实际观测到的 idle false positive 意味着若 C6 按当前文档实现，用户会在**打开 Teams 时立即被打扰**。给两条候选路径供 Reviewer / 哥 决策：
+
+- **路径 A（保守推荐）**：把 F1 + F2 + F3 的修正合并进 **C6**，避免 C6 上线即成已知 broken。具体：
+  1. `judgeMeeting` 前置过滤：**只保留 `isOnScreen == true` 且 `frame.width >= 200 && frame.height >= 200` 的窗口作为 candidates**。这一步就消除了 F1 + F3。
+  2. 收紧关键词判据：不再单独用 `contains("meeting")` / 后缀判据；改为**必须同时**满足"`title` 命中 `meetingTitleSuffix` **且** `title` 前缀（split by `|` 的第一段）命中 `meetingTitleKeywords` 或形如 `<subject>` / `<name>'s Meeting`"。用 " | " 拆分标题的第一段作为会议主题槽位，从而排除 Chat 频道名里出现的 "meeting" 字样。
+  3. `excludedTitles` 追加：`"teams nrc"`、以及 `"select a certificate for authentication"`（登录期间不算会议）。
+  4. **保留 `count >= 2` 判据作为兜底**（对非英语 / 非中文会议标题格式变化的兜底），但要求两个 candidate 都是 on-screen + 尺寸达标。
+- **路径 B（先按原文档 ship，靠 DQ-4 后置收紧）**：C6 原封实现，C9 手工验收时靠 DQ-4 捕捉假阳性，走 C10 收紧。**风险**：本机探针数据已经证明 idle 状态会误报，DQ-4 一定失败，等于把已知 bug 推到 C9 后再修，白跑一趟 C6-C8 的 test 通过。
+
+**我推荐路径 A**：把上面 4 条修正立即写入设计文档"Teams meeting window heuristic"章节 + 更新单测集，把 C6 一次性实现到 90% 准确度，再让 C9 DQ-4 只处理边缘 case。
+
+### 待补充的观察项（授权后重跑时填写）
+
+| 场景 | Teams 主窗数量 | 会议窗标题样例 | count 判据命中 | 关键词判据命中 | 备注 |
+|------|---------------|----------------|----------------|----------------|------|
+| **空闲（idle，主窗展示 Chat 频道）** | 15（14 excluded/offscreen + 1 on-screen 主窗） | `Chat \| Calling/Meeting/Devices \| General \| Microsoft Teams` | ✅（当前，误报） | ✅（关键词 + 后缀双中，误报） | **F1 + F2 + F3 已确认** |
+| 打开 Chat 独立弹窗 | 待测 | | | | |
+| 打开 Calendar 独立弹窗 | 待测 | | | | |
+| 打开 Settings 独立弹窗 | 待测 | | | | |
+| 正在开会 | 待测 | | | | |
+| 会议 + Chat 弹窗 | 待测 | | | | |
+| 签退/证书选择弹窗中 | 会出现 2 个 `Select a certificate for authentication` | — | ✅（当前，误报） | ❌ | F3 已确认 |
+
+### 判据校准记录
+
+- **2026-07-06 首次运行**：F1/F2/F3 已发现；建议按上文"路径 A"修文档 → 进入 C6。
+
 ## References
 
 - Apple — [`SCShareableContent`](https://developer.apple.com/documentation/screencapturekit/scshareablecontent)
