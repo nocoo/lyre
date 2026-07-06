@@ -14,6 +14,7 @@
 		1F413F3779C11F9BCBAF57A1 /* LyreApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD16DFD242493414EA1EA2C /* LyreApp.swift */; };
 		222511AB5DCBDAE7356A1F0A /* UploadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB98E36516BA802546FB5DD3 /* UploadManager.swift */; };
 		230C26A7C8A3591AAA595374 /* AppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DD67E445ECC5A650871E39 /* AppConfigTests.swift */; };
+		303BB8E9608792224DF55CCA /* MeetingPromptCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A3232D2C222D6EEE2D3E00 /* MeetingPromptCoordinatorTests.swift */; };
 		388F22E571C9B5D97E0E2800 /* RecordingActionSeams.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73B35B04E34E72F386A1689B /* RecordingActionSeams.swift */; };
 		40836B442512BD5224B77224 /* TeamsMeetingWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FEFFCA62BF2B5983A134165 /* TeamsMeetingWatcher.swift */; };
 		468D65919A6805A74C84652F /* AudioCaptureManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD146B1E12A00EF03AF5F9 /* AudioCaptureManagerTests.swift */; };
@@ -38,6 +39,7 @@
 		984FEB538739A932909C1235 /* RecordingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F91E0D26696DF1EA2A6E00AC /* RecordingsStoreTests.swift */; };
 		9BF7D7200EABA546E35A96BD /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 244AED17BBD66EDA693A8A3F /* APIClientTests.swift */; };
 		9D063CCD246FB23505FDD103 /* AudioMixer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5708B989E5F7501403FAB84 /* AudioMixer.swift */; };
+		A30F2F1815DB892750BC7789 /* MeetingPromptCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C5549C994F3F4733D79F7A3 /* MeetingPromptCoordinator.swift */; };
 		AC72919ABC690F2270C864E7 /* PermissionGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF5FFE40BC27B3A080DABD3 /* PermissionGuideView.swift */; };
 		B004BA99B8CA6E86985DA16B /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5854B120C2D1FD845D584070 /* PermissionManager.swift */; };
 		C8A71EEA57EAFB25AB836BA4 /* AlertPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2305D4D9E681FC7F5E326DA4 /* AlertPresenter.swift */; };
@@ -77,6 +79,7 @@
 		38EB579CEBF90EFF9A4A8011 /* LyreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LyreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DD16DFD242493414EA1EA2C /* LyreApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyreApp.swift; sourceTree = "<group>"; };
 		3F7E85877A862D61AFEA40B1 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		42A3232D2C222D6EEE2D3E00 /* MeetingPromptCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPromptCoordinatorTests.swift; sourceTree = "<group>"; };
 		49F47766AB03DAA36A603A4E /* RecordingActionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingActionController.swift; sourceTree = "<group>"; };
 		4BDA488FB21B03DA3A9C7DC2 /* RecordingDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingDependencies.swift; sourceTree = "<group>"; };
 		4CDE2097869D4BFE14162DA8 /* AudioDownmixerHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDownmixerHelpers.swift; sourceTree = "<group>"; };
@@ -92,6 +95,7 @@
 		75DD146B1E12A00EF03AF5F9 /* AudioCaptureManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureManagerTests.swift; sourceTree = "<group>"; };
 		76B15AEDC1503219D6CB881B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		778611E3A8ACB3CC04691360 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		7C5549C994F3F4733D79F7A3 /* MeetingPromptCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPromptCoordinator.swift; sourceTree = "<group>"; };
 		832768EF815764CF672E1763 /* MeetingDetectionSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingDetectionSettingsTests.swift; sourceTree = "<group>"; };
 		84479354E7634918D8CBADA9 /* RecordingE2ETests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingE2ETests.swift; sourceTree = "<group>"; };
 		865B1312BF623D7C897306B8 /* Lyre.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Lyre.entitlements; sourceTree = "<group>"; };
@@ -150,6 +154,7 @@
 				A0466628751754340ABAF168 /* AVAssetWriterPTSProbeTests.swift */,
 				A10ABD247F77F83777AE4A3F /* AVAssetWriterTrackOrderProbeTests.swift */,
 				832768EF815764CF672E1763 /* MeetingDetectionSettingsTests.swift */,
+				42A3232D2C222D6EEE2D3E00 /* MeetingPromptCoordinatorTests.swift */,
 				4FD9C1C2B1DAFB998D03C2D8 /* PermissionManagerTests.swift */,
 				B527587162EFAB646CB07E65 /* RecordingActionControllerTests.swift */,
 				84479354E7634918D8CBADA9 /* RecordingE2ETests.swift */,
@@ -234,6 +239,7 @@
 			children = (
 				2305D4D9E681FC7F5E326DA4 /* AlertPresenter.swift */,
 				D95A536BEF86BCC26B5F0F56 /* MeetingDetectionSettings.swift */,
+				7C5549C994F3F4733D79F7A3 /* MeetingPromptCoordinator.swift */,
 				C3DE4D379AD9AB19169EE644 /* ShareableWindow.swift */,
 				8FEFFCA62BF2B5983A134165 /* TeamsMeetingWatcher.swift */,
 			);
@@ -358,6 +364,7 @@
 				597E6093995248E45AD85311 /* AudioMixerTests.swift in Sources */,
 				973D3AEBBA1630F9CAA16E80 /* AudioPlayerManagerTests.swift in Sources */,
 				4A0F7CA3DABB6C7B3825D078 /* MeetingDetectionSettingsTests.swift in Sources */,
+				303BB8E9608792224DF55CCA /* MeetingPromptCoordinatorTests.swift in Sources */,
 				480F11687C07C1CA0543473B /* PermissionManagerTests.swift in Sources */,
 				12B6685F0DEE3D29DDBA9D01 /* RecordingActionControllerTests.swift in Sources */,
 				6955B2A8546957F6E6054A61 /* RecordingE2ETests.swift in Sources */,
@@ -388,6 +395,7 @@
 				7E5FC4E676D1D8F70794F464 /* Constants.swift in Sources */,
 				1F413F3779C11F9BCBAF57A1 /* LyreApp.swift in Sources */,
 				FBA8C6EDBBFE6665C0386AD1 /* MeetingDetectionSettings.swift in Sources */,
+				A30F2F1815DB892750BC7789 /* MeetingPromptCoordinator.swift in Sources */,
 				AC72919ABC690F2270C864E7 /* PermissionGuideView.swift in Sources */,
 				B004BA99B8CA6E86985DA16B /* PermissionManager.swift in Sources */,
 				5604B4600F241CB841EAE1F9 /* RecordingActionController.swift in Sources */,
