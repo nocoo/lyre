@@ -13,9 +13,9 @@
 
 ## Status
 
-- 阶段：设计（v1.2，已合并 Reviewer 三轮意见）
+- 阶段：设计（v1.3，Phase 0 观察后收紧判据契约）
 - 作者：MBP-SDE-A
-- 审查：MBP-Reviewer-A（v0、v1、v1.1 均已审查，见"审查记录"）
+- 审查：MBP-Reviewer-A（v0、v1、v1.1、v1.2 均已审查；v1.3 由 C3 Phase 0 触发，见"审查记录"）
 - 决策人：@zheng-li
 
 ## Motivation
@@ -126,31 +126,58 @@ warm 档 5s tick 内检测到会议窗口 → 触发提示。**最坏延迟 ≈ 
 
 **极端场景兜底 —— 先启动 Lyre，Teams 已经在开会**：见下面 **[启动时会议中的语义](#启动时会议中的语义v1-澄清来自-reviewer-反馈-5)**。
 
-### Teams meeting window heuristic
+### Teams meeting window heuristic（v1.3 修订，Phase 0 观察后收紧，Reviewer 定案 C3.5）
 
-`SCShareableContent.current.windows` 里，筛选出 `owningApplication?.bundleIdentifier ∈ TEAMS_BUNDLE_IDS`
-的窗口子集 `teamsWindows`。判"会议中"的规则（**任一命中即算 active**，宁误弹一次也不漏）：
+**Phase 0 探针数据推翻了 v1.2 的"任一命中即 active / 宁误弹一次也不漏"前提。** 详见 [Appendix A](#appendix-a--phase-0-sckteams-window-probe-c3)：本机 15 个 Teams 窗口中只有 1 个 on-screen，且主窗标题 `"Chat | Calling/Meeting/Devices | General | Microsoft Teams"` 是一个正常 Chat 频道名，同时命中 `meetingTitleKeywords` 与 `meetingTitleSuffix`，导致 idle 状态即被判 active。这是产品级 false positive，必须在 C6 前把判据收紧到工作可靠的水平；判据契约由本节写死。
 
-1. **数量判据**：`teamsWindows.count >= 2`（排除白名单标题后）。Teams 平常只开一个主窗口
-   `"Microsoft Teams"`；开会时会额外弹一个独立的会议窗口。这条覆盖绝大多数情况。
-2. **标题关键词判据**：`teamsWindows` 中存在 `title` 包含以下任一子串
-   （**大小写不敏感**，先 `lowercased()`）：
-   - `"meeting"`（英）
-   - `"会议"`（简体中文）
-   - `"會議"`（繁体中文）
-   - `" | microsoft teams"` 作为后缀（这是 New Teams 会议窗口标题的固定形态）
-3. **排除项**：即使命中 (1) 或 (2)，若窗口 `title` 属于以下白名单，跳过：
-   - `"Microsoft Teams"`（主窗口）
-   - `"Settings"` / `"设置"` / `"Preferences"`
-   - `""`（空标题的 offscreen 窗口，比如后台 renderer）
+#### 前置过滤（v1.3 强制）
 
-**为什么用数量判据而非精确标题匹配**：微软在 New Teams 每次迭代都会改会议窗口标题格式，
-最近观察到有 `"Meeting in <subject> | Microsoft Teams"` / `"<subject> | Microsoft Teams"` /
-`"<name>'s Meeting | Microsoft Teams"` 等变体，硬编码正则会持续失效。
+在跑判据前，先把 Teams 窗口过滤为 **`onScreenCandidates`**：
 
-**已知假阳性**：Teams "Chat" 弹独立窗口、"Calendar" 弹日历弹窗时，`teamsWindows.count` 也可能 ≥ 2。
-本设计选择**接受**这个假阳性 —— 用户看到 "是否开始录音" 弹窗，按 "Not now" 一秒关掉，
-比漏检一场会议成本低得多。Phase 0 探针会实际测量假阳性率，若超阈值再收紧判据（见 [Rollout](#rollout)）。
+```
+onScreenCandidates =
+    teamsWindows
+        .filter { !excludedTitles.contains($0.title?.lowercased() ?? "") }
+        .filter { $0.isOnScreen }
+        .filter { $0.frame.width >= 200 && $0.frame.height >= 200 }
+```
+
+- **`isOnScreen == true`**：排除 offscreen renderer / helper（Phase 0 显示 15/15 中 14 是 offscreen；这条一步消除 F1）。
+- **`frame >= 200×200`**：排除 1×1 / 45×19 / 84×77 一类 helper 窗口（这条消除 F3 里 `Teams NRC` 一类漏网）。200×200 门槛是保守选择（会议 preview / 主窗都 ≫ 200）。
+- **`excludedTitles`（v1.3 追加 F3 里发现的）**：`"microsoft teams"` / `"settings"` / `"设置"` / `"preferences"` / `""` / `"teams nrc"` / `"select a certificate for authentication"`。白名单是**兜底防线**，不是主要正确性来源。
+
+#### 判据（v1.3 收紧）
+
+只对 `onScreenCandidates` 应用规则；**任一命中即 active**（保留双判据的耐磨性，但每一条都收紧）：
+
+1. **数量判据（收紧）**：`onScreenCandidates.count >= 2`。要求两个 candidate 都已经过 on-screen + 尺寸达标过滤。Teams 平常 idle 只会有 1 个 on-screen 主窗；开会时会额外弹一个独立的、on-screen、大尺寸的会议窗口，仍能命中。
+2. **标题槽位判据（收紧）**：不再对整个 title 做 `contains("meeting")` 或简单后缀命中。改为**槽位化匹配**：
+   - 用 " | "（U+0020 竖线 U+0020）分割 title，取第一段（即 Teams 用来放"会议主题"或"频道名"的槽位），记为 `head`。
+   - 要求 `title` 命中 `meetingTitleSuffix`（`" | microsoft teams"`），**并且** `head.lowercased()` 满足以下任一：
+     - 以 `"meeting"` 开头（`"Meeting in Sprint"` / `"Meeting with Alice"` 命中；`"Chat"` / `"Calling/Meeting/Devices"` 不命中，因为不以 "meeting" 开头）
+     - 以 `"'s meeting"` 结尾（`"Alice's Meeting"` 命中）
+     - 完全等于 `"meeting"` / `"会议"` / `"會議"` / `"会议中"`（保留纯中文会议标题命中）
+   - 命中的判据示例：
+     - `"Meeting in Sprint | Microsoft Teams"` ✅
+     - `"Alice's Meeting | Microsoft Teams"` ✅
+     - `"<subject> | Microsoft Teams"` where `<subject>` 是任意主题：**不命中**（现代 Teams 主窗切频道后也是这种形态，如 F2 中的 `"Chat | ... | Microsoft Teams"`）—— 依靠数量判据兜底
+     - `"Chat | Calling/Meeting/Devices | General | Microsoft Teams"` ❌（`head == "Chat"`，不命中）
+     - `"讨论 | Microsoft Teams"` ❌（`head == "讨论"`，不含 meeting 关键词）
+   - 该判据的目的是**捕捉 New Teams 会议窗口的常见命名格式**，而不是所有可能命名。命不中的情况由数量判据兜底。
+
+#### 数量判据 vs. 标题判据的角色分工（v1.3 明确）
+
+- **数量判据是"会议中"的**主要**判据**：因为 New Teams 稳定会为会议开一个独立 on-screen 窗口，主窗 + 会议窗 → count>=2；idle 状态即使切到 Chat 频道，也只有 1 个 on-screen 主窗，count=1。
+- **标题槽位判据是补齐用**：捕捉 Classic Teams 或某些企业改配置情况下"会议不额外开窗但把主窗标题改成 `Meeting in X | Microsoft Teams`"的 case。**必须窄，宁可漏也不能宽**，因为宽的关键词判据会被主窗切频道打穿（F2）。
+
+#### 已知漏检（by-design，接受）
+
+- 会议时 Teams 只有 1 个 on-screen 窗口且标题不以 `"Meeting"` 开头 —— 不命中。若在 DQ-4 观察到此形态出现，走 C10 扩容；不在此契约里承诺。
+- 用户手动把 Teams 窗口最小化到 dock 时 `isOnScreen == false` —— 判 inactive。产品选择：用户主动最小化 = 用户主动脱离会议关注 = 不打扰。
+
+#### 从 provider 拿到 `isOnScreen` / `frame`（v1.3 契约）
+
+判据依赖 `isOnScreen` 与 `frame.size`，因此 [ShareableContentProviding](#teamsmeetingwatcher-v1-用-asyncstream-q2-定案) 返回的 `ShareableWindow` 结构必须携带这两个字段。C6 实现时需要相应扩展（见下节代码示例的 v1.3 版本）。
 
 ### Debounce / hysteresis
 
@@ -435,9 +462,13 @@ protocol ShareableContentProviding {
 }
 
 /// Value-type window info（SCWindow 不便构造，用轻量结构体绕开）
+/// v1.3 契约：判据必须能读 isOnScreen + frame，因此 provider 必须携带这两个字段
+/// （不是 optional，直接用 CGRect 拿 width/height）。
 struct ShareableWindow: Sendable {
     let bundleID: String
     let title: String?
+    let isOnScreen: Bool
+    let frame: CGRect
 }
 
 @MainActor
@@ -451,9 +482,19 @@ final class TeamsMeetingWatcher {
 
     // MARK: - Constants
     static let teamsBundleIDs: Set<String> = ["com.microsoft.teams", "com.microsoft.teams2"]
-    static let meetingTitleKeywords: [String] = ["meeting", "会议", "會議"]
+    /// v1.3 判据用（收紧后不是简单 contains）
     static let meetingTitleSuffix: String = " | microsoft teams"
-    static let excludedTitles: Set<String> = ["microsoft teams", "settings", "设置", "preferences", ""]
+    static let meetingHeadPrefixEnglish: String = "meeting"          // head 以此开头即命中
+    static let meetingHeadSuffixEnglish: String = "'s meeting"        // head 以此结尾即命中
+    static let meetingHeadExact: Set<String> = ["meeting", "会议", "會議", "会议中"]  // head 完全等于其一即命中
+    /// v1.3 追加 F3 中发现的漏网：teams nrc、证书选择弹窗
+    static let excludedTitles: Set<String> = [
+        "microsoft teams", "settings", "设置", "preferences", "",
+        "teams nrc", "select a certificate for authentication",
+    ]
+    /// v1.3 前置过滤门槛：窗口 min 尺寸
+    static let minCandidateWidth: CGFloat = 200
+    static let minCandidateHeight: CGFloat = 200
 
     private let coldInterval: TimeInterval = 30
     private let warmInterval: TimeInterval = 5
@@ -621,17 +662,38 @@ final class TeamsMeetingWatcher {
         }
     }
 
-    /// **内部纯函数** — 单元测试直接调这个
+    /// **内部纯函数** — 单元测试直接调这个（v1.3 收紧后的实现契约）
     static func judgeMeeting(from windows: [ShareableWindow]) -> Bool {
-        let candidates = windows.filter { !excludedTitles.contains(($0.title ?? "").lowercased()) }
+        // 前置过滤：白名单 + on-screen + 尺寸达标
+        let candidates = windows.filter { w in
+            let title = (w.title ?? "").lowercased()
+            guard !excludedTitles.contains(title) else { return false }
+            guard w.isOnScreen else { return false }
+            guard w.frame.width >= minCandidateWidth,
+                  w.frame.height >= minCandidateHeight else { return false }
+            return true
+        }
+        // 数量判据（主判据）：两个 on-screen + 达标窗口
         if candidates.count >= 2 { return true }
-        for w in candidates {
-            let t = (w.title ?? "").lowercased()
-            if t.hasSuffix(meetingTitleSuffix) { return true }
-            for kw in meetingTitleKeywords where t.contains(kw) { return true }
+        // 标题槽位判据（补齐用）：必须同时命中 suffix + head 是"会议主题"形态
+        for w in candidates where isMeetingTitle(w.title) {
+            return true
         }
         return false
     }
+
+    /// v1.3 标题槽位判据（收紧）：suffix 必须命中，head 必须是"会议主题"形态。
+    /// head = 用 " | " 拆分 title 的第一段。
+    static func isMeetingTitle(_ title: String?) -> Bool {
+        let t = (title ?? "").lowercased()
+        guard t.hasSuffix(meetingTitleSuffix) else { return false }
+        let head = String(t.split(separator: " | ", maxSplits: 1, omittingEmptySubsequences: false).first ?? "")
+        if meetingHeadExact.contains(head) { return true }
+        if head.hasPrefix(meetingHeadPrefixEnglish) { return true }   // "meeting in sprint"
+        if head.hasSuffix(meetingHeadSuffixEnglish) { return true }    // "alice's meeting"
+        return false
+    }
+
     private func judgeMeeting(from windows: [ShareableWindow]) -> Bool {
         Self.judgeMeeting(from: windows)
     }
@@ -949,9 +1011,12 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 
 | 测试 | 操作 |
 |---|---|
-| `TeamsMeetingWatcherTests.judgeMeeting_count` | 构造 `[ShareableWindow(bid: teams2, title: "Microsoft Teams"), ShareableWindow(bid: teams2, title: "Meeting in Sprint \| Microsoft Teams")]` → `Self.judgeMeeting == true`（数量 >=2 排除主窗口后是 1，但会议标题匹配也命中） |
-| `TeamsMeetingWatcherTests.judgeMeeting_keyword` | 单窗 title `"会议：产品评审"` → true；`"讨论 \| Microsoft Teams"` → true；`"Random Chat"` → false |
-| `TeamsMeetingWatcherTests.judgeMeeting_exclude` | 两窗 title 都是 `"Microsoft Teams"` / `"Settings"` → 排除后 candidates=0 → false |
+| `TeamsMeetingWatcherTests.judgeMeeting_count_only_onscreen_and_sized` | 两个窗都 on-screen + 尺寸达标 + 非 excluded → true；其中一个 offscreen → false；其中一个 100×100 → false。**回归 F1 + F3** |
+| `TeamsMeetingWatcherTests.judgeMeeting_title_slot_positive` | 单窗（on-screen + 达标），title 分别为 `"Meeting in Sprint \| Microsoft Teams"` / `"Alice's Meeting \| Microsoft Teams"` / `"会议 \| Microsoft Teams"` → 全 true |
+| `TeamsMeetingWatcherTests.judgeMeeting_title_slot_negative_regressions` | **F2 回归**：单窗（on-screen + 达标），title 分别为 `"Chat \| Calling/Meeting/Devices \| General \| Microsoft Teams"` / `"讨论 \| Microsoft Teams"` / `"Random Chat"` / `"Foo Meeting Bar \| Microsoft Teams"`（head 是 "foo meeting bar"，不以 meeting 开头也不以 's meeting 结尾）→ 全 false |
+| `TeamsMeetingWatcherTests.judgeMeeting_excluded_titles_v13` | 两个 on-screen + 达标 candidates，一个是 `"Teams NRC"`（1×1 也算，但被白名单排除）、一个是 `"Select a certificate for authentication"` → 排除后 candidates=0 → false。**F3 回归** |
+| `TeamsMeetingWatcherTests.judgeMeeting_offscreen_helpers_ignored` | 15 个 ShareableWindow：14 个 offscreen renderer/helper（frame=3360×30 空 title、45×19、84×77、1×1 Teams NRC）+ 1 个 on-screen 达标的 `"Chat \| ... \| Microsoft Teams"` → false（还原 Phase 0 idle 场景） |
+| `TeamsMeetingWatcherTests.judgeMeeting_meeting_plus_chat_yields_true` | on-screen 达标：主窗 `"Chat \| ... \| Microsoft Teams"`（不命中标题槽位）+ 单独会议窗 `"<subject> \| Microsoft Teams"`（也不命中标题槽位，但数量 = 2）→ true（正样本，会议中）|
 | `TeamsMeetingWatcherTests.baseline_does_not_yield` | Fake providers 让首次 tick 判 true → `meetingEvents` 30ms 内**无** yield，`confirmedActive == true`（读取内部 seam 或通过后续状态验证） |
 | `TeamsMeetingWatcherTests.debounce_switch` | 序列 `[true, false, true, true]` → yield 序列应为 `[]`（前 3 tick 都在两两不一致中，第 4 tick `lastRaw==true && confirmed(baseline=true)!=true` 也不动） → 更换测试案例：baseline=false，然后 `[true, true]` → yield `[true]`；再 `[false, false]` → yield `[false]` |
 | `TeamsMeetingWatcherTests.sck_unauthorized_silent` | Fake permissions `screenCaptureGranted = false` → tick 不调 SCK provider，`sckUnauthorizedLogged` 只置位一次，`confirmedActive == false` |
@@ -1016,7 +1081,7 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 | 窗口标题格式再次变化 | Microsoft 改 New Teams 会议窗口标题 | 数量判据仍生效；DQ-4 定期回归 |
 | SCK 权限被撤销 | 用户在系统设置撤销 Screen Recording | 一次性告警 + 静默 inactive；录音本身仍走现有引导 |
 | Alert 被埋（Teams 全屏 + 另一 Space） | 见 [AlertPresenter](#alertpresenter) | `NSApp.activate(ignoringOtherApps: true)` 前置；产品选择"直接了当" |
-| 假阳性太多 | DQ-4 发现率高 | 收紧 `excludedTitles` 或改用严格标题判据；预留 Phase 4 |
+| 假阳性太多 | DQ-4 观察到边缘 case | v1.3 已消除 **Phase 0 实测确认**的 3 类 false positive：idle 主窗标题被 `Meeting` 关键词/后缀打穿（F2）、offscreen renderer/helper 打穿 `count>=2`（F1）、`Teams NRC` / certificate 弹窗打穿（F3）。**尚未消除**：用户打开 Teams Chat / Calendar 独立窗口时，main + popout 形成两个 on-screen + 大尺寸 candidates → v1.3 数量判据仍会命中。这是**待验证风险**，由 DQ-4 手工验证；如频繁误报走 C10 收紧 |
 | Teams 崩溃 → 进程还在但无窗口 | 极少见 | warm tick 检测不到窗口 → 平滑降 inactive → 若正在录音会弹 Stop prompt，用户按 Keep recording 即可 |
 | 抖动导致 miss stop prompt | Start prompt 弹开阻塞时会议结束 | 由 `.bufferingNewest(1)` 决定：只丢一次；用户可从 tray 手动 stop（DQ-9 已确保入口一致） |
 
@@ -1045,11 +1110,11 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 | C3 | `chore(macos): capture teams window shape probe results` | Phase 0 探针脚本 + 附录（Teams 主/会议/Chat/Settings/Calendar 窗口 title 观察值），落到 docs/07 附录 | 文档 review |
 | C4 | `refactor(macos): extract RecordingActionController and recording seams for tray + detector` | v1.1 修订：扩展 `RecordingPermissions` 增加 `screenCaptureGranted`（`PermissionManager` extension 实现）；新增 `RecordingLifecycleManaging` / `RecordingsRefreshing` 两个窄协议（`RecordingManager` / `RecordingsStore` 通过 extension conform）；新增 `Recording/RecordingActionController.swift` + `Meeting/AlertPresenter.swift`；把 tray 现有 elapsed timer / store refresh / error alert 迁进 controller；TrayMenu 依赖 `@Bindable var actionController: RecordingActionController`（concrete，让 SwiftUI 观察生效）；`LyreApp` 在 init 里构造 controller 并传入 tray。同时补 `RecordingActionControllerTests`（走新协议 fake）。 | `xcodebuild build & test` — 新单测全绿 + 现有 tray/manager 测试仍绿；本机手动录一段验证 tray 显示、Recordings 刷新 |
 | C5 | `feat(macos): add meeting detection settings + settings ui toggle` | `Meeting/MeetingDetectionSettings.swift` + `SettingsView.swift` 追加 Section + `LyreApp` 持有 `MeetingDetectionSettings` 并传入 `SettingsView` | `xcodebuild build`；打开 Settings 看到开关 |
-| C6 | `feat(macos): add teams meeting watcher with provider seams` | `Meeting/TeamsMeetingWatcher.swift` + `Meeting/ShareableWindow.swift` + 两个 provider concrete impl；watcher 用 `start()` / `suspend()` / `resume()` / `stopAndFinish()` 生命周期，`meetingEvents: AsyncStream<Bool>` 只 yield 已确认的状态变化；SCK 未授权时读 `permissions.screenCaptureGranted` 静默。新增 `TeamsMeetingWatcherTests` 全部用例（judge / debounce / baseline 不 yield / SCK 未授权静默 / didTerminate 强制 false / suspend 后 resume 能继续消费） | `xcodebuild test` — 新测试全绿 |
+| C6 | `feat(macos): add teams meeting watcher with provider seams` | `Meeting/TeamsMeetingWatcher.swift` + `Meeting/ShareableWindow.swift`（v1.3 携带 `isOnScreen` + `frame`）+ 两个 provider concrete impl；watcher 用 `start()` / `suspend()` / `resume()` / `stopAndFinish()` 生命周期，`meetingEvents: AsyncStream<Bool>` 只 yield 已确认的状态变化；SCK 未授权时读 `permissions.screenCaptureGranted` 静默；`judgeMeeting` 按 v1.3 收紧契约实现（on-screen + 尺寸达标前置过滤 + 标题槽位判据 + v1.3 excludedTitles）。新增 `TeamsMeetingWatcherTests` 全部用例（v1.3 6 条 judge regression + debounce + baseline 不 yield + SCK 未授权静默 + didTerminate 强制 false + suspend 后 resume 能继续消费） | `xcodebuild test` — 新测试全绿；F1/F2/F3 三条 Phase 0 regression 全部通过 |
 | C7 | `feat(macos): add prompt coordinator with alert presenter tests` | `Meeting/MeetingPromptCoordinator.swift` + 复用 `AlertPresenter.swift`；`MeetingPromptCoordinatorTests` 全部用例；测试用 fake watcher + fake presenter + fake action | `xcodebuild test` — 新测试全绿 |
 | C8 | `feat(macos): wire meeting detector into LyreApp with off-switch handling` | `LyreApp.swift` 构造 watcher/coordinator（coordinator init 后始终 start），`onChange(of: meetingSettings.isEnabled)` 驱动 **watcher suspend/resume**；DQ-1/DQ-6 打点 log | `xcodebuild build & test`；DQ-1/DQ-6 手动 |
 | C9 | `docs(macos): record DQ manual acceptance results` | DQ-1 到 DQ-9 手工验收记录写入 docs/07 附录；若发现假阳性率高，跟随一个 tightening commit | 文档 review |
-| C10（条件） | `feat(macos): tighten meeting judgement heuristic` | 只有 DQ-4 假阳性率高时才提；调整 `excludedTitles` 或改用严格标题判据 | 相应新单测 + `xcodebuild test` |
+| C10（条件） | `feat(macos): tighten meeting judgement heuristic` | 仅在 C9 DQ 观察到 v1.3 未覆盖的假阳性时触发。**v1.3 已消除的**：Phase 0 F1/F2/F3（offscreen helper / idle chat 频道标题 / cert 弹窗）；**v1.3 未消除的**：Teams Chat / Calendar 独立弹窗形成的 count>=2、以及未来 Teams 新版本改标题/新弹窗形态。C10 处理这些边缘 case（例如：数量判据加"其中一个必须 head 命中标题槽位"、追加 `excludedTitles`、按窗口 z-order 或 activation 时间进一步过滤） | 相应新单测 + `xcodebuild test` |
 | C11 | `chore: update CLAUDE.md retrospective (if any macOS API learnings)` | 若 C6/C7/C8 学到 `SCShareableContent` / `AsyncStream` / `NSAlert` 的坑，写到 retrospective | — |
 
 **约束**：
@@ -1157,6 +1222,18 @@ Phase 0 探针的输出直接推翻了"任一命中即算 active，宁误弹"的
 - Granola [Permissions FAQ](https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time) — "不需要 Accessibility 也能做会议感知"的产品先例
 
 ## 审查记录
+
+### v1.2 → v1.3 修订项（Phase 0 触发，Reviewer 定案 C3.5）
+
+Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次运行发现 idle 状态即被判 active（详见 [Appendix A](#appendix-a--phase-0-sckteams-window-probe-c3)）。Reviewer 定案：**判据契约变更必须在 C6 实现前用一个 doc-only 原子提交锁住，不能埋进 C6 implementation commit**。C3.5 (task #13) 落地本 v1.3：
+
+1. **前置过滤强制 `isOnScreen == true` + `frame >= 200×200`** — 消除 F1（offscreen renderer 打穿 count>=2）+ F3 里 1×1 / 小 helper 打穿的情况。
+2. **`ShareableWindow` 契约扩展**：新增 `isOnScreen: Bool` + `frame: CGRect` 字段；provider 必须携带，C6 概念代码同步更新。
+3. **标题槽位判据（收紧）**：不再对 title 做简单 `contains("meeting")` / 单独后缀命中；改为**同时**要求 title 命中 suffix + `head`（用 " | " 拆的第一段）是"会议主题"形态（`meeting…` 开头 / `'s meeting` 结尾 / 完全等于 `meeting`/`会议`/`會議`/`会议中`）。消除 F2（`Chat | ... | Microsoft Teams` 打穿）。
+4. **`excludedTitles` v1.3 版**：追加 `"teams nrc"` 与 `"select a certificate for authentication"`；白名单作为**兜底防线**，不作为主要正确性来源。
+5. **数量判据 vs. 标题判据的角色分工**：数量判据是主判据（New Teams 会议时稳定开独立窗口），标题槽位判据补齐 Classic Teams / 企业特殊配置的漏；标题判据设计成"宁漏勿宽"，任何漏由数量判据兜底。
+6. **`TeamsMeetingWatcherTests` 表更新**：删除旧的 `judgeMeeting_count / _keyword / _exclude`（沿用旧规则，会引导实现回退到 broken 状态）；改为 6 条覆盖 F1/F2/F3 回归的用例（`_count_only_onscreen_and_sized` / `_title_slot_positive` / `_title_slot_negative_regressions` / `_excluded_titles_v13` / `_offscreen_helpers_ignored` / `_meeting_plus_chat_yields_true`）。
+7. **C10 定位收窄**：从"DQ-4 后置修主要正确性"改为"C9 后处理 v1.3 未覆盖的假阳性"。v1.3 已消除 Phase 0 实测确认的 F1/F2/F3；**未消除**的是 Chat / Calendar 独立弹窗打穿 `count>=2` —— 这类由 DQ-4 手工验证，如频繁误报走 C10。C10 不是"主要正确性兜底"，但也不能声称 v1.3 已覆盖所有 chat 场景。
 
 ### v1.1 → v1.2 修订项
 
