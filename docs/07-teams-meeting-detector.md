@@ -2,8 +2,21 @@
 
 > 检测 Microsoft Teams 会议的开始 / 结束，在合适的时机弹出模态对话框，
 > 提示用户"是否开始录音 / 是否停止录音"。
-> 目标：**极致轻量**（Teams 未运行时几乎零开销）、**只提示不动作**（录音的启停仍统一走
-> `RecordingManager`）、**不引入新权限**（复用已有的 Screen Recording 授权）。
+>
+> **产品指标（哥定）**：
+> 1. 极致轻量、稳定，性能消耗小
+> 2. 提示直接了当，但用户可以极易关掉，且不影响其他任何事情
+>
+> **架构约束**：**只提示不动作**（录音的启停统一走 `RecordingActionController` 层，
+> tray 与 detector 走同一入口），**不引入新权限**（复用已有的 Screen Recording 授权，
+> 未授权时静默 inactive）。
+
+## Status
+
+- 阶段：设计（v1，已合并 Reviewer 首轮意见 + 我的 A-D 补充点 + Q1/Q2 定案）
+- 作者：MBP-SDE-A
+- 审查：MBP-Reviewer-A
+- 决策人：@zheng-li
 
 ## Motivation
 
@@ -20,10 +33,10 @@ Product goal：在这两个时刻各弹一次**可秒关的**模态对话框，�
 
 ### Constraint — 极致轻量是核心目标之一
 
-Lyre 是常驻菜单栏 App（`LSUIElement = true`），Teams meeting detector 会跟着常驻。
-如果检测机制在 Teams 未运行时也持续消耗 CPU / IO，会把菜单栏 App 的静默功耗推上去，
-违背菜单栏工具的基本礼仪。因此 **Teams 未运行时的检测路径必须无 IPC、无 syscall 密集轮询**，
-只走 `NSWorkspace.runningApplications` 这种"读进程表"级别的操作。
+Lyre 是常驻菜单栏 App（`LSUIElement = true`，见 `apps/macos/Lyre/Info.plist`），Teams meeting
+detector 会跟着常驻。如果检测机制在 Teams 未运行时也持续消耗 CPU / IO，会把菜单栏 App 的
+静默功耗推上去，违背菜单栏工具的基本礼仪。因此 **Teams 未运行时的检测路径必须无 IPC、
+无 syscall 密集轮询**，只走 `NSWorkspace.runningApplications` 这种"读进程表"级别的操作。
 
 ### Constraint — 只做 Teams
 
@@ -49,7 +62,20 @@ Lyre 是常驻菜单栏 App（`LSUIElement = true`），Teams meeting detector �
 | EventKit calendar | 需要 Calendar 权限 | **不使用**（用户还没允许把日历给 Lyre） |
 
 **结论**：`NSWorkspace`（控制轮询档位） + `SCShareableContent`（做 Teams 窗口识别）。
-两者都不引入新权限。SCK 授权本来就是录音的前置条件，任何 Lyre 用户都已经点过同意。
+
+### Screen Recording 授权状态处理（v1 明确，来自 Reviewer 反馈 #4）
+
+Lyre 的 `PermissionManager` 已经维护 SCK 授权判定。detector 在启动/每次 warm tick 前
+读取该判定：
+
+- **未授权**：watcher 保持 warm/cold 档位不变，**跳过** `SCShareableContent.current` 调用，
+  静默判 inactive，**不重复打日志**（每次会话最多一条 info），**不触发系统引导 alert**，
+  **不弹会议提示**。Screen Recording 的引导流程仍走现有 `PermissionGuideView`，
+  由录音动作触发，不因 detector 而额外拉起。
+- **首次授权变化**（撤销 → 授予或授予 → 撤销）：watcher 观察 `PermissionManager` 的
+  `screenCaptureGranted` 变化，state 变化后下一次 tick 自然重新走判定。
+- **调用抛错**（授权被撤销但状态还没同步、SCK 挂了）：一次性 `warning` 日志 +
+  保守判 inactive；不主动弹 alert 打扰用户。
 
 ### Teams bundle IDs
 
@@ -62,8 +88,8 @@ Lyre 是常驻菜单栏 App（`LSUIElement = true`），Teams meeting detector �
 
 | 档位 | 触发条件 | 轮询周期 | 检测动作 |
 |---|---|---|---|
-| **cold** | Teams 进程不在 `runningApplications` 中 | **30 s** | 仅 `NSWorkspace.runningApplications` 扫一次，看是否出现 Teams |
-| **warm** | Teams 运行，但当前判定"无会议" | **5 s** | 调 `SCShareableContent.current` → 匹配 Teams 窗口 → 判会议 |
+| **cold** | Teams 进程不在 `runningApplications` 中 | **30 s** | 仅 `NSWorkspace.runningApplications` 扫一次 |
+| **warm** | Teams 运行，但当前判定"无会议" | **5 s** | `SCShareableContent.current` → 匹配 Teams 窗口 → 判会议 |
 | **hot** | 当前判定"会议中" | **5 s** | 同 warm；等 meeting 结束的信号 |
 
 档位切换：
@@ -74,21 +100,19 @@ Lyre 是常驻菜单栏 App（`LSUIElement = true`），Teams meeting detector �
   兜底：warm tick 时 `runningApplications` 里已无 Teams → 也切回 cold。
 - `warm ↔ hot`：由会议判据（下节）驱动，需要经过**去抖**。
 
-**极端场景兜底 —— "用户打开 Teams 立刻 join 会议"**：假设用户手动启动 Teams，
-`didLaunch` 通知触发 `cold → warm` 切档。用户几秒内点了 Join Meeting，
-warm 档 5s tick 检测到会议窗口 → 触发提示。**最坏延迟 ≈ 5s + SCK 查询耗时（几十 ms）**，
-可以接受（用户决策明确：可以稍晚但不能不弹）。
+**极端场景兜底 —— 用户手动启动 Teams 并立即入会**：`didLaunch` 触发 `cold → warm`，
+warm 档 5s tick 内检测到会议窗口 → 触发提示。**最坏延迟 ≈ 5s + SCK 查询耗时**，
+可接受（用户决策：可以稍晚但不能不弹）。
 
-**极端场景兜底 —— "先启动 Lyre，Teams 已经在开会"**：Lyre 启动时先跑一次 tick，
-如果 Teams 已在 `runningApplications` 里，直接切到 warm 档并立即触发第一次 `SCShareableContent` 检测。
+**极端场景兜底 —— 先启动 Lyre，Teams 已经在开会**：见下面 **[启动时会议中的语义](#启动时会议中的语义v1-澄清来自-reviewer-反馈-5)**。
 
 ### Teams meeting window heuristic
 
 `SCShareableContent.current.windows` 里，筛选出 `owningApplication?.bundleIdentifier ∈ TEAMS_BUNDLE_IDS`
 的窗口子集 `teamsWindows`。判"会议中"的规则（**任一命中即算 active**，宁误弹一次也不漏）：
 
-1. **数量判据**：`teamsWindows.count >= 2`。Teams 平常只开一个主窗口 `"Microsoft Teams"`；
-   开会时会额外弹一个独立的会议窗口。这条覆盖绝大多数情况。
+1. **数量判据**：`teamsWindows.count >= 2`（排除白名单标题后）。Teams 平常只开一个主窗口
+   `"Microsoft Teams"`；开会时会额外弹一个独立的会议窗口。这条覆盖绝大多数情况。
 2. **标题关键词判据**：`teamsWindows` 中存在 `title` 包含以下任一子串
    （**大小写不敏感**，先 `lowercased()`）：
    - `"meeting"`（英）
@@ -103,26 +127,38 @@ warm 档 5s tick 检测到会议窗口 → 触发提示。**最坏延迟 ≈ 5s 
 **为什么用数量判据而非精确标题匹配**：微软在 New Teams 每次迭代都会改会议窗口标题格式，
 最近观察到有 `"Meeting in <subject> | Microsoft Teams"` / `"<subject> | Microsoft Teams"` /
 `"<name>'s Meeting | Microsoft Teams"` 等变体，硬编码正则会持续失效。
-"额外弹了个独立窗口"这个信号比标题格式稳定得多。
 
 **已知假阳性**：Teams "Chat" 弹独立窗口、"Calendar" 弹日历弹窗时，`teamsWindows.count` 也可能 ≥ 2。
 本设计选择**接受**这个假阳性 —— 用户看到 "是否开始录音" 弹窗，按 "Not now" 一秒关掉，
-比漏检一场会议成本低得多。若后续用户反馈假阳性太多，再引入更严格的标题正则。
+比漏检一场会议成本低得多。Phase 0 探针会实际测量假阳性率，若超阈值再收紧判据（见 [Rollout](#rollout)）。
 
 ### Debounce / hysteresis
 
-`SCShareableContent` 返回窗口列表有短暂抖动（Teams 会议开始的一瞬间窗口 map 未稳定，
+`SCShareableContent` 返回窗口列表有短暂抖动（会议开始的一瞬间窗口 map 未稳定，
 或者 tick 恰好落在窗口 close 的中间）。**必须去抖**，否则会出现"弹了又收又弹"的骚扰。
 
-规则：
+规则（watcher 内部）：
 
-- 内部维护一个 `pendingActive: Bool?`，代表"当前 tick 判定"。
-- 只有 **连续 2 个 tick** 判定一致（都 active 或都 inactive），才把 `meetingActive` 切换到该值。
-- **首次 tick 的判定要立即生效**：Lyre 冷启动时 `meetingActive = nil`，第一次拿到判定后
-  直接置为 true/false，不等第二个 tick。（防止 Lyre 启动瞬间正好在会中 → 需要 10s 才弹）
-- 首次生效**不弹提示**（只是刷新初始状态），后续所有变化才弹。
+- 维护 `lastRawJudgement: Bool?`，代表"上一 tick 的原始判定"。
+- 维护 `confirmedActive: Bool?`，代表"已确认的会议状态"。
+- **只有连续 2 个 tick 的 raw 判定一致，才把 `confirmedActive` 切换到该值**。切换成功后，
+  向 `AsyncStream` yield 一次事件。
 
-时间开销：稳态下每 5s 一次 `SCShareableContent`，切换事件平均延迟 5–10s。
+### 启动时会议中的语义（v1 澄清，来自 Reviewer 反馈 #5）
+
+**统一规则**：
+1. Watcher 启动时，先跑一次 baseline tick（异步，不阻塞 start）。
+2. 无论 baseline 结果是 true 还是 false，都只**设置内部状态**，**不 yield 到 stream**。
+3. 之后所有从 baseline 出发的**变化**（经过去抖确认后），才 yield 到 stream。
+4. Coordinator 只消费 stream，因此启动时会议中的场景不会弹 start prompt。
+
+这条规则同时解决了：
+- 冷启动时正好在会议中不误弹（用户会去手动开 tray 里的 Start Recording）。
+- 冷启动时没有会议，之后开会仍能正常弹。
+
+如果未来产品决策改为"启动时也提示当前会议中"，只需 watcher 增加一个"启动后 30s 内 first
+change from baseline that is active"的特殊 event，coordinator 增加一条 gating 即可，
+不动去抖流程。
 
 ### Per-meeting suppression
 
@@ -134,7 +170,20 @@ warm 档 5s tick 检测到会议窗口 → 触发提示。**最坏延迟 ≈ 5s 
 
 抑制状态在 `MeetingPromptCoordinator` 内部维护，不持久化 —— Lyre 重启即清空。
 
-### Prompt gating（交叉判定 recorder.state）
+### Single-alert 在场规则（v1 新增，来自 Reviewer 反馈 #6）
+
+`NSAlert.runModal()` 阻塞 main run loop —— 若 alert 打开期间又有新 event 到达，
+必须**丢弃**而非排队，否则用户会看到"关一个还有一个"的骚扰。
+
+规则：
+
+- Coordinator 维护 `isPromptPresented: Bool`。
+- 收到 event 时，先检查 `isPromptPresented` 与 per-meeting suppression；任一命中就丢弃。
+- 弹 alert 前置 `isPromptPresented = true`；`runModal()` 返回后（defer）复位。
+- Esc / Cmd-W / 关闭按钮均视为 secondary action（`.alertSecondButtonReturn`），
+  不触发录音动作。
+
+### Prompt gating（交叉判定 `recorder.state`）
 
 不是每次 meeting 状态跨越都要弹：
 
@@ -145,86 +194,260 @@ warm 档 5s tick 检测到会议窗口 → 触发提示。**最坏延迟 ≈ 5s 
 | `true → false`（结束） | `.recording` | ✅ | "Teams 会议已结束，是否停止录音？" [Stop recording] [Keep recording] |
 | `true → false`（结束） | `.idle` | ❌ | 用户根本没录，不打扰 |
 
+**读取时机**：只在收到 event 时读取一次 `recorder.state`，不做长期观察（避免因
+`RecordingManager` 无 MainActor 隔离带来的读写竞争，见 [并发说明](#并发说明v1-新增来自我的补充点-b-d)）。
+
 ## Module Layout
 
-**Scope**：只新增 `apps/macos/Lyre/Meeting/` 目录，不修改 `Audio/` 下任何文件。
-`LyreApp.swift` 加 3–5 行接线（构造 watcher + coordinator，绑定到 `recorder`）。
+**Scope**：新增 `apps/macos/Lyre/Meeting/` 目录 + **共享 recording action 层**
+`apps/macos/Lyre/Recording/RecordingActionController.swift`（Q1 定案）；`SettingsView.swift`
+追加一段；`LyreApp.swift` 加 `@State` + 接线。
 
 ```
 apps/macos/Lyre/
-├── Meeting/                                  # 新增
-│   ├── TeamsMeetingWatcher.swift             # 检测器：轮询 + NSWorkspace 观察 + 发布 meetingActive
-│   ├── MeetingPromptCoordinator.swift        # 交叉判 recorder.state → 弹 NSAlert → 触发录音
-│   └── MeetingDetectionSettings.swift        # UserDefaults-backed 用户开关
-├── Views/Settings/
-│   └── GeneralSettingsView.swift             # 已存在则追加开关，不存在则本次一并新建
-└── LyreApp.swift                             # +3–5 行接线
-```
+├── Meeting/                                     # 新增
+│   ├── TeamsMeetingWatcher.swift                # 检测器：轮询 + NSWorkspace 观察 + AsyncStream 发布 meeting events
+│   ├── MeetingPromptCoordinator.swift           # 消费 stream + 交叉判 recorder.state → 请求 alert + 调 action controller
+│   ├── MeetingDetectionSettings.swift           # UserDefaults-backed 用户开关
+│   └── AlertPresenter.swift                     # NSAlert protocol + concrete impl（便于测试注入）
+├── Recording/
+│   └── RecordingActionController.swift          # 新增：TrayMenu + Coordinator 共享的 recording 动作入口（Q1 定案）
+├── Views/
+│   └── SettingsView.swift                       # 追加 "Meeting Detection" section 与开关
+└── LyreApp.swift                                # 新增 @State 持有 settings/watcher/coordinator/actionController；接线；把 controller 传给 TrayMenu
 
-对应测试：
-
-```
 apps/macos/LyreTests/
-├── TeamsMeetingWatcherTests.swift            # 窗口识别规则 / 去抖 / 档位切换
-└── MeetingPromptCoordinatorTests.swift       # 抑制 / 交叉判定 / NSAlert 触发
+├── TeamsMeetingWatcherTests.swift               # judge / debounce / baseline 不 yield / SCK 未授权路径
+├── MeetingPromptCoordinatorTests.swift          # gating / suppression / single-alert / 开关关闭
+├── RecordingActionControllerTests.swift         # start/stop 顺序、store refresh、elapsed 生命周期
+└── AlertPresenterTests.swift                    # 基本 double 验证（可与 coordinator 测试合并）
 ```
 
-### TeamsMeetingWatcher
+`project.yml` 无需改动（`Lyre` target 的 `sources: [path: Lyre]` 已包含全目录，见
+`apps/macos/project.yml:24-25`）。
 
-职责：三档轮询、`NSWorkspace` 观察、窗口识别、去抖、发布 `meetingActive: Bool`。
-**不与 `RecordingManager` 直接耦合** —— coordinator 才是耦合层。
+### RecordingActionController（Q1 定案，v1 新增）
+
+**Reviewer 定案**：coordinator 不能直接调 `RecordingManager` —— tray 现在还挂了 elapsed
+timer 与 `recordingsStore.refresh(url:)` 副作用；直接绕过会造成录音成功但 tray 计时不动、
+Recordings 列表不刷新的可见 bug。抽 `RecordingActionController` 统一入口。
 
 ```swift
-import Foundation
 import AppKit
-import ScreenCaptureKit
+import Foundation
 import Observation
 import os
 
+@MainActor
+protocol RecordingActionHandling: AnyObject {
+    var state: RecordingManager.State { get }
+    func requestStart() async
+    func requestStop() async
+}
+
 @Observable
 @MainActor
+final class RecordingActionController: RecordingActionHandling {
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "RecordingActionController")
+
+    // Owned dependencies
+    let recorder: RecordingManager
+    let recordingsStore: RecordingsStore
+    private let alertPresenter: AlertPresenting
+
+    // MARK: - Elapsed surface（TrayMenu 从这里读，不再自己维护 Timer）
+    private(set) var elapsedDisplay: String = "00:00"
+    private var elapsedTimer: Timer?
+
+    init(recorder: RecordingManager, recordingsStore: RecordingsStore, alertPresenter: AlertPresenting) {
+        self.recorder = recorder
+        self.recordingsStore = recordingsStore
+        self.alertPresenter = alertPresenter
+    }
+
+    var state: RecordingManager.State { recorder.state }
+
+    func requestStart() async {
+        guard recorder.state == .idle else { return }  // 并发防御，coordinator + tray 同时点也不会双开
+        do {
+            try await recorder.startRecording()
+            startElapsedTimer()
+        } catch {
+            Self.logger.error("Start failed: \(error.localizedDescription)")
+            alertPresenter.presentError(title: "Recording Failed", message: error.localizedDescription)
+        }
+    }
+
+    func requestStop() async {
+        guard recorder.state == .recording else { return }
+        stopElapsedTimer()
+        do {
+            let url = try await recorder.stopRecording()
+            await recordingsStore.refresh(url: url)
+        } catch {
+            Self.logger.error("Stop failed: \(error.localizedDescription)")
+            alertPresenter.presentError(title: "Recording Error", message: error.localizedDescription)
+        }
+    }
+
+    // MARK: - Elapsed timer (moved out of TrayMenu)
+    private func startElapsedTimer() {
+        elapsedDisplay = "00:00"
+        elapsedTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateElapsedDisplay() }
+        }
+    }
+
+    private func stopElapsedTimer() {
+        elapsedTimer?.invalidate(); elapsedTimer = nil
+        elapsedDisplay = "00:00"
+    }
+
+    private func updateElapsedDisplay() {
+        let seconds = Int(recorder.elapsedSeconds)
+        elapsedDisplay = String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+```
+
+**TrayMenu 侧改造**（同一 commit 内）：
+- 移除 `elapsedTimer` / `elapsedDisplay` / `startRecording()` / `stopRecording()` 私有方法与
+  自持的 `recordingsStore`；
+- 改成从 `controller: RecordingActionHandling` 读 `state` + `elapsedDisplay`，按钮直接调
+  `controller.requestStart()` / `controller.requestStop()`；
+- `showErrorAlert` 走 `AlertPresenting`。
+
+### AlertPresenter
+
+```swift
+import AppKit
+
+@MainActor
+protocol AlertPresenting {
+    /// 弹选择型 alert，返回 true = 主按钮 (first), false = 次按钮 / 关闭 / Esc / Cmd-W
+    func presentChoice(title: String, message: String, primary: String, secondary: String) -> Bool
+    func presentError(title: String, message: String)
+}
+
+@MainActor
+final class NSAlertPresenter: AlertPresenting {
+    func presentChoice(title: String, message: String, primary: String, secondary: String) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: primary)   // .alertFirstButtonReturn
+        alert.addButton(withTitle: secondary) // .alertSecondButtonReturn
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    func presentError(title: String, message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+}
+```
+
+**产品选择说明（Reviewer 反馈"建议调整"）**：`NSApp.activate(ignoringOtherApps: true)` 会
+跨 Space 抢焦点，这是**故意的** —— 用户约束 #2 要求"直接了当"。降低骚扰的手段是压
+假阳性率（Rollout Phase 4 兜底），而不是让 alert 更弱。
+
+### TeamsMeetingWatcher（v1，用 AsyncStream，Q2 定案）
+
+**职责**：三档轮询、`NSWorkspace` 观察、窗口识别、去抖、通过 `AsyncStream<Bool>` 只推送
+**已确认的状态变化**（不推 baseline、不推 raw tick、不推重复值）。
+
+```swift
+import AppKit
+import Foundation
+import os
+import ScreenCaptureKit
+
+/// 抽 protocol 便于测试注入 fake app-list / window-list provider
+@MainActor
+protocol RunningAppsProviding {
+    func isBundleRunning(anyOf ids: Set<String>) -> Bool
+}
+
+@MainActor
+protocol ShareableContentProviding {
+    func currentTeamsWindows(bundleIDs: Set<String>) async throws -> [ShareableWindow]
+}
+
+/// Value-type window info（SCWindow 不便构造，用轻量结构体绕开）
+struct ShareableWindow: Sendable {
+    let bundleID: String
+    let title: String?
+}
+
+@MainActor
 final class TeamsMeetingWatcher {
-    /// 唯一对外状态。coordinator / UI 订阅这个即可。
-    /// nil = 尚未完成第一次检测（Lyre 刚启动）
-    private(set) var meetingActive: Bool? = nil
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "TeamsMeetingWatcher")
 
-    /// 当前档位（诊断用，UI 一般不订阅）
-    private(set) var tier: Tier = .cold
-
-    enum Tier { case cold, warm, hot }
+    // MARK: - Public
+    /// 只 yield 已确认的状态变化（true = 会议进入 active，false = 结束）。
+    /// baseline / 重复值 / raw tick 不 yield。
+    let meetingEvents: AsyncStream<Bool>
 
     // MARK: - Constants
-    static let teamsBundleIDs: Set<String> = [
-        "com.microsoft.teams",       // Classic
-        "com.microsoft.teams2",      // New Teams
-    ]
-    /// 会议关键词（小写；title.lowercased() 后 contains 匹配）
-    static let meetingTitleKeywords: [String] = [
-        "meeting", "会议", "會議",
-    ]
-    /// 会议窗口标题后缀（New Teams 稳定格式）
+    static let teamsBundleIDs: Set<String> = ["com.microsoft.teams", "com.microsoft.teams2"]
+    static let meetingTitleKeywords: [String] = ["meeting", "会议", "會議"]
     static let meetingTitleSuffix: String = " | microsoft teams"
-    /// 明确排除的窗口标题（小写）
-    static let excludedTitles: Set<String> = [
-        "microsoft teams", "settings", "设置", "preferences", "",
-    ]
+    static let excludedTitles: Set<String> = ["microsoft teams", "settings", "设置", "preferences", ""]
 
     private let coldInterval: TimeInterval = 30
     private let warmInterval: TimeInterval = 5
 
-    // MARK: - Internals
+    // MARK: - Dependencies
+    private let runningApps: RunningAppsProviding
+    private let content: ShareableContentProviding
+    private let permissions: RecordingPermissions       // 读 screenCaptureGranted
+    private let clock: () -> Date                       // 允许测试注入
+
+    // MARK: - Internal state
+    private var eventContinuation: AsyncStream<Bool>.Continuation!
     private var tickTimer: Timer?
     private var launchObserver: NSObjectProtocol?
     private var terminateObserver: NSObjectProtocol?
 
-    /// 去抖：连续 2 个 tick 一致才切换 meetingActive
-    private var pendingActive: Bool?
+    private enum Tier { case cold, warm, hot }
+    private var tier: Tier = .cold
+
+    /// nil = 还没跑过 baseline
+    private var confirmedActive: Bool?
+    /// 上一 tick 的 raw judgement，用于连续 2 tick 一致才确认切换
+    private var lastRawJudgement: Bool?
+    /// 是否已跑过 baseline（第一次判定用来 seed confirmedActive，不 yield）
+    private var baselineDone: Bool = false
+    /// SCK 未授权告警只打一次
+    private var sckUnauthorizedLogged: Bool = false
+
+    init(
+        runningApps: RunningAppsProviding,
+        content: ShareableContentProviding,
+        permissions: RecordingPermissions,
+        clock: @escaping () -> Date = Date.init
+    ) {
+        self.runningApps = runningApps
+        self.content = content
+        self.permissions = permissions
+        self.clock = clock
+
+        // .bufferingNewest(1)：alert 阻塞期间只保留最新状态，避免积压
+        var cont: AsyncStream<Bool>.Continuation!
+        self.meetingEvents = AsyncStream<Bool>(bufferingPolicy: .bufferingNewest(1)) { cont = $0 }
+        self.eventContinuation = cont
+    }
 
     // MARK: - Lifecycle
     func start() {
         installWorkspaceObservers()
-        // 首次 tick 立即跑一次（用户可能启动 Lyre 时 Teams 已经在开会）
-        recomputeTier(runTickImmediately: true)
+        recomputeTier(runBaselineTickImmediately: true)
     }
 
     func stop() {
@@ -232,49 +455,51 @@ final class TeamsMeetingWatcher {
         if let o = launchObserver { NSWorkspace.shared.notificationCenter.removeObserver(o) }
         if let o = terminateObserver { NSWorkspace.shared.notificationCenter.removeObserver(o) }
         launchObserver = nil; terminateObserver = nil
+        eventContinuation.finish()
     }
 
-    // MARK: - NSWorkspace observers (免费的即时档位切换)
+    // MARK: - NSWorkspace observers
     private func installWorkspaceObservers() {
         let nc = NSWorkspace.shared.notificationCenter
         launchObserver = nc.addObserver(
-            forName: NSWorkspace.didLaunchApplicationNotification,
-            object: nil, queue: .main
+            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   let bid = app.bundleIdentifier,
                   Self.teamsBundleIDs.contains(bid) else { return }
-            Task { @MainActor in self?.recomputeTier(runTickImmediately: true) }
+            Task { @MainActor in self?.recomputeTier(runBaselineTickImmediately: true) }
         }
         terminateObserver = nc.addObserver(
-            forName: NSWorkspace.didTerminateApplicationNotification,
-            object: nil, queue: .main
+            forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   let bid = app.bundleIdentifier,
                   Self.teamsBundleIDs.contains(bid) else { return }
-            Task { @MainActor in self?.recomputeTier(runTickImmediately: false) }
+            Task { @MainActor in self?.recomputeTier(runBaselineTickImmediately: false) }
         }
     }
 
     // MARK: - Tier control
-    /// 决定档位（依据 Teams 进程是否存活 + 当前 meetingActive）+ 重排 timer
-    /// 可选立即再跑一次 tick（`didLaunch` 场景需要即时反应）
-    private func recomputeTier(runTickImmediately: Bool) {
-        let teamsAlive = isTeamsRunning()
+    private func recomputeTier(runBaselineTickImmediately: Bool) {
+        let teamsAlive = runningApps.isBundleRunning(anyOf: Self.teamsBundleIDs)
         let newTier: Tier
         if !teamsAlive {
             newTier = .cold
-            // Teams 关了也把 meetingActive 强制归 false（不走去抖，直接落）
-            if meetingActive == true { fireStateChange(to: false) }
-            meetingActive = false
-            pendingActive = false
+            // Teams 消失 → 强制标记 inactive（如果之前 confirmed 是 true，yield 一次 false）
+            if confirmedActive == true {
+                confirmedActive = false
+                lastRawJudgement = false
+                eventContinuation.yield(false)
+            } else {
+                confirmedActive = false
+                lastRawJudgement = false
+            }
         } else {
-            newTier = (meetingActive == true) ? .hot : .warm
+            newTier = (confirmedActive == true) ? .hot : .warm
         }
         tier = newTier
         rescheduleTimer()
-        if runTickImmediately { tick() }
+        if runBaselineTickImmediately { Task { @MainActor in self.tick() } }
     }
 
     private func rescheduleTimer() {
@@ -285,228 +510,194 @@ final class TeamsMeetingWatcher {
         }
     }
 
-    private func isTeamsRunning() -> Bool {
-        NSWorkspace.shared.runningApplications.contains {
-            guard let bid = $0.bundleIdentifier else { return false }
-            return Self.teamsBundleIDs.contains(bid)
-        }
-    }
-
     // MARK: - Tick
     private func tick() {
         switch tier {
         case .cold:
-            // cold tick 只查进程表 —— 极致轻量
-            if isTeamsRunning() { recomputeTier(runTickImmediately: true) }
+            if runningApps.isBundleRunning(anyOf: Self.teamsBundleIDs) {
+                recomputeTier(runBaselineTickImmediately: true)
+            }
         case .warm, .hot:
-            Task { await checkTeamsWindows() }
+            Task { @MainActor in await checkTeamsWindows() }
         }
     }
 
     private func checkTeamsWindows() async {
-        do {
-            let content = try await SCShareableContent.current
-            let teamsWindows = content.windows.filter { win in
-                guard let bid = win.owningApplication?.bundleIdentifier else { return false }
-                return Self.teamsBundleIDs.contains(bid)
+        // SCK 未授权 → 静默 inactive；一次性告警
+        guard permissions.screenCaptureGranted else {
+            if !sckUnauthorizedLogged {
+                Self.logger.info("Screen Recording not granted; detector stays inactive")
+                sckUnauthorizedLogged = true
             }
-            let active = judgeMeeting(from: teamsWindows)
-            applyDebounced(active: active)
+            applyDebounced(rawActive: false)
+            return
+        }
+        do {
+            let windows = try await content.currentTeamsWindows(bundleIDs: Self.teamsBundleIDs)
+            applyDebounced(rawActive: judgeMeeting(from: windows))
         } catch {
-            // 权限被撤销、SCK 挂了等 —— 保守当作 inactive
-            Self.logger.warning("SCShareableContent failed: \(error.localizedDescription)")
-            applyDebounced(active: false)
+            Self.logger.warning("SCK query failed: \(error.localizedDescription)")
+            applyDebounced(rawActive: false)
         }
     }
 
-    private func judgeMeeting(from windows: [SCWindow]) -> Bool {
-        // 排除白名单标题后计数
-        let candidates = windows.filter { win in
-            let t = (win.title ?? "").lowercased()
-            return !Self.excludedTitles.contains(t)
-        }
+    /// **内部纯函数** — 单元测试直接调这个
+    static func judgeMeeting(from windows: [ShareableWindow]) -> Bool {
+        let candidates = windows.filter { !excludedTitles.contains(($0.title ?? "").lowercased()) }
         if candidates.count >= 2 { return true }
-        for win in candidates {
-            let t = (win.title ?? "").lowercased()
-            if t.hasSuffix(Self.meetingTitleSuffix) { return true }
-            for kw in Self.meetingTitleKeywords where t.contains(kw) { return true }
+        for w in candidates {
+            let t = (w.title ?? "").lowercased()
+            if t.hasSuffix(meetingTitleSuffix) { return true }
+            for kw in meetingTitleKeywords where t.contains(kw) { return true }
         }
         return false
     }
+    private func judgeMeeting(from windows: [ShareableWindow]) -> Bool {
+        Self.judgeMeeting(from: windows)
+    }
 
-    // MARK: - Debounce
-    private func applyDebounced(active: Bool) {
-        // 首次 tick：直接落，不弹提示（fireStateChange 由 pendingActive 首次 nil→值 时抑制）
-        if meetingActive == nil {
-            meetingActive = active
-            pendingActive = active
-            // tier 可能需要升 hot（如果直接落成 true）
-            if active { recomputeTier(runTickImmediately: false) }
+    // MARK: - Debounce + baseline
+    private func applyDebounced(rawActive: Bool) {
+        if !baselineDone {
+            confirmedActive = rawActive
+            lastRawJudgement = rawActive
+            baselineDone = true
+            // baseline 不 yield（Reviewer 反馈 #5 / Q2 定案）
+            // 若 baseline 就是 active，档位升 hot
+            if rawActive { recomputeTier(runBaselineTickImmediately: false) }
             return
         }
-        if pendingActive == active && meetingActive != active {
-            // 连续 2 个 tick 一致 → 切换
-            let previous = meetingActive!
-            meetingActive = active
-            fireStateChange(to: active)
-            // 会议开始 → 升 hot；会议结束 → 降 warm
-            recomputeTier(runTickImmediately: false)
-            _ = previous
+
+        // 连续 2 tick 一致才确认
+        if lastRawJudgement == rawActive && confirmedActive != rawActive {
+            confirmedActive = rawActive
+            eventContinuation.yield(rawActive)
+            recomputeTier(runBaselineTickImmediately: false)
         }
-        pendingActive = active
+        lastRawJudgement = rawActive
     }
-
-    private func fireStateChange(to active: Bool) {
-        // 只是 hook 点。真正的 UI 触发由 coordinator 订阅 meetingActive 完成。
-        Self.logger.info("meetingActive changed to \(active)")
-    }
-
-    private static let logger = Logger(subsystem: "ai.hexly.lyre", category: "TeamsMeetingWatcher")
-}
-```
-
-**关键并发/隔离约束**：
-- 整个类 `@MainActor` 隔离 —— `SCShareableContent` 和 `NSWorkspace` 都是 main-actor-friendly，
-  避开 Swift 6 strict concurrency 的 Sendable 报错。
-- `NSWorkspace` observer 的 closure 在 main queue 上，用 `Task { @MainActor in ... }` 桥回主 actor。
-- `Timer.scheduledTimer` 的 closure 在 main run loop 上，同样桥回。
-
-### MeetingPromptCoordinator
-
-职责：订阅 `watcher.meetingActive` 变化 + 读 `recorder.state` → 决定是否弹 NSAlert → 触发 `recorder.startRecording()` / `stopRecording()`。
-
-```swift
-import Foundation
-import AppKit
-import Observation
-import os
-
-@Observable
-@MainActor
-final class MeetingPromptCoordinator {
-    private let watcher: TeamsMeetingWatcher
-    private let recorder: RecordingManager
-    private let settings: MeetingDetectionSettings
-
-    /// 每场会议的抑制标记（本地会话内有效，不持久化）
-    private var startPromptShownForCurrentMeeting = false
-    private var stopPromptShownForCurrentMeeting  = false
-
-    /// 上一次观察到的 meetingActive（用来判"跨越"）
-    private var lastObservedActive: Bool? = nil
-
-    /// Observation tracking token
-    private var observationTask: Task<Void, Never>?
-
-    init(watcher: TeamsMeetingWatcher, recorder: RecordingManager, settings: MeetingDetectionSettings) {
-        self.watcher = watcher
-        self.recorder = recorder
-        self.settings = settings
-    }
-
-    func start() {
-        // 使用 Observation withObservationTracking 循环订阅 watcher.meetingActive
-        observationTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                await self?.observeOnce()
-            }
-        }
-    }
-
-    func stop() {
-        observationTask?.cancel(); observationTask = nil
-    }
-
-    @MainActor
-    private func observeOnce() async {
-        // 拿一个 continuation，等 watcher.meetingActive 变化
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            withObservationTracking {
-                _ = watcher.meetingActive
-            } onChange: {
-                Task { @MainActor in cont.resume() }
-            }
-        }
-        handleChange()
-    }
-
-    private func handleChange() {
-        guard settings.isEnabled else {
-            // 用户关掉了功能：更新 lastObservedActive 但不弹
-            lastObservedActive = watcher.meetingActive
-            return
-        }
-        let now = watcher.meetingActive
-        defer { lastObservedActive = now }
-        guard let previous = lastObservedActive, let current = now else { return }
-        if previous == current { return }
-
-        if !previous && current {
-            // false → true：会议开始
-            startPromptShownForCurrentMeeting = false  // reset from any previous meeting cycle
-            stopPromptShownForCurrentMeeting  = false
-            if recorder.state == .idle && !startPromptShownForCurrentMeeting {
-                startPromptShownForCurrentMeeting = true
-                promptStart()
-            }
-        } else if previous && !current {
-            // true → false：会议结束
-            if recorder.state == .recording && !stopPromptShownForCurrentMeeting {
-                stopPromptShownForCurrentMeeting = true
-                promptStop()
-            }
-        }
-    }
-
-    // MARK: - Prompt UI
-    private func promptStart() {
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = String(localized: "Teams meeting detected")
-        alert.informativeText = String(localized: "Start recording this meeting?")
-        alert.addButton(withTitle: String(localized: "Start Recording"))  // return .alertFirstButtonReturn
-        alert.addButton(withTitle: String(localized: "Not now"))          // .alertSecondButtonReturn
-        NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            Task { await triggerStart() }
-        }
-    }
-
-    private func promptStop() {
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = String(localized: "Teams meeting ended")
-        alert.informativeText = String(localized: "Stop recording?")
-        alert.addButton(withTitle: String(localized: "Stop Recording"))
-        alert.addButton(withTitle: String(localized: "Keep Recording"))
-        NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            Task { await triggerStop() }
-        }
-    }
-
-    private func triggerStart() async {
-        do { try await recorder.startRecording() }
-        catch { Self.logger.error("start via prompt failed: \(error.localizedDescription)") }
-    }
-
-    private func triggerStop() async {
-        do { _ = try await recorder.stopRecording() }
-        catch { Self.logger.error("stop via prompt failed: \(error.localizedDescription)") }
-    }
-
-    private static let logger = Logger(subsystem: "ai.hexly.lyre", category: "MeetingPromptCoordinator")
 }
 ```
 
 **关键点**：
-- 录音的启停**统一走 `RecordingManager` 现有的 `startRecording()` / `stopRecording()`**。
-  Coordinator 只是"触发者"，不复制录音逻辑（用户约束 #4）。
-- `NSAlert.runModal()` 会阻塞当前 run loop —— 菜单栏 App 里这是正常做法（参见 `TrayMenu.showErrorAlert`）。
-  用户按任一按钮或 Cmd-W / Esc 都会立即返回，秒关（用户约束 #1）。
-- `NSApp.activate(ignoringOtherApps: true)` 前置一次，保证 Teams 全屏时 Lyre 的 alert 能抢焦点。
+- **`meetingEvents` 只 yield 已确认的状态变化**（Q2 定案 + Reviewer 反馈 #5）。baseline
+  首次判定只 seed `confirmedActive`，**绝不 yield**。测试可以直接读 stream 断言 yield 序列。
+- **`.bufferingNewest(1)`**（Q2 定案）：alert 阻塞期间只保留最新状态，避免积压过时事件。
+- **Provider 抽象**（Reviewer 反馈 #3）：`RunningAppsProviding` / `ShareableContentProviding`
+  两个 protocol 让 fake 直接注入 tick 序列，测试不依赖真 Teams。
+- **纯函数 `Self.judgeMeeting(from:)`**（Reviewer 反馈 #3）：`SCWindow` 无法直接构造，把
+  判据抽成 static 接受 `[ShareableWindow]`，单元测试直接调。
+- **SCK 未授权路径**（Reviewer 反馈 #4）：不调用 SCK API、不弹引导、一次性告警。
+- **Swift 6 隔离**：类整体 `@MainActor`；provider protocol 也是 `@MainActor`；
+  `NSWorkspace` observer closure 通过 `Task { @MainActor in ... }` 桥回主 actor；
+  `Timer.scheduledTimer` 同样桥回。**方案写死为 `Timer + Task { @MainActor }`**，
+  不留 `DispatchSourceTimer` / `AsyncTimerSequence` 备选路径（我的补充点 D 定案）。
+
+### MeetingPromptCoordinator（v1，用 for-await 消费 stream）
+
+**职责**：消费 `watcher.meetingEvents`，读一次 `recorder.state`（快照，避免观察），
+按 gating / suppression / single-alert 规则调 `AlertPresenting` + `RecordingActionHandling`。
+
+```swift
+import Foundation
+import os
+
+@MainActor
+final class MeetingPromptCoordinator {
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "MeetingPromptCoordinator")
+
+    private let watcher: TeamsMeetingWatcher
+    private let action: RecordingActionHandling
+    private let alertPresenter: AlertPresenting
+    private let settings: MeetingDetectionSettings
+
+    private var task: Task<Void, Never>?
+    /// 单 alert 在场标记（Reviewer 反馈 #6）
+    private var isPromptPresented: Bool = false
+    /// 每场会议的抑制标记
+    private var startPromptShownForCurrentMeeting: Bool = false
+    private var stopPromptShownForCurrentMeeting: Bool = false
+
+    init(
+        watcher: TeamsMeetingWatcher,
+        action: RecordingActionHandling,
+        alertPresenter: AlertPresenting,
+        settings: MeetingDetectionSettings
+    ) {
+        self.watcher = watcher
+        self.action = action
+        self.alertPresenter = alertPresenter
+        self.settings = settings
+    }
+
+    func start() {
+        task = Task { @MainActor [weak self] in
+            guard let stream = self?.watcher.meetingEvents else { return }
+            for await active in stream {
+                await self?.handle(active: active)
+            }
+        }
+    }
+
+    func stop() { task?.cancel(); task = nil }
+
+    private func handle(active: Bool) async {
+        guard settings.isEnabled else { return }
+        guard !isPromptPresented else { return }  // single-alert 规则
+
+        if active {
+            // false → true：会议开始（一场新会议 → 重置本场抑制）
+            startPromptShownForCurrentMeeting = false
+            stopPromptShownForCurrentMeeting = false
+            guard action.state == .idle else { return }
+            if startPromptShownForCurrentMeeting { return }
+            startPromptShownForCurrentMeeting = true
+            await promptStart()
+        } else {
+            // true → false：会议结束
+            guard action.state == .recording else { return }
+            if stopPromptShownForCurrentMeeting { return }
+            stopPromptShownForCurrentMeeting = true
+            await promptStop()
+        }
+    }
+
+    private func promptStart() async {
+        isPromptPresented = true
+        defer { isPromptPresented = false }
+        let start = alertPresenter.presentChoice(
+            title: String(localized: "Teams meeting detected"),
+            message: String(localized: "Start recording this meeting?"),
+            primary: String(localized: "Start Recording"),
+            secondary: String(localized: "Not now")
+        )
+        if start { await action.requestStart() }
+    }
+
+    private func promptStop() async {
+        isPromptPresented = true
+        defer { isPromptPresented = false }
+        let stop = alertPresenter.presentChoice(
+            title: String(localized: "Teams meeting ended"),
+            message: String(localized: "Stop recording?"),
+            primary: String(localized: "Stop Recording"),
+            secondary: String(localized: "Keep Recording")
+        )
+        if stop { await action.requestStop() }
+    }
+}
+```
+
+**关键点**：
+- **消费 `AsyncStream`**（Q2 定案）：无 `withObservationTracking`、无 continuation
+  竞争问题，事件模型确定且可测试（在测试里给 watcher 塞 fake events）。
+- **只读快照** `action.state`（我的补充点 B）：不长期观察 `recorder.state`，避免与
+  `RecordingManager` 的 non-MainActor 状态发生竞争。
+- **不直接碰 `RecordingManager`**（Reviewer 反馈 #1 + Q1 定案）：全部通过
+  `RecordingActionHandling`。
+- **Esc / Cmd-W / 关闭 = secondary action**（Reviewer 反馈 #6）：`NSAlert.runModal()` 对
+  这些用户交互都返回非 `.alertFirstButtonReturn`，`presentChoice` 返回 `false`，
+  不触发录音。
 
 ### MeetingDetectionSettings
 
@@ -515,6 +706,7 @@ import Foundation
 import Observation
 
 @Observable
+@MainActor
 final class MeetingDetectionSettings {
     private let defaultsKey = "meeting.detection.enabled"
 
@@ -532,45 +724,110 @@ final class MeetingDetectionSettings {
 }
 ```
 
-Settings 面板加一行开关："Detect Teams meetings and prompt to record"，绑定 `isEnabled`。
+**关闭开关后的行为**（Reviewer 反馈"建议调整"）：
+- **Coordinator 不再弹提示**（handle 首行 guard）。
+- **Watcher 保持运行但降到 cold 档并停 SCK 查询**：为了避免"关掉功能仍有 SCK 权限压力"，
+  开关关闭时 `MeetingPromptCoordinator` 除了不弹之外，还调 `watcher.stop()` 完全停止
+  轮询；重新开启时 `watcher.start()`。文档明确：**关掉开关 = detector 完全停机**，
+  静态功耗归零，与 Teams 未安装等价。
 
-### LyreApp 接线
+### SettingsView 追加（v1 修订，Reviewer 反馈 #2）
+
+在现有 `apps/macos/Lyre/Views/SettingsView.swift`（**注意：不是不存在的 `Views/Settings/GeneralSettingsView.swift`**）内追加一个 Section：
 
 ```swift
-// LyreApp.swift init()
+Section("Meeting Detection") {
+    Toggle(
+        "Detect Teams meetings and prompt to record",
+        isOn: $meetingSettings.isEnabled
+    )
+    Text("When enabled, Lyre pops up a small confirmation when a Microsoft Teams meeting starts or ends. Lyre never starts or stops recording without your confirmation.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+}
+```
+
+`SettingsView` 签名扩展一个 `@Bindable var meetingSettings: MeetingDetectionSettings`。
+
+### LyreApp 接线（v1 明确，Reviewer 反馈 #2）
+
+需要新增的 `@State`：
+- `meetingSettings: MeetingDetectionSettings`
+- `meetingWatcher: TeamsMeetingWatcher`
+- `meetingCoordinator: MeetingPromptCoordinator`
+- `actionController: RecordingActionController`
+- `alertPresenter: AlertPresenting`（NSAlertPresenter 实例）
+
+`init()` 顺序：
+```swift
 init() {
     let cfg = AppConfig()
     let mgr = RecordingManager()
     mgr.outputDirectory = cfg.outputDirectory
+    let store = RecordingsStore(directory: cfg.outputDirectory)
+    let presenter = NSAlertPresenter()
+    let action = RecordingActionController(recorder: mgr, recordingsStore: store, alertPresenter: presenter)
+
     let mtgSettings = MeetingDetectionSettings()
-    let watcher = TeamsMeetingWatcher()
-    let coord   = MeetingPromptCoordinator(watcher: watcher, recorder: mgr, settings: mtgSettings)
-    watcher.start()
-    coord.start()
+    let watcher = TeamsMeetingWatcher(
+        runningApps: NSWorkspaceRunningAppsProvider(),
+        content: SCShareableContentProvider(),
+        permissions: mgr.permissions
+    )
+    let coord = MeetingPromptCoordinator(
+        watcher: watcher,
+        action: action,
+        alertPresenter: presenter,
+        settings: mtgSettings
+    )
+
+    if mtgSettings.isEnabled {
+        watcher.start()
+        coord.start()
+    }
+
     _config = State(initialValue: cfg)
     _recorder = State(initialValue: mgr)
-    _recordingsStore = State(initialValue: RecordingsStore(directory: cfg.outputDirectory))
+    _recordingsStore = State(initialValue: store)
+    _actionController = State(initialValue: action)
     _meetingSettings = State(initialValue: mtgSettings)
     _meetingWatcher = State(initialValue: watcher)
     _meetingCoordinator = State(initialValue: coord)
+    _alertPresenter = State(initialValue: presenter)
 }
 ```
+
+TrayMenu 改成从 `actionController` 拿 state / elapsedDisplay / requestStart / requestStop。
+`SettingsView` 传入 `meetingSettings` 用于 Section 开关；开关的 `didSet` 应该驱动
+watcher/coordinator 的 start/stop，具体接线放在 LyreApp 的 `.onChange(of: meetingSettings.isEnabled)`。
+
+### 并发说明（v1 新增，来自我的补充点 B/D）
+
+- `TeamsMeetingWatcher` / `MeetingPromptCoordinator` / `RecordingActionController` /
+  `AlertPresenting` 全部 `@MainActor` 隔离，避开 Swift 6 strict concurrency 的 Sendable 报错。
+- `RecordingManager` 现状是 `@unchecked Sendable` 且没有 MainActor 隔离，`state` 是
+  `internal(set) var`。**Coordinator 与 Controller 只在 MainActor 上读**（`action.state`
+  快照），不长期观察，避免与录音线程的写发生竞争。start/stop 通过 controller 上的 async
+  函数触发，controller 内部 `await recorder.startRecording()` —— 与目前 TrayMenu 的用法
+  一致（`RecordingManager.startRecording` 本身是 async throws）。
+- `Timer.scheduledTimer` closure 在 main run loop 上，但**不是 MainActor-isolated**；
+  统一走 `Task { @MainActor in ... }` 桥接，方案写死不做 DispatchSourceTimer 备选。
+- **所有 Logger 都用 `Constants.subsystem`**（补充点 A），不硬编码 `"ai.hexly.lyre"`。
 
 ## Design Principles
 
 1. **Teams-only, single detector**：一个 `TeamsMeetingWatcher`，不做通用 `MeetingObserver` 抽象。
-   YAGNI —— 后续加 Zoom 时再抽（可能只需要抽 `MeetingSignal` protocol，不需要重构现有代码）。
-2. **No new permissions**：不用 Accessibility、不用 Calendar、不用 CoreAudio process listener。
-   只用 SCK（已有）+ NSWorkspace（免费）。
-3. **Cold path 零 IPC**：Teams 未运行时 30s tick 只读 `runningApplications`，
-   无 SCK 查询、无窗口枚举。Lyre 常驻状态下 90% 时间处于 cold 档，功耗 ≈ 0。
-4. **Prompt only, never act**：只弹对话框，不主动动录音。录音的启停统一由 `RecordingManager` 承担
-   （用户约束 #4）。Coordinator 是"UI 层触发者"而非"录音层控制者"。
-5. **Debounce > accuracy**：宁可延迟 5–10s 发提示，也不弹后立刻收回。用户看到一次假阳性弹窗
-   （按 Not now 就消失）比看到"弹了收弹了收"的骚扰更能容忍。
-6. **Per-meeting suppression**：一场会议内每种提示最多一次。用户按 Not now 后不再骚扰。
-7. **No persistence of transient state**：只持久化 `isEnabled` 开关。会议 active 状态、抑制标记
-   都在内存里，重启即清空 —— 简单、正确。
+2. **No new permissions**：只用 SCK（已有，未授权时静默）+ NSWorkspace（免费）。
+3. **Cold path 零 IPC**：Teams 未运行时 30s tick 只读 `runningApplications`。
+4. **Prompt only, never act**：只弹对话框；录音启停统一走 `RecordingActionController`。
+5. **Debounce > accuracy**：宁可延迟 5–10s 发提示，也不弹后立刻收回。
+6. **Per-meeting suppression + single-alert**：一场会议内每种提示最多一次；alert 打开
+   期间新 event 直接丢弃。
+7. **Baseline 静默**：启动时的会议状态只作 baseline，不弹提示；哥要的"启动时也提示"若
+   将来需要，走独立 first-change event，不动去抖流程。
+8. **Off-switch = full stop**：关掉开关 = detector 完全停机（watcher stop + coord stop）。
+9. **Testable seams**：provider protocol + AlertPresenter + RecordingActionHandling +
+   AsyncStream。测试无 Teams / 无 SCK / 无真 alert 依赖。
 
 ## Testing Strategy
 
@@ -578,111 +835,159 @@ init() {
 
 | 测试 | 操作 |
 |---|---|
-| `TeamsMeetingWatcherTests` — `judgeMeeting` 数量判据 | 构造 2 个 `SCWindow` 桩（bundleID 都是 `com.microsoft.teams2`，title 分别是 `"Microsoft Teams"` / `"Meeting in Sprint | Microsoft Teams"`）→ 断言 `judgeMeeting(from:) == true`。**技术点**：`SCWindow` 无法直接构造；改测 `judgeMeeting` 的等价纯函数版本 `Self.judge(candidates:)` 接受 `[(bundleID: String, title: String?)]`，把类方法暴露成 internal 便于单测。 |
-| `TeamsMeetingWatcherTests` — 标题关键词判据 | 单一 Teams 窗口，title 分别为 `"会议：产品评审"` / `"讨论 | Microsoft Teams"` / `"Random Chat"` → 前两个 active、第三个 inactive。 |
-| `TeamsMeetingWatcherTests` — 排除白名单 | 2 个 Teams 窗口，title 都是 `"Microsoft Teams"` / `"Settings"` → 排除后 candidates=0 → inactive（不因数量 >=2 误判）。 |
-| `TeamsMeetingWatcherTests` — 去抖 | Mock 一个 tick 序列 `[true, false, true, true, true]` → 断言 `meetingActive` 序列 `[nil→true(首次), (第2次false 不切), (第3次true 不切因为前一次是false), (第4次true → pending==active==true → 已经是true 不动), (第5次true → 同)]`。仔细设计边界。 |
-| `TeamsMeetingWatcherTests` — 首次生效不弹提示 | 首次 tick `true` → `meetingActive` 直接为 true，`fireStateChange` **不**被调用（区分"初始状态"和"变化事件"）。 |
-| `MeetingPromptCoordinatorTests` — start prompt gating | 构造 `RecordingManager` mock 状态 `.idle`，触发 `meetingActive: false → true` → 断言 promptStart 被调用（用 test double 替换 `NSAlert.runModal()` —— 抽 `AlertPresenter` protocol 注入）。 |
-| `MeetingPromptCoordinatorTests` — 录音中不弹 start | mock recorder 状态 `.recording`，触发 `false → true` → 不调用 promptStart。 |
-| `MeetingPromptCoordinatorTests` — idle 状态不弹 stop | mock recorder 状态 `.idle`，触发 `true → false` → 不调用 promptStop。 |
-| `MeetingPromptCoordinatorTests` — 一场会议只弹一次 start | mock recorder `.idle`；触发 `false → true` → 弹一次；`.idle` 保持；再次触发 `false → true`（**中间没经过 true → false**，理论上 debouncer 不会连发，但确认代码防御性）→ 不再弹。 |
-| `MeetingPromptCoordinatorTests` — 用户关掉开关 | `settings.isEnabled = false`，触发 `false → true` → 不弹，但 `lastObservedActive` 仍被更新（防止重新开启后误弹旧变化）。 |
+| `TeamsMeetingWatcherTests.judgeMeeting_count` | 构造 `[ShareableWindow(bid: teams2, title: "Microsoft Teams"), ShareableWindow(bid: teams2, title: "Meeting in Sprint \| Microsoft Teams")]` → `Self.judgeMeeting == true`（数量 >=2 排除主窗口后是 1，但会议标题匹配也命中） |
+| `TeamsMeetingWatcherTests.judgeMeeting_keyword` | 单窗 title `"会议：产品评审"` → true；`"讨论 \| Microsoft Teams"` → true；`"Random Chat"` → false |
+| `TeamsMeetingWatcherTests.judgeMeeting_exclude` | 两窗 title 都是 `"Microsoft Teams"` / `"Settings"` → 排除后 candidates=0 → false |
+| `TeamsMeetingWatcherTests.baseline_does_not_yield` | Fake providers 让首次 tick 判 true → `meetingEvents` 30ms 内**无** yield，`confirmedActive == true`（读取内部 seam 或通过后续状态验证） |
+| `TeamsMeetingWatcherTests.debounce_switch` | 序列 `[true, false, true, true]` → yield 序列应为 `[]`（前 3 tick 都在两两不一致中，第 4 tick `lastRaw==true && confirmed(baseline=true)!=true` 也不动） → 更换测试案例：baseline=false，然后 `[true, true]` → yield `[true]`；再 `[false, false]` → yield `[false]` |
+| `TeamsMeetingWatcherTests.sck_unauthorized_silent` | Fake permissions `screenCaptureGranted = false` → tick 不调 SCK provider，`sckUnauthorizedLogged` 只置位一次，`confirmedActive == false` |
+| `TeamsMeetingWatcherTests.teams_terminate_forces_false` | baseline=true → NSWorkspace 触发 didTerminate → 立即 yield `false` |
+| `MeetingPromptCoordinatorTests.start_prompt_gating_idle` | action.state=.idle → 塞一个 true event → `presenter.presentChoice` 被调一次，参数为 start prompt 文案；返回 true → `action.requestStart` 被调 |
+| `MeetingPromptCoordinatorTests.no_start_when_recording` | action.state=.recording → 塞 true event → 不调 presenter |
+| `MeetingPromptCoordinatorTests.no_stop_when_idle` | action.state=.idle → 塞 false event → 不调 presenter |
+| `MeetingPromptCoordinatorTests.one_prompt_per_meeting` | idle → 塞 true → 弹一次；再塞 true → 不弹（同一场会议内被抑制） |
+| `MeetingPromptCoordinatorTests.single_alert_gate` | 让 presenter 的 `presentChoice` 阻塞 → 期间塞第二个 event → 不弹第二次；presenter 返回后再塞事件走正常流程 |
+| `MeetingPromptCoordinatorTests.settings_disabled_silent` | settings.isEnabled=false → 塞事件 → 不弹（并且不改变 lastObservedActive，因为 v1 已改为"关掉 = watcher 完全停机"，coordinator 内不再需要跟踪 lastObservedActive） |
+| `RecordingActionControllerTests.start_updates_elapsed` | requestStart 成功 → elapsedTimer 启动、elapsedDisplay 更新序列可观察 |
+| `RecordingActionControllerTests.stop_refreshes_store` | requestStop 成功 → recordingsStore.refresh 被调，参数是 recorder 返回的 URL |
+| `RecordingActionControllerTests.start_alerts_on_error` | mock recorder 抛错 → alertPresenter.presentError 被调 |
+| `RecordingActionControllerTests.double_start_is_noop` | recorder.state=.recording → requestStart 直接 return，不调 recorder.startRecording |
+| `AlertPresenterTests`（optional） | 保持 NSAlertPresenter 只是薄封装；如引入正式测试，用 UI test 或跳过 |
 
 **注入策略**：
-- `TeamsMeetingWatcher` 内部把"检测 Teams 是否运行"和"查询窗口列表"抽成 protocol，
-  测试时注入 fake 实现，避免测试依赖真的 Teams App。
-- `MeetingPromptCoordinator` 里 `NSAlert.runModal()` 抽成 `AlertPresenting` protocol，
-  测试用 double 记录调用次数和参数，不弹真 alert。
+- `TeamsMeetingWatcher`：`RunningAppsProviding` / `ShareableContentProviding` /
+  `RecordingPermissions` 全 protocol 注入。
+- `MeetingPromptCoordinator`：`AlertPresenting` / `RecordingActionHandling` /
+  `MeetingDetectionSettings` 全 protocol / concrete-with-defaults 注入；watcher 传一个
+  fake watcher，暴露 `feedEvent(_ active: Bool)` 直接向 stream yield。
+- `RecordingActionController`：`RecordingManager` 因为是 concrete final class，测试里
+  用一个 lightweight subclass override + `internal(set)` 状态直接改；或者引入
+  `RecordingLifecycle` protocol 但 v1 优先保留 controller 直持 concrete manager（协议
+  仅在必要时抽出）。
 
-### Manual acceptance（release 前必跑，同 06 的 6DQ 风格）
+### Manual acceptance（release 前必跑）
 
-1. **DQ-1 Teams 不运行时的功耗**：Lyre 启动，Teams 完全关闭。用 Activity Monitor 观察 Lyre 进程
-   30 分钟 —— CPU 占用应 < 0.1%。（cold 档 30s tick 只读 running apps）
-2. **DQ-2 打开 Teams 立即 join 会议**：从关闭状态启动 Teams → 立刻点日历里的 Join → 观察 Lyre
-   是否在 15 秒内弹出 "Start recording" 提示。（`didLaunch` 触发 warm 档 → 首次 warm tick 立即触发）
-3. **DQ-3 会议中启动 Lyre**：Teams 会议已经在进行中 → 启动 Lyre → 观察 5–10 秒内是否弹提示。
-   （首次 tick 直接落 meetingActive=true 不弹，但 handleChange 里 `lastObservedActive=nil` → 有一段边界要仔细看：coordinator 的 `handleChange` guard 条件 `guard let previous = ..., let current = ...` 会跳过第一次。这是**故意的** —— Lyre 启动时用户可能正在开会但不希望被打扰，除非会议**变化**）。
-   → **决策**：DQ-3 场景**不弹提示**。用户约束是"会议开始时提示"，不是"启动 Lyre 时提示"，两者语义不同。若用户希望"启动时也提示当前会议中"，作为后续 issue。
-4. **DQ-4 假阳性**：Teams 打开 Chat 独立窗口（有的 org 允许 chat 弹出为独立窗口） → 观察是否误弹。
-   如果误弹率高于每天 1 次，考虑收紧判据。
-5. **DQ-5 会议结束提示**：录音中，主持人 End Meeting → 观察 5–15 秒内是否弹 "Stop recording"。
-6. **DQ-6 关掉开关**：Settings 里关掉开关 → 开会不弹。重新开启 → 下一场会议开始时正常弹。
+1. **DQ-1 Teams 不运行时功耗**：Lyre 启动、Teams 完全关闭。Activity Monitor 观察 Lyre
+   进程 30 分钟 —— CPU < 0.1%。
+2. **DQ-2 打开 Teams 立即入会**：Teams 冷启 → 立刻 Join → 15 秒内弹 "Start recording"。
+3. **DQ-3 会议中启动 Lyre**：已在会议中 → 启动 Lyre → **不弹**（baseline 静默）。托盘正常
+   显示，用户可手动 Start Recording。
+4. **DQ-4 假阳性**：Teams 打开 Chat 独立窗口、Calendar 弹窗 → 观察误弹率。>1/day 则收紧判据。
+5. **DQ-5 会议结束提示**：录音中，主持人 End Meeting → 5–15 秒内弹 "Stop recording"。
+6. **DQ-6 关掉开关**：Settings 关掉 → 开会不弹，且 Activity Monitor 上 watcher 完全停机
+   （无 5s SCK 查询）。重新开启 → 下一场会议正常弹。
+7. **DQ-7 SCK 未授权**：临时撤销 Screen Recording → Teams 中开会 → 不弹、无骚扰、日志
+   最多 1 条 info。重新授予 → 下一场会议正常弹。
+8. **DQ-8 Single-alert**：弹起 Start prompt 后立即结束会议（人为在 Teams 里 leave）→
+   Stop prompt 不重叠出现；Start prompt 关闭后如仍 inactive，不再弹 Stop（因为 Start
+   prompt 期间的 true→false 变化被 buffering 1 覆盖掉）。**明确记录此行为为 by-design**：
+   丢弃优先于叠加。
+9. **DQ-9 录音入口一致性**：tray Start / detector Start / tray Stop / detector Stop
+   四种组合各录一段 → Recordings 列表都能立即刷新、tray 计时器都能起停。
 
 ## Compatibility & Migration
 
-- **macOS minimum**：15.0（跟随现有约束，`SCShareableContent` / `NSWorkspace` 都无所谓）。
-- **权限**：不新增。SCK 授权是录音的前置条件，本 feature 复用。
-- **老用户**：默认开启（`MeetingDetectionSettings.isEnabled` 初值 true）。首次弹窗即为功能提示，
-  不需要 onboarding 步骤。
-- **Teams 未安装的用户**：cold 档持续，无提示，无影响。
-- **测试环境**：Xcodebuild test 里 `NSWorkspace` / SCK 都能跑，注入 fake 后无外部依赖。
+- **macOS minimum**：15.0（`project.yml:5` 已固化）。
+- **权限**：不新增。SCK 未授权时 detector 静默。
+- **老用户**：默认开启（首装机 `isEnabled = true`）。
+- **Teams 未安装**：cold 档持续，无提示，无影响。
+- **测试环境**：Provider protocol + AlertPresenter + AsyncStream，无外部依赖。
 
 ## Risk & Fallback
 
 | 风险 | 触发条件 | 降级 |
 |---|---|---|
-| 窗口标题格式再次变化 | Microsoft 改 New Teams 会议窗口标题 → 关键词判据失效 | 数量判据仍生效（`teamsWindows.count >= 2`）—— 双判据的作用。仅当数量也不满足时才会漏检。 |
-| SCK 权限被撤销 | 用户在系统设置里撤销 Screen Recording | `SCShareableContent.current` 抛错 → watcher 保守当 inactive → 用户不会收到误报。录音本身也无法启动，用户会察觉到。 |
-| Cmd-Tab 切窗时 alert 被埋 | Teams 全屏 + 用户在别的 Space | `NSApp.activate(ignoringOtherApps: true)` 前置调用 —— 会跳到 Lyre 所在的 Space。如果仍被埋，用户下一次切回 Lyre 会看到 alert 挂着（`runModal()` 会一直等）。 |
-| 假阳性太多 | DQ-4 中标题白名单不够广 | 逐步扩 `excludedTitles` 白名单。极端情况下改用"必须命中标题关键词"的严格判据（放弃数量判据）。 |
-| Teams 崩溃 → 进程还在但无窗口 | 极少见 | warm tick 检测不到会议窗口 → 平滑降为 inactive → 如果正在录音会误弹 "Stop recording"。用户按 Keep recording 即可。 |
+| 窗口标题格式再次变化 | Microsoft 改 New Teams 会议窗口标题 | 数量判据仍生效；DQ-4 定期回归 |
+| SCK 权限被撤销 | 用户在系统设置撤销 Screen Recording | 一次性告警 + 静默 inactive；录音本身仍走现有引导 |
+| Alert 被埋（Teams 全屏 + 另一 Space） | 见 [AlertPresenter](#alertpresenter) | `NSApp.activate(ignoringOtherApps: true)` 前置；产品选择"直接了当" |
+| 假阳性太多 | DQ-4 发现率高 | 收紧 `excludedTitles` 或改用严格标题判据；预留 Phase 4 |
+| Teams 崩溃 → 进程还在但无窗口 | 极少见 | warm tick 检测不到窗口 → 平滑降 inactive → 若正在录音会弹 Stop prompt，用户按 Keep recording 即可 |
+| 抖动导致 miss stop prompt | Start prompt 弹开阻塞时会议结束 | 由 `.bufferingNewest(1)` 决定：只丢一次；用户可从 tray 手动 stop（DQ-9 已确保入口一致） |
 
 ## Non-goals
 
-- **不做 Zoom / Meet / Webex** —— 用户明确决策，只做 Teams。
-- **不做日历集成** —— 不申请 Calendar 权限。
-- **不主动开录 / 停录** —— 只弹提示。所有真正的录音动作走 `RecordingManager`。
-- **不做转录 / 摘要触发** —— 会议检测不联动 AI summary、上传等下游流程，那些是录音结束后
-  已有流水线的事。
-- **不持久化会议历史** —— Watcher 不记录"过去发生过哪些会议"，只关心 now。
-- **不做通用 `MeetingObserver` 抽象** —— 目前只有一个 detector，不引入不必要的多态。
-- **不用 UserNotifications 横幅通知** —— 用户明确要模态对话框（可打断、可秒关）。
-  UserNotifications 需要新权限，且用户可能配 DND 静音。
+- **不做 Zoom / Meet / Webex**。
+- **不做日历集成**。
+- **不主动开录 / 停录**。
+- **不做转录 / 摘要触发**。
+- **不持久化会议历史**。
+- **不做通用 `MeetingObserver` 抽象**。
+- **不用 UserNotifications 横幅通知** —— 用户明确要模态对话框。
+- **不做 detector 层的 SCK 权限引导** —— 引导只在录音路径出现。
 
-## Rollout
+## Rollout — 原子化提交计划（v1 修订，Reviewer 反馈 #7）
 
-按以下顺序执行，前一步是后一步的前置门禁：
+按以下顺序**逐 commit 提交到 main**，每个 commit 独立可通过 `xcodegen generate` +
+`xcodebuild -scheme Lyre -destination 'platform=macOS' build` +
+`xcodebuild -scheme Lyre -destination 'platform=macOS' test` +
+`swiftlint lint apps/macos/Lyre/`。
 
-**Phase 0 — 探针 & 验证（半天）**
+| # | Commit | 内容 | 验证 |
+|---|--------|------|------|
+| C1 | `docs(macos): draft teams meeting detector spec` | 现有 `docs/07-teams-meeting-detector.md` v0（已提交 `3d600f9`） | 文档评审 |
+| C2 | `docs(macos): refine teams detector spec after joint review` | 本文档 v1 | 文档评审 |
+| C3 | `chore(macos): capture teams window shape probe results` | Phase 0 探针脚本 + 附录（Teams 主/会议/Chat/Settings/Calendar 窗口 title 观察值），落到 docs/07 附录 | 文档 review |
+| C4 | `refactor(macos): extract RecordingActionController for tray + detector` | 新增 `Recording/RecordingActionController.swift` + `Meeting/AlertPresenter.swift`；把 tray 现有 elapsed timer / store refresh / error alert 迁进 controller；TrayMenu 改成从 controller 读取 & 调用；`LyreApp` 在 init 里构造 controller 并传入 tray | `xcodebuild build & test`（不新增测试就位，但现有 tray/manager 测试仍绿）；本机手动录一段验证 tray 显示、Recordings 刷新 |
+| C5 | `feat(macos): add meeting detection settings + settings ui toggle` | `Meeting/MeetingDetectionSettings.swift` + `SettingsView.swift` 追加 Section + `LyreApp` 持有 `MeetingDetectionSettings` 并传入 `SettingsView` | `xcodebuild build`；打开 Settings 看到开关 |
+| C6 | `feat(macos): add teams meeting watcher with provider seams` | `Meeting/TeamsMeetingWatcher.swift` + `Meeting/ShareableWindow.swift` + 两个 provider concrete impl；新增 `TeamsMeetingWatcherTests` 全部用例（judge / debounce / baseline / SCK 未授权 / didTerminate 强制 false） | `xcodebuild test` — 新测试全绿 |
+| C7 | `feat(macos): add prompt coordinator with alert presenter tests` | `Meeting/MeetingPromptCoordinator.swift` + 复用 `AlertPresenter.swift`；`MeetingPromptCoordinatorTests` 全部用例；测试用 fake watcher + fake presenter + fake action | `xcodebuild test` — 新测试全绿 |
+| C8 | `feat(macos): wire meeting detector into LyreApp with off-switch handling` | `LyreApp.swift` 构造 watcher/coordinator，`onChange(of: meetingSettings.isEnabled)` 驱动 start/stop；DQ-1/DQ-6 打点 log | `xcodebuild build & test`；DQ-1/DQ-6 手动 |
+| C9 | `docs(macos): record DQ manual acceptance results` | DQ-1 到 DQ-9 手工验收记录写入 docs/07 附录；若发现假阳性率高，跟随一个 tightening commit | 文档 review |
+| C10（条件） | `feat(macos): tighten meeting judgement heuristic` | 只有 DQ-4 假阳性率高时才提；调整 `excludedTitles` 或改用严格标题判据 | 相应新单测 + `xcodebuild test` |
+| C11 | `chore: update CLAUDE.md retrospective (if any macOS API learnings)` | 若 C6/C7/C8 学到 `SCShareableContent` / `AsyncStream` / `NSAlert` 的坑，写到 retrospective | — |
 
-1. 写一个临时 CLI Swift 脚本，跑 `SCShareableContent.current`，在你本机开 Teams + 打开 / 结束几次
-   真实会议，dump `teamsWindows` 的 `(title, frame, isOnScreen)`。
-   目的：**校准数量判据 + 标题关键词是否真的命中当前 Teams 版本**。若发现新窗口标题格式，
-   补进 `meetingTitleKeywords`。
-2. 观察 Teams 打开 Chat / Settings / Calendar 弹出窗口时 `teamsWindows` 的形态，
-   评估假阳性风险，必要时扩 `excludedTitles`。
-3. 结论写进 PR 描述。
-
-**Phase 1 — 代码（1 天）**
-
-4. 新建 `Meeting/` 目录 + 3 个源文件（`TeamsMeetingWatcher` / `MeetingPromptCoordinator` /
-   `MeetingDetectionSettings`）。
-5. Settings 面板加开关。
-6. `LyreApp.swift` 接线。
-7. `xcodegen generate` + `xcodebuild build` + `swiftlint --strict Lyre/` 全绿。
-
-**Phase 2 — 测试（半天）**
-
-8. 写 `TeamsMeetingWatcherTests` + `MeetingPromptCoordinatorTests`（10 条用例，见 Testing Strategy）。
-9. `xcodebuild test` 全绿。
-
-**Phase 3 — 手工验收（1 小时）**
-
-10. 跑 DQ-1 到 DQ-6。全部通过 → 合并。
-11. 更新 `CLAUDE.md` 的 Retrospective（若在 Phase 0/2/3 学到 macOS API 的坑）。
-
-**Phase 4（条件触发）**
-
-12. 若 DQ-4 假阳性率高 → 收紧判据（去掉数量判据、依赖严格标题关键词），发一版补丁。
-13. 若用户反馈 "希望启动 Lyre 时也提示当前会议中" → 单独开 issue 讨论 DQ-3 决策变更。
+**约束**：
+- 每个 commit 都必须能过 pre-commit hook（`xcodebuild` + `swiftlint`）；C4 之后每步都
+  需要至少能 build。
+- 不在 C4 之外的 commit 里做 tray refactor，避免 diff 混杂；detector 相关代码集中在
+  C5-C8。
+- C4 是承载 Reviewer #1 修正的关键；如 C4 复审发现 tray 显示回归，先滚回 C4 再往下走。
+- C6/C7 的测试必须 100% 绿才能进入 C8。
 
 ## References
 
 - Apple — [`SCShareableContent`](https://developer.apple.com/documentation/screencapturekit/scshareablecontent)
 - Apple — [`NSWorkspace.runningApplications`](https://developer.apple.com/documentation/appkit/nsworkspace/1534059-runningapplications)
 - Apple — [`NSAlert`](https://developer.apple.com/documentation/appkit/nsalert)
+- Apple — [`AsyncStream`](https://developer.apple.com/documentation/swift/asyncstream)
 - Apple — [Observation framework](https://developer.apple.com/documentation/observation)
-- [yazinsai/OpenOats — `MeetingDetector.swift`](https://github.com/yazinsai/OpenOats) — 参考的多平台会议检测实现（本项目仅取其"进程 + SCK 窗口"双判据思路，不采纳其 CoreAudio mic listener 路径）
-- [RecapAI/Recap — `AudioProcess.swift`](https://github.com/RecapAI/Recap) — 参考 bundle ID 白名单模式
-- Granola [Permissions FAQ](https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time) — 佐证"不需要 Accessibility 也能做会议感知"的产品先例
+- [yazinsai/OpenOats — `MeetingDetector.swift`](https://github.com/yazinsai/OpenOats) — 参考"进程 + SCK 窗口"双判据思路
+- [RecapAI/Recap — `AudioProcess.swift`](https://github.com/RecapAI/Recap) — bundle ID 白名单模式
+- Granola [Permissions FAQ](https://docs.granola.ai/help-center/getting-started/setting-up-granola-for-the-first-time) — "不需要 Accessibility 也能做会议感知"的产品先例
+
+## 审查记录
+
+### v0 → v1 修订项
+
+来自 @MBP-Reviewer-A 2026-07-06 首轮审查（本 lyre-teams 线程 msg=6e6d64d4）+ 我的独立扫码
+补充 A-D + 联合 Q1/Q2 定案，全部合并：
+
+1. **抽 `RecordingActionController`（Q1 定案）** — 解决 detector 绕过 tray 现有副作用
+   （elapsed timer、`recordingsStore.refresh`）导致 UI 不同步的 bug。TrayMenu 和
+   Coordinator 都走 `RecordingActionHandling` protocol；controller 由 LyreApp 拥有。
+2. **Settings 路径与接线** — 撤销不存在的 `Views/Settings/GeneralSettingsView.swift`；
+   改到现有 `Views/SettingsView.swift` 追加 Section；LyreApp 明确列出所有新增 `@State`。
+3. **测试 seam** — Provider protocol（`RunningAppsProviding` / `ShareableContentProviding`）
+   + `AlertPresenting` + `RecordingActionHandling`；watcher 判据抽 static
+   `judgeMeeting(from:)`。
+4. **SCK 未授权路径** — 静默 inactive、一次性告警、不主动拉引导、不弹会议提示。
+5. **启动语义统一** — Baseline 只 seed 内部状态，不 yield；启动时会议中不弹。相关表述
+   全部改成 baseline-first。
+6. **Single-alert 在场规则** — `isPromptPresented` gate + `.bufferingNewest(1)`；Esc /
+   Cmd-W / 关闭均为 secondary action。
+7. **原子提交拆分** — C1-C11 明细表（含 C10 条件 commit）；每个 commit 写出验证命令。
+
+我额外补充的：
+- **A.** Logger subsystem 统一 `Constants.subsystem`，不硬编码。
+- **B.** Coordinator 只读 `action.state` 快照，不长期观察，避免与 non-MainActor
+  `RecordingManager` 竞争。
+- **C.** 用 `AsyncStream` 替代 `withObservationTracking`，解决 Observation one-shot
+  在同一 run loop tick 内漏事件的脆弱性（Q2 定案）。
+- **D.** Timer 方案写死 `Timer + Task { @MainActor in ... }`，不留 `DispatchSourceTimer` /
+  `AsyncTimerSequence` 备选路径。
+- **开关关掉 = watcher 完全停机**（对齐 Reviewer "建议调整"）：coordinator 观察
+  `settings.isEnabled` 变化 → 停 watcher；重新开启 → 起 watcher。detector 静态功耗归零。
+
+---
+
+v1 敲定后按 C3 起进入实现阶段。
