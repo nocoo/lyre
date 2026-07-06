@@ -3,11 +3,15 @@ import SwiftUI
 
 @main
 struct LyreApp: App {
+    private static let logger = Logger(subsystem: Constants.subsystem, category: "LyreApp")
+
     @State private var recorder: RecordingManager
     @State private var config: AppConfig
     @State private var recordingsStore: RecordingsStore
     @State private var actionController: RecordingActionController
     @State private var meetingSettings: MeetingDetectionSettings
+    @State private var meetingWatcher: TeamsMeetingWatcher
+    @State private var meetingCoordinator: MeetingPromptCoordinator
     @State private var selectedTab: MainWindowView.SidebarTab = .recordings
     @Environment(\.openWindow) private var openWindow
 
@@ -23,11 +27,39 @@ struct LyreApp: App {
             alertPresenter: presenter
         )
         let mtgSettings = MeetingDetectionSettings()
+
+        // Meeting detector: LyreApp is the sole lifecycle owner.
+        // - Coordinator starts once and stays alive for the app's lifetime;
+        //   it swallows in-flight events when settings.isEnabled == false.
+        // - Watcher's start()/suspend()/resume() is driven by the Settings
+        //   toggle so a disabled detector performs no polling or SCK reads
+        //   (docs/07-teams-meeting-detector.md C8).
+        let watcher = TeamsMeetingWatcher(
+            runningApps: NSWorkspaceRunningAppsProvider(),
+            content: SCShareableContentProvider(),
+            permissions: mgr.permissions
+        )
+        let coordinator = MeetingPromptCoordinator(
+            watcher: watcher,
+            action: action,
+            alertPresenter: presenter,
+            settings: mtgSettings
+        )
+        coordinator.start()
+        if mtgSettings.isEnabled {
+            watcher.start()
+            Self.logger.info("Meeting detector started (enabled)")
+        } else {
+            Self.logger.info("Meeting detector kept idle (settings disabled)")
+        }
+
         _config = State(initialValue: cfg)
         _recorder = State(initialValue: mgr)
         _recordingsStore = State(initialValue: store)
         _actionController = State(initialValue: action)
         _meetingSettings = State(initialValue: mtgSettings)
+        _meetingWatcher = State(initialValue: watcher)
+        _meetingCoordinator = State(initialValue: coordinator)
     }
 
     var body: some Scene {
@@ -49,7 +81,12 @@ struct LyreApp: App {
             TrayLabel(isRecording: recorder.state == .recording)
         }
 
-        // Main window (opened from tray menu)
+        // Main window (opened from tray menu). The `.onChange` observers
+        // live here because this scene is guaranteed to be materialised
+        // whenever the user can flip a Setting — SettingsView lives inside
+        // MainWindowView. MenuBarExtra's popover content only lives while
+        // the menu is open, so it is not a reliable place to observe the
+        // meeting-detector toggle (Reviewer C8 blocker).
         Window("Lyre", id: "main") {
             MainWindowView(
                 recorder: recorder,
@@ -66,6 +103,20 @@ struct LyreApp: App {
                 // post-stop refresh lands on the visible list rather than
                 // the stale directory's list.
                 actionController.setRecordingsStore(newStore)
+            }
+            .onChange(of: meetingSettings.isEnabled) { _, isEnabled in
+                // Sole lifecycle switch for the watcher. `suspend()` tears
+                // down the timer + NSWorkspace observers without finishing
+                // the stream, so the coordinator's consumer parks safely
+                // and picks up again on resume without needing to be
+                // recreated.
+                if isEnabled {
+                    meetingWatcher.resume()
+                    Self.logger.info("Meeting detector resumed by user toggle")
+                } else {
+                    meetingWatcher.suspend()
+                    Self.logger.info("Meeting detector suspended by user toggle")
+                }
             }
         }
         .defaultSize(width: 600, height: 500)
