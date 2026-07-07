@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.6.18 (2026-07-07)
+
+### 🚀 Features
+
+- feat(macos): wire meeting detector into LyreApp with watcher suspend/resume off-switch (3c86848)
+- feat(macos): add MeetingPromptCoordinator with alert reentrance gate (95671d7)
+- feat(macos): add TeamsMeetingWatcher with provider seams and v1.3 heuristic (c411fcc)
+- feat(macos): add MeetingDetectionSettings and Settings UI toggle (e1b6a11)
+
+### 🐛 Bug Fixes
+
+- fix(macos): activate app before showing recording error alert (80e8295)
+- fix(macos): guard NSWorkspace observer install against re-entry (2b79772)
+
+### 📝 Other Changes
+
+- chore: update CLAUDE.md retrospective with meeting detector learnings (fc31c3d)
+- docs(macos): record DQ manual acceptance results for teams detector (C9) (f2db826)
+- refactor(macos): extract RecordingActionController and recording seams for tray + detector (92fc471)
+- docs(macos): tighten Teams meeting heuristic per Phase 0 findings (v1.3) (3a0c1c4)
+- chore(macos): add teams SCK window probe and phase 0 appendix (6350f23)
+- docs(macos): coordinator on MeetingEventProviding + settings owns watcher only (cf9f4cd)
+- docs(macos): tighten protocol seams + watcher lifecycle in detector spec (f65cfac)
+- docs(macos): refine teams detector spec after joint review (f5ae0a3)
+- docs: add teams-meeting-detector spec (07) (3d600f9)
+
+
 ## v1.6.17 (2026-07-03)
 
 ### 🚀 Features
