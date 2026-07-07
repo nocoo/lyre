@@ -187,11 +187,19 @@ struct MeetingPromptCoordinatorTests {
         }
 
         coord.start()
-        // Kick off the meeting-started event and wait long enough for the
-        // consumer to process both events + the modal to return + the
-        // buffered event to be delivered.
+        // Kick off the meeting-started event and wait for the coordinator to
+        // finish handling both events (Start prompt accepted + Stop
+        // suppression check). Polling rather than a fixed sleep avoids
+        // flakiness when the machine is under load — the run-time is
+        // deterministic on quiet hardware (~110 ms) but climbs above the
+        // old 100 ms budget during a full pre-push pipeline. See DQ-9.
         ctx.watcher.feed(true)
-        try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms
+        await waitUntil(timeoutMs: 2_000) { ctx.action.startCount == 1 }
+        // Give the consumer one more scheduling turn so any buffered
+        // `false` yielded via `onBeforePresentChoice` is drained and
+        // observed by the reentrance gate before assertions.
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 20_000_000)  // 20ms drain
 
         #expect(ctx.alerts.choiceCount == 1)
         // startCount == 1 confirms Start prompt was accepted and dispatched.
@@ -233,9 +241,11 @@ struct MeetingPromptCoordinatorTests {
 
         coord.start()
         ctx.watcher.feed(true)                              // meeting #1 → Start prompt
-        try? await Task.sleep(nanoseconds: 100_000_000)     // 100ms drain
+        await waitUntil(timeoutMs: 2_000) { ctx.alerts.choiceCount == 1 }
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 20_000_000)      // drain the dropped `false`
         ctx.watcher.feed(true)                              // meeting #2 → must re-fire
-        try? await Task.sleep(nanoseconds: 100_000_000)     // 100ms drain
+        await waitUntil(timeoutMs: 2_000) { ctx.alerts.choiceCount == 2 }
 
         #expect(ctx.alerts.choiceCount == 2)  // both meetings prompted
         #expect(ctx.action.startCount == 0)   // user declined both times
@@ -279,6 +289,22 @@ private func makeCoordinator() -> (MeetingPromptCoordinator, TestContext) {
         settings: ctx.settings
     )
     return (coord, ctx)
+}
+
+// MARK: - Timing helpers
+
+/// Poll `predicate` every 5 ms until it returns `true`, up to `timeoutMs`.
+/// Replaces fixed-duration `Task.sleep(...)` waits that were flaky under
+/// load — the coordinator's real dispatch takes ~110 ms on a quiet machine
+/// but climbs above 100 ms during the full pre-push pipeline. Polling
+/// tracks actual work completion rather than betting on wall-clock budget.
+@MainActor
+private func waitUntil(timeoutMs: Int, _ predicate: @MainActor () -> Bool) async {
+    let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
+    while Date() < deadline {
+        if predicate() { return }
+        try? await Task.sleep(nanoseconds: 5_000_000)  // 5 ms
+    }
 }
 
 // MARK: - Fakes
