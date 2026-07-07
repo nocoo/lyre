@@ -184,6 +184,11 @@ final class TeamsMeetingWatcher: MeetingEventProviding {
     // MARK: - NSWorkspace observers
 
     private func installWorkspaceObservers() {
+        // Idempotent: `start()`/`resume()` may be called on an already-armed
+        // watcher (e.g. user rapidly toggles the Settings switch). Without
+        // this guard the previous NSObjectProtocol tokens are overwritten
+        // and the underlying observers leak until process exit.
+        guard launchObserver == nil, terminateObserver == nil else { return }
         let center = NSWorkspace.shared.notificationCenter
         launchObserver = center.addObserver(
             forName: NSWorkspace.didLaunchApplicationNotification,

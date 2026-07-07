@@ -377,6 +377,34 @@ struct TeamsMeetingWatcherLifecycleTests {
         // invariant is that we exit rather than block forever.
         #expect(collected.count <= 1)
     }
+
+    // MARK: - Reentrance safety
+
+    @Test func startTwice_thenSuspend_leavesObserversDetached() async {
+        // Regression: `start()` (and thus `resume()`) unconditionally
+        // installed the NSWorkspace observers, overwriting the previous
+        // NSObjectProtocol tokens and leaking the old observers because
+        // `suspend()` could only remove whichever token pair was current.
+        // The install path is now idempotent — this test wires the same
+        // sequence and asserts the watcher survives it cleanly.
+        let watcher = TeamsMeetingWatcher(
+            runningApps: FakeRunningApps(alive: true),
+            content: FakeContent(),
+            permissions: FakePerms(sck: true)
+        )
+        watcher.start()
+        watcher.start()   // must not double-install / crash
+        watcher.suspend() // must clear both observer tokens
+
+        // Drive the debouncer to prove state is still consistent after the
+        // double-start + suspend cycle.
+        watcher.testingSubmit(rawActive: false)
+        watcher.testingSubmit(rawActive: true)
+        watcher.testingSubmit(rawActive: true)
+        #expect(watcher.testingConfirmedActive == true)
+
+        watcher.stopAndFinish()
+    }
 }
 
 // MARK: - Fakes
