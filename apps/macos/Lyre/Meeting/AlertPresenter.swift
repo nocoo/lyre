@@ -43,6 +43,11 @@ final class NSAlertPresenter: AlertPresenting {
         alert.messageText = title
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
+        // Lyre is LSUIElement — a recording failure almost certainly fires
+        // while the user is focused on another app. Without an explicit
+        // activate the NSAlert lands behind other windows and the user
+        // never sees it. Matches the `presentChoice` behaviour above.
+        NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
     }
 }
