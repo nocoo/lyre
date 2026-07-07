@@ -495,7 +495,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.18;
+				MARKETING_VERSION = 1.6.19;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.hexly.lyre;
 				PRODUCT_NAME = Lyre;
 				SDKROOT = macosx;
@@ -602,7 +602,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.6.18;
+				MARKETING_VERSION = 1.6.19;
 				PRODUCT_BUNDLE_IDENTIFIER = ai.hexly.lyre;
 				PRODUCT_NAME = Lyre;
 				SDKROOT = macosx;
