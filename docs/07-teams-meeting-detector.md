@@ -145,13 +145,20 @@ extension PermissionManager {
 Detector 在启动 / 每次 warm tick 前读该字段：
 
 - **未授权**：watcher 保持 warm/cold 档位不变，**跳过** `SCShareableContent.current` 调用，
-  静默判 inactive，**不重复打日志**（每次会话最多一条 info），**不触发系统引导 alert**，
-  **不弹会议提示**。Screen Recording 的引导流程仍走现有 `PermissionGuideView`，
-  由录音动作触发，不因 detector 而额外拉起。
+  走 `handleObservationUnavailable()`：**保留 `confirmedActive` 不变**、**不 yield**（避免把
+  临时授权缺口误当成 meeting-ended 事件而弹 Stop 提示），**不重复打日志**（每次会话最多一条 info），
+  **不触发系统引导 alert**，**不弹会议提示**。Screen Recording 的引导流程仍走现有
+  `PermissionGuideView`，由录音动作触发，不因 detector 而额外拉起。
 - **首次授权变化**（撤销 → 授予或授予 → 撤销）：watcher 观察 `PermissionManager` 的
   `screenRecording` 变化，state 变化后下一次 tick 自然重新走判定。
 - **调用抛错**（授权被撤销但状态还没同步、SCK 挂了）：一次性 `warning` 日志 +
-  保守判 inactive；不主动弹 alert 打扰用户。
+  同 `handleObservationUnavailable()` 路径（**保留 `confirmedActive` 不变、不 yield**）；
+  不主动弹 alert 打扰用户。
+
+**Correction note**：本节较早版本写"静默判 inactive / 保守判 inactive"。实现落地时**没有**
+把 SCK-unavailable 视为 inactive 信号 —— 那会在授权被短暂撤销 / 撤销后立刻授予的场景把 hot
+状态误翻 warm、弹出 Stop 提示。以上文字已同步 `TeamsMeetingWatcher.handleObservationUnavailable()`
+的实际语义（`apps/macos/Lyre/Meeting/TeamsMeetingWatcher.swift`）。
 
 ### Teams bundle IDs
 
