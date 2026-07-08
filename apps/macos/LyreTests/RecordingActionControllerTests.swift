@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import Testing
 @testable import Lyre
@@ -306,6 +307,26 @@ struct RecordingActionControllerTests {
         #expect(alerts.lastErrorTitle == "Recording Error")
         #expect(alerts.lastErrorMessage.contains("finalize failed"))
     }
+
+    @Test func recorderStateDivergesToIdle_elapsedTick_convergesControllerState() async {
+        // Regression: RecordingManager.handleStreamError() flips its own
+        // `state` to `.idle` bypassing the controller. Before this fix the
+        // controller stayed `.recording` (tray menu showed "Stop Recording"
+        // while the tray icon — reading recorder.state — showed idle).
+        // The elapsed-timer tick now mirrors the recovery.
+        let recorder = FakeRecorder()
+        let controller = RecordingActionController(
+            recorder: recorder,
+            recordingsStore: FakeRecordingsStore(),
+            alertPresenter: FakeAlertPresenter()
+        )
+        await controller.requestStart()
+        #expect(controller.state == .recording)
+        recorder.state = .idle
+        controller.testingForceElapsedTick()
+        #expect(controller.state == .idle)
+        #expect(controller.elapsedDisplay == "00:00")
+    }
 }
 
 // MARK: - Fakes
@@ -385,3 +406,4 @@ private enum FakeError: LocalizedError {
         }
     }
 }
+// swiftlint:enable file_length

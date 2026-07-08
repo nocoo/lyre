@@ -126,7 +126,27 @@ final class RecordingActionController: RecordingActionHandling {
     }
 
     private func updateElapsedDisplay() {
+        // Detect a stream-error recovery in RecordingManager: it can flip
+        // its own `state` back to `.idle` without going through the
+        // controller (see RecordingManager.handleStreamError). If that
+        // happens, our stored `state` would stay stuck at `.recording`,
+        // leaving the tray menu showing "Stop Recording" while the tray
+        // icon (which reads recorder.state directly) shows idle. Detect
+        // the divergence here and converge.
+        if recorder.state == .idle && state == .recording {
+            Self.logger.warning("Recorder state diverged (idle) — mirroring and tearing down timer")
+            stopElapsedTimer()
+            state = .idle
+            return
+        }
         let seconds = Int(recorder.elapsedSeconds)
         elapsedDisplay = String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
+
+    #if DEBUG
+    /// Test hook: run one iteration of the elapsed-timer callback. Lets
+    /// tests exercise the divergence-detection path in
+    /// `updateElapsedDisplay()` without waiting a real second.
+    func testingForceElapsedTick() { updateElapsedDisplay() }
+    #endif
 }
