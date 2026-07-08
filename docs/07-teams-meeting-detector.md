@@ -13,10 +13,66 @@
 
 ## Status
 
-- 阶段：设计（v1.3，Phase 0 观察后收紧判据契约）
+- 阶段：设计（v2.0，process-tap 作 primary，v1.3 窗口判据留作 fallback）
 - 作者：MBP-SDE-A
-- 审查：MBP-Reviewer-A（v0、v1、v1.1、v1.2 均已审查；v1.3 由 C3 Phase 0 触发，见"审查记录"）
+- 审查：MBP-Reviewer-A（v0、v1、v1.1、v1.2、v1.3；v2.0 由 Space 切换假误报讨论 + 竞品调研触发）
 - 决策人：@zheng-li
+
+## v2.0 Addendum — Process-tap as primary signal
+
+**问题**：v1.3 契约（`isOnScreen` + frame + count/title-slot）在 macOS **多 Space** 场景下踩雷。
+`SCWindow.isOnScreen` 继承 CGWindow 语义，**只对当前 active Space 上的窗口返回 true**。
+用户会议中切到别的 Space → 主会议大窗 `isOnScreen` 翻 false → 若 compact view 也不在 →
+`onScreenCandidates` 为空 → debouncer 翻 false → 弹 Stop 误提示。
+
+**解决**：新增一个更硬的主信号 —— **CoreAudio 进程属性 `kAudioProcessPropertyIsRunningInput`**
+（macOS 14.4+），询问系统"有没有 Teams 进程正在读麦克风"。
+
+### 为什么这个信号更硬
+
+| 维度 | v1.3 窗口判据 | v2.0 process-tap |
+|---|---|---|
+| Space 切换 | ❌ isOnScreen 翻 false | ✅ 与 UI 无关 |
+| 窗口最小化 | ❌ 同上 | ✅ 同上 |
+| 用户切走视觉焦点 | ⚠️ 依赖 compact view 存在 | ✅ 同上 |
+| Teams 改窗口标题 | ⚠️ 判据需跟改 | ✅ 完全绕开 title |
+| 权限成本 | Screen Recording（已有） | **零**（读进程属性无需授权） |
+| 事件驱动 | ❌ 5s 轮询 | 未来可挂 property listener，本次仍 poll 保架构一致 |
+
+**参考实现**（社区已收敛到这一模式）：`moona3k/macparakeet`、`BasedHardware/omi`、`Muesli-HQ/muesli`、`island-io/mila`、`huopolinen/MemorAI`。5 个真在跑的项目全用同一个信号。
+
+### 已知副作用与 fallback
+
+**Teams 会议中用户静音 / 浏览器托管的 Meet 静音**：process-tap 可能读到 false（native Teams 一般保持占麦，但为防御性设计仍要 fallback）。落地方案：
+
+```
+if audioActivity.isBundleUsingInput(anyOf: teamsBundleIDs) == true {
+    applyDebounced(rawActive: true)     // primary hit — skip window enumeration
+    return
+}
+// primary said false or nil → fall through to v1.3 window heuristic
+```
+
+- **audio true** → 立刻 active，**不查 SCK**（省 CPU + 省时延）
+- **audio false + 窗口判据 active** → 保持 active（compact view / 会议大窗兜底）
+- **audio false + 窗口判据 inactive** → 走原去抖翻 false
+
+### 实现文件
+
+- `apps/macos/Lyre/Meeting/TeamsAudioActivityProvider.swift` — CoreAudio C API 封装 + `TeamsAudioActivityProviding` 协议 seam
+- `apps/macos/Lyre/Meeting/TeamsMeetingWatcher.swift:checkTeamsWindows()` — 融合两个信号
+- `apps/macos/Lyre/Meeting/MeetingProviders.swift` — 从 watcher 抽出的 `RunningAppsProviding` / `ShareableContentProviding` / `MeetingEventProviding` 三个协议（因为 file_length 限制）
+- 测试：`LyreTests/TeamsMeetingWatcherTests.swift` 新增 4 条 process-tap 场景（audio-true-no-windows / audio-false-fallback / audio-nil-fallback / audio-flip-true-to-false）
+
+### 未采纳的候选
+
+- **窗口 `windowID` anchor**：在 hot 阶段记录会议窗口 ID，Space 切换时用 windowID 判"窗口是否真的关闭"。process-tap 落地后不再必要。
+- **`CGSCopySpacesForWindows`（SkyLight private API）**：能查窗口在哪些 Space，但为 private SPI，无必要引入。
+- **Accessibility API + 浏览器 tab URL**：为 web-hosted meeting（Teams web / Meet）设计的信号，本项目只做 native Teams，不需要。
+
+### macOS 版本要求
+
+`kAudioProcessProperty*` 系列 selector 是 macOS 14.4+ 才有。Lyre 已经 target macOS 15 → 不受影响。provider 内 `#available(macOS 14.4, *)` 分支返回 nil 供未来某天 target 下调时兜底。
 
 ## Motivation
 
