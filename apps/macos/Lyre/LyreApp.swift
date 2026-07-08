@@ -19,6 +19,12 @@ struct LyreApp: App {
         let cfg = AppConfig()
         let mgr = RecordingManager()
         mgr.outputDirectory = cfg.outputDirectory
+        // Restore saved input device before any recording entry point can
+        // fire (menu bar hotkey, meeting prompt, etc.), so a user who
+        // never opens the tray still gets the device they last picked.
+        // Previously this ran on TrayMenu.onAppear, which meant hotkey /
+        // meeting-prompt starts silently reverted to auto.
+        InputDeviceRestore.restore(config: cfg, capture: mgr.capture)
         let store = RecordingsStore(directory: cfg.outputDirectory)
         let presenter = NSAlertPresenter()
         let action = RecordingActionController(
@@ -180,8 +186,6 @@ struct MainWindowView: View {
 
 /// The tray dropdown menu.
 struct TrayMenu: View {
-    private static let logger = Logger(subsystem: Constants.subsystem, category: "TrayMenu")
-
     @Bindable var recorder: RecordingManager
     @Bindable var config: AppConfig
     @Bindable var recordingsStore: RecordingsStore
@@ -251,8 +255,10 @@ struct TrayMenu: View {
                 hasCheckedPermissions = true
                 Task {
                     await recorder.permissions.checkAll()
+                    // Refresh here too so the visible device list picks up
+                    // hardware added since app launch; the saved-id restore
+                    // itself already ran in LyreApp.init.
                     recorder.capture.refreshDevices()
-                    restoreSavedInputDevice()
                 }
             }
         }
@@ -265,22 +271,6 @@ struct TrayMenu: View {
                 if !stillExists {
                     config.selectedInputDeviceID = nil
                 }
-            }
-        }
-    }
-
-    // MARK: - Actions
-
-    /// Restore saved input device from config, falling back to default if unavailable.
-    private func restoreSavedInputDevice() {
-        if let savedID = config.selectedInputDeviceID {
-            let available = recorder.capture.availableDevices.contains { $0.id == savedID }
-            if available {
-                recorder.capture.selectedDeviceID = savedID
-            } else {
-                Self.logger.info("Saved input device \(savedID) no longer available, using default")
-                config.selectedInputDeviceID = nil
-                recorder.capture.selectedDeviceID = nil
             }
         }
     }
