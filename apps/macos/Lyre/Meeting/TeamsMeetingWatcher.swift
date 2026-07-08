@@ -3,60 +3,9 @@ import Foundation
 import os
 import ScreenCaptureKit
 
-/// Test seam for "is Teams running in the process table?". `NSWorkspace` is
-/// the production impl; tests inject an in-memory fake.
-@MainActor
-protocol RunningAppsProviding {
-    func isBundleRunning(anyOf ids: Set<String>) -> Bool
-}
-
-/// Test seam for `SCShareableContent`. Production impl calls SCK; tests inject
-/// an array of `ShareableWindow` values.
-@MainActor
-protocol ShareableContentProviding {
-    func currentTeamsWindows(bundleIDs: Set<String>) async throws -> [ShareableWindow]
-}
-
-/// Coordinator-facing seam that carries the debounced meeting state stream
-/// (`MeetingPromptCoordinator` will consume this; the concrete watcher
-/// conforms). Kept in this file because it is defined against
-/// `TeamsMeetingWatcher` and lives entirely alongside it in the meeting layer.
-@MainActor
-protocol MeetingEventProviding: AnyObject {
-    var meetingEvents: AsyncStream<Bool> { get }
-}
-
-// MARK: - Production providers
-
-/// Real `NSWorkspace` adapter.
-@MainActor
-final class NSWorkspaceRunningAppsProvider: RunningAppsProviding {
-    func isBundleRunning(anyOf ids: Set<String>) -> Bool {
-        NSWorkspace.shared.runningApplications.contains {
-            guard let bid = $0.bundleIdentifier else { return false }
-            return ids.contains(bid)
-        }
-    }
-}
-
-/// Real `SCShareableContent` adapter. Projects each Teams window into the
-/// `ShareableWindow` value type so the judgement rules stay pure.
-@MainActor
-final class SCShareableContentProvider: ShareableContentProviding {
-    func currentTeamsWindows(bundleIDs: Set<String>) async throws -> [ShareableWindow] {
-        let content = try await SCShareableContent.current
-        return content.windows.compactMap { win -> ShareableWindow? in
-            guard let bid = win.owningApplication?.bundleIdentifier,
-                  bundleIDs.contains(bid) else { return nil }
-            return ShareableWindow(
-                bundleID: bid,
-                title: win.title,
-                isOnScreen: win.isOnScreen,
-                frame: win.frame
-            )
-        }
-    }
-}
+// Test seams (`RunningAppsProviding`, `ShareableContentProviding`,
+// `MeetingEventProviding`) and their production adapters live in
+// `MeetingProviders.swift` alongside this file.
 
 // MARK: - Watcher
 
@@ -101,6 +50,7 @@ final class TeamsMeetingWatcher: MeetingEventProviding {
     private let runningApps: RunningAppsProviding
     private let content: ShareableContentProviding
     private let permissions: RecordingPermissions
+    private let audioActivity: TeamsAudioActivityProviding
 
     // MARK: - Internal state
 
@@ -127,11 +77,13 @@ final class TeamsMeetingWatcher: MeetingEventProviding {
     init(
         runningApps: RunningAppsProviding,
         content: ShareableContentProviding,
-        permissions: RecordingPermissions
+        permissions: RecordingPermissions,
+        audioActivity: TeamsAudioActivityProviding = CoreAudioTeamsAudioActivityProvider()
     ) {
         self.runningApps = runningApps
         self.content = content
         self.permissions = permissions
+        self.audioActivity = audioActivity
 
         var continuation: AsyncStream<Bool>.Continuation?
         self.meetingEvents = AsyncStream<Bool>(bufferingPolicy: .bufferingNewest(1)) {
@@ -261,6 +213,21 @@ final class TeamsMeetingWatcher: MeetingEventProviding {
     }
 
     private func checkTeamsWindows() async {
+        // Primary signal: CoreAudio process-tap. Robust across Space
+        // switches, minimized windows, all-day meeting scenarios, and Teams
+        // title changes — none of those affect whether Teams holds the mic.
+        // See docs/07 v2.0 rationale.
+        if audioActivity.isBundleUsingInput(anyOf: Self.teamsBundleIDs) == true {
+            applyDebounced(rawActive: true)
+            return
+        }
+        // Audio signal returned false or nil → fall back to the window
+        // heuristic. This covers the "Teams meeting in progress but mic is
+        // muted" edge case where a browser-hosted call drops mic input
+        // entirely (native Teams keeps it — but be defensive), and the
+        // rare macOS < 14.4 fallback (Lyre targets 15+ so unreachable in
+        // production, but the provider returns nil in that branch).
+        //
         // SCK not granted → stay inactive silently, log at most once per
         // watcher lifetime. Deliberately does NOT feed the debounce channel:
         // a transient permission gap must not become a meeting-ended event

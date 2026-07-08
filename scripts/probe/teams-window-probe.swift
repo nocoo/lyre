@@ -50,6 +50,8 @@ struct WindowSnapshot: Codable {
     let bundleID: String
     let appName: String?
     let title: String?
+    let windowID: UInt32
+    let windowLayer: Int
     let isOnScreen: Bool
     let frame: [String: Double]
     let excludedByWhitelist: Bool
@@ -100,6 +102,8 @@ func run() async {
             bundleID: w.owningApplication?.bundleIdentifier ?? "unknown",
             appName: w.owningApplication?.applicationName,
             title: w.title,
+            windowID: w.windowID,
+            windowLayer: w.windowLayer,
             isOnScreen: w.isOnScreen,
             frame: [
                 "x": Double(w.frame.origin.x),
@@ -120,9 +124,11 @@ func run() async {
         if s.count >= width { return s }
         return s + String(repeating: " ", count: width - s.count)
     }
-    func row(bundle: String, onscr: String, title: String, excl: String, kw: String, suf: String, frame: String) -> String {
+    func row(bundle: String, onscr: String, title: String, excl: String, kw: String, suf: String, frame: String, wid: String, layer: String) -> String {
         [
             padCell(bundle, 25),
+            padCell(wid, 8),
+            padCell(layer, 6),
             padCell(onscr, 6),
             padCell(title, 40),
             padCell(excl, 4),
@@ -133,11 +139,11 @@ func run() async {
     }
 
     print("=== Teams windows visible to SCShareableContent (\(snapshots.count)) ===")
-    print(row(bundle: "bundle", onscr: "onscr", title: "title", excl: "excl", kw: "kw", suf: "suf", frame: "frame"))
+    print(row(bundle: "bundle", onscr: "onscr", title: "title", excl: "excl", kw: "kw", suf: "suf", frame: "frame", wid: "winID", layer: "layer"))
     for s in snapshots {
         let title = s.title ?? "<nil>"
         let truncated = title.count > 40 ? String(title.prefix(37)) + "..." : title
-        let frame = String(format: "%.0fx%.0f", s.frame["w"] ?? 0, s.frame["h"] ?? 0)
+        let frame = String(format: "%.0fx%.0f@(%.0f,%.0f)", s.frame["w"] ?? 0, s.frame["h"] ?? 0, s.frame["x"] ?? 0, s.frame["y"] ?? 0)
         print(row(
             bundle: s.bundleID,
             onscr: s.isOnScreen ? "yes" : "no",
@@ -145,7 +151,9 @@ func run() async {
             excl: s.excludedByWhitelist ? "yes" : "no",
             kw: s.matchesMeetingKeyword ? "yes" : "no",
             suf: s.matchesMeetingSuffix ? "yes" : "no",
-            frame: frame
+            frame: frame,
+            wid: String(s.windowID),
+            layer: String(s.windowLayer)
         ))
     }
 

@@ -174,7 +174,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
 
         watcher.testingSubmit(rawActive: true)  // baseline tick lands true
@@ -190,7 +191,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         watcher.testingSubmit(rawActive: false)
         #expect(watcher.testingConfirmedActive == false)
@@ -203,7 +205,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         // Baseline false, then need two consecutive `true` to flip.
         watcher.testingSubmit(rawActive: false)  // baseline
@@ -220,7 +223,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         watcher.testingSubmit(rawActive: false)  // baseline
         watcher.testingSubmit(rawActive: true)   // single noise tick
@@ -240,7 +244,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: content,
-            permissions: FakePerms(sck: false)
+            permissions: FakePerms(sck: false),
+            audioActivity: FakeAudioActivity()
         )
         watcher.start()
 
@@ -262,7 +267,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: content,
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         // Seed baseline as active via the debounce hook (avoids waiting on
         // real timers) and confirm it is set.
@@ -292,7 +298,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         watcher.testingSubmit(rawActive: true)   // baseline active
         #expect(watcher.testingConfirmedActive == true)
@@ -313,7 +320,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: running,
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         // Move to confirmed active without touching production timers.
         watcher.testingSubmit(rawActive: true)  // baseline true
@@ -340,7 +348,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         watcher.suspend()   // no-op given we haven't started, but exercises teardown
         watcher.resume()    // resume must not throw / finish stream
@@ -363,7 +372,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         watcher.start()
         watcher.stopAndFinish()
@@ -390,7 +400,8 @@ struct TeamsMeetingWatcherLifecycleTests {
         let watcher = TeamsMeetingWatcher(
             runningApps: FakeRunningApps(alive: true),
             content: FakeContent(),
-            permissions: FakePerms(sck: true)
+            permissions: FakePerms(sck: true),
+            audioActivity: FakeAudioActivity()
         )
         watcher.start()
         watcher.start()   // must not double-install / crash
@@ -403,6 +414,105 @@ struct TeamsMeetingWatcherLifecycleTests {
         watcher.testingSubmit(rawActive: true)
         #expect(watcher.testingConfirmedActive == true)
 
+        watcher.stopAndFinish()
+    }
+
+    // MARK: - Process-audio primary signal (v2.0)
+
+    @Test func processAudio_true_isSufficientEvenWithNoWindows() async throws {
+        // Space-switch scenario: main meeting window off current Space, no
+        // compact view visible → SCK window list empty → old judgeMeeting
+        // would return false. But Teams process still holds the mic, so
+        // the process-tap signal keeps the watcher active. This is the
+        // whole point of v2.0.
+        let audio = FakeAudioActivity(result: true)
+        let content = FakeContent()   // no windows to return
+        let watcher = TeamsMeetingWatcher(
+            runningApps: FakeRunningApps(alive: true),
+            content: content,
+            permissions: FakePerms(sck: true),
+            audioActivity: audio
+        )
+        watcher.start()
+        try await Task.sleep(nanoseconds: 30_000_000)  // let baseline tick fire
+        #expect(watcher.testingConfirmedActive == true)
+        // Critical: no SCK query happened because process-tap short-circuited
+        // ahead of the window path.
+        #expect(content.callCount == 0)
+        watcher.stopAndFinish()
+    }
+
+    @Test func processAudio_falseButWindowsSayActive_fallbackKeepsHot() async throws {
+        // Fallback path: Teams released the mic (e.g. user mid-meeting hits
+        // mute for a moment in a browser-hosted call) but the meeting UI
+        // is still on screen. Window heuristic must catch it.
+        let audio = FakeAudioActivity(result: false)
+        let content = FakeContent()
+        content.windowsToReturn = [
+            ShareableWindow(
+                bundleID: "com.microsoft.teams2",
+                title: "Meeting in Sprint | Microsoft Teams",
+                isOnScreen: true,
+                frame: CGRect(x: 100, y: 100, width: 800, height: 600)
+            )
+        ]
+        let watcher = TeamsMeetingWatcher(
+            runningApps: FakeRunningApps(alive: true),
+            content: content,
+            permissions: FakePerms(sck: true),
+            audioActivity: audio
+        )
+        watcher.start()
+        try await Task.sleep(nanoseconds: 30_000_000)
+        #expect(watcher.testingConfirmedActive == true)
+        // SCK was consulted because process-tap said false.
+        #expect(content.callCount >= 1)
+        watcher.stopAndFinish()
+    }
+
+    @Test func processAudio_nil_treatsAsFalseAndFallsBackToWindows() async throws {
+        // Provider returns nil (macOS < 14.4 / CoreAudio blip). Must not
+        // hard-fail — flow into the window path just like process-tap == false.
+        let audio = FakeAudioActivity(result: nil)
+        let content = FakeContent()   // empty → inactive
+        let watcher = TeamsMeetingWatcher(
+            runningApps: FakeRunningApps(alive: true),
+            content: content,
+            permissions: FakePerms(sck: true),
+            audioActivity: audio
+        )
+        watcher.start()
+        try await Task.sleep(nanoseconds: 30_000_000)
+        #expect(watcher.testingConfirmedActive == false)
+        #expect(content.callCount >= 1)  // fallback engaged
+        watcher.stopAndFinish()
+    }
+
+    @Test func processAudio_flipsFromTrueToFalse_windowsAlsoEmpty_yieldsFalseAfterDebounce() async throws {
+        // Full end-to-end: audio said true (meeting starts), then flips to
+        // false (Teams releases mic AND no meeting UI) — two consecutive
+        // ticks of "false" must be observed before the debouncer yields.
+        // Uses testingSubmit to drive the debouncer directly so the test
+        // does not race real Timer ticks.
+        let audio = FakeAudioActivity(result: true)
+        let watcher = TeamsMeetingWatcher(
+            runningApps: FakeRunningApps(alive: true),
+            content: FakeContent(),
+            permissions: FakePerms(sck: true),
+            audioActivity: audio
+        )
+        // Baseline via the audio-true path.
+        watcher.testingSubmit(rawActive: true)
+        #expect(watcher.testingConfirmedActive == true)
+
+        // Meeting ends. Two consecutive false ticks flip.
+        watcher.testingSubmit(rawActive: false)
+        #expect(watcher.testingConfirmedActive == true)  // first false absorbed
+        watcher.testingSubmit(rawActive: false)
+        #expect(watcher.testingConfirmedActive == false)
+
+        let event = try await nextEvent(watcher.meetingEvents, timeoutMs: 200)
+        #expect(event == false)
         watcher.stopAndFinish()
     }
 }
@@ -437,6 +547,21 @@ private final class FakePerms: RecordingPermissions, @unchecked Sendable {
     init(sck: Bool) { self.sck = sck }
     func checkAll() async {}
 }
+
+// swiftlint:disable discouraged_optional_boolean
+@MainActor
+private final class FakeAudioActivity: TeamsAudioActivityProviding {
+    /// nil = "cannot tell" (mimics CoreAudio API blip / macOS < 14.4);
+    /// false = definitively no; true = a Teams process holds the mic.
+    var result: Bool?
+    private(set) var callCount = 0
+    init(result: Bool? = false) { self.result = result }
+    func isBundleUsingInput(anyOf bundleIDs: Set<String>) -> Bool? {
+        callCount += 1
+        return result
+    }
+}
+// swiftlint:enable discouraged_optional_boolean
 
 // MARK: - Stream helpers
 
