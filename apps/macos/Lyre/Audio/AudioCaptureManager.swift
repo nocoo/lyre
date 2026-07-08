@@ -72,6 +72,24 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     private var systemAudioBufferCount: Int = 0
     private var micBufferCount: Int = 0
 
+    /// Wall-clock instant that `startCapture()` returned successfully.
+    /// Used to compute first-frame arrival latency and total elapsed
+    /// time at `stopCapture()`. Reset on each start.
+    private var captureStartInstant: Date?
+
+    /// Whichever input UID SCK was actually configured with for this
+    /// session, or `nil` when we let SCK pick internally. Persisted so
+    /// stop-time diagnostics and first-frame logs can name it without
+    /// re-resolving. Reset on each start.
+    private var lastEffectiveDevice: EffectiveInputDevice?
+
+    /// System-default input UID lookup. Overridable so tests do not
+    /// have to touch AVFoundation. Kept `internal` so unit tests in the
+    /// same module can inject a stub.
+    var defaultInputDeviceIDProvider: () -> String? = {
+        AVCaptureDevice.default(for: .audio)?.uniqueID
+    }
+
     /// Timer that periodically drains the mixer and delivers mixed samples.
     private var drainTimer: Timer?
 
@@ -166,13 +184,28 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
 
         // Microphone
         config.captureMicrophone = true
-        if let deviceID = selectedDeviceID {
-            config.microphoneCaptureDeviceID = deviceID
+        // Resolve the input device explicitly instead of letting SCK
+        // pick "system default" internally. On macOS 15 SCK's own
+        // default resolution can pick a device that produces no mic
+        // samples (AirPods H2H, aggregate devices, exclusive-mode USB),
+        // so we prefer to name the UID ourselves and log which UID we
+        // chose. `.scPicked` only happens when the system genuinely has
+        // no default input, in which case we fall through and let SCK
+        // do whatever it would have done — but at least the log shows
+        // it was our last resort.
+        let effective = InputDeviceResolver.resolve(
+            selected: selectedDeviceID,
+            availableDefault: defaultInputDeviceIDProvider()
+        )
+        if let effectiveID = effective.effectiveID {
+            config.microphoneCaptureDeviceID = effectiveID
         }
+        lastEffectiveDevice = effective
 
         mixer.reset()
         systemAudioBufferCount = 0
         micBufferCount = 0
+        captureStartInstant = Date()
 
         let newStream = SCStream(filter: filter, configuration: config, delegate: self)
 
@@ -183,8 +216,12 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         try newStream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
         try newStream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: sampleQueue)
 
-        let deviceLabel = selectedDeviceID ?? "default"
-        Self.logger.info("Starting capture: mic=\(config.captureMicrophone), device=\(deviceLabel)")
+        Self.logger.info("""
+            Starting capture: mic=\(config.captureMicrophone) \
+            selected=\(effective.selectedID ?? "nil") \
+            effective=\(effective.effectiveID ?? "nil") \
+            source=\(effective.source.rawValue)
+            """)
 
         try await newStream.startCapture()
         stream = newStream
@@ -210,7 +247,13 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
             drainTimer = nil
         }
 
-        Self.logger.info("Stopping capture: systemAudio=\(self.systemAudioBufferCount) buffers, mic=\(self.micBufferCount) buffers")
+        let elapsedMs = captureStartInstant.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0
+        let effectiveLabel = lastEffectiveDevice?.effectiveID ?? "nil"
+        Self.logger.info("""
+            Stopping capture: systemAudio=\(self.systemAudioBufferCount) buffers, \
+            mic=\(self.micBufferCount) buffers, elapsedMs=\(elapsedMs), \
+            effective=\(effectiveLabel)
+            """)
 
         if let stream {
             try await stream.stopCapture()
@@ -426,11 +469,26 @@ extension AudioCaptureManager: SCStreamOutput {
     private func trackBufferCount(_ type: SCStreamOutputType, sampleBuffer: CMSampleBuffer) {
         if type == .audio {
             systemAudioBufferCount += 1
-            if systemAudioBufferCount == 1 { logBufferFormat(sampleBuffer, label: "SystemAudio") }
+            if systemAudioBufferCount == 1 { logFirstFrame(sampleBuffer, label: "SystemAudio") }
         } else {
             micBufferCount += 1
-            if micBufferCount == 1 { logBufferFormat(sampleBuffer, label: "Microphone") }
+            if micBufferCount == 1 { logFirstFrame(sampleBuffer, label: "Microphone") }
         }
+    }
+
+    /// First-frame diagnostic: arrival latency since `startCapture()` +
+    /// stream ASBD + the effective device UID SCK was told to use.
+    /// Fires exactly once per session per output type — used to prove
+    /// whether an "auto no-audio" bug is "buffers never arrived" vs
+    /// "buffers arrived but empty" once we correlate with the stop-time
+    /// counters.
+    private func logFirstFrame(_ sampleBuffer: CMSampleBuffer, label: String) {
+        let elapsedMs = captureStartInstant.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0
+        let effectiveLabel = lastEffectiveDevice?.effectiveID ?? "nil"
+        Self.logger.info("""
+            \(label) first frame: elapsedMs=\(elapsedMs), effective=\(effectiveLabel)
+            """)
+        logBufferFormat(sampleBuffer, label: label)
     }
 
     /// Log peak amplitude every ~1 second (48000/1024 ≈ 47 buffers).
