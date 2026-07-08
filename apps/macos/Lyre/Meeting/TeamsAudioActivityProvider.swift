@@ -3,10 +3,12 @@ import Foundation
 import os
 
 // The `Bool?` tri-state (nil = "cannot tell") is intentional throughout this
-// file. The watcher treats nil the same way it treats an SCK unauthorized
-// read — preserve prior state, do not yield a transition. Suppress
-// the discouraged_optional_boolean rule file-wide so this contract is not
-// buried under per-declaration exemptions.
+// file. It lets callers distinguish "definitely no Teams process holds the
+// mic" from "we could not enumerate the process list". The watcher
+// (`TeamsMeetingWatcher.checkTeamsWindows`) treats both `false` and `nil`
+// the same way at the top level: fall through to the v1.3 window heuristic
+// as the fallback signal. Suppress the discouraged_optional_boolean rule
+// file-wide so this contract is not buried under per-declaration exemptions.
 // swiftlint:disable discouraged_optional_boolean
 
 /// Test seam: "is any process with a bundle ID in `bundleIDs` currently
@@ -41,9 +43,11 @@ final class CoreAudioTeamsAudioActivityProvider: TeamsAudioActivityProviding {
     /// Returns true if any live audio process in the system currently has
     /// `IsRunningInput == true` and its bundle ID is in `bundleIDs`.
     /// Returns false when no such process is holding the mic. Returns nil
-    /// only if the process list itself could not be enumerated — the caller
-    /// treats nil the same way it treats "SCK unauthorized": preserve prior
-    /// confirmed state and refuse to yield a transition.
+    /// only if the process list itself could not be enumerated (missing
+    /// macOS version, CoreAudio blip). The watcher treats nil the same as
+    /// false at the top of `checkTeamsWindows` — both fall through to the
+    /// v1.3 window heuristic fallback, so a transient CoreAudio failure
+    /// never in itself flips the debouncer.
     func isBundleUsingInput(anyOf bundleIDs: Set<String>) -> Bool? {
         guard #available(macOS 14.4, *) else {
             // macOS < 14.4 lacks kAudioProcessPropertyIsRunningInput.
