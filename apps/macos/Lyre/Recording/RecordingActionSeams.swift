@@ -12,6 +12,12 @@ import Foundation
 protocol RecordingLifecycleManaging: AnyObject {
     var state: RecordingManager.State { get }
     var elapsedSeconds: TimeInterval { get }
+    /// Snapshot exposed from the underlying capture manager after the
+    /// most recent stop. Nil when no session has run yet, or when
+    /// stopCapture() failed before the snapshot could be taken. Read by
+    /// `RecordingActionController` to post non-fatal warnings without
+    /// affecting the fileURL return path.
+    var lastCaptureDiagnostics: CaptureDiagnostics? { get }
     func startRecording() async throws
     @discardableResult func stopRecording() async throws -> URL
 }

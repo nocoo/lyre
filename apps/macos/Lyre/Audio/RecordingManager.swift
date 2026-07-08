@@ -52,6 +52,12 @@ final class RecordingManager: @unchecked Sendable {
     /// Last error that occurred during recording.
     internal(set) var lastError: Error?
 
+    /// Proxy to the underlying `AudioCapturing.lastCaptureDiagnostics`
+    /// so `RecordingActionController` can decide on non-fatal warnings
+    /// (e.g. mic silence) after a successful stop, without reaching
+    /// into `capture` directly. Nil before the first stop.
+    var lastCaptureDiagnostics: CaptureDiagnostics? { capture.lastCaptureDiagnostics }
+
     // MARK: - Dependencies
 
     let permissions: RecordingPermissions

@@ -85,6 +85,19 @@ final class RecordingActionController: RecordingActionHandling {
             let url = try await recorder.stopRecording()
             state = .idle
             await recordingsStore.refresh(url: url)
+            // Non-fatal diagnostic surface. Stop success is not
+            // affected by this — the fileURL is already returned and
+            // the store already refreshed above. If the capture
+            // manager detected mic-silence (mic requested but zero
+            // buffers arrived while system audio did), tell the user
+            // so they can pick a working input before the next take.
+            if let warning = recorder.lastCaptureDiagnostics?.micSilenceWarning {
+                Self.logger.warning("Post-stop mic silence detected: \(warning)")
+                alertPresenter.presentError(
+                    title: "Microphone Not Captured",
+                    message: warning
+                )
+            }
         } catch {
             // Even on error the recorder path resets its own state; mirror
             // that here so the UI does not stay stuck in `.recording`.

@@ -96,6 +96,7 @@ struct InputDeviceRestoreTests {
 private final class RestoreFakeCapture: AudioCapturing, @unchecked Sendable {
     var availableDevices: [AudioInputDevice] = []
     var selectedDeviceID: String?
+    var lastCaptureDiagnostics: CaptureDiagnostics?
     var onMixedSamples: (([Float]) -> Void)?
     var onRawSystemBuffer: ((CMSampleBuffer) -> Void)?
     var onRawMicBuffer: ((CMSampleBuffer) -> Void)?

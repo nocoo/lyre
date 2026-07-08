@@ -189,6 +189,123 @@ struct RecordingActionControllerTests {
 
         #expect(controller.state == .recording)
     }
+
+    // MARK: - Non-fatal mic silence warning surface
+
+    @Test func requestStop_micSilenceDiagnostic_surfacesWarningAfterHealthyStop() async {
+        // Precondition: stopRecording succeeds (fileURL returned, store
+        // refreshed) — the warning must not gate any of that.
+        let recorder = FakeRecorder()
+        recorder.state = .recording
+        let expectedURL = URL(fileURLWithPath: "/tmp/lyre-mic-silence.m4a")
+        recorder.stopURL = expectedURL
+        recorder.lastCaptureDiagnostics = CaptureDiagnostics(
+            micBufferCount: 0,
+            systemAudioBufferCount: 800,
+            elapsedMs: 12_000,
+            captureMicrophone: true,
+            effectiveDeviceID: "AirPods-uid"
+        )
+        let store = FakeRecordingsStore()
+        let alerts = FakeAlertPresenter()
+        let controller = RecordingActionController(
+            recorder: recorder,
+            recordingsStore: store,
+            alertPresenter: alerts
+        )
+
+        await controller.requestStop()
+
+        // Stop-success invariants — unchanged by warning.
+        #expect(recorder.stopCount == 1)
+        #expect(store.refreshCount == 1)
+        #expect(store.lastRefreshURL == expectedURL)
+        #expect(controller.state == .idle)
+
+        // Warning surface.
+        #expect(alerts.errorCount == 1)
+        #expect(alerts.lastErrorTitle == "Microphone Not Captured")
+        #expect(alerts.lastErrorMessage.contains("AirPods-uid"))
+    }
+
+    @Test func requestStop_healthyDiagnostic_doesNotWarn() async {
+        let recorder = FakeRecorder()
+        recorder.state = .recording
+        recorder.lastCaptureDiagnostics = CaptureDiagnostics(
+            micBufferCount: 900,
+            systemAudioBufferCount: 800,
+            elapsedMs: 12_000,
+            captureMicrophone: true,
+            effectiveDeviceID: "built-in-uid"
+        )
+        let store = FakeRecordingsStore()
+        let alerts = FakeAlertPresenter()
+        let controller = RecordingActionController(
+            recorder: recorder,
+            recordingsStore: store,
+            alertPresenter: alerts
+        )
+
+        await controller.requestStop()
+
+        #expect(store.refreshCount == 1)
+        #expect(alerts.errorCount == 0)
+    }
+
+    @Test func requestStop_shortSession_suppressesMicSilenceWarning() async {
+        // Sub-threshold elapsed => cold-start latency dominates; the
+        // warning is (correctly) suppressed even though mic=0.
+        let recorder = FakeRecorder()
+        recorder.state = .recording
+        recorder.lastCaptureDiagnostics = CaptureDiagnostics(
+            micBufferCount: 0,
+            systemAudioBufferCount: 100,
+            elapsedMs: 2_000,
+            captureMicrophone: true,
+            effectiveDeviceID: "built-in-uid"
+        )
+        let store = FakeRecordingsStore()
+        let alerts = FakeAlertPresenter()
+        let controller = RecordingActionController(
+            recorder: recorder,
+            recordingsStore: store,
+            alertPresenter: alerts
+        )
+
+        await controller.requestStop()
+
+        #expect(store.refreshCount == 1)
+        #expect(alerts.errorCount == 0)
+    }
+
+    @Test func requestStop_failure_doesNotEmitMicSilenceWarning() async {
+        // Even if diagnostics were populated pre-throw, a hard failure
+        // takes the error path and shows the "Recording Error" alert.
+        // The mic-silence warning must not double up on top of it.
+        let recorder = FakeRecorder()
+        recorder.state = .recording
+        recorder.stopShouldThrow = FakeError.simulated("finalize failed")
+        recorder.lastCaptureDiagnostics = CaptureDiagnostics(
+            micBufferCount: 0,
+            systemAudioBufferCount: 800,
+            elapsedMs: 12_000,
+            captureMicrophone: true,
+            effectiveDeviceID: "AirPods-uid"
+        )
+        let store = FakeRecordingsStore()
+        let alerts = FakeAlertPresenter()
+        let controller = RecordingActionController(
+            recorder: recorder,
+            recordingsStore: store,
+            alertPresenter: alerts
+        )
+
+        await controller.requestStop()
+
+        #expect(alerts.errorCount == 1)
+        #expect(alerts.lastErrorTitle == "Recording Error")
+        #expect(alerts.lastErrorMessage.contains("finalize failed"))
+    }
 }
 
 // MARK: - Fakes
@@ -202,6 +319,10 @@ private final class FakeRecorder: RecordingLifecycleManaging {
     var stopURL = URL(fileURLWithPath: "/tmp/fake-recording.m4a")
     var startShouldThrow: Error?
     var stopShouldThrow: Error?
+    /// Snapshot the controller reads after a successful stop to decide
+    /// whether to raise a non-fatal warning. Default `nil` keeps the
+    /// pre-existing tests exercising the healthy stop path.
+    var lastCaptureDiagnostics: CaptureDiagnostics?
 
     func startRecording() async throws {
         startCount += 1

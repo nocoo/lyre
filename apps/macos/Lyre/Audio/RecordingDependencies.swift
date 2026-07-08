@@ -31,6 +31,13 @@ protocol AudioCapturing: AnyObject {
     var availableDevices: [AudioInputDevice] { get }
     var selectedDeviceID: String? { get set }
 
+    /// Snapshot of the most recent `stopCapture()`. `nil` before the
+    /// first stop or when the manager has never captured. Consumed by
+    /// `RecordingManager.stopRecording()` for non-fatal diagnostics
+    /// (e.g. mic-silence warning). Never used to drive control flow —
+    /// stop success is still governed by `stopCapture()` throwing.
+    var lastCaptureDiagnostics: CaptureDiagnostics? { get }
+
     var onMixedSamples: (([Float]) -> Void)? { get set }
     var onRawSystemBuffer: ((CMSampleBuffer) -> Void)? { get set }
     var onRawMicBuffer: ((CMSampleBuffer) -> Void)? { get set }

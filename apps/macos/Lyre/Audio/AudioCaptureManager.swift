@@ -83,6 +83,18 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     /// re-resolving. Reset on each start.
     private var lastEffectiveDevice: EffectiveInputDevice?
 
+    /// Whether the most recent `startCapture()` asked SCK to capture
+    /// microphone. Recorded so the stop-time diagnostics snapshot knows
+    /// whether "0 mic buffers" was a failure or a system-audio-only
+    /// session.
+    private var lastCaptureMicrophone: Bool = false
+
+    /// End-of-session snapshot produced by `stopCapture()`. Consumers
+    /// (RecordingManager, RecordingActionController) read this after
+    /// stop returns to drive non-fatal warnings like mic silence
+    /// detection. Reset on each start.
+    private(set) var lastCaptureDiagnostics: CaptureDiagnostics?
+
     /// System-default input UID lookup. Overridable so tests do not
     /// have to touch AVFoundation. Kept `internal` so unit tests in the
     /// same module can inject a stub.
@@ -201,11 +213,13 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
             config.microphoneCaptureDeviceID = effectiveID
         }
         lastEffectiveDevice = effective
+        lastCaptureMicrophone = config.captureMicrophone
 
         mixer.reset()
         systemAudioBufferCount = 0
         micBufferCount = 0
         captureStartInstant = Date()
+        lastCaptureDiagnostics = nil
 
         let newStream = SCStream(filter: filter, configuration: config, delegate: self)
 
@@ -254,6 +268,18 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
             mic=\(self.micBufferCount) buffers, elapsedMs=\(elapsedMs), \
             effective=\(effectiveLabel)
             """)
+
+        // Snapshot BEFORE the throw so a partial-teardown failure still
+        // leaves post-hoc diagnostics readable (the counters are frozen
+        // for us either way; the throw only says whether SCK's own stop
+        // returned cleanly).
+        lastCaptureDiagnostics = CaptureDiagnostics(
+            micBufferCount: micBufferCount,
+            systemAudioBufferCount: systemAudioBufferCount,
+            elapsedMs: elapsedMs,
+            captureMicrophone: lastCaptureMicrophone,
+            effectiveDeviceID: lastEffectiveDevice?.effectiveID
+        )
 
         if let stream {
             try await stream.stopCapture()
