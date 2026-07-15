@@ -78,14 +78,25 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["next", "next/*", "next-auth", "next-auth/*", "next-themes"],
-										"message": "SPA must not import Next.js / NextAuth / next-themes."
+										"group": [
+											"next",
+											"next/*",
+											"next-auth",
+											"next-auth/*",
+											"next-themes",
+											"@auth/*"
+										],
+										"message": "SPA must not import Next.js / NextAuth / next-themes / @auth/*."
 									},
 									{
 										"group": [
+											"@lyre/api/services",
 											"@lyre/api/services/*",
+											"@lyre/api/handlers",
 											"@lyre/api/handlers/*",
 											"@lyre/api/runtime",
+											"@lyre/api/runtime/*",
+											"@lyre/api/db",
 											"@lyre/api/db/*"
 										],
 										"message": "Server-only @lyre/api subpaths must not leak into the browser bundle."
