@@ -21,31 +21,22 @@ export function RecordingTileCard({
 }: RecordingTileCardProps) {
 	const isFailed = recording.statusRaw === "failed";
 
-	const content = (
+	// Body without the checkbox — reused by both selectable and non-selectable modes.
+	const body = (
 		<>
 			{/* Header: icon + status */}
 			<div className="flex items-center justify-between mb-3">
-				<div className="flex items-center gap-2">
-					{selectable && (
-						<Checkbox
-							checked={selected}
-							onCheckedChange={() => onToggleSelect?.(recording.id)}
-							onClick={(e) => e.stopPropagation()}
-							aria-label={`Select ${recording.title}`}
-						/>
+				<div
+					className={cn(
+						"flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+						isFailed ? "bg-destructive/10" : "bg-secondary",
 					)}
-					<div
-						className={cn(
-							"flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-							isFailed ? "bg-destructive/10" : "bg-secondary",
-						)}
-					>
-						{isFailed ? (
-							<AlertCircle className="h-4 w-4 text-destructive" strokeWidth={1.5} />
-						) : (
-							<Mic className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-						)}
-					</div>
+				>
+					{isFailed ? (
+						<AlertCircle className="h-4 w-4 text-destructive" strokeWidth={1.5} />
+					) : (
+						<Mic className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+					)}
 				</div>
 				<div className="flex items-center gap-1.5">
 					<Badge variant={recording.status.variant} className="text-[10px]">
@@ -115,13 +106,14 @@ export function RecordingTileCard({
 		</>
 	);
 
+	// Selectable mode overlays the checkbox on top of a full-card toggle
+	// button. Checkbox and button are siblings so we don't nest one
+	// interactive control inside another.
 	if (selectable) {
 		return (
-			<button
-				type="button"
-				onClick={() => onToggleSelect?.(recording.id)}
+			<div
 				className={cn(
-					"group flex flex-col w-full text-left rounded-card bg-secondary p-4 transition-colors cursor-pointer h-full",
+					"group relative flex flex-col rounded-card bg-secondary transition-colors h-full",
 					selected
 						? "ring-1 ring-primary bg-primary/5"
 						: isFailed
@@ -129,8 +121,21 @@ export function RecordingTileCard({
 							: "hover:bg-accent/50",
 				)}
 			>
-				{content}
-			</button>
+				<div className="absolute top-3 left-3 z-10">
+					<Checkbox
+						checked={selected}
+						onCheckedChange={() => onToggleSelect?.(recording.id)}
+						aria-label={`Select ${recording.title}`}
+					/>
+				</div>
+				<button
+					type="button"
+					onClick={() => onToggleSelect?.(recording.id)}
+					className="flex flex-col w-full h-full text-left rounded-card p-4 pl-10 cursor-pointer"
+				>
+					{body}
+				</button>
+			</div>
 		);
 	}
 
@@ -142,7 +147,7 @@ export function RecordingTileCard({
 				isFailed ? "ring-1 ring-destructive/30" : "",
 			)}
 		>
-			{content}
+			{body}
 		</Link>
 	);
 }

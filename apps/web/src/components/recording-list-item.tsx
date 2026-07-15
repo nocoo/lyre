@@ -30,19 +30,8 @@ export function RecordingListItem({
 }: RecordingListItemProps) {
 	const isFailed = recording.statusRaw === "failed";
 
-	const content = (
-		<div className="flex items-start gap-3">
-			{/* Checkbox (manage mode) */}
-			{selectable && (
-				<div className="flex items-center pt-2.5">
-					<Checkbox
-						checked={selected}
-						onCheckedChange={() => onToggleSelect?.(recording.id)}
-						onClick={(e) => e.stopPropagation()}
-						aria-label={`Select ${recording.title}`}
-					/>
-				</div>
-			)}
+	const body = (
+		<>
 			<div
 				className={cn(
 					"flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
@@ -120,17 +109,17 @@ export function RecordingListItem({
 					</div>
 				)}
 			</div>
-		</div>
+		</>
 	);
 
-	// In selectable mode, clicking the row toggles selection instead of navigating
+	// In selectable mode the row is a container that lays out the checkbox
+	// beside a full-width toggle button. The two interactive elements are
+	// siblings so we don't nest <button> inside <button>.
 	if (selectable) {
 		return (
-			<button
-				type="button"
-				onClick={() => onToggleSelect?.(recording.id)}
+			<div
 				className={cn(
-					"group block w-full text-left rounded-card bg-secondary p-4 transition-colors cursor-pointer",
+					"group flex items-start gap-3 rounded-card bg-secondary p-4 transition-colors",
 					selected
 						? "ring-1 ring-primary bg-primary/5"
 						: isFailed
@@ -138,8 +127,21 @@ export function RecordingListItem({
 							: "hover:bg-accent/50",
 				)}
 			>
-				{content}
-			</button>
+				<div className="flex items-center pt-2.5">
+					<Checkbox
+						checked={selected}
+						onCheckedChange={() => onToggleSelect?.(recording.id)}
+						aria-label={`Select ${recording.title}`}
+					/>
+				</div>
+				<button
+					type="button"
+					onClick={() => onToggleSelect?.(recording.id)}
+					className="flex flex-1 min-w-0 items-start gap-3 text-left cursor-pointer"
+				>
+					{body}
+				</button>
+			</div>
 		);
 	}
 
@@ -147,11 +149,11 @@ export function RecordingListItem({
 		<Link
 			to={`/recordings/${recording.id}`}
 			className={cn(
-				"group block rounded-card bg-secondary p-4 transition-colors hover:bg-accent/50",
+				"group flex items-start gap-3 rounded-card bg-secondary p-4 transition-colors hover:bg-accent/50",
 				isFailed ? "ring-1 ring-destructive/30" : "",
 			)}
 		>
-			{content}
+			{body}
 		</Link>
 	);
 }
