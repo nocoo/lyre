@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.7.0 (2026-07-15)
+
+### 🚀 Features
+
+- feat(macos): add CoreAudio process-tap as primary Teams meeting signal (b562f42)
+
+### 🐛 Bug Fixes
+
+- fix(lint): tighten SPA import restrictions to match legacy ESLint intent (53b8ae1)
+- fix(web): stop nesting Radix Checkbox inside selectable row button (afca1d4)
+- fix(scripts): write package.json with tab indent in release (1be64fc)
+- fix(macos): sync RecordingActionController state on recorder-side reset (63e0831)
+- fix(macos): warn user when recording captured no microphone audio (85442a2)
+- fix(macos): explicitly resolve auto input device before starting SCK (1c9486b)
+- fix(macos): restore saved input device at app init (6db7b9d)
+
+### 📝 Other Changes
+
+- chore(api): drop @types/node from @lyre/api (77b3f72)
+- chore(web): remove three unused shadcn wrapper files (b28778b)
+- chore(deps): consolidate collapsible into radix-ui meta package (ba703ec)
+- chore(deps): drop root-level hono declaration (f3cad05)
+- chore(security): drop ESLint OSV ignores after biome migration (5dc2d5c)
+- chore: upgrade typescript to 7.0.2 (f69a17a)
+- chore: replace eslint + typescript-eslint with biome (df8f4de)
+- docs(macos): clarify TeamsAudioActivityProvider nil semantics (be0724f)
+- docs(macos): sync SCK-unavailable semantics with shipped code (6e516e1)
+- docs(macos): add v2.0 process-tap addendum to teams detector spec (3cf745b)
+
+
 ## v1.6.19 (2026-07-07)
 
 ### 🚀 Features
