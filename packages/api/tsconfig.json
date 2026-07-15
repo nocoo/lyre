@@ -16,7 +16,7 @@
 		"isolatedModules": true,
 		"declaration": true,
 		"noEmit": true,
-		"types": ["node", "bun"]
+		"types": ["bun"]
 	},
 	"include": ["src/**/*.ts", "package.json"]
 }
