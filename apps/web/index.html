@@ -11,14 +11,14 @@
     />
     <!-- Blocking script: apply dark class before first paint to prevent FOUC -->
     <script>
-      (function () {
+      (() => {
         try {
-          var s = localStorage.getItem("theme");
-          var d = window.matchMedia("(prefers-color-scheme:dark)").matches;
+          const s = localStorage.getItem("theme");
+          const d = window.matchMedia("(prefers-color-scheme:dark)").matches;
           if (s === "dark" || (s !== "light" && d)) {
             document.documentElement.classList.add("dark");
           }
-        } catch (e) {}
+        } catch {}
       })();
     </script>
   </head>

@@ -7,25 +7,24 @@
  */
 
 import type { MiddlewareHandler } from "hono";
+import type { Bindings, Variables } from "../bindings";
 import { openD1 } from "../lib/d1";
 import { buildLyreEnv } from "../lib/env";
-import type { Bindings, Variables } from "../bindings";
 
 export function runtimeContext(): MiddlewareHandler<{
-  Bindings: Bindings;
-  Variables: Variables;
+	Bindings: Bindings;
+	Variables: Variables;
 }> {
-  return async (c, next) => {
-    const env = buildLyreEnv(c.env);
-    const db = openD1(c.env.DB);
-    c.set("runtime", {
-      env,
-      db,
-      user: null,
-      headers: c.req.raw.headers,
-      waitUntil: (promise: Promise<unknown>) =>
-        c.executionCtx.waitUntil(promise),
-    });
-    await next();
-  };
+	return async (c, next) => {
+		const env = buildLyreEnv(c.env);
+		const db = openD1(c.env.DB);
+		c.set("runtime", {
+			env,
+			db,
+			user: null,
+			headers: c.req.raw.headers,
+			waitUntil: (promise: Promise<unknown>) => c.executionCtx.waitUntil(promise),
+		});
+		await next();
+	};
 }

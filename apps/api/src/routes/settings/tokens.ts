@@ -1,26 +1,24 @@
-import { Hono } from "hono";
 import {
-  listTokensHandler,
-  createTokenHandler,
-  deleteTokenHandler,
+	createTokenHandler,
+	deleteTokenHandler,
+	listTokensHandler,
 } from "@lyre/api/handlers/settings-tokens";
-import { toResponse } from "../../lib/to-response";
+import { Hono } from "hono";
 import type { Bindings, Variables } from "../../bindings";
+import { toResponse } from "../../lib/to-response";
 
 export const settingsTokens = new Hono<{
-  Bindings: Bindings;
-  Variables: Variables;
+	Bindings: Bindings;
+	Variables: Variables;
 }>();
 
-settingsTokens.get("/", async (c) =>
-  toResponse(c, await listTokensHandler(c.get("runtime"))),
-);
+settingsTokens.get("/", async (c) => toResponse(c, await listTokensHandler(c.get("runtime"))));
 
 settingsTokens.post("/", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  return toResponse(c, await createTokenHandler(c.get("runtime"), body));
+	const body = await c.req.json().catch(() => ({}));
+	return toResponse(c, await createTokenHandler(c.get("runtime"), body));
 });
 
 settingsTokens.delete("/:id", async (c) =>
-  toResponse(c, await deleteTokenHandler(c.get("runtime"), c.req.param("id"))),
+	toResponse(c, await deleteTokenHandler(c.get("runtime"), c.req.param("id"))),
 );

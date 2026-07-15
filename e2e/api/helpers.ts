@@ -15,39 +15,35 @@ const BASE = process.env.E2E_BASE_URL ?? "http://localhost:7017";
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-async function request(
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<Response> {
-  const url = `${BASE}${path}`;
-  const headers: Record<string, string> = { Origin: BASE };
-  const init: RequestInit = { method, headers };
-  if (body !== undefined) {
-    headers["content-type"] = "application/json";
-    init.body = JSON.stringify(body);
-  }
-  return fetch(url, init);
+async function request(method: string, path: string, body?: unknown): Promise<Response> {
+	const url = `${BASE}${path}`;
+	const headers: Record<string, string> = { Origin: BASE };
+	const init: RequestInit = { method, headers };
+	if (body !== undefined) {
+		headers["content-type"] = "application/json";
+		init.body = JSON.stringify(body);
+	}
+	return fetch(url, init);
 }
 
 export async function get(path: string): Promise<Response> {
-  return request("GET", path);
+	return request("GET", path);
 }
 
 export async function post(path: string, body?: unknown): Promise<Response> {
-  return request("POST", path, body);
+	return request("POST", path, body);
 }
 
 export async function put(path: string, body?: unknown): Promise<Response> {
-  return request("PUT", path, body);
+	return request("PUT", path, body);
 }
 
 export async function del(path: string, body?: unknown): Promise<Response> {
-  return request("DELETE", path, body);
+	return request("DELETE", path, body);
 }
 
 export async function head(path: string): Promise<Response> {
-  return request("HEAD", path);
+	return request("HEAD", path);
 }
 
 // ---------------------------------------------------------------------------
@@ -55,5 +51,5 @@ export async function head(path: string): Promise<Response> {
 // ---------------------------------------------------------------------------
 
 export async function json<T = unknown>(res: Response): Promise<T> {
-  return (await res.json()) as T;
+	return (await res.json()) as T;
 }

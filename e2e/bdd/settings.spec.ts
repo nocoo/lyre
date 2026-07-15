@@ -1,38 +1,28 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 test.describe("Settings", () => {
-  test("general settings page renders", async ({ page }) => {
-    await page.goto("/settings");
+	test("general settings page renders", async ({ page }) => {
+		await page.goto("/settings");
 
-    await expect(
-      page.getByRole("heading", { name: "General" }),
-    ).toBeVisible();
-  });
+		await expect(page.getByRole("heading", { name: "General" })).toBeVisible();
+	});
 
-  test("AI settings page renders", async ({ page }) => {
-    await page.goto("/settings/ai");
+	test("AI settings page renders", async ({ page }) => {
+		await page.goto("/settings/ai");
 
-    await expect(
-      page.getByRole("heading", { name: "AI & ASR Settings" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Configure LLM provider").first(),
-    ).toBeVisible();
-  });
+		await expect(page.getByRole("heading", { name: "AI & ASR Settings" })).toBeVisible();
+		await expect(page.getByText("Configure LLM provider").first()).toBeVisible();
+	});
 
-  test("storage settings page renders", async ({ page }) => {
-    await page.goto("/settings/storage");
+	test("storage settings page renders", async ({ page }) => {
+		await page.goto("/settings/storage");
 
-    await expect(
-      page.getByRole("heading", { name: "Storage" }),
-    ).toBeVisible();
-  });
+		await expect(page.getByRole("heading", { name: "Storage" })).toBeVisible();
+	});
 
-  test("device tokens page renders", async ({ page }) => {
-    await page.goto("/settings/tokens");
+	test("device tokens page renders", async ({ page }) => {
+		await page.goto("/settings/tokens");
 
-    await expect(
-      page.getByRole("heading", { name: "Device Tokens" }),
-    ).toBeVisible();
-  });
+		await expect(page.getByRole("heading", { name: "Device Tokens" })).toBeVisible();
+	});
 });

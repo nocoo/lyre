@@ -4,627 +4,592 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  listRecordingsHandler,
-  createRecordingHandler,
-  getRecordingHandler,
-  updateRecordingHandler,
-  deleteRecordingHandler,
-  batchDeleteRecordingsHandler,
-  playUrlHandler,
-  downloadUrlHandler,
-  wordsHandler,
-  transcribeRecordingHandler,
+	batchDeleteRecordingsHandler,
+	createRecordingHandler,
+	deleteRecordingHandler,
+	downloadUrlHandler,
+	getRecordingHandler,
+	listRecordingsHandler,
+	playUrlHandler,
+	transcribeRecordingHandler,
+	updateRecordingHandler,
+	wordsHandler,
 } from "../../handlers/recordings";
-import {
-  makeCtx,
-  setupAnonCtx,
-  setupAuthedCtx,
-  testRepos,
-} from "../_fixtures/runtime-context";
-import {
-  resetAsrProvider,
-  setAsrProvider,
-} from "../../services/asr-provider";
 import type { AsrProvider } from "../../services/asr";
+import { resetAsrProvider, setAsrProvider } from "../../services/asr-provider";
+import { makeCtx, setupAnonCtx, setupAuthedCtx, testRepos } from "../_fixtures/runtime-context";
 
 function withMockedFetch<T>(
-  impl: (url: string, init?: RequestInit) => Promise<Response>,
-  fn: () => Promise<T>,
+	impl: (url: string, init?: RequestInit) => Promise<Response>,
+	fn: () => Promise<T>,
 ): Promise<T> {
-  const orig = globalThis.fetch;
-  globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) =>
-    impl(typeof url === "string" ? url : url.toString(), init)) as typeof fetch;
-  return fn().finally(() => {
-    globalThis.fetch = orig;
-  });
+	const orig = globalThis.fetch;
+	globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) =>
+		impl(typeof url === "string" ? url : url.toString(), init)) as typeof fetch;
+	return fn().finally(() => {
+		globalThis.fetch = orig;
+	});
 }
 
 const ossEnv = {
-  OSS_ACCESS_KEY_ID: "ak",
-  OSS_ACCESS_KEY_SECRET: "sk",
-  OSS_BUCKET: "bucket",
-  OSS_REGION: "oss-cn",
-  OSS_ENDPOINT: "https://oss.example.com",
-  SKIP_OSS_ARCHIVE: "1",
+	OSS_ACCESS_KEY_ID: "ak",
+	OSS_ACCESS_KEY_SECRET: "sk",
+	OSS_BUCKET: "bucket",
+	OSS_REGION: "oss-cn",
+	OSS_ENDPOINT: "https://oss.example.com",
+	SKIP_OSS_ARCHIVE: "1",
 };
 
 describe("listRecordingsHandler", () => {
-  it("401 anon", async () => {
-    expect((await listRecordingsHandler(setupAnonCtx(), {})).status).toBe(401);
-  });
-  it("empty list authed", async () => {
-    const { ctx } = await setupAuthedCtx();
-    const res = await listRecordingsHandler(ctx, {});
-    expect(res.status).toBe(200);
-    if (res.kind !== "json") throw new Error();
-    const body = res.body as { items: unknown[]; total: number };
-    expect(body.total).toBe(0);
-  });
-  it("filters by folderId=unfiled", async () => {
-    const { ctx } = await setupAuthedCtx();
-    expect(
-      (await listRecordingsHandler(ctx, { folderId: "unfiled" })).status,
-    ).toBe(200);
-  });
+	it("401 anon", async () => {
+		expect((await listRecordingsHandler(setupAnonCtx(), {})).status).toBe(401);
+	});
+	it("empty list authed", async () => {
+		const { ctx } = await setupAuthedCtx();
+		const res = await listRecordingsHandler(ctx, {});
+		expect(res.status).toBe(200);
+		if (res.kind !== "json") throw new Error();
+		const body = res.body as { items: unknown[]; total: number };
+		expect(body.total).toBe(0);
+	});
+	it("filters by folderId=unfiled", async () => {
+		const { ctx } = await setupAuthedCtx();
+		expect((await listRecordingsHandler(ctx, { folderId: "unfiled" })).status).toBe(200);
+	});
 });
 
 describe("createRecordingHandler", () => {
-  it("401 anon", async () => {
-    expect(
-      (
-        await createRecordingHandler(setupAnonCtx(), {
-          title: "t",
-          fileName: "f",
-          ossKey: "o",
-        })
-      ).status,
-    ).toBe(401);
-  });
-  it("400 missing fields", async () => {
-    const { ctx } = await setupAuthedCtx();
-    expect((await createRecordingHandler(ctx, {})).status).toBe(400);
-  });
-  it("creates recording", async () => {
-    const { ctx } = await setupAuthedCtx();
-    const res = await createRecordingHandler(ctx, {
-      title: "Hello",
-      fileName: "h.m4a",
-      ossKey: "uploads/x/y/h.m4a",
-    });
-    expect(res.status).toBe(201);
-  });
+	it("401 anon", async () => {
+		expect(
+			(
+				await createRecordingHandler(setupAnonCtx(), {
+					title: "t",
+					fileName: "f",
+					ossKey: "o",
+				})
+			).status,
+		).toBe(401);
+	});
+	it("400 missing fields", async () => {
+		const { ctx } = await setupAuthedCtx();
+		expect((await createRecordingHandler(ctx, {})).status).toBe(400);
+	});
+	it("creates recording", async () => {
+		const { ctx } = await setupAuthedCtx();
+		const res = await createRecordingHandler(ctx, {
+			title: "Hello",
+			fileName: "h.m4a",
+			ossKey: "uploads/x/y/h.m4a",
+		});
+		expect(res.status).toBe(201);
+	});
 });
 
 describe("get/update/recording", () => {
-  it("404 unknown id", async () => {
-    const { ctx } = await setupAuthedCtx();
-    expect((await getRecordingHandler(ctx, "no")).status).toBe(404);
-    expect(
-      (await updateRecordingHandler(ctx, "no", { title: "x" })).status,
-    ).toBe(404);
-  });
-  it("authed get/update round-trip", async () => {
-    const { ctx } = await setupAuthedCtx();
-    const created = await createRecordingHandler(ctx, {
-      title: "A",
-      fileName: "a.m4a",
-      ossKey: "uploads/x/y/a.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const id = (created.body as { id: string }).id;
-    expect((await getRecordingHandler(ctx, id)).status).toBe(200);
-    expect((await updateRecordingHandler(ctx, id, { title: "B" })).status).toBe(
-      200,
-    );
-  });
-  it("401 anon", async () => {
-    expect((await getRecordingHandler(setupAnonCtx(), "x")).status).toBe(401);
-    expect((await updateRecordingHandler(setupAnonCtx(), "x", {})).status).toBe(
-      401,
-    );
-  });
+	it("404 unknown id", async () => {
+		const { ctx } = await setupAuthedCtx();
+		expect((await getRecordingHandler(ctx, "no")).status).toBe(404);
+		expect((await updateRecordingHandler(ctx, "no", { title: "x" })).status).toBe(404);
+	});
+	it("authed get/update round-trip", async () => {
+		const { ctx } = await setupAuthedCtx();
+		const created = await createRecordingHandler(ctx, {
+			title: "A",
+			fileName: "a.m4a",
+			ossKey: "uploads/x/y/a.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const id = (created.body as { id: string }).id;
+		expect((await getRecordingHandler(ctx, id)).status).toBe(200);
+		expect((await updateRecordingHandler(ctx, id, { title: "B" })).status).toBe(200);
+	});
+	it("401 anon", async () => {
+		expect((await getRecordingHandler(setupAnonCtx(), "x")).status).toBe(401);
+		expect((await updateRecordingHandler(setupAnonCtx(), "x", {})).status).toBe(401);
+	});
 });
 
 describe("delete + batch", () => {
-  it("401 anon", async () => {
-    expect((await deleteRecordingHandler(setupAnonCtx(), "x")).status).toBe(
-      401,
-    );
-    expect(
-      (await batchDeleteRecordingsHandler(setupAnonCtx(), {})).status,
-    ).toBe(401);
-  });
-  it("404 unknown", async () => {
-    const { ctx } = await setupAuthedCtx();
-    expect((await deleteRecordingHandler(ctx, "no")).status).toBe(404);
-  });
-  it("400 batch invalid", async () => {
-    const { ctx } = await setupAuthedCtx();
-    expect(
-      (await batchDeleteRecordingsHandler(ctx, { ids: [] })).status,
-    ).toBe(400);
-    expect(
-      (await batchDeleteRecordingsHandler(ctx, { ids: "no" })).status,
-    ).toBe(400);
-  });
-  it("batch with no owned ids returns 0", async () => {
-    const { ctx } = await setupAuthedCtx();
-    const res = await batchDeleteRecordingsHandler(ctx, {
-      ids: ["nope-1", "nope-2"],
-    });
-    expect(res.status).toBe(200);
-    if (res.kind !== "json") throw new Error();
-    expect((res.body as { deleted: number }).deleted).toBe(0);
-  });
-  it("batch over max", async () => {
-    const { ctx } = await setupAuthedCtx();
-    const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`);
-    expect(
-      (await batchDeleteRecordingsHandler(ctx, { ids })).status,
-    ).toBe(400);
-  });
-  it("delete owned recording (no oss key path)", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const id = (created.body as { id: string }).id;
-    const res = await deleteRecordingHandler(ctx, id);
-    expect(res.status).toBe(200);
-  });
+	it("401 anon", async () => {
+		expect((await deleteRecordingHandler(setupAnonCtx(), "x")).status).toBe(401);
+		expect((await batchDeleteRecordingsHandler(setupAnonCtx(), {})).status).toBe(401);
+	});
+	it("404 unknown", async () => {
+		const { ctx } = await setupAuthedCtx();
+		expect((await deleteRecordingHandler(ctx, "no")).status).toBe(404);
+	});
+	it("400 batch invalid", async () => {
+		const { ctx } = await setupAuthedCtx();
+		expect((await batchDeleteRecordingsHandler(ctx, { ids: [] })).status).toBe(400);
+		expect((await batchDeleteRecordingsHandler(ctx, { ids: "no" })).status).toBe(400);
+	});
+	it("batch with no owned ids returns 0", async () => {
+		const { ctx } = await setupAuthedCtx();
+		const res = await batchDeleteRecordingsHandler(ctx, {
+			ids: ["nope-1", "nope-2"],
+		});
+		expect(res.status).toBe(200);
+		if (res.kind !== "json") throw new Error();
+		expect((res.body as { deleted: number }).deleted).toBe(0);
+	});
+	it("batch over max", async () => {
+		const { ctx } = await setupAuthedCtx();
+		const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`);
+		expect((await batchDeleteRecordingsHandler(ctx, { ids })).status).toBe(400);
+	});
+	it("delete owned recording (no oss key path)", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const id = (created.body as { id: string }).id;
+		const res = await deleteRecordingHandler(ctx, id);
+		expect(res.status).toBe(200);
+	});
 });
 
 describe("playUrl/downloadUrl handlers", () => {
-  it("401 anon", async () => {
-    expect((await playUrlHandler(setupAnonCtx(), "x")).status).toBe(401);
-    expect((await downloadUrlHandler(setupAnonCtx(), "x")).status).toBe(401);
-  });
-  it("404 unknown", async () => {
-    const { ctx } = await setupAuthedCtx();
-    expect((await playUrlHandler(ctx, "no")).status).toBe(404);
-    expect((await downloadUrlHandler(ctx, "no")).status).toBe(404);
-  });
-  it("returns presigned URLs for owned recording", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const id = (created.body as { id: string }).id;
-    expect((await playUrlHandler(ctx, id)).status).toBe(200);
-    expect((await downloadUrlHandler(ctx, id)).status).toBe(200);
-  });
+	it("401 anon", async () => {
+		expect((await playUrlHandler(setupAnonCtx(), "x")).status).toBe(401);
+		expect((await downloadUrlHandler(setupAnonCtx(), "x")).status).toBe(401);
+	});
+	it("404 unknown", async () => {
+		const { ctx } = await setupAuthedCtx();
+		expect((await playUrlHandler(ctx, "no")).status).toBe(404);
+		expect((await downloadUrlHandler(ctx, "no")).status).toBe(404);
+	});
+	it("returns presigned URLs for owned recording", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const id = (created.body as { id: string }).id;
+		expect((await playUrlHandler(ctx, id)).status).toBe(200);
+		expect((await downloadUrlHandler(ctx, id)).status).toBe(200);
+	});
 });
 
 describe("wordsHandler", () => {
-  it("401 anon", async () => {
-    expect((await wordsHandler(setupAnonCtx(), "x")).status).toBe(401);
-  });
-  it("404 unknown", async () => {
-    const { ctx } = await setupAuthedCtx();
-    expect((await wordsHandler(ctx, "no")).status).toBe(404);
-  });
-  it("404 when no completed transcription", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const id = (created.body as { id: string }).id;
-    const res = await wordsHandler(ctx, id);
-    expect(res.status).toBe(404);
-  });
-  it("returns sentences for SUCCEEDED job (mocked OSS fetch)", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const recId = (created.body as { id: string }).id;
-    await testRepos().jobs.create({
-      id: "job-w-1",
-      recordingId: recId,
-      taskId: "task-1",
-      requestId: null,
-      status: "SUCCEEDED",
-    });
-    const fakeAsr = {
-      transcripts: [
-        {
-          channel_id: 0,
-          sentences: [
-            {
-              sentence_id: 1,
-              words: [
-                { begin_time: 0, end_time: 100, text: "hi", punctuation: "" },
-              ],
-            },
-          ],
-        },
-      ],
-    };
-    const res = await withMockedFetch(
-      async () =>
-        new Response(JSON.stringify(fakeAsr), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      () => wordsHandler(ctx, recId),
-    );
-    expect(res.status).toBe(200);
-    if (res.kind !== "json") throw new Error();
-    const body = res.body as {
-      sentences: Array<{ sentenceId: number; channelId: number }>;
-    };
-    // channel_id=0 keeps the raw sentence_id; composite encoding only
-    // raises the id for higher channels.
-    expect(body.sentences[0]?.sentenceId).toBe(1);
-    expect(body.sentences[0]?.channelId).toBe(0);
-  });
-  it("merges sentences from every channel and assigns composite sentenceIds", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const recId = (created.body as { id: string }).id;
-    await testRepos().jobs.create({
-      id: "job-w-multi",
-      recordingId: recId,
-      taskId: "task-multi",
-      requestId: null,
-      status: "SUCCEEDED",
-    });
-    const fakeAsr = {
-      transcripts: [
-        {
-          channel_id: 0,
-          sentences: [
-            {
-              sentence_id: 0,
-              words: [
-                { begin_time: 0, end_time: 100, text: "sys-a", punctuation: "" },
-              ],
-            },
-          ],
-        },
-        {
-          channel_id: 1,
-          sentences: [
-            {
-              sentence_id: 0,
-              words: [
-                { begin_time: 50, end_time: 150, text: "mic-a", punctuation: "" },
-              ],
-            },
-          ],
-        },
-      ],
-    };
-    const res = await withMockedFetch(
-      async () =>
-        new Response(JSON.stringify(fakeAsr), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      () => wordsHandler(ctx, recId),
-    );
-    expect(res.status).toBe(200);
-    if (res.kind !== "json") throw new Error();
-    const body = res.body as {
-      sentences: Array<{ sentenceId: number; channelId: number; words: Array<{ text: string }> }>;
-    };
-    expect(body.sentences).toHaveLength(2);
-    // Sorted by first word's begin_time; channel 0 (begin 0) first,
-    // channel 1 (begin 50) second.
-    expect(body.sentences[0]?.channelId).toBe(0);
-    expect(body.sentences[0]?.sentenceId).toBe(0);
-    expect(body.sentences[0]?.words[0]?.text).toBe("sys-a");
-    expect(body.sentences[1]?.channelId).toBe(1);
-    // Channel 1's raw sentence_id=0 lifts by SENTENCE_ID_CHANNEL_STRIDE so
-    // it does not collide with channel 0's id=0.
-    expect(body.sentences[1]?.sentenceId).toBe(100_000);
-    expect(body.sentences[1]?.words[0]?.text).toBe("mic-a");
-  });
-  it("502 when OSS fetch returns non-ok", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const recId = (created.body as { id: string }).id;
-    await testRepos().jobs.create({
-      id: "job-w-2",
-      recordingId: recId,
-      taskId: "task-2",
-      requestId: null,
-      status: "SUCCEEDED",
-    });
-    const res = await withMockedFetch(
-      async () => new Response("nope", { status: 500 }),
-      () => wordsHandler(ctx, recId),
-    );
-    expect(res.status).toBe(502);
-  });
-  it("500 when fetch throws", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const recId = (created.body as { id: string }).id;
-    await testRepos().jobs.create({
-      id: "job-w-3",
-      recordingId: recId,
-      taskId: "task-3",
-      requestId: null,
-      status: "SUCCEEDED",
-    });
-    const res = await withMockedFetch(
-      async () => {
-        throw new Error("boom");
-      },
-      () => wordsHandler(ctx, recId),
-    );
-    expect(res.status).toBe(500);
-  });
-  it("returns empty sentences when transcripts is empty", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const recId = (created.body as { id: string }).id;
-    await testRepos().jobs.create({
-      id: "job-w-4",
-      recordingId: recId,
-      taskId: "task-4",
-      requestId: null,
-      status: "SUCCEEDED",
-    });
-    const res = await withMockedFetch(
-      async () =>
-        new Response(JSON.stringify({ transcripts: [] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      () => wordsHandler(ctx, recId),
-    );
-    expect(res.status).toBe(200);
-  });
-  it("tolerates sentences with no words array", async () => {
-    // DashScope occasionally omits `words` on short / older-model
-    // sentences. The handler used to crash on `s.words.map(...)`;
-    // the defensive default to `[]` should let it pass through.
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const recId = (created.body as { id: string }).id;
-    await testRepos().jobs.create({
-      id: "job-w-nowords",
-      recordingId: recId,
-      taskId: "task-nowords",
-      requestId: null,
-      status: "SUCCEEDED",
-    });
-    const fakeAsr = {
-      transcripts: [
-        {
-          channel_id: 0,
-          sentences: [
-            {
-              sentence_id: 0,
-              begin_time: 0,
-              end_time: 100,
-              text: "no words here",
-              // intentionally NO `words` field
-            },
-          ],
-        },
-      ],
-    };
-    const res = await withMockedFetch(
-      async () =>
-        new Response(JSON.stringify(fakeAsr), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      () => wordsHandler(ctx, recId),
-    );
-    expect(res.status).toBe(200);
-    if (res.kind !== "json") throw new Error();
-    const body = res.body as {
-      sentences: Array<{ sentenceId: number; words: unknown[] }>;
-    };
-    expect(body.sentences).toHaveLength(1);
-    expect(body.sentences[0]?.words).toEqual([]);
-  });
-  it("502 when OSS body is not valid JSON", async () => {
-    // Malformed payload from a successful 200 is a storage-side
-    // contract problem — should surface as 502 (upstream) rather than
-    // 500 (handler crash).
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const recId = (created.body as { id: string }).id;
-    await testRepos().jobs.create({
-      id: "job-w-bad",
-      recordingId: recId,
-      taskId: "task-bad",
-      requestId: null,
-      status: "SUCCEEDED",
-    });
-    const res = await withMockedFetch(
-      async () =>
-        new Response("<<not json>>", {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      () => wordsHandler(ctx, recId),
-    );
-    expect(res.status).toBe(502);
-  });
+	it("401 anon", async () => {
+		expect((await wordsHandler(setupAnonCtx(), "x")).status).toBe(401);
+	});
+	it("404 unknown", async () => {
+		const { ctx } = await setupAuthedCtx();
+		expect((await wordsHandler(ctx, "no")).status).toBe(404);
+	});
+	it("404 when no completed transcription", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const id = (created.body as { id: string }).id;
+		const res = await wordsHandler(ctx, id);
+		expect(res.status).toBe(404);
+	});
+	it("returns sentences for SUCCEEDED job (mocked OSS fetch)", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const recId = (created.body as { id: string }).id;
+		await testRepos().jobs.create({
+			id: "job-w-1",
+			recordingId: recId,
+			taskId: "task-1",
+			requestId: null,
+			status: "SUCCEEDED",
+		});
+		const fakeAsr = {
+			transcripts: [
+				{
+					channel_id: 0,
+					sentences: [
+						{
+							sentence_id: 1,
+							words: [{ begin_time: 0, end_time: 100, text: "hi", punctuation: "" }],
+						},
+					],
+				},
+			],
+		};
+		const res = await withMockedFetch(
+			async () =>
+				new Response(JSON.stringify(fakeAsr), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			() => wordsHandler(ctx, recId),
+		);
+		expect(res.status).toBe(200);
+		if (res.kind !== "json") throw new Error();
+		const body = res.body as {
+			sentences: Array<{ sentenceId: number; channelId: number }>;
+		};
+		// channel_id=0 keeps the raw sentence_id; composite encoding only
+		// raises the id for higher channels.
+		expect(body.sentences[0]?.sentenceId).toBe(1);
+		expect(body.sentences[0]?.channelId).toBe(0);
+	});
+	it("merges sentences from every channel and assigns composite sentenceIds", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const recId = (created.body as { id: string }).id;
+		await testRepos().jobs.create({
+			id: "job-w-multi",
+			recordingId: recId,
+			taskId: "task-multi",
+			requestId: null,
+			status: "SUCCEEDED",
+		});
+		const fakeAsr = {
+			transcripts: [
+				{
+					channel_id: 0,
+					sentences: [
+						{
+							sentence_id: 0,
+							words: [{ begin_time: 0, end_time: 100, text: "sys-a", punctuation: "" }],
+						},
+					],
+				},
+				{
+					channel_id: 1,
+					sentences: [
+						{
+							sentence_id: 0,
+							words: [{ begin_time: 50, end_time: 150, text: "mic-a", punctuation: "" }],
+						},
+					],
+				},
+			],
+		};
+		const res = await withMockedFetch(
+			async () =>
+				new Response(JSON.stringify(fakeAsr), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			() => wordsHandler(ctx, recId),
+		);
+		expect(res.status).toBe(200);
+		if (res.kind !== "json") throw new Error();
+		const body = res.body as {
+			sentences: Array<{ sentenceId: number; channelId: number; words: Array<{ text: string }> }>;
+		};
+		expect(body.sentences).toHaveLength(2);
+		// Sorted by first word's begin_time; channel 0 (begin 0) first,
+		// channel 1 (begin 50) second.
+		expect(body.sentences[0]?.channelId).toBe(0);
+		expect(body.sentences[0]?.sentenceId).toBe(0);
+		expect(body.sentences[0]?.words[0]?.text).toBe("sys-a");
+		expect(body.sentences[1]?.channelId).toBe(1);
+		// Channel 1's raw sentence_id=0 lifts by SENTENCE_ID_CHANNEL_STRIDE so
+		// it does not collide with channel 0's id=0.
+		expect(body.sentences[1]?.sentenceId).toBe(100_000);
+		expect(body.sentences[1]?.words[0]?.text).toBe("mic-a");
+	});
+	it("502 when OSS fetch returns non-ok", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const recId = (created.body as { id: string }).id;
+		await testRepos().jobs.create({
+			id: "job-w-2",
+			recordingId: recId,
+			taskId: "task-2",
+			requestId: null,
+			status: "SUCCEEDED",
+		});
+		const res = await withMockedFetch(
+			async () => new Response("nope", { status: 500 }),
+			() => wordsHandler(ctx, recId),
+		);
+		expect(res.status).toBe(502);
+	});
+	it("500 when fetch throws", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const recId = (created.body as { id: string }).id;
+		await testRepos().jobs.create({
+			id: "job-w-3",
+			recordingId: recId,
+			taskId: "task-3",
+			requestId: null,
+			status: "SUCCEEDED",
+		});
+		const res = await withMockedFetch(
+			async () => {
+				throw new Error("boom");
+			},
+			() => wordsHandler(ctx, recId),
+		);
+		expect(res.status).toBe(500);
+	});
+	it("returns empty sentences when transcripts is empty", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const recId = (created.body as { id: string }).id;
+		await testRepos().jobs.create({
+			id: "job-w-4",
+			recordingId: recId,
+			taskId: "task-4",
+			requestId: null,
+			status: "SUCCEEDED",
+		});
+		const res = await withMockedFetch(
+			async () =>
+				new Response(JSON.stringify({ transcripts: [] }), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			() => wordsHandler(ctx, recId),
+		);
+		expect(res.status).toBe(200);
+	});
+	it("tolerates sentences with no words array", async () => {
+		// DashScope occasionally omits `words` on short / older-model
+		// sentences. The handler used to crash on `s.words.map(...)`;
+		// the defensive default to `[]` should let it pass through.
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const recId = (created.body as { id: string }).id;
+		await testRepos().jobs.create({
+			id: "job-w-nowords",
+			recordingId: recId,
+			taskId: "task-nowords",
+			requestId: null,
+			status: "SUCCEEDED",
+		});
+		const fakeAsr = {
+			transcripts: [
+				{
+					channel_id: 0,
+					sentences: [
+						{
+							sentence_id: 0,
+							begin_time: 0,
+							end_time: 100,
+							text: "no words here",
+							// intentionally NO `words` field
+						},
+					],
+				},
+			],
+		};
+		const res = await withMockedFetch(
+			async () =>
+				new Response(JSON.stringify(fakeAsr), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			() => wordsHandler(ctx, recId),
+		);
+		expect(res.status).toBe(200);
+		if (res.kind !== "json") throw new Error();
+		const body = res.body as {
+			sentences: Array<{ sentenceId: number; words: unknown[] }>;
+		};
+		expect(body.sentences).toHaveLength(1);
+		expect(body.sentences[0]?.words).toEqual([]);
+	});
+	it("502 when OSS body is not valid JSON", async () => {
+		// Malformed payload from a successful 200 is a storage-side
+		// contract problem — should surface as 502 (upstream) rather than
+		// 500 (handler crash).
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const recId = (created.body as { id: string }).id;
+		await testRepos().jobs.create({
+			id: "job-w-bad",
+			recordingId: recId,
+			taskId: "task-bad",
+			requestId: null,
+			status: "SUCCEEDED",
+		});
+		const res = await withMockedFetch(
+			async () =>
+				new Response("<<not json>>", {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				}),
+			() => wordsHandler(ctx, recId),
+		);
+		expect(res.status).toBe(502);
+	});
 });
 
 describe("batch delete with owned recording", () => {
-  it("batch delete owned recording with associated job", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctx = makeCtx(user, { env: ossEnv });
-    const created = await createRecordingHandler(ctx, {
-      title: "X",
-      fileName: "x.m4a",
-      ossKey: "uploads/u/r/x.m4a",
-    });
-    if (created.kind !== "json") throw new Error();
-    const recId = (created.body as { id: string }).id;
-    await testRepos().jobs.create({
-      id: "job-bd-1",
-      recordingId: recId,
-      taskId: "task-bd-1",
-      requestId: null,
-      status: "SUCCEEDED",
-    });
-    const res = await batchDeleteRecordingsHandler(ctx, { ids: [recId] });
-    expect(res.status).toBe(200);
-    if (res.kind !== "json") throw new Error();
-    expect((res.body as { deleted: number }).deleted).toBe(1);
-  });
+	it("batch delete owned recording with associated job", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctx = makeCtx(user, { env: ossEnv });
+		const created = await createRecordingHandler(ctx, {
+			title: "X",
+			fileName: "x.m4a",
+			ossKey: "uploads/u/r/x.m4a",
+		});
+		if (created.kind !== "json") throw new Error();
+		const recId = (created.body as { id: string }).id;
+		await testRepos().jobs.create({
+			id: "job-bd-1",
+			recordingId: recId,
+			taskId: "task-bd-1",
+			requestId: null,
+			status: "SUCCEEDED",
+		});
+		const res = await batchDeleteRecordingsHandler(ctx, { ids: [recId] });
+		expect(res.status).toBe(200);
+		if (res.kind !== "json") throw new Error();
+		expect((res.body as { deleted: number }).deleted).toBe(1);
+	});
 });
 
 describe("transcribeRecordingHandler", () => {
-  it("401 anon", async () => {
-    const res = await transcribeRecordingHandler(setupAnonCtx(), "x");
-    expect(res.status).toBe(401);
-  });
-  it("404 unknown recording", async () => {
-    const { ctx, user } = await setupAuthedCtx();
-    const env = makeCtx(user, { env: ossEnv }).env;
-    const res = await transcribeRecordingHandler(
-      { ...ctx, env },
-      "no-such-recording",
-    );
-    expect(res.status).toBe(404);
-  });
-  it("404 when recording belongs to another user", async () => {
-    const { user: owner } = await setupAuthedCtx();
-    const rec = await testRepos().recordings.create({
-      id: "r-other",
-      userId: owner.id,
-      title: "t",
-      description: null,
-      fileName: "f.m4a",
-      fileSize: null,
-      duration: null,
-      format: null,
-      sampleRate: null,
-      ossKey: "uploads/o/r/x.m4a",
-      status: "uploaded",
-    });
-    const intruder = makeCtx({
-      ...owner,
-      id: "intruder",
-      email: "intruder@example.com",
-    });
-    const res = await transcribeRecordingHandler(intruder, rec.id);
-    expect(res.status).toBe(404);
-  });
-  it("409 when already transcribing", async () => {
-    const { user } = await setupAuthedCtx();
-    const ctxWithOss = makeCtx(user, { env: ossEnv });
-    const rec = await testRepos().recordings.create({
-      id: "r-busy",
-      userId: user.id,
-      title: "t",
-      description: null,
-      fileName: "f.m4a",
-      fileSize: null,
-      duration: null,
-      format: null,
-      sampleRate: null,
-      ossKey: "uploads/u/r/x.m4a",
-      status: "transcribing",
-    });
-    const res = await transcribeRecordingHandler(ctxWithOss, rec.id);
-    expect(res.status).toBe(409);
-  });
-  it("creates job and flips status to transcribing", async () => {
-    const mock: AsrProvider = {
-      submit: async () => ({
-        request_id: "rq-1",
-        output: { task_id: "task-1", task_status: "PENDING" },
-      }),
-      poll: async () => ({
-        request_id: "rq-1",
-        output: { task_id: "task-1", task_status: "RUNNING" },
-      }),
-      fetchResult: async () => ({
-        file_url: "u",
-        audio_info: { format: "m4a", sample_rate: 16000 },
-        transcripts: [],
-      }),
-    };
-    setAsrProvider(mock);
-    try {
-      const { user } = await setupAuthedCtx();
-      const ctx = makeCtx(user, { env: ossEnv });
-      const rec = await testRepos().recordings.create({
-        id: "r-go",
-        userId: user.id,
-        title: "t",
-        description: null,
-        fileName: "f.m4a",
-        fileSize: null,
-        duration: null,
-        format: null,
-        sampleRate: null,
-        ossKey: "uploads/u/r/x.m4a",
-        status: "uploaded",
-      });
-      const res = await transcribeRecordingHandler(ctx, rec.id);
-      expect(res.status).toBe(201);
-      if (res.kind !== "json") throw new Error();
-      const job = res.body as { recordingId: string; taskId: string };
-      expect(job.recordingId).toBe(rec.id);
-      expect(job.taskId).toBe("task-1");
-      const after = await testRepos().recordings.findById(rec.id);
-      expect(after?.status).toBe("transcribing");
-    } finally {
-      resetAsrProvider();
-    }
-  });
+	it("401 anon", async () => {
+		const res = await transcribeRecordingHandler(setupAnonCtx(), "x");
+		expect(res.status).toBe(401);
+	});
+	it("404 unknown recording", async () => {
+		const { ctx, user } = await setupAuthedCtx();
+		const env = makeCtx(user, { env: ossEnv }).env;
+		const res = await transcribeRecordingHandler({ ...ctx, env }, "no-such-recording");
+		expect(res.status).toBe(404);
+	});
+	it("404 when recording belongs to another user", async () => {
+		const { user: owner } = await setupAuthedCtx();
+		const rec = await testRepos().recordings.create({
+			id: "r-other",
+			userId: owner.id,
+			title: "t",
+			description: null,
+			fileName: "f.m4a",
+			fileSize: null,
+			duration: null,
+			format: null,
+			sampleRate: null,
+			ossKey: "uploads/o/r/x.m4a",
+			status: "uploaded",
+		});
+		const intruder = makeCtx({
+			...owner,
+			id: "intruder",
+			email: "intruder@example.com",
+		});
+		const res = await transcribeRecordingHandler(intruder, rec.id);
+		expect(res.status).toBe(404);
+	});
+	it("409 when already transcribing", async () => {
+		const { user } = await setupAuthedCtx();
+		const ctxWithOss = makeCtx(user, { env: ossEnv });
+		const rec = await testRepos().recordings.create({
+			id: "r-busy",
+			userId: user.id,
+			title: "t",
+			description: null,
+			fileName: "f.m4a",
+			fileSize: null,
+			duration: null,
+			format: null,
+			sampleRate: null,
+			ossKey: "uploads/u/r/x.m4a",
+			status: "transcribing",
+		});
+		const res = await transcribeRecordingHandler(ctxWithOss, rec.id);
+		expect(res.status).toBe(409);
+	});
+	it("creates job and flips status to transcribing", async () => {
+		const mock: AsrProvider = {
+			submit: async () => ({
+				request_id: "rq-1",
+				output: { task_id: "task-1", task_status: "PENDING" },
+			}),
+			poll: async () => ({
+				request_id: "rq-1",
+				output: { task_id: "task-1", task_status: "RUNNING" },
+			}),
+			fetchResult: async () => ({
+				file_url: "u",
+				audio_info: { format: "m4a", sample_rate: 16000 },
+				transcripts: [],
+			}),
+		};
+		setAsrProvider(mock);
+		try {
+			const { user } = await setupAuthedCtx();
+			const ctx = makeCtx(user, { env: ossEnv });
+			const rec = await testRepos().recordings.create({
+				id: "r-go",
+				userId: user.id,
+				title: "t",
+				description: null,
+				fileName: "f.m4a",
+				fileSize: null,
+				duration: null,
+				format: null,
+				sampleRate: null,
+				ossKey: "uploads/u/r/x.m4a",
+				status: "uploaded",
+			});
+			const res = await transcribeRecordingHandler(ctx, rec.id);
+			expect(res.status).toBe(201);
+			if (res.kind !== "json") throw new Error();
+			const job = res.body as { recordingId: string; taskId: string };
+			expect(job.recordingId).toBe(rec.id);
+			expect(job.taskId).toBe("task-1");
+			const after = await testRepos().recordings.findById(rec.id);
+			expect(after?.status).toBe("transcribing");
+		} finally {
+			resetAsrProvider();
+		}
+	});
 });

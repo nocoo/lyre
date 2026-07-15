@@ -8,41 +8,41 @@
  */
 
 export interface Bindings {
-  DB: D1Database;
-  ASSETS?: Fetcher;
+	DB: D1Database;
+	ASSETS?: Fetcher;
 
-  // Auth bypass for E2E.
-  E2E_SKIP_AUTH?: string;
+	// Auth bypass for E2E.
+	E2E_SKIP_AUTH?: string;
 
-  NODE_ENV?: string;
-  SKIP_OSS_ARCHIVE?: string;
+	NODE_ENV?: string;
+	SKIP_OSS_ARCHIVE?: string;
 
-  // Cloudflare Access — required for verifying the
-  // `Cf-Access-Jwt-Assertion` header. Both must be set in production;
-  // missing/empty values cause the middleware to reject the assertion
-  // (fail-closed). Set via `wrangler secret put` or `[vars]`.
-  CF_ACCESS_TEAM_DOMAIN?: string;
-  CF_ACCESS_AUD?: string;
+	// Cloudflare Access — required for verifying the
+	// `Cf-Access-Jwt-Assertion` header. Both must be set in production;
+	// missing/empty values cause the middleware to reject the assertion
+	// (fail-closed). Set via `wrangler secret put` or `[vars]`.
+	CF_ACCESS_TEAM_DOMAIN?: string;
+	CF_ACCESS_AUD?: string;
 
-  // Comma-separated list of additional origins (scheme://host) that are
-  // allowed to issue cookie-authenticated writes to `/api/*`. The Worker's
-  // own request origin is always allowed; this is for SPAs hosted on a
-  // separate origin (e.g. preview deploys, custom domains).
-  PUBLIC_ORIGIN?: string;
+	// Comma-separated list of additional origins (scheme://host) that are
+	// allowed to issue cookie-authenticated writes to `/api/*`. The Worker's
+	// own request origin is always allowed; this is for SPAs hosted on a
+	// separate origin (e.g. preview deploys, custom domains).
+	PUBLIC_ORIGIN?: string;
 
-  // Aliyun OSS
-  OSS_ACCESS_KEY_ID?: string;
-  OSS_ACCESS_KEY_SECRET?: string;
-  OSS_BUCKET?: string;
-  OSS_REGION?: string;
-  OSS_ENDPOINT?: string;
+	// Aliyun OSS
+	OSS_ACCESS_KEY_ID?: string;
+	OSS_ACCESS_KEY_SECRET?: string;
+	OSS_BUCKET?: string;
+	OSS_REGION?: string;
+	OSS_ENDPOINT?: string;
 
-  // DashScope (ASR)
-  DASHSCOPE_API_KEY?: string;
+	// DashScope (ASR)
+	DASHSCOPE_API_KEY?: string;
 }
 
 import type { RuntimeContext } from "@lyre/api/runtime/context";
 
 export type Variables = {
-  runtime: RuntimeContext;
+	runtime: RuntimeContext;
 };

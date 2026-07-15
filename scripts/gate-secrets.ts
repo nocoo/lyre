@@ -10,23 +10,23 @@
 import { spawn } from "bun";
 
 async function main(): Promise<void> {
-  // Check gitleaks is installed
-  const check = spawn(["which", "gitleaks"], { stdout: null, stderr: null });
-  if ((await check.exited) !== 0) {
-    console.error("gitleaks not installed — install: brew install gitleaks");
-    process.exit(1);
-  }
+	// Check gitleaks is installed
+	const check = spawn(["which", "gitleaks"], { stdout: null, stderr: null });
+	if ((await check.exited) !== 0) {
+		console.error("gitleaks not installed — install: brew install gitleaks");
+		process.exit(1);
+	}
 
-  const proc = spawn(["gitleaks", "protect", "--staged", "--no-banner"], {
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+	const proc = spawn(["gitleaks", "protect", "--staged", "--no-banner"], {
+		stdout: "inherit",
+		stderr: "inherit",
+	});
 
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) {
-    console.error("Secrets scan failed — commit blocked.");
-  }
-  process.exit(exitCode);
+	const exitCode = await proc.exited;
+	if (exitCode !== 0) {
+		console.error("Secrets scan failed — commit blocked.");
+	}
+	process.exit(exitCode);
 }
 
 void main();

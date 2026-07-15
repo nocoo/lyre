@@ -5,5 +5,5 @@ import { useLocation } from "react-router";
 
 /** Returns the current pathname. */
 export function useLocationPathname(): string {
-  return useLocation().pathname;
+	return useLocation().pathname;
 }

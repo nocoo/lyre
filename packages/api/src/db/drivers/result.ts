@@ -8,17 +8,17 @@
  */
 
 export interface SqliteRunResult {
-  changes?: number;
-  lastInsertRowid?: number | bigint;
+	changes?: number;
+	lastInsertRowid?: number | bigint;
 }
 
 export interface D1RunResult {
-  success?: boolean;
-  meta?: {
-    changes?: number;
-    duration?: number;
-    last_row_id?: number;
-  };
+	success?: boolean;
+	meta?: {
+		changes?: number;
+		duration?: number;
+		last_row_id?: number;
+	};
 }
 
 export type AnyRunResult = SqliteRunResult | D1RunResult | unknown;
@@ -28,9 +28,9 @@ export type AnyRunResult = SqliteRunResult | D1RunResult | unknown;
  * produced the result. Returns 0 for any unrecognized shape.
  */
 export function rowsAffected(result: AnyRunResult): number {
-  if (!result || typeof result !== "object") return 0;
-  const r = result as SqliteRunResult & D1RunResult;
-  if (typeof r.changes === "number") return r.changes;
-  if (r.meta && typeof r.meta.changes === "number") return r.meta.changes;
-  return 0;
+	if (!result || typeof result !== "object") return 0;
+	const r = result as SqliteRunResult & D1RunResult;
+	if (typeof r.changes === "number") return r.changes;
+	if (r.meta && typeof r.meta.changes === "number") return r.meta.changes;
+	return 0;
 }

@@ -6,17 +6,17 @@
  * and handles server-side object deletion.
  */
 
-import { createHmac } from "crypto";
+import { createHmac } from "node:crypto";
 import type { LyreEnv } from "../runtime/env";
 
 // ── Config ──
 
 export interface OssConfig {
-  accessKeyId: string;
-  accessKeySecret: string;
-  bucket: string;
-  region: string;
-  endpoint: string;
+	accessKeyId: string;
+	accessKeySecret: string;
+	bucket: string;
+	region: string;
+	endpoint: string;
 }
 
 /** Production bucket name. */
@@ -33,27 +33,27 @@ export const BUCKET_DEV = "lyre-dev";
  * - everything else (development, test, undefined) → "lyre-dev"
  */
 export function resolveBucket(env: LyreEnv): string {
-  const e = env;
-  const explicit = e.OSS_BUCKET;
-  if (explicit) return explicit;
-  return e.NODE_ENV === "production" ? BUCKET_PROD : BUCKET_DEV;
+	const e = env;
+	const explicit = e.OSS_BUCKET;
+	if (explicit) return explicit;
+	return e.NODE_ENV === "production" ? BUCKET_PROD : BUCKET_DEV;
 }
 
 function getConfig(env: LyreEnv): OssConfig {
-  const e = env;
-  const accessKeyId = e.OSS_ACCESS_KEY_ID;
-  const accessKeySecret = e.OSS_ACCESS_KEY_SECRET;
-  const bucket = resolveBucket(e);
-  const region = e.OSS_REGION;
-  const endpoint = e.OSS_ENDPOINT;
+	const e = env;
+	const accessKeyId = e.OSS_ACCESS_KEY_ID;
+	const accessKeySecret = e.OSS_ACCESS_KEY_SECRET;
+	const bucket = resolveBucket(e);
+	const region = e.OSS_REGION;
+	const endpoint = e.OSS_ENDPOINT;
 
-  if (!accessKeyId || !accessKeySecret || !region || !endpoint) {
-    throw new Error(
-      "Missing OSS config. Required env vars: OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_REGION, OSS_ENDPOINT",
-    );
-  }
+	if (!accessKeyId || !accessKeySecret || !region || !endpoint) {
+		throw new Error(
+			"Missing OSS config. Required env vars: OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_REGION, OSS_ENDPOINT",
+		);
+	}
 
-  return { accessKeyId, accessKeySecret, bucket, region, endpoint };
+	return { accessKeyId, accessKeySecret, bucket, region, endpoint };
 }
 
 // ── V1 Signature ──
@@ -65,22 +65,16 @@ function getConfig(env: LyreEnv): OssConfig {
  *              + Expires + "\n" + CanonicalizedOSSHeaders + CanonicalizedResource
  */
 export function signV1(
-  secret: string,
-  method: string,
-  resource: string,
-  expires: number,
-  contentType: string = "",
-  contentMd5: string = "",
+	secret: string,
+	method: string,
+	resource: string,
+	expires: number,
+	contentType: string = "",
+	contentMd5: string = "",
 ): string {
-  const stringToSign = [
-    method,
-    contentMd5,
-    contentType,
-    expires.toString(),
-    resource,
-  ].join("\n");
+	const stringToSign = [method, contentMd5, contentType, expires.toString(), resource].join("\n");
 
-  return createHmac("sha1", secret).update(stringToSign, "utf8").digest("base64");
+	return createHmac("sha1", secret).update(stringToSign, "utf8").digest("base64");
 }
 
 // ── OSS Key helpers ──
@@ -89,12 +83,8 @@ export function signV1(
  * Generate the OSS object key for a recording upload.
  * Format: uploads/{userId}/{recordingId}/{fileName}
  */
-export function makeUploadKey(
-  userId: string,
-  recordingId: string,
-  fileName: string,
-): string {
-  return `uploads/${userId}/${recordingId}/${fileName}`;
+export function makeUploadKey(userId: string, recordingId: string, fileName: string): string {
+	return `uploads/${userId}/${recordingId}/${fileName}`;
 }
 
 /**
@@ -102,7 +92,7 @@ export function makeUploadKey(
  * Format: results/{jobId}/{fileName}
  */
 export function makeResultKey(jobId: string, fileName: string): string {
-  return `results/${jobId}/${fileName}`;
+	return `results/${jobId}/${fileName}`;
 }
 
 // ── Presigned URL generation ──
@@ -111,7 +101,7 @@ export function makeResultKey(jobId: string, fileName: string): string {
  * Build bucket-style URL: https://{bucket}.{region}.aliyuncs.com/{key}
  */
 function buildBucketUrl(config: OssConfig, key: string): string {
-  return `https://${config.bucket}.${config.region}.aliyuncs.com/${key}`;
+	return `https://${config.bucket}.${config.region}.aliyuncs.com/${key}`;
 }
 
 /**
@@ -123,30 +113,24 @@ function buildBucketUrl(config: OssConfig, key: string): string {
  * @returns Presigned URL string
  */
 export function presignPut(
-  key: string,
-  contentType: string,
-  expiresInSec: number = 900,
-  config: OssConfig | undefined,
-  env: LyreEnv,
+	key: string,
+	contentType: string,
+	expiresInSec: number = 900,
+	config: OssConfig | undefined,
+	env: LyreEnv,
 ): string {
-  const cfg = config ?? getConfig(env);
-  const expires = Math.floor(Date.now() / 1000) + expiresInSec;
-  const resource = `/${cfg.bucket}/${key}`;
+	const cfg = config ?? getConfig(env);
+	const expires = Math.floor(Date.now() / 1000) + expiresInSec;
+	const resource = `/${cfg.bucket}/${key}`;
 
-  const signature = signV1(
-    cfg.accessKeySecret,
-    "PUT",
-    resource,
-    expires,
-    contentType,
-  );
+	const signature = signV1(cfg.accessKeySecret, "PUT", resource, expires, contentType);
 
-  const url = new URL(buildBucketUrl(cfg, key));
-  url.searchParams.set("OSSAccessKeyId", cfg.accessKeyId);
-  url.searchParams.set("Expires", expires.toString());
-  url.searchParams.set("Signature", signature);
+	const url = new URL(buildBucketUrl(cfg, key));
+	url.searchParams.set("OSSAccessKeyId", cfg.accessKeyId);
+	url.searchParams.set("Expires", expires.toString());
+	url.searchParams.set("Signature", signature);
 
-  return url.toString();
+	return url.toString();
 }
 
 /**
@@ -159,47 +143,47 @@ export function presignPut(
  * @returns Presigned URL string
  */
 export function presignGet(
-  key: string,
-  expiresInSec: number = 3600,
-  responseOverrides: Record<string, string> | undefined,
-  config: OssConfig | undefined,
-  env: LyreEnv,
+	key: string,
+	expiresInSec: number = 3600,
+	responseOverrides: Record<string, string> | undefined,
+	config: OssConfig | undefined,
+	env: LyreEnv,
 ): string {
-  const cfg = config ?? getConfig(env);
-  const expires = Math.floor(Date.now() / 1000) + expiresInSec;
+	const cfg = config ?? getConfig(env);
+	const expires = Math.floor(Date.now() / 1000) + expiresInSec;
 
-  // Build canonical resource — must include response override params for V1 signature
-  let resource = `/${cfg.bucket}/${key}`;
-  if (responseOverrides && Object.keys(responseOverrides).length > 0) {
-    const overrideParts = Object.entries(responseOverrides)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`);
-    resource += `?${overrideParts.join("&")}`;
-  }
+	// Build canonical resource — must include response override params for V1 signature
+	let resource = `/${cfg.bucket}/${key}`;
+	if (responseOverrides && Object.keys(responseOverrides).length > 0) {
+		const overrideParts = Object.entries(responseOverrides)
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([k, v]) => `${k}=${v}`);
+		resource += `?${overrideParts.join("&")}`;
+	}
 
-  const signature = signV1(cfg.accessKeySecret, "GET", resource, expires);
+	const signature = signV1(cfg.accessKeySecret, "GET", resource, expires);
 
-  const url = new URL(buildBucketUrl(cfg, key));
-  url.searchParams.set("OSSAccessKeyId", cfg.accessKeyId);
-  url.searchParams.set("Expires", expires.toString());
-  url.searchParams.set("Signature", signature);
+	const url = new URL(buildBucketUrl(cfg, key));
+	url.searchParams.set("OSSAccessKeyId", cfg.accessKeyId);
+	url.searchParams.set("Expires", expires.toString());
+	url.searchParams.set("Signature", signature);
 
-  // Append response override params to URL
-  if (responseOverrides) {
-    for (const [k, v] of Object.entries(responseOverrides)) {
-      url.searchParams.set(k, v);
-    }
-  }
+	// Append response override params to URL
+	if (responseOverrides) {
+		for (const [k, v] of Object.entries(responseOverrides)) {
+			url.searchParams.set(k, v);
+		}
+	}
 
-  return url.toString();
+	return url.toString();
 }
 
 // ── List objects ──
 
 export interface OssObject {
-  key: string;
-  size: number;
-  lastModified: string;
+	key: string;
+	size: number;
+	lastModified: string;
 }
 
 /**
@@ -213,70 +197,71 @@ export interface OssObject {
  * @returns Array of all matching objects
  */
 export async function listObjects(
-  prefix: string,
-  config: OssConfig | undefined,
-  env: LyreEnv,
+	prefix: string,
+	config: OssConfig | undefined,
+	env: LyreEnv,
 ): Promise<OssObject[]> {
-  const cfg = config ?? getConfig(env);
-  const all: OssObject[] = [];
-  let marker = "";
-  let hasMore = true;
+	const cfg = config ?? getConfig(env);
+	const all: OssObject[] = [];
+	let marker = "";
+	let hasMore = true;
 
-  while (hasMore) {
-    const date = new Date().toUTCString();
-    const resource = `/${cfg.bucket}/`;
+	while (hasMore) {
+		const date = new Date().toUTCString();
+		const resource = `/${cfg.bucket}/`;
 
-    const stringToSign = ["GET", "", "", date, resource].join("\n");
-    const signature = createHmac("sha1", cfg.accessKeySecret)
-      .update(stringToSign, "utf8")
-      .digest("base64");
+		const stringToSign = ["GET", "", "", date, resource].join("\n");
+		const signature = createHmac("sha1", cfg.accessKeySecret)
+			.update(stringToSign, "utf8")
+			.digest("base64");
 
-    const url = new URL(
-      `https://${cfg.bucket}.${cfg.region}.aliyuncs.com/`,
-    );
-    url.searchParams.set("prefix", prefix);
-    url.searchParams.set("max-keys", "1000");
-    if (marker) url.searchParams.set("marker", marker);
+		const url = new URL(`https://${cfg.bucket}.${cfg.region}.aliyuncs.com/`);
+		url.searchParams.set("prefix", prefix);
+		url.searchParams.set("max-keys", "1000");
+		if (marker) url.searchParams.set("marker", marker);
 
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        Date: date,
-        Authorization: `OSS ${cfg.accessKeyId}:${signature}`,
-      },
-    });
+		const response = await fetch(url.toString(), {
+			method: "GET",
+			headers: {
+				Date: date,
+				Authorization: `OSS ${cfg.accessKeyId}:${signature}`,
+			},
+		});
 
-    if (!response.ok) {
-      throw new Error(`OSS listObjects failed: ${response.status} ${response.statusText}`);
-    }
+		if (!response.ok) {
+			throw new Error(`OSS listObjects failed: ${response.status} ${response.statusText}`);
+		}
 
-    const xml = await response.text();
+		const xml = await response.text();
 
-    // Parse <Contents> entries from XML
-    const contentsRegex =
-      /<Contents>\s*<Key>([^<]+)<\/Key>\s*<LastModified>([^<]+)<\/LastModified>[\s\S]*?<Size>(\d+)<\/Size>[\s\S]*?<\/Contents>/g;
-    let match: RegExpExecArray | null;
-    while ((match = contentsRegex.exec(xml)) !== null) {
-      all.push({
-        key: match[1]!,
-        size: parseInt(match[3]!, 10),
-        lastModified: match[2]!,
-      });
-    }
+		// Parse <Contents> entries from XML
+		const contentsRegex =
+			/<Contents>\s*<Key>([^<]+)<\/Key>\s*<LastModified>([^<]+)<\/LastModified>[\s\S]*?<Size>(\d+)<\/Size>[\s\S]*?<\/Contents>/g;
+		while (true) {
+			const match = contentsRegex.exec(xml);
+			if (match === null) break;
+			const [, key, lastModified, size] = match;
+			if (key === undefined || lastModified === undefined || size === undefined) continue;
+			all.push({
+				key,
+				size: Number.parseInt(size, 10),
+				lastModified,
+			});
+		}
 
-    // Check if truncated
-    const truncatedMatch = /<IsTruncated>(true|false)<\/IsTruncated>/.exec(xml);
-    const isTruncated = truncatedMatch?.[1] === "true";
-    if (isTruncated) {
-      const nextMarkerMatch = /<NextMarker>([^<]+)<\/NextMarker>/.exec(xml);
-      marker = nextMarkerMatch?.[1] ?? "";
-      hasMore = !!marker;
-    } else {
-      hasMore = false;
-    }
-  }
+		// Check if truncated
+		const truncatedMatch = /<IsTruncated>(true|false)<\/IsTruncated>/.exec(xml);
+		const isTruncated = truncatedMatch?.[1] === "true";
+		if (isTruncated) {
+			const nextMarkerMatch = /<NextMarker>([^<]+)<\/NextMarker>/.exec(xml);
+			marker = nextMarkerMatch?.[1] ?? "";
+			hasMore = !!marker;
+		} else {
+			hasMore = false;
+		}
+	}
 
-  return all;
+	return all;
 }
 
 /**
@@ -290,80 +275,72 @@ export async function listObjects(
  * @returns Number of objects successfully deleted
  */
 export async function deleteObjects(
-  keys: string[],
-  config: OssConfig | undefined,
-  env: LyreEnv,
+	keys: string[],
+	config: OssConfig | undefined,
+	env: LyreEnv,
 ): Promise<number> {
-  if (keys.length === 0) return 0;
-  const cfg = config ?? getConfig(env);
-  let totalDeleted = 0;
+	if (keys.length === 0) return 0;
+	const cfg = config ?? getConfig(env);
+	let totalDeleted = 0;
 
-  // Process in batches of 1000 (OSS limit)
-  for (let i = 0; i < keys.length; i += 1000) {
-    const batch = keys.slice(i, i + 1000);
+	// Process in batches of 1000 (OSS limit)
+	for (let i = 0; i < keys.length; i += 1000) {
+		const batch = keys.slice(i, i + 1000);
 
-    const objectElements = batch
-      .map((k) => `<Object><Key>${escapeXml(k)}</Key></Object>`)
-      .join("");
-    const body = `<?xml version="1.0" encoding="UTF-8"?><Delete><Quiet>false</Quiet>${objectElements}</Delete>`;
+		const objectElements = batch.map((k) => `<Object><Key>${escapeXml(k)}</Key></Object>`).join("");
+		const body = `<?xml version="1.0" encoding="UTF-8"?><Delete><Quiet>false</Quiet>${objectElements}</Delete>`;
 
-    const bodyBuffer = Buffer.from(body, "utf8");
-    const md5 = await computeMd5(bodyBuffer);
+		const bodyBuffer = Buffer.from(body, "utf8");
+		const md5 = await computeMd5(bodyBuffer);
 
-    const date = new Date().toUTCString();
-    const resource = `/${cfg.bucket}/?delete`;
-    const contentType = "application/xml";
+		const date = new Date().toUTCString();
+		const resource = `/${cfg.bucket}/?delete`;
+		const contentType = "application/xml";
 
-    const stringToSign = [
-      "POST",
-      md5,
-      contentType,
-      date,
-      resource,
-    ].join("\n");
-    const signature = createHmac("sha1", cfg.accessKeySecret)
-      .update(stringToSign, "utf8")
-      .digest("base64");
+		const stringToSign = ["POST", md5, contentType, date, resource].join("\n");
+		const signature = createHmac("sha1", cfg.accessKeySecret)
+			.update(stringToSign, "utf8")
+			.digest("base64");
 
-    const url = `https://${cfg.bucket}.${cfg.region}.aliyuncs.com/?delete`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Date: date,
-        "Content-Type": contentType,
-        "Content-MD5": md5,
-        "Content-Length": bodyBuffer.length.toString(),
-        Authorization: `OSS ${cfg.accessKeyId}:${signature}`,
-      },
-      body: bodyBuffer,
-    });
+		const url = `https://${cfg.bucket}.${cfg.region}.aliyuncs.com/?delete`;
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				Date: date,
+				"Content-Type": contentType,
+				"Content-MD5": md5,
+				"Content-Length": bodyBuffer.length.toString(),
+				Authorization: `OSS ${cfg.accessKeyId}:${signature}`,
+			},
+			body: bodyBuffer,
+		});
 
-    if (response.ok) {
-      const xml = await response.text();
-      // Count <Deleted> entries
-      const deletedMatches = xml.match(/<Deleted>/g);
-      totalDeleted += deletedMatches?.length ?? batch.length;
-    }
-  }
+		if (response.ok) {
+			const xml = await response.text();
+			// Count <Deleted> entries
+			const deletedMatches = xml.match(/<Deleted>/g);
+			totalDeleted += deletedMatches?.length ?? batch.length;
+		}
+	}
 
-  return totalDeleted;
+	return totalDeleted;
 }
 
 /** Escape special XML characters */
 function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&apos;");
 }
 
 /** Compute base64-encoded MD5 hash */
 async function computeMd5(data: Buffer): Promise<string> {
-  // Use Node.js crypto (not HMAC — plain hash)
-  const { createHash } = await import("crypto");
-  return createHash("md5").update(data).digest("base64");
+	// Use Node.js crypto (not HMAC — plain hash)
+	const { createHash } = await import("node:crypto");
+	return createHash("md5").update(data).digest("base64");
 }
 
 /**
@@ -373,43 +350,43 @@ async function computeMd5(data: Buffer): Promise<string> {
  * @returns true if deleted (2xx response), false otherwise
  */
 export async function deleteObject(
-  key: string,
-  config: OssConfig | undefined,
-  env: LyreEnv,
+	key: string,
+	config: OssConfig | undefined,
+	env: LyreEnv,
 ): Promise<boolean> {
-  const cfg = config ?? getConfig(env);
-  const date = new Date().toUTCString();
-  const resource = `/${cfg.bucket}/${key}`;
+	const cfg = config ?? getConfig(env);
+	const date = new Date().toUTCString();
+	const resource = `/${cfg.bucket}/${key}`;
 
-  // For non-presigned requests, use Authorization header with date
-  const stringToSign = ["DELETE", "", "", date, resource].join("\n");
-  const signature = createHmac("sha1", cfg.accessKeySecret)
-    .update(stringToSign, "utf8")
-    .digest("base64");
+	// For non-presigned requests, use Authorization header with date
+	const stringToSign = ["DELETE", "", "", date, resource].join("\n");
+	const signature = createHmac("sha1", cfg.accessKeySecret)
+		.update(stringToSign, "utf8")
+		.digest("base64");
 
-  const url = buildBucketUrl(cfg, key);
-  const response = await fetch(url, {
-    method: "DELETE",
-    headers: {
-      Date: date,
-      Authorization: `OSS ${cfg.accessKeyId}:${signature}`,
-    },
-  });
+	const url = buildBucketUrl(cfg, key);
+	const response = await fetch(url, {
+		method: "DELETE",
+		headers: {
+			Date: date,
+			Authorization: `OSS ${cfg.accessKeyId}:${signature}`,
+		},
+	});
 
-  // 204 No Content is the success response for DELETE
-  return response.status >= 200 && response.status < 300;
+	// 204 No Content is the success response for DELETE
+	return response.status >= 200 && response.status < 300;
 }
 
 // ── Service barrel ──
 
 export const ossService = {
-  makeUploadKey,
-  makeResultKey,
-  presignPut,
-  presignGet,
-  deleteObject,
-  deleteObjects,
-  listObjects,
-  signV1,
-  resolveBucket,
+	makeUploadKey,
+	makeResultKey,
+	presignPut,
+	presignGet,
+	deleteObject,
+	deleteObjects,
+	listObjects,
+	signV1,
+	resolveBucket,
 };

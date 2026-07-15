@@ -1,61 +1,62 @@
 {
-  "name": "lyre",
-  "version": "1.6.19",
-  "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "scripts": {
-    "dev": "bun run web:dev",
-    "dev:all": "bun run worker:dev & bun run web:dev",
-    "build": "bun run web:build",
-    "lint": "bun run web:lint && bun run api:lint",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "typecheck": "bun run web:typecheck && bun run worker:typecheck && bun run api:typecheck",
-    "deploy": "bun run web:build && bun run --cwd apps/api deploy",
-    "web:dev": "bun run --cwd apps/web dev",
-    "web:build": "bun run --cwd apps/web build",
-    "web:lint": "bun run --cwd apps/web lint",
-    "web:typecheck": "bun run --cwd apps/web typecheck",
-    "worker:dev": "bun run --cwd apps/api dev",
-    "worker:typecheck": "bun run --cwd apps/api typecheck",
-    "api:lint": "bun run --cwd packages/api lint",
-    "api:typecheck": "bun run --cwd packages/api typecheck",
-    "test:e2e": "bun run scripts/run-e2e.ts",
-    "test:e2e:bdd": "npx playwright test",
-    "gate:routes": "bun run scripts/check-route-coverage.ts",
-    "gate:pages": "bun run scripts/check-page-coverage.ts",
-    "gate:secrets": "bun run scripts/gate-secrets.ts",
-    "gate:deps": "bun run scripts/gate-deps.ts",
-    "pre-push": "bun run scripts/pre-push.ts",
-    "prepare": "husky",
-    "release": "bun run scripts/release.ts",
-    "macos:dmg": "bash scripts/build-dmg.sh"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.52.0",
-    "@types/better-sqlite3": "^7.6.13",
-    "@vitest/coverage-v8": "^4.1.5",
-    "better-sqlite3": "^12.9.0",
-    "husky": "^9.1.7",
-    "vitest": "^4.1.5"
-  },
-  "dependencies": {
-    "hono": "^4.12.25"
-  },
-  "overrides": {
-    "ws": "^8.21.0",
-    "esbuild": "^0.28.1",
-    "@babel/core": "^7.29.6",
-    "js-yaml": "^4.2.0",
-    "undici": "^7.28.0",
-    "vite": "^6.4.3"
-  },
-  "trustedDependencies": [
-    "better-sqlite3",
-    "husky"
-  ]
+	"name": "lyre",
+	"version": "1.6.19",
+	"private": true,
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"scripts": {
+		"dev": "bun run web:dev",
+		"dev:all": "bun run worker:dev & bun run web:dev",
+		"build": "bun run web:build",
+		"lint": "biome check --error-on-warnings .",
+		"lint:fix": "biome check --write .",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"typecheck": "bun run web:typecheck && bun run worker:typecheck && bun run api:typecheck",
+		"deploy": "bun run web:build && bun run --cwd apps/api deploy",
+		"web:dev": "bun run --cwd apps/web dev",
+		"web:build": "bun run --cwd apps/web build",
+		"web:typecheck": "bun run --cwd apps/web typecheck",
+		"worker:dev": "bun run --cwd apps/api dev",
+		"worker:typecheck": "bun run --cwd apps/api typecheck",
+		"api:typecheck": "bun run --cwd packages/api typecheck",
+		"test:e2e": "bun run scripts/run-e2e.ts",
+		"test:e2e:bdd": "npx playwright test",
+		"gate:routes": "bun run scripts/check-route-coverage.ts",
+		"gate:pages": "bun run scripts/check-page-coverage.ts",
+		"gate:secrets": "bun run scripts/gate-secrets.ts",
+		"gate:deps": "bun run scripts/gate-deps.ts",
+		"pre-push": "bun run scripts/pre-push.ts",
+		"prepare": "husky",
+		"release": "bun run scripts/release.ts",
+		"macos:dmg": "bash scripts/build-dmg.sh"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.3",
+		"@playwright/test": "^1.52.0",
+		"@types/better-sqlite3": "^7.6.13",
+		"@vitest/coverage-v8": "^4.1.5",
+		"better-sqlite3": "^12.9.0",
+		"husky": "^9.1.7",
+		"vitest": "^4.1.5"
+	},
+	"dependencies": {
+		"hono": "^4.12.25"
+	},
+	"overrides": {
+		"ws": "^8.21.0",
+		"esbuild": "^0.28.1",
+		"@babel/core": "^7.29.6",
+		"js-yaml": "^4.2.0",
+		"undici": "^7.28.0",
+		"vite": "^6.4.3"
+	},
+	"trustedDependencies": [
+		"@biomejs/biome",
+		"better-sqlite3",
+		"husky"
+	]
 }

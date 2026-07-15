@@ -1,43 +1,40 @@
 {
-  "name": "@lyre/api",
-  "version": "1.6.19",
-  "private": true,
-  "type": "module",
-  "exports": {
-    "./contracts/ai": "./src/contracts/ai.ts",
-    "./contracts/asr": "./src/contracts/asr.ts",
-    "./contracts/jobs": "./src/contracts/jobs.ts",
-    "./contracts/recordings": "./src/contracts/recordings.ts",
-    "./db": "./src/db/index.ts",
-    "./db/schema": "./src/db/schema.ts",
-    "./db/repositories": "./src/db/repositories/index.ts",
-    "./db/repositories/*": "./src/db/repositories/*.ts",
-    "./db/drivers/result": "./src/db/drivers/result.ts",
-    "./db/drivers/batch": "./src/db/drivers/batch.ts",
-    "./services/*": "./src/services/*.ts",
-    "./lib/api-auth": "./src/lib/api-auth.ts",
-    "./lib/types": "./src/lib/types.ts",
-    "./lib/palette": "./src/lib/palette.ts",
-    "./lib/sidebar-nav": "./src/lib/sidebar-nav.ts",
-    "./lib/version": "./src/lib/version.ts",
-    "./runtime/env": "./src/runtime/env.ts",
-    "./runtime/context": "./src/runtime/context.ts",
-    "./handlers/*": "./src/handlers/*.ts"
-  },
-  "scripts": {
-    "lint": "eslint --max-warnings=0 src",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@nocoo/next-ai": "^0.4.0",
-    "ai": "^7.0.2",
-    "drizzle-orm": "^0.45.1"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.3.10",
-    "@types/node": "^20.19.37",
-    "eslint": "^10.2.1",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.59.0"
-  }
+	"name": "@lyre/api",
+	"version": "1.6.19",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./contracts/ai": "./src/contracts/ai.ts",
+		"./contracts/asr": "./src/contracts/asr.ts",
+		"./contracts/jobs": "./src/contracts/jobs.ts",
+		"./contracts/recordings": "./src/contracts/recordings.ts",
+		"./db": "./src/db/index.ts",
+		"./db/schema": "./src/db/schema.ts",
+		"./db/repositories": "./src/db/repositories/index.ts",
+		"./db/repositories/*": "./src/db/repositories/*.ts",
+		"./db/drivers/result": "./src/db/drivers/result.ts",
+		"./db/drivers/batch": "./src/db/drivers/batch.ts",
+		"./services/*": "./src/services/*.ts",
+		"./lib/api-auth": "./src/lib/api-auth.ts",
+		"./lib/types": "./src/lib/types.ts",
+		"./lib/palette": "./src/lib/palette.ts",
+		"./lib/sidebar-nav": "./src/lib/sidebar-nav.ts",
+		"./lib/version": "./src/lib/version.ts",
+		"./runtime/env": "./src/runtime/env.ts",
+		"./runtime/context": "./src/runtime/context.ts",
+		"./handlers/*": "./src/handlers/*.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@nocoo/next-ai": "^0.4.0",
+		"ai": "^7.0.2",
+		"drizzle-orm": "^0.45.1"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.10",
+		"@types/node": "^20.19.37",
+		"typescript": "^5.9.3"
+	}
 }

@@ -8,17 +8,17 @@
  */
 
 export {
-  AiProviderRegistry,
-  CUSTOM_PROVIDER_INFO,
-  isValidProvider,
-  type AiProviderInfo,
-  type SdkType,
-  type AuthType,
-  type AiConfig,
-  type AiSettingsInput,
+	type AiConfig,
+	type AiProviderInfo,
+	AiProviderRegistry,
+	type AiSettingsInput,
+	type AuthType,
+	CUSTOM_PROVIDER_INFO,
+	isValidProvider,
+	type SdkType,
 } from "@nocoo/next-ai";
 
-import { AiProviderRegistry, type AiProviderInfo } from "@nocoo/next-ai";
+import { type AiProviderInfo, AiProviderRegistry } from "@nocoo/next-ai";
 
 /**
  * lyre originally typed providers as a string union; next-ai's registry is
@@ -30,7 +30,7 @@ const defaultRegistry = new AiProviderRegistry();
 
 /** Built-in providers keyed by id (excludes "custom"). */
 export const AI_PROVIDERS: Record<string, AiProviderInfo> = Object.fromEntries(
-  defaultRegistry.getAll().map((p) => [p.id, p]),
+	defaultRegistry.getAll().map((p) => [p.id, p]),
 );
 
 /** All valid provider IDs (built-ins plus "custom"). */

@@ -31,21 +31,21 @@ const MAX_WAIT_MS = 60_000;
 import { existsSync } from "node:fs";
 
 async function ensureStaticAssets(): Promise<void> {
-  const staticDir = resolve(WORKER_DIR, "static");
-  if (existsSync(staticDir)) return;
+	const staticDir = resolve(WORKER_DIR, "static");
+	if (existsSync(staticDir)) return;
 
-  console.log("Step 0: static/ missing (worktree?) — running web:build...");
-  const proc = Bun.spawn(["bun", "run", "web:build"], {
-    cwd: ROOT,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) {
-    console.error("FATAL: web:build failed");
-    process.exit(1);
-  }
-  console.log("  Build complete.");
+	console.log("Step 0: static/ missing (worktree?) — running web:build...");
+	const proc = Bun.spawn(["bun", "run", "web:build"], {
+		cwd: ROOT,
+		stdout: "inherit",
+		stderr: "inherit",
+	});
+	const exitCode = await proc.exited;
+	if (exitCode !== 0) {
+		console.error("FATAL: web:build failed");
+		process.exit(1);
+	}
+	console.log("  Build complete.");
 }
 
 // ---------------------------------------------------------------------------
@@ -53,35 +53,35 @@ async function ensureStaticAssets(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function applySchema(): Promise<void> {
-  const schemaPath = resolve(ROOT, "e2e/schema.sql");
-  console.log("Step 1: Applying D1 schema to local database...");
+	const schemaPath = resolve(ROOT, "e2e/schema.sql");
+	console.log("Step 1: Applying D1 schema to local database...");
 
-  const proc = Bun.spawn(
-    [
-      "npx",
-      "wrangler",
-      "d1",
-      "execute",
-      "lyre-db-test",
-      "--env",
-      "test",
-      "--local",
-      "--file",
-      schemaPath,
-    ],
-    {
-      cwd: WORKER_DIR,
-      stdout: "inherit",
-      stderr: "inherit",
-    },
-  );
+	const proc = Bun.spawn(
+		[
+			"npx",
+			"wrangler",
+			"d1",
+			"execute",
+			"lyre-db-test",
+			"--env",
+			"test",
+			"--local",
+			"--file",
+			schemaPath,
+		],
+		{
+			cwd: WORKER_DIR,
+			stdout: "inherit",
+			stderr: "inherit",
+		},
+	);
 
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) {
-    console.error("FATAL: Failed to apply D1 schema");
-    process.exit(1);
-  }
-  console.log("  Schema applied.");
+	const exitCode = await proc.exited;
+	if (exitCode !== 0) {
+		console.error("FATAL: Failed to apply D1 schema");
+		process.exit(1);
+	}
+	console.log("  Schema applied.");
 }
 
 // ---------------------------------------------------------------------------
@@ -89,18 +89,15 @@ async function applySchema(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function spawnDevServer(): Subprocess {
-  console.log(`Step 2: Starting wrangler dev --env test on port ${E2E_PORT}...`);
+	console.log(`Step 2: Starting wrangler dev --env test on port ${E2E_PORT}...`);
 
-  const proc = Bun.spawn(
-    ["npx", "wrangler", "dev", "--env", "test", "--port", String(E2E_PORT)],
-    {
-      cwd: WORKER_DIR,
-      stdout: "inherit",
-      stderr: "inherit",
-    },
-  );
+	const proc = Bun.spawn(["npx", "wrangler", "dev", "--env", "test", "--port", String(E2E_PORT)], {
+		cwd: WORKER_DIR,
+		stdout: "inherit",
+		stderr: "inherit",
+	});
 
-  return proc;
+	return proc;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,29 +105,29 @@ function spawnDevServer(): Subprocess {
 // ---------------------------------------------------------------------------
 
 async function waitForServer(): Promise<void> {
-  const url = `http://localhost:${E2E_PORT}/api/live`;
-  const start = Date.now();
+	const url = `http://localhost:${E2E_PORT}/api/live`;
+	const start = Date.now();
 
-  console.log(`Step 3: Waiting for server at ${url}...`);
+	console.log(`Step 3: Waiting for server at ${url}...`);
 
-  while (Date.now() - start < MAX_WAIT_MS) {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
-      if (response.ok) {
-        const body = (await response.json()) as { status: string };
-        if (body.status === "ok") {
-          console.log(`  Server ready (${Date.now() - start}ms)`);
-          return;
-        }
-      }
-    } catch {
-      // Server not up yet
-    }
-    await Bun.sleep(POLL_INTERVAL_MS);
-  }
+	while (Date.now() - start < MAX_WAIT_MS) {
+		try {
+			const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
+			if (response.ok) {
+				const body = (await response.json()) as { status: string };
+				if (body.status === "ok") {
+					console.log(`  Server ready (${Date.now() - start}ms)`);
+					return;
+				}
+			}
+		} catch {
+			// Server not up yet
+		}
+		await Bun.sleep(POLL_INTERVAL_MS);
+	}
 
-  console.error(`FATAL: Server did not start within ${MAX_WAIT_MS}ms`);
-  process.exit(1);
+	console.error(`FATAL: Server did not start within ${MAX_WAIT_MS}ms`);
+	process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -138,15 +135,15 @@ async function waitForServer(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function runTests(): Promise<number> {
-  console.log("\nStep 4: Running E2E tests...\n");
+	console.log("\nStep 4: Running E2E tests...\n");
 
-  const proc = Bun.spawn(["bun", "test", "--timeout", "15000", "e2e/api/"], {
-    cwd: ROOT,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+	const proc = Bun.spawn(["bun", "test", "--timeout", "15000", "e2e/api/"], {
+		cwd: ROOT,
+		stdout: "inherit",
+		stderr: "inherit",
+	});
 
-  return proc.exited;
+	return proc.exited;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,29 +151,29 @@ async function runTests(): Promise<number> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  console.log("=== L2: API E2E Test Runner ===\n");
+	console.log("=== L2: API E2E Test Runner ===\n");
 
-  await ensureStaticAssets();
-  await applySchema();
-  const server = spawnDevServer();
-  let testExitCode = 1;
+	await ensureStaticAssets();
+	await applySchema();
+	const server = spawnDevServer();
+	let testExitCode = 1;
 
-  try {
-    await waitForServer();
-    testExitCode = await runTests();
-  } finally {
-    console.log("\nStep 5: Stopping dev server...");
-    server.kill();
-    await server.exited;
-    console.log("  Server stopped.");
-  }
+	try {
+		await waitForServer();
+		testExitCode = await runTests();
+	} finally {
+		console.log("\nStep 5: Stopping dev server...");
+		server.kill();
+		await server.exited;
+		console.log("  Server stopped.");
+	}
 
-  if (testExitCode !== 0) {
-    console.error("\n=== E2E tests FAILED ===\n");
-    process.exit(1);
-  }
+	if (testExitCode !== 0) {
+		console.error("\n=== E2E tests FAILED ===\n");
+		process.exit(1);
+	}
 
-  console.log("\n=== E2E tests PASSED ===\n");
+	console.log("\n=== E2E tests PASSED ===\n");
 }
 
 void main();

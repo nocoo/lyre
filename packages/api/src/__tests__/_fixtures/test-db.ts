@@ -6,8 +6,8 @@
  * this — the worker uses D1.
  */
 
-import Database from "better-sqlite3";
 import type { Database as BetterSqliteDb } from "better-sqlite3";
+import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../../db/schema";
 import type { LyreDb } from "../../db/types";
@@ -114,38 +114,38 @@ PRAGMA foreign_keys=ON;
 `;
 
 const TABLES = [
-  "device_tokens",
-  "settings",
-  "transcriptions",
-  "transcription_jobs",
-  "recording_tags",
-  "recordings",
-  "tags",
-  "folders",
-  "users",
+	"device_tokens",
+	"settings",
+	"transcriptions",
+	"transcription_jobs",
+	"recording_tags",
+	"recordings",
+	"tags",
+	"folders",
+	"users",
 ];
 
 let cached: { sqlite: BetterSqliteDb; db: LyreDb } | null = null;
 
 export function getTestDb(): LyreDb {
-  if (cached) return cached.db;
-  const sqlite = new Database(":memory:");
-  sqlite.exec(INIT_SQL);
-  const db = drizzle(sqlite, { schema }) as unknown as LyreDb;
-  cached = { sqlite, db };
-  return db;
+	if (cached) return cached.db;
+	const sqlite = new Database(":memory:");
+	sqlite.exec(INIT_SQL);
+	const db = drizzle(sqlite, { schema }) as unknown as LyreDb;
+	cached = { sqlite, db };
+	return db;
 }
 
 export function resetTestDb(): void {
-  if (!cached) {
-    getTestDb();
-    return;
-  }
-  for (const t of TABLES) {
-    try {
-      cached.sqlite.exec(`DELETE FROM ${t}`);
-    } catch {
-      /* table may not exist yet */
-    }
-  }
+	if (!cached) {
+		getTestDb();
+		return;
+	}
+	for (const t of TABLES) {
+		try {
+			cached.sqlite.exec(`DELETE FROM ${t}`);
+		} catch {
+			/* table may not exist yet */
+		}
+	}
 }

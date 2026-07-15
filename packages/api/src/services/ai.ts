@@ -7,21 +7,21 @@
  */
 
 import {
-  AiProviderRegistry,
-  CUSTOM_PROVIDER_INFO as NEXT_AI_CUSTOM_PROVIDER_INFO,
-  type AiProviderInfo,
+	type AiProviderInfo,
+	AiProviderRegistry,
+	CUSTOM_PROVIDER_INFO as NEXT_AI_CUSTOM_PROVIDER_INFO,
 } from "@nocoo/next-ai";
 
 // ── Re-exports from @nocoo/next-ai ──
 
 export {
-  AiProviderRegistry,
-  isValidProvider,
-  resolveAiConfig,
-  type SdkType,
-  type AiProviderInfo,
-  type AiConfig,
-  type AiSettingsInput,
+	type AiConfig,
+	type AiProviderInfo,
+	AiProviderRegistry,
+	type AiSettingsInput,
+	isValidProvider,
+	resolveAiConfig,
+	type SdkType,
 } from "@nocoo/next-ai";
 
 export { createAiModel } from "@nocoo/next-ai/server";
@@ -38,7 +38,7 @@ const defaultRegistry = new AiProviderRegistry();
 
 /** Built-in providers keyed by id (excludes "custom"). */
 export const AI_PROVIDERS: Record<string, AiProviderInfo> = Object.fromEntries(
-  defaultRegistry.getAll().map((p) => [p.id, p]),
+	defaultRegistry.getAll().map((p) => [p.id, p]),
 );
 
 /** All valid provider IDs (built-ins plus "custom"). */
@@ -51,11 +51,9 @@ export const CUSTOM_PROVIDER_INFO = NEXT_AI_CUSTOM_PROVIDER_INFO;
  * Look up a built-in provider's static config. Returns undefined for "custom"
  * or unknown providers, matching the previous lyre behaviour.
  */
-export function getProviderConfig(
-  providerId: string,
-): AiProviderInfo | undefined {
-  if (providerId === "custom") return undefined;
-  return defaultRegistry.get(providerId);
+export function getProviderConfig(providerId: string): AiProviderInfo | undefined {
+	if (providerId === "custom") return undefined;
+	return defaultRegistry.get(providerId);
 }
 
 // ── Summary generation (lyre-specific) ──
@@ -67,8 +65,8 @@ export function getProviderConfig(
 // dominant in the audio. English proper nouns / code / model names are
 // left untranslated — that's what "keep names verbatim" enforces.
 const OUTPUT_LANGUAGE_INSTRUCTION =
-  "Always write the summary in Simplified Chinese (简体中文), regardless of what language the transcript is in. " +
-  "Keep proper nouns, product names, and code identifiers verbatim in their original form (do not translate them).";
+	"Always write the summary in Simplified Chinese (简体中文), regardless of what language the transcript is in. " +
+	"Keep proper nouns, product names, and code identifiers verbatim in their original form (do not translate them).";
 
 const SUMMARY_PROMPT = `Summarize the following transcript concisely.
 
@@ -80,10 +78,10 @@ ${OUTPUT_LANGUAGE_INSTRUCTION}
 
 /** Build the summary prompt from a transcript. */
 export function buildSummaryPrompt(transcript: string): string {
-  if (!transcript.trim()) {
-    throw new Error("Transcript is empty");
-  }
-  return SUMMARY_PROMPT.replace("{transcript}", transcript);
+	if (!transcript.trim()) {
+		throw new Error("Transcript is empty");
+	}
+	return SUMMARY_PROMPT.replace("{transcript}", transcript);
 }
 
 /**
@@ -101,59 +99,58 @@ export function buildSummaryPrompt(transcript: string): string {
  * LLM from confusing them with the transcript.
  */
 export function buildSummaryPromptWithFeedback(
-  transcript: string,
-  opts: {
-    previousSummary?: string | null;
-    feedback?: string | null;
-  },
+	transcript: string,
+	opts: {
+		previousSummary?: string | null;
+		feedback?: string | null;
+	},
 ): string {
-  if (!transcript.trim()) {
-    throw new Error("Transcript is empty");
-  }
-  const prev = opts.previousSummary?.trim() ? opts.previousSummary : null;
-  const fb = opts.feedback?.trim() ? opts.feedback : null;
-  if (!prev && !fb) {
-    return buildSummaryPrompt(transcript);
-  }
+	if (!transcript.trim()) {
+		throw new Error("Transcript is empty");
+	}
+	const prev = opts.previousSummary?.trim() ? opts.previousSummary : null;
+	const fb = opts.feedback?.trim() ? opts.feedback : null;
+	if (!prev && !fb) {
+		return buildSummaryPrompt(transcript);
+	}
 
-  // Compose an instruction line matching what the caller actually
-  // supplied. Keeping this in one place (instead of three prompt
-  // constants) makes it easy to tweak wording later without duplication.
-  let instruction: string;
-  if (prev && fb) {
-    instruction =
-      "The previous attempt is included below. The user was unsatisfied with it " +
-      "and left feedback. Treat the feedback as an instruction: address the " +
-      "concerns and, using the full transcript as the source of truth, produce a " +
-      "new summary. Do not simply repeat the previous version — improve on it.";
-  } else if (prev) {
-    instruction =
-      "The previous attempt is included below. Produce an improved version " +
-      "based on the full transcript. Do not simply repeat the previous version.";
-  } else {
-    instruction =
-      "The user was unsatisfied with the previous summary and left this feedback. " +
-      "Treat it as an instruction: address the concerns and, combined with the " +
-      "transcript, produce a new summary.";
-  }
+	// Compose an instruction line matching what the caller actually
+	// supplied. Keeping this in one place (instead of three prompt
+	// constants) makes it easy to tweak wording later without duplication.
+	let instruction: string;
+	if (prev && fb) {
+		instruction =
+			"The previous attempt is included below. The user was unsatisfied with it " +
+			"and left feedback. Treat the feedback as an instruction: address the " +
+			"concerns and, using the full transcript as the source of truth, produce a " +
+			"new summary. Do not simply repeat the previous version — improve on it.";
+	} else if (prev) {
+		instruction =
+			"The previous attempt is included below. Produce an improved version " +
+			"based on the full transcript. Do not simply repeat the previous version.";
+	} else {
+		instruction =
+			"The user was unsatisfied with the previous summary and left this feedback. " +
+			"Treat it as an instruction: address the concerns and, combined with the " +
+			"transcript, produce a new summary.";
+	}
 
-  const sections: string[] = [
-    "Summarize the following transcript concisely.",
-    OUTPUT_LANGUAGE_INSTRUCTION,
-    instruction,
-  ];
-  if (prev) {
-    sections.push(`<previous-summary>\n${prev}\n</previous-summary>`);
-  }
-  if (fb) {
-    sections.push(`<user-feedback>\n${fb}\n</user-feedback>`);
-  }
-  sections.push(`<transcript>\n${transcript}\n</transcript>`);
-  return sections.join("\n\n");
+	const sections: string[] = [
+		"Summarize the following transcript concisely.",
+		OUTPUT_LANGUAGE_INSTRUCTION,
+		instruction,
+	];
+	if (prev) {
+		sections.push(`<previous-summary>\n${prev}\n</previous-summary>`);
+	}
+	if (fb) {
+		sections.push(`<user-feedback>\n${fb}\n</user-feedback>`);
+	}
+	sections.push(`<transcript>\n${transcript}\n</transcript>`);
+	return sections.join("\n\n");
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyGenerateFn = (opts: any) => Promise<{ text: string }>;
+type AnyGenerateFn = (opts: { prompt: string }) => Promise<{ text: string }>;
 
 /**
  * Generate a summary from a transcript.
@@ -163,10 +160,10 @@ type AnyGenerateFn = (opts: any) => Promise<{ text: string }>;
  * @returns The generated summary text
  */
 export async function generateSummary(
-  transcript: string,
-  generate: AnyGenerateFn,
+	transcript: string,
+	generate: AnyGenerateFn,
 ): Promise<string> {
-  const prompt = buildSummaryPrompt(transcript);
-  const result = await generate({ prompt });
-  return result.text;
+	const prompt = buildSummaryPrompt(transcript);
+	const result = await generate({ prompt });
+	return result.text;
 }

@@ -5,12 +5,8 @@
  * This module is the single point to swap between mock and real API.
  */
 
-import {
-  createMockAsrProvider,
-  createRealAsrProvider,
-  type AsrProvider,
-} from "./asr";
 import type { LyreEnv } from "../runtime/env";
+import { type AsrProvider, createMockAsrProvider, createRealAsrProvider } from "./asr";
 
 let provider: AsrProvider | null = null;
 
@@ -20,34 +16,34 @@ let provider: AsrProvider | null = null;
  * otherwise falls back to mock provider.
  */
 export function getAsrProvider(env: LyreEnv): AsrProvider {
-  if (provider) return provider;
+	if (provider) return provider;
 
-  const apiKey = env.DASHSCOPE_API_KEY;
+	const apiKey = env.DASHSCOPE_API_KEY;
 
-  if (apiKey) {
-    provider = createRealAsrProvider(apiKey);
-    return provider;
-  }
+	if (apiKey) {
+		provider = createRealAsrProvider(apiKey);
+		return provider;
+	}
 
-  // Default to mock provider with realistic timing
-  provider = createMockAsrProvider({
-    pollsUntilRunning: 1,
-    pollsUntilDone: 3,
-  });
+	// Default to mock provider with realistic timing
+	provider = createMockAsrProvider({
+		pollsUntilRunning: 1,
+		pollsUntilDone: 3,
+	});
 
-  return provider;
+	return provider;
 }
 
 /**
  * Reset the provider singleton (useful for testing).
  */
 export function resetAsrProvider(): void {
-  provider = null;
+	provider = null;
 }
 
 /**
  * Set a custom provider (useful for testing).
  */
 export function setAsrProvider(custom: AsrProvider): void {
-  provider = custom;
+	provider = custom;
 }

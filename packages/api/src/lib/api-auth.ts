@@ -9,9 +9,9 @@
  * bearer-auth middleware and the device-tokens handler.
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 
 /** SHA-256 hash a raw token string to hex. */
 export function hashToken(raw: string): string {
-  return createHash("sha256").update(raw).digest("hex");
+	return createHash("sha256").update(raw).digest("hex");
 }

@@ -8,35 +8,32 @@
  * `access-auth`'s job, so the two compose cleanly.
  */
 
-import type { MiddlewareHandler } from "hono";
+import { makeDeviceTokensRepo, makeUsersRepo } from "@lyre/api/db/repositories";
 import { hashToken } from "@lyre/api/lib/api-auth";
-import {
-  makeUsersRepo,
-  makeDeviceTokensRepo,
-} from "@lyre/api/db/repositories";
+import type { MiddlewareHandler } from "hono";
 import type { Bindings, Variables } from "../bindings";
 
 export function bearerAuth(): MiddlewareHandler<{
-  Bindings: Bindings;
-  Variables: Variables;
+	Bindings: Bindings;
+	Variables: Variables;
 }> {
-  return async (c, next) => {
-    const runtime = c.get("runtime");
-    const auth = c.req.header("Authorization");
-    if (auth?.startsWith("Bearer ")) {
-      const raw = auth.slice(7);
-      if (raw) {
-        const hash = hashToken(raw);
-        const deviceTokens = makeDeviceTokensRepo(runtime.db);
-        const tok = await deviceTokens.findByHash(hash);
-        if (tok) {
-          // Fire-and-forget last-used touch.
-          void deviceTokens.touchLastUsed(tok.id);
-          const users = makeUsersRepo(runtime.db);
-          runtime.user = (await users.findById(tok.userId)) ?? null;
-        }
-      }
-    }
-    await next();
-  };
+	return async (c, next) => {
+		const runtime = c.get("runtime");
+		const auth = c.req.header("Authorization");
+		if (auth?.startsWith("Bearer ")) {
+			const raw = auth.slice(7);
+			if (raw) {
+				const hash = hashToken(raw);
+				const deviceTokens = makeDeviceTokensRepo(runtime.db);
+				const tok = await deviceTokens.findByHash(hash);
+				if (tok) {
+					// Fire-and-forget last-used touch.
+					void deviceTokens.touchLastUsed(tok.id);
+					const users = makeUsersRepo(runtime.db);
+					runtime.user = (await users.findById(tok.userId)) ?? null;
+				}
+			}
+		}
+		await next();
+	};
 }

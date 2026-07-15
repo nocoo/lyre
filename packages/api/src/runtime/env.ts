@@ -7,49 +7,49 @@
  */
 
 export interface LyreEnv {
-  /** "production" | "development" | "test" | undefined */
-  NODE_ENV: string | undefined;
-  /** "1" enables Playwright auth bypass. */
-  PLAYWRIGHT: string | undefined;
-  /** "1" disables uploading the raw ASR JSON to OSS (used in tests). */
-  SKIP_OSS_ARCHIVE: string | undefined;
+	/** "production" | "development" | "test" | undefined */
+	NODE_ENV: string | undefined;
+	/** "1" enables Playwright auth bypass. */
+	PLAYWRIGHT: string | undefined;
+	/** "1" disables uploading the raw ASR JSON to OSS (used in tests). */
+	SKIP_OSS_ARCHIVE: string | undefined;
 
-  /**
-   * Cloudflare Access team domain (the subdomain before
-   * `.cloudflareaccess.com`). Used to build the JWKS URL and expected
-   * issuer. Missing => Access assertions are rejected (fail-closed).
-   */
-  CF_ACCESS_TEAM_DOMAIN: string | undefined;
-  /**
-   * Cloudflare Access Application AUD tag. Missing => Access
-   * assertions are rejected (fail-closed).
-   */
-  CF_ACCESS_AUD: string | undefined;
+	/**
+	 * Cloudflare Access team domain (the subdomain before
+	 * `.cloudflareaccess.com`). Used to build the JWKS URL and expected
+	 * issuer. Missing => Access assertions are rejected (fail-closed).
+	 */
+	CF_ACCESS_TEAM_DOMAIN: string | undefined;
+	/**
+	 * Cloudflare Access Application AUD tag. Missing => Access
+	 * assertions are rejected (fail-closed).
+	 */
+	CF_ACCESS_AUD: string | undefined;
 
-  // Aliyun OSS
-  OSS_ACCESS_KEY_ID: string | undefined;
-  OSS_ACCESS_KEY_SECRET: string | undefined;
-  OSS_BUCKET: string | undefined;
-  OSS_REGION: string | undefined;
-  OSS_ENDPOINT: string | undefined;
+	// Aliyun OSS
+	OSS_ACCESS_KEY_ID: string | undefined;
+	OSS_ACCESS_KEY_SECRET: string | undefined;
+	OSS_BUCKET: string | undefined;
+	OSS_REGION: string | undefined;
+	OSS_ENDPOINT: string | undefined;
 
-  // DashScope (ASR)
-  DASHSCOPE_API_KEY: string | undefined;
+	// DashScope (ASR)
+	DASHSCOPE_API_KEY: string | undefined;
 }
 
 /** Build a fresh `LyreEnv` with all fields undefined (useful for tests). */
 export function emptyEnv(): LyreEnv {
-  return {
-    NODE_ENV: undefined,
-    PLAYWRIGHT: undefined,
-    SKIP_OSS_ARCHIVE: undefined,
-    CF_ACCESS_TEAM_DOMAIN: undefined,
-    CF_ACCESS_AUD: undefined,
-    OSS_ACCESS_KEY_ID: undefined,
-    OSS_ACCESS_KEY_SECRET: undefined,
-    OSS_BUCKET: undefined,
-    OSS_REGION: undefined,
-    OSS_ENDPOINT: undefined,
-    DASHSCOPE_API_KEY: undefined,
-  };
+	return {
+		NODE_ENV: undefined,
+		PLAYWRIGHT: undefined,
+		SKIP_OSS_ARCHIVE: undefined,
+		CF_ACCESS_TEAM_DOMAIN: undefined,
+		CF_ACCESS_AUD: undefined,
+		OSS_ACCESS_KEY_ID: undefined,
+		OSS_ACCESS_KEY_SECRET: undefined,
+		OSS_BUCKET: undefined,
+		OSS_REGION: undefined,
+		OSS_ENDPOINT: undefined,
+		DASHSCOPE_API_KEY: undefined,
+	};
 }

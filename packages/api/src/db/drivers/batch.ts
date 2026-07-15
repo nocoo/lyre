@@ -17,34 +17,34 @@
 import type { LyreDb } from "../types";
 
 interface BatchableDb {
-  batch?: (statements: unknown[]) => Promise<unknown>;
-  transaction?: (cb: (tx: LyreDb) => unknown) => unknown;
+	batch?: (statements: unknown[]) => Promise<unknown>;
+	transaction?: (cb: (tx: LyreDb) => unknown) => unknown;
 }
 
 interface RunnableQuery {
-  run: () => unknown;
+	run: () => unknown;
 }
 
 export async function runBatch(
-  db: LyreDb,
-  build: (handle: LyreDb) => RunnableQuery[],
+	db: LyreDb,
+	build: (handle: LyreDb) => RunnableQuery[],
 ): Promise<void> {
-  const handle = db as BatchableDb;
-  if (typeof handle.batch === "function") {
-    // Cloudflare D1: ship queued statements as one atomic request.
-    const stmts = build(db);
-    await handle.batch(stmts as unknown[]);
-    return;
-  }
-  if (typeof handle.transaction === "function") {
-    // bun:sqlite / better-sqlite3: synchronous transaction.
-    handle.transaction((tx: LyreDb) => {
-      const stmts = build(tx);
-      for (const s of stmts) s.run();
-    });
-    return;
-  }
-  // Last-resort fallback — execute sequentially without atomicity.
-  const stmts = build(db);
-  for (const s of stmts) await s.run();
+	const handle = db as BatchableDb;
+	if (typeof handle.batch === "function") {
+		// Cloudflare D1: ship queued statements as one atomic request.
+		const stmts = build(db);
+		await handle.batch(stmts as unknown[]);
+		return;
+	}
+	if (typeof handle.transaction === "function") {
+		// bun:sqlite / better-sqlite3: synchronous transaction.
+		handle.transaction((tx: LyreDb) => {
+			const stmts = build(tx);
+			for (const s of stmts) s.run();
+		});
+		return;
+	}
+	// Last-resort fallback — execute sequentially without atomicity.
+	const stmts = build(db);
+	for (const s of stmts) await s.run();
 }

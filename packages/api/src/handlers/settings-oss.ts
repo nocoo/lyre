@@ -3,297 +3,289 @@
  */
 
 import { makeRepos } from "../db/repositories";
-import { listObjects, deleteObjects, type OssObject } from "../services/oss";
 import type { RuntimeContext } from "../runtime/context";
-import {
-  json,
-  badRequest,
-  unauthorized,
-  type HandlerResponse,
-} from "./http";
+import { deleteObjects, listObjects, type OssObject } from "../services/oss";
+import { badRequest, type HandlerResponse, json, unauthorized } from "./http";
 
 interface FileInfo {
-  key: string;
-  size: number;
-  lastModified: string;
-  hasDbRecord: boolean;
+	key: string;
+	size: number;
+	lastModified: string;
+	hasDbRecord: boolean;
 }
 interface TaskFolder {
-  id: string;
-  files: FileInfo[];
-  totalSize: number;
-  hasDbRecord: boolean;
+	id: string;
+	files: FileInfo[];
+	totalSize: number;
+	hasDbRecord: boolean;
 }
 interface UserBucket {
-  userId: string;
-  userName: string | null;
-  userEmail: string | null;
-  uploads: {
-    folders: TaskFolder[];
-    totalSize: number;
-    totalFiles: number;
-    orphanFolders: number;
-    orphanSize: number;
-  };
-  results: {
-    folders: TaskFolder[];
-    totalSize: number;
-    totalFiles: number;
-    orphanFolders: number;
-    orphanSize: number;
-  };
+	userId: string;
+	userName: string | null;
+	userEmail: string | null;
+	uploads: {
+		folders: TaskFolder[];
+		totalSize: number;
+		totalFiles: number;
+		orphanFolders: number;
+		orphanSize: number;
+	};
+	results: {
+		folders: TaskFolder[];
+		totalSize: number;
+		totalFiles: number;
+		orphanFolders: number;
+		orphanSize: number;
+	};
 }
 
-function groupByPrefix(
-  objects: OssObject[],
-  depth: number,
-): Map<string, OssObject[]> {
-  const groups = new Map<string, OssObject[]>();
-  for (const obj of objects) {
-    const parts = obj.key.split("/");
-    if (parts.length <= depth) continue;
-    const prefix = parts.slice(0, depth).join("/");
-    const group = groups.get(prefix) ?? [];
-    group.push(obj);
-    groups.set(prefix, group);
-  }
-  return groups;
+function groupByPrefix(objects: OssObject[], depth: number): Map<string, OssObject[]> {
+	const groups = new Map<string, OssObject[]>();
+	for (const obj of objects) {
+		const parts = obj.key.split("/");
+		if (parts.length <= depth) continue;
+		const prefix = parts.slice(0, depth).join("/");
+		const group = groups.get(prefix) ?? [];
+		group.push(obj);
+		groups.set(prefix, group);
+	}
+	return groups;
 }
 
-export async function ossScanHandler(
-  ctx: RuntimeContext,
-): Promise<HandlerResponse> {
-  if (!ctx.user) return unauthorized();
-  const { users, recordings, jobs } = makeRepos(ctx.db);
-  const [uploadObjects, resultObjects] = await Promise.all([
-    listObjects("uploads/", undefined, ctx.env),
-    listObjects("results/", undefined, ctx.env),
-  ]);
-  const allUsers = await users.findAll();
-  const userMap = new Map(allUsers.map((u) => [u.id, u]));
-  const jobUserMap = new Map<string, string>();
-  const recordingIdSet = new Set<string>();
-  for (const u of allUsers) {
-    const recs = await recordings.findAll(u.id);
-    for (const rec of recs) {
-      recordingIdSet.add(rec.id);
-      for (const job of await jobs.findByRecordingId(rec.id)) {
-        jobUserMap.set(job.id, u.id);
-      }
-    }
-  }
+export async function ossScanHandler(ctx: RuntimeContext): Promise<HandlerResponse> {
+	if (!ctx.user) return unauthorized();
+	const { users, recordings, jobs } = makeRepos(ctx.db);
+	const [uploadObjects, resultObjects] = await Promise.all([
+		listObjects("uploads/", undefined, ctx.env),
+		listObjects("results/", undefined, ctx.env),
+	]);
+	const allUsers = await users.findAll();
+	const userMap = new Map(allUsers.map((u) => [u.id, u]));
+	const jobUserMap = new Map<string, string>();
+	const recordingIdSet = new Set<string>();
+	for (const u of allUsers) {
+		const recs = await recordings.findAll(u.id);
+		for (const rec of recs) {
+			recordingIdSet.add(rec.id);
+			for (const job of await jobs.findByRecordingId(rec.id)) {
+				jobUserMap.set(job.id, u.id);
+			}
+		}
+	}
 
-  const uploadsByUser = new Map<string, OssObject[]>();
-  for (const obj of uploadObjects) {
-    const parts = obj.key.split("/");
-    if (parts.length < 4) continue;
-    const userId = parts[1]!;
-    const list = uploadsByUser.get(userId) ?? [];
-    list.push(obj);
-    uploadsByUser.set(userId, list);
-  }
+	const uploadsByUser = new Map<string, OssObject[]>();
+	for (const obj of uploadObjects) {
+		const parts = obj.key.split("/");
+		if (parts.length < 4) continue;
+		const userId = parts[1];
+		if (userId === undefined) continue;
+		const list = uploadsByUser.get(userId) ?? [];
+		list.push(obj);
+		uploadsByUser.set(userId, list);
+	}
 
-  const resultsByJobId = groupByPrefix(resultObjects, 2);
-  const resultsByUser = new Map<string, TaskFolder[]>();
-  const unlinkedResults: TaskFolder[] = [];
+	const resultsByJobId = groupByPrefix(resultObjects, 2);
+	const resultsByUser = new Map<string, TaskFolder[]>();
+	const unlinkedResults: TaskFolder[] = [];
 
-  for (const [prefix, objects] of resultsByJobId) {
-    const jobId = prefix.split("/")[1]!;
-    const hasJobRecord = (await jobs.findById(jobId)) !== undefined;
-    const folder: TaskFolder = {
-      id: jobId,
-      files: objects.map((o) => ({
-        key: o.key,
-        size: o.size,
-        lastModified: o.lastModified,
-        hasDbRecord: hasJobRecord,
-      })),
-      totalSize: objects.reduce((s, o) => s + o.size, 0),
-      hasDbRecord: hasJobRecord,
-    };
-    const userId = jobUserMap.get(jobId);
-    if (userId) {
-      const list = resultsByUser.get(userId) ?? [];
-      list.push(folder);
-      resultsByUser.set(userId, list);
-    } else {
-      unlinkedResults.push(folder);
-    }
-  }
+	for (const [prefix, objects] of resultsByJobId) {
+		const jobId = prefix.split("/")[1];
+		if (jobId === undefined) continue;
+		const hasJobRecord = (await jobs.findById(jobId)) !== undefined;
+		const folder: TaskFolder = {
+			id: jobId,
+			files: objects.map((o) => ({
+				key: o.key,
+				size: o.size,
+				lastModified: o.lastModified,
+				hasDbRecord: hasJobRecord,
+			})),
+			totalSize: objects.reduce((s, o) => s + o.size, 0),
+			hasDbRecord: hasJobRecord,
+		};
+		const userId = jobUserMap.get(jobId);
+		if (userId) {
+			const list = resultsByUser.get(userId) ?? [];
+			list.push(folder);
+			resultsByUser.set(userId, list);
+		} else {
+			unlinkedResults.push(folder);
+		}
+	}
 
-  const allUserIds = new Set([
-    ...uploadsByUser.keys(),
-    ...resultsByUser.keys(),
-  ]);
-  const userBuckets: UserBucket[] = [];
-  let totalSize = 0;
-  let totalFiles = 0;
-  let totalOrphanFiles = 0;
-  let totalOrphanSize = 0;
+	const allUserIds = new Set([...uploadsByUser.keys(), ...resultsByUser.keys()]);
+	const userBuckets: UserBucket[] = [];
+	let totalSize = 0;
+	let totalFiles = 0;
+	let totalOrphanFiles = 0;
+	let totalOrphanSize = 0;
 
-  for (const userId of allUserIds) {
-    const dbUser = userMap.get(userId);
-    const userUploads = uploadsByUser.get(userId) ?? [];
-    const uploadFolderMap = groupByPrefix(userUploads, 3);
-    const uploadFolders: TaskFolder[] = [];
-    let uploadTotalSize = 0;
-    let uploadTotalFiles = 0;
-    let uploadOrphanFolders = 0;
-    let uploadOrphanSize = 0;
-    for (const [prefix, objects] of uploadFolderMap) {
-      const recordingId = prefix.split("/")[2]!;
-      const hasRecord = recordingIdSet.has(recordingId);
-      const folderSize = objects.reduce((s, o) => s + o.size, 0);
-      uploadFolders.push({
-        id: recordingId,
-        files: objects.map((o) => ({
-          key: o.key,
-          size: o.size,
-          lastModified: o.lastModified,
-          hasDbRecord: hasRecord,
-        })),
-        totalSize: folderSize,
-        hasDbRecord: hasRecord,
-      });
-      uploadTotalSize += folderSize;
-      uploadTotalFiles += objects.length;
-      if (!hasRecord) {
-        uploadOrphanFolders++;
-        uploadOrphanSize += folderSize;
-      }
-    }
+	for (const userId of allUserIds) {
+		const dbUser = userMap.get(userId);
+		const userUploads = uploadsByUser.get(userId) ?? [];
+		const uploadFolderMap = groupByPrefix(userUploads, 3);
+		const uploadFolders: TaskFolder[] = [];
+		let uploadTotalSize = 0;
+		let uploadTotalFiles = 0;
+		let uploadOrphanFolders = 0;
+		let uploadOrphanSize = 0;
+		for (const [prefix, objects] of uploadFolderMap) {
+			const recordingId = prefix.split("/")[2];
+			if (recordingId === undefined) continue;
+			const hasRecord = recordingIdSet.has(recordingId);
+			const folderSize = objects.reduce((s, o) => s + o.size, 0);
+			uploadFolders.push({
+				id: recordingId,
+				files: objects.map((o) => ({
+					key: o.key,
+					size: o.size,
+					lastModified: o.lastModified,
+					hasDbRecord: hasRecord,
+				})),
+				totalSize: folderSize,
+				hasDbRecord: hasRecord,
+			});
+			uploadTotalSize += folderSize;
+			uploadTotalFiles += objects.length;
+			if (!hasRecord) {
+				uploadOrphanFolders++;
+				uploadOrphanSize += folderSize;
+			}
+		}
 
-    const userResults = resultsByUser.get(userId) ?? [];
-    let resultTotalSize = 0;
-    let resultTotalFiles = 0;
-    let resultOrphanFolders = 0;
-    let resultOrphanSize = 0;
-    for (const folder of userResults) {
-      resultTotalSize += folder.totalSize;
-      resultTotalFiles += folder.files.length;
-      if (!folder.hasDbRecord) {
-        resultOrphanFolders++;
-        resultOrphanSize += folder.totalSize;
-      }
-    }
+		const userResults = resultsByUser.get(userId) ?? [];
+		let resultTotalSize = 0;
+		let resultTotalFiles = 0;
+		let resultOrphanFolders = 0;
+		let resultOrphanSize = 0;
+		for (const folder of userResults) {
+			resultTotalSize += folder.totalSize;
+			resultTotalFiles += folder.files.length;
+			if (!folder.hasDbRecord) {
+				resultOrphanFolders++;
+				resultOrphanSize += folder.totalSize;
+			}
+		}
 
-    userBuckets.push({
-      userId,
-      userName: dbUser?.name ?? null,
-      userEmail: dbUser?.email ?? null,
-      uploads: {
-        folders: uploadFolders,
-        totalSize: uploadTotalSize,
-        totalFiles: uploadTotalFiles,
-        orphanFolders: uploadOrphanFolders,
-        orphanSize: uploadOrphanSize,
-      },
-      results: {
-        folders: userResults,
-        totalSize: resultTotalSize,
-        totalFiles: resultTotalFiles,
-        orphanFolders: resultOrphanFolders,
-        orphanSize: resultOrphanSize,
-      },
-    });
+		userBuckets.push({
+			userId,
+			userName: dbUser?.name ?? null,
+			userEmail: dbUser?.email ?? null,
+			uploads: {
+				folders: uploadFolders,
+				totalSize: uploadTotalSize,
+				totalFiles: uploadTotalFiles,
+				orphanFolders: uploadOrphanFolders,
+				orphanSize: uploadOrphanSize,
+			},
+			results: {
+				folders: userResults,
+				totalSize: resultTotalSize,
+				totalFiles: resultTotalFiles,
+				orphanFolders: resultOrphanFolders,
+				orphanSize: resultOrphanSize,
+			},
+		});
 
-    totalSize += uploadTotalSize + resultTotalSize;
-    totalFiles += uploadTotalFiles + resultTotalFiles;
-    totalOrphanFiles +=
-      (uploadOrphanFolders > 0
-        ? uploadFolders
-            .filter((f) => !f.hasDbRecord)
-            .reduce((n, f) => n + f.files.length, 0)
-        : 0) +
-      (resultOrphanFolders > 0
-        ? userResults
-            .filter((f) => !f.hasDbRecord)
-            .reduce((n, f) => n + f.files.length, 0)
-        : 0);
-    totalOrphanSize += uploadOrphanSize + resultOrphanSize;
-  }
+		totalSize += uploadTotalSize + resultTotalSize;
+		totalFiles += uploadTotalFiles + resultTotalFiles;
+		totalOrphanFiles +=
+			(uploadOrphanFolders > 0
+				? uploadFolders.filter((f) => !f.hasDbRecord).reduce((n, f) => n + f.files.length, 0)
+				: 0) +
+			(resultOrphanFolders > 0
+				? userResults.filter((f) => !f.hasDbRecord).reduce((n, f) => n + f.files.length, 0)
+				: 0);
+		totalOrphanSize += uploadOrphanSize + resultOrphanSize;
+	}
 
-  for (const folder of unlinkedResults) {
-    totalSize += folder.totalSize;
-    totalFiles += folder.files.length;
-    totalOrphanFiles += folder.files.length;
-    totalOrphanSize += folder.totalSize;
-  }
+	for (const folder of unlinkedResults) {
+		totalSize += folder.totalSize;
+		totalFiles += folder.files.length;
+		totalOrphanFiles += folder.files.length;
+		totalOrphanSize += folder.totalSize;
+	}
 
-  userBuckets.sort(
-    (a, b) =>
-      b.uploads.totalSize +
-      b.results.totalSize -
-      (a.uploads.totalSize + a.results.totalSize),
-  );
+	userBuckets.sort(
+		(a, b) =>
+			b.uploads.totalSize + b.results.totalSize - (a.uploads.totalSize + a.results.totalSize),
+	);
 
-  return json({
-    users: userBuckets,
-    unlinkedResults,
-    summary: {
-      totalSize,
-      totalFiles,
-      totalOrphanFiles,
-      totalOrphanSize,
-    },
-  });
+	return json({
+		users: userBuckets,
+		unlinkedResults,
+		summary: {
+			totalSize,
+			totalFiles,
+			totalOrphanFiles,
+			totalOrphanSize,
+		},
+	});
 }
 
 export interface OssCleanupInput {
-  keys?: unknown;
+	keys?: unknown;
 }
 
 export async function ossCleanupHandler(
-  ctx: RuntimeContext,
-  body: OssCleanupInput,
+	ctx: RuntimeContext,
+	body: OssCleanupInput,
 ): Promise<HandlerResponse> {
-  if (!ctx.user) return unauthorized();
-  const { recordings, jobs } = makeRepos(ctx.db);
-  const { keys } = body;
-  if (!Array.isArray(keys) || keys.length === 0) {
-    return badRequest("keys must be a non-empty array");
-  }
-  if (keys.length > 5000) {
-    return badRequest("Too many keys (max 5000 per request)");
-  }
-  const confirmedOrphans: string[] = [];
-  const skipped: unknown[] = [];
-  for (const key of keys) {
-    if (typeof key !== "string" || !key) {
-      skipped.push(key);
-      continue;
-    }
-    if (key.startsWith("uploads/")) {
-      const parts = key.split("/");
-      if (parts.length < 4) {
-        skipped.push(key);
-        continue;
-      }
-      const recordingId = parts[2]!;
-      if (await recordings.findById(recordingId)) skipped.push(key);
-      else confirmedOrphans.push(key);
-    } else if (key.startsWith("results/")) {
-      const parts = key.split("/");
-      if (parts.length < 3) {
-        skipped.push(key);
-        continue;
-      }
-      const jobId = parts[1]!;
-      if (await jobs.findById(jobId)) skipped.push(key);
-      else confirmedOrphans.push(key);
-    } else {
-      skipped.push(key);
-    }
-  }
+	if (!ctx.user) return unauthorized();
+	const { recordings, jobs } = makeRepos(ctx.db);
+	const { keys } = body;
+	if (!Array.isArray(keys) || keys.length === 0) {
+		return badRequest("keys must be a non-empty array");
+	}
+	if (keys.length > 5000) {
+		return badRequest("Too many keys (max 5000 per request)");
+	}
+	const confirmedOrphans: string[] = [];
+	const skipped: unknown[] = [];
+	for (const key of keys) {
+		if (typeof key !== "string" || !key) {
+			skipped.push(key);
+			continue;
+		}
+		if (key.startsWith("uploads/")) {
+			const parts = key.split("/");
+			if (parts.length < 4) {
+				skipped.push(key);
+				continue;
+			}
+			const recordingId = parts[2];
+			if (recordingId === undefined) {
+				skipped.push(key);
+				continue;
+			}
+			if (await recordings.findById(recordingId)) skipped.push(key);
+			else confirmedOrphans.push(key);
+		} else if (key.startsWith("results/")) {
+			const parts = key.split("/");
+			if (parts.length < 3) {
+				skipped.push(key);
+				continue;
+			}
+			const jobId = parts[1];
+			if (jobId === undefined) {
+				skipped.push(key);
+				continue;
+			}
+			if (await jobs.findById(jobId)) skipped.push(key);
+			else confirmedOrphans.push(key);
+		} else {
+			skipped.push(key);
+		}
+	}
 
-  let deleted = 0;
-  if (confirmedOrphans.length > 0) {
-    deleted = await deleteObjects(confirmedOrphans, undefined, ctx.env);
-  }
-  return json({
-    deleted,
-    requested: (keys as unknown[]).length,
-    confirmed: confirmedOrphans.length,
-    skipped: skipped.length,
-  });
+	let deleted = 0;
+	if (confirmedOrphans.length > 0) {
+		deleted = await deleteObjects(confirmedOrphans, undefined, ctx.env);
+	}
+	return json({
+		deleted,
+		requested: (keys as unknown[]).length,
+		confirmed: confirmedOrphans.length,
+		skipped: skipped.length,
+	});
 }

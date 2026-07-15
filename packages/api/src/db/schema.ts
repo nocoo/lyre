@@ -6,17 +6,17 @@
  * Transcription sentences are stored as JSON text.
  */
 
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // ── Users ──
 
 export const users = sqliteTable("users", {
-  id: text("id").primaryKey(),
-  email: text("email").notNull().unique(),
-  name: text("name"),
-  avatarUrl: text("avatar_url"),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
+	id: text("id").primaryKey(),
+	email: text("email").notNull().unique(),
+	name: text("name"),
+	avatarUrl: text("avatar_url"),
+	createdAt: integer("created_at").notNull(),
+	updatedAt: integer("updated_at").notNull(),
 });
 
 export type DbUser = typeof users.$inferSelect;
@@ -25,14 +25,14 @@ export type NewDbUser = typeof users.$inferInsert;
 // ── Folders (flat, one level only) ──
 
 export const folders = sqliteTable("folders", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  name: text("name").notNull(),
-  icon: text("icon").notNull().default("folder"), // lucide icon name
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => users.id),
+	name: text("name").notNull(),
+	icon: text("icon").notNull().default("folder"), // lucide icon name
+	createdAt: integer("created_at").notNull(),
+	updatedAt: integer("updated_at").notNull(),
 });
 
 export type DbFolder = typeof folders.$inferSelect;
@@ -41,32 +41,32 @@ export type NewDbFolder = typeof folders.$inferInsert;
 // ── Recordings ──
 
 export const recordings = sqliteTable("recordings", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  folderId: text("folder_id").references(() => folders.id),
-  title: text("title").notNull(),
-  description: text("description"),
-  fileName: text("file_name").notNull(),
-  fileSize: integer("file_size"),
-  duration: real("duration"), // seconds
-  format: text("format"),
-  sampleRate: integer("sample_rate"),
-  ossKey: text("oss_key").notNull(),
-  tags: text("tags").notNull().default("[]"), // Legacy JSON array (kept for migration compat)
-  notes: text("notes"),
-  aiSummary: text("ai_summary"),
-  aiSummaryStatus: text("ai_summary_status", {
-    enum: ["running", "succeeded", "failed"],
-  }),
-  aiSummaryError: text("ai_summary_error"),
-  recordedAt: integer("recorded_at"), // Unix ms — defaults to file lastModified on upload
-  status: text("status", {
-    enum: ["uploaded", "transcribing", "completed", "failed"],
-  }).notNull(),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => users.id),
+	folderId: text("folder_id").references(() => folders.id),
+	title: text("title").notNull(),
+	description: text("description"),
+	fileName: text("file_name").notNull(),
+	fileSize: integer("file_size"),
+	duration: real("duration"), // seconds
+	format: text("format"),
+	sampleRate: integer("sample_rate"),
+	ossKey: text("oss_key").notNull(),
+	tags: text("tags").notNull().default("[]"), // Legacy JSON array (kept for migration compat)
+	notes: text("notes"),
+	aiSummary: text("ai_summary"),
+	aiSummaryStatus: text("ai_summary_status", {
+		enum: ["running", "succeeded", "failed"],
+	}),
+	aiSummaryError: text("ai_summary_error"),
+	recordedAt: integer("recorded_at"), // Unix ms — defaults to file lastModified on upload
+	status: text("status", {
+		enum: ["uploaded", "transcribing", "completed", "failed"],
+	}).notNull(),
+	createdAt: integer("created_at").notNull(),
+	updatedAt: integer("updated_at").notNull(),
 });
 
 export type DbRecording = typeof recordings.$inferSelect;
@@ -75,22 +75,22 @@ export type NewDbRecording = typeof recordings.$inferInsert;
 // ── Transcription Jobs ──
 
 export const transcriptionJobs = sqliteTable("transcription_jobs", {
-  id: text("id").primaryKey(),
-  recordingId: text("recording_id")
-    .notNull()
-    .references(() => recordings.id),
-  taskId: text("task_id").notNull(), // DashScope task ID
-  requestId: text("request_id"),
-  status: text("status", {
-    enum: ["PENDING", "RUNNING", "SUCCEEDED", "FAILED"],
-  }).notNull(),
-  submitTime: text("submit_time"),
-  endTime: text("end_time"),
-  usageSeconds: integer("usage_seconds"),
-  errorMessage: text("error_message"),
-  resultUrl: text("result_url"),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
+	id: text("id").primaryKey(),
+	recordingId: text("recording_id")
+		.notNull()
+		.references(() => recordings.id),
+	taskId: text("task_id").notNull(), // DashScope task ID
+	requestId: text("request_id"),
+	status: text("status", {
+		enum: ["PENDING", "RUNNING", "SUCCEEDED", "FAILED"],
+	}).notNull(),
+	submitTime: text("submit_time"),
+	endTime: text("end_time"),
+	usageSeconds: integer("usage_seconds"),
+	errorMessage: text("error_message"),
+	resultUrl: text("result_url"),
+	createdAt: integer("created_at").notNull(),
+	updatedAt: integer("updated_at").notNull(),
 });
 
 export type DbTranscriptionJob = typeof transcriptionJobs.$inferSelect;
@@ -99,19 +99,19 @@ export type NewDbTranscriptionJob = typeof transcriptionJobs.$inferInsert;
 // ── Transcriptions ──
 
 export const transcriptions = sqliteTable("transcriptions", {
-  id: text("id").primaryKey(),
-  recordingId: text("recording_id")
-    .notNull()
-    .unique()
-    .references(() => recordings.id),
-  jobId: text("job_id")
-    .notNull()
-    .references(() => transcriptionJobs.id),
-  fullText: text("full_text").notNull(),
-  sentences: text("sentences").notNull().default("[]"), // JSON array
-  language: text("language"),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
+	id: text("id").primaryKey(),
+	recordingId: text("recording_id")
+		.notNull()
+		.unique()
+		.references(() => recordings.id),
+	jobId: text("job_id")
+		.notNull()
+		.references(() => transcriptionJobs.id),
+	fullText: text("full_text").notNull(),
+	sentences: text("sentences").notNull().default("[]"), // JSON array
+	language: text("language"),
+	createdAt: integer("created_at").notNull(),
+	updatedAt: integer("updated_at").notNull(),
 });
 
 export type DbTranscription = typeof transcriptions.$inferSelect;
@@ -120,12 +120,12 @@ export type NewDbTranscription = typeof transcriptions.$inferInsert;
 // ── Tags (per-user tag library) ──
 
 export const tags = sqliteTable("tags", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  name: text("name").notNull(),
-  createdAt: integer("created_at").notNull(),
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => users.id),
+	name: text("name").notNull(),
+	createdAt: integer("created_at").notNull(),
 });
 
 export type DbTag = typeof tags.$inferSelect;
@@ -134,16 +134,16 @@ export type NewDbTag = typeof tags.$inferInsert;
 // ── Recording ↔ Tag join table ──
 
 export const recordingTags = sqliteTable(
-  "recording_tags",
-  {
-    recordingId: text("recording_id")
-      .notNull()
-      .references(() => recordings.id, { onDelete: "cascade" }),
-    tagId: text("tag_id")
-      .notNull()
-      .references(() => tags.id, { onDelete: "cascade" }),
-  },
-  (table) => [primaryKey({ columns: [table.recordingId, table.tagId] })],
+	"recording_tags",
+	{
+		recordingId: text("recording_id")
+			.notNull()
+			.references(() => recordings.id, { onDelete: "cascade" }),
+		tagId: text("tag_id")
+			.notNull()
+			.references(() => tags.id, { onDelete: "cascade" }),
+	},
+	(table) => [primaryKey({ columns: [table.recordingId, table.tagId] })],
 );
 
 export type DbRecordingTag = typeof recordingTags.$inferSelect;
@@ -152,14 +152,14 @@ export type NewDbRecordingTag = typeof recordingTags.$inferInsert;
 // ── Device Tokens ──
 
 export const deviceTokens = sqliteTable("device_tokens", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  name: text("name").notNull(),
-  tokenHash: text("token_hash").notNull().unique(),
-  lastUsedAt: integer("last_used_at"),
-  createdAt: integer("created_at").notNull(),
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => users.id),
+	name: text("name").notNull(),
+	tokenHash: text("token_hash").notNull().unique(),
+	lastUsedAt: integer("last_used_at"),
+	createdAt: integer("created_at").notNull(),
 });
 
 export type DbDeviceToken = typeof deviceTokens.$inferSelect;
@@ -168,12 +168,12 @@ export type NewDbDeviceToken = typeof deviceTokens.$inferInsert;
 // ── Settings ──
 
 export const settings = sqliteTable("settings", {
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  key: text("key").notNull(),
-  value: text("value").notNull(),
-  updatedAt: integer("updated_at").notNull(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => users.id),
+	key: text("key").notNull(),
+	value: text("value").notNull(),
+	updatedAt: integer("updated_at").notNull(),
 });
 
 export type DbSetting = typeof settings.$inferSelect;

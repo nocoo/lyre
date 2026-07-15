@@ -6,57 +6,51 @@
  * `makeRepos(ctx.db)` once at the top.
  */
 
-export { makeUsersRepo, type UsersRepo } from "./users";
+export { type DeviceTokensRepo, makeDeviceTokensRepo } from "./device-tokens";
+export { type FoldersRepo, makeFoldersRepo } from "./folders";
+export { type JobsRepo, makeJobsRepo } from "./jobs";
 export { makeRecordingsRepo, type RecordingsRepo } from "./recordings";
-export { makeJobsRepo, type JobsRepo } from "./jobs";
-export {
-  makeTranscriptionsRepo,
-  type TranscriptionsRepo,
-} from "./transcriptions";
 export { makeSettingsRepo, type SettingsRepo } from "./settings";
-export { makeFoldersRepo, type FoldersRepo } from "./folders";
 export { makeTagsRepo, type TagsRepo } from "./tags";
-export { makeDeviceTokensRepo, type DeviceTokensRepo } from "./device-tokens";
+export {
+	makeTranscriptionsRepo,
+	type TranscriptionsRepo,
+} from "./transcriptions";
+export { makeUsersRepo, type UsersRepo } from "./users";
 
 import type { LyreDb } from "../types";
-import { makeUsersRepo, type UsersRepo } from "./users";
+import { type DeviceTokensRepo, makeDeviceTokensRepo } from "./device-tokens";
+import { type FoldersRepo, makeFoldersRepo } from "./folders";
+import { type JobsRepo, makeJobsRepo } from "./jobs";
 import { makeRecordingsRepo, type RecordingsRepo } from "./recordings";
-import { makeJobsRepo, type JobsRepo } from "./jobs";
-import {
-  makeTranscriptionsRepo,
-  type TranscriptionsRepo,
-} from "./transcriptions";
 import { makeSettingsRepo, type SettingsRepo } from "./settings";
-import { makeFoldersRepo, type FoldersRepo } from "./folders";
 import { makeTagsRepo, type TagsRepo } from "./tags";
-import {
-  makeDeviceTokensRepo,
-  type DeviceTokensRepo,
-} from "./device-tokens";
+import { makeTranscriptionsRepo, type TranscriptionsRepo } from "./transcriptions";
+import { makeUsersRepo, type UsersRepo } from "./users";
 
 /**
  * The whole repo bundle bound to a single Drizzle handle.
  */
 export interface Repos {
-  users: UsersRepo;
-  recordings: RecordingsRepo;
-  jobs: JobsRepo;
-  transcriptions: TranscriptionsRepo;
-  settings: SettingsRepo;
-  folders: FoldersRepo;
-  tags: TagsRepo;
-  deviceTokens: DeviceTokensRepo;
+	users: UsersRepo;
+	recordings: RecordingsRepo;
+	jobs: JobsRepo;
+	transcriptions: TranscriptionsRepo;
+	settings: SettingsRepo;
+	folders: FoldersRepo;
+	tags: TagsRepo;
+	deviceTokens: DeviceTokensRepo;
 }
 
 export function makeRepos(db: LyreDb): Repos {
-  return {
-    users: makeUsersRepo(db),
-    recordings: makeRecordingsRepo(db),
-    jobs: makeJobsRepo(db),
-    transcriptions: makeTranscriptionsRepo(db),
-    settings: makeSettingsRepo(db),
-    folders: makeFoldersRepo(db),
-    tags: makeTagsRepo(db),
-    deviceTokens: makeDeviceTokensRepo(db),
-  };
+	return {
+		users: makeUsersRepo(db),
+		recordings: makeRecordingsRepo(db),
+		jobs: makeJobsRepo(db),
+		transcriptions: makeTranscriptionsRepo(db),
+		settings: makeSettingsRepo(db),
+		folders: makeFoldersRepo(db),
+		tags: makeTagsRepo(db),
+		deviceTokens: makeDeviceTokensRepo(db),
+	};
 }

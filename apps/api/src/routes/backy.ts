@@ -13,26 +13,23 @@
  * dispatch by method inside a single `all()` handler.
  */
 
+import { backyPullHeadHandler, backyPullPostHandler } from "@lyre/api/handlers/settings-backy";
 import { Hono } from "hono";
-import {
-  backyPullHeadHandler,
-  backyPullPostHandler,
-} from "@lyre/api/handlers/settings-backy";
-import { toResponse } from "../lib/to-response";
 import type { Bindings, Variables } from "../bindings";
+import { toResponse } from "../lib/to-response";
 
 export const backy = new Hono<{
-  Bindings: Bindings;
-  Variables: Variables;
+	Bindings: Bindings;
+	Variables: Variables;
 }>();
 
 backy.all("/pull", async (c) => {
-  const method = c.req.method;
-  if (method === "HEAD") {
-    return toResponse(c, await backyPullHeadHandler(c.get("runtime")));
-  }
-  if (method === "POST") {
-    return toResponse(c, await backyPullPostHandler(c.get("runtime")));
-  }
-  return c.json({ error: "Method not allowed" }, 405);
+	const method = c.req.method;
+	if (method === "HEAD") {
+		return toResponse(c, await backyPullHeadHandler(c.get("runtime")));
+	}
+	if (method === "POST") {
+		return toResponse(c, await backyPullPostHandler(c.get("runtime")));
+	}
+	return c.json({ error: "Method not allowed" }, 405);
 });

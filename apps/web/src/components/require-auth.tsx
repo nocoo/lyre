@@ -9,15 +9,15 @@
  */
 
 import type { ReactNode } from "react";
-import { useMe } from "@/hooks/use-me";
 import LoadingScreen from "@/components/loading-screen";
+import { useMe } from "@/hooks/use-me";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { me, isLoading } = useMe();
+	const { me, isLoading } = useMe();
 
-  if (isLoading || !me) {
-    return <LoadingScreen />;
-  }
+	if (isLoading || !me) {
+		return <LoadingScreen />;
+	}
 
-  return <>{children}</>;
+	return <>{children}</>;
 }

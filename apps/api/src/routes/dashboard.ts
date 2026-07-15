@@ -1,13 +1,11 @@
-import { Hono } from "hono";
 import { dashboardHandler } from "@lyre/api/handlers/dashboard";
-import { toResponse } from "../lib/to-response";
+import { Hono } from "hono";
 import type { Bindings, Variables } from "../bindings";
+import { toResponse } from "../lib/to-response";
 
 export const dashboard = new Hono<{
-  Bindings: Bindings;
-  Variables: Variables;
+	Bindings: Bindings;
+	Variables: Variables;
 }>();
 
-dashboard.get("/", async (c) =>
-  toResponse(c, await dashboardHandler(c.get("runtime"))),
-);
+dashboard.get("/", async (c) => toResponse(c, await dashboardHandler(c.get("runtime"))));
