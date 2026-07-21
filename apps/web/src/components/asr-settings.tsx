@@ -3,6 +3,7 @@ import { AudioWaveform, Check, Loader2, Save } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface AsrSettings {
 	model: string;
@@ -46,9 +47,20 @@ export function AsrSettingsSection() {
 
 	if (!loaded) {
 		return (
-			<div className="rounded-card bg-secondary p-5 h-full">
-				<div className="flex items-center justify-center py-8">
-					<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+			<div className="rounded-card bg-secondary p-5 h-full flex flex-col">
+				<div className="mb-4 flex items-center gap-3">
+					<Skeleton className="h-9 w-9 rounded-lg" />
+					<div className="space-y-1.5">
+						<Skeleton className="h-4 w-32" />
+						<Skeleton className="h-3 w-56" />
+					</div>
+				</div>
+				<div className="space-y-1.5">
+					<Skeleton className="h-3 w-16" />
+					<Skeleton className="h-9 w-full rounded-md" />
+				</div>
+				<div className="mt-auto pt-4">
+					<Skeleton className="h-8 w-20 rounded-md" />
 				</div>
 			</div>
 		);

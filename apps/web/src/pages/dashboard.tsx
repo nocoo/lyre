@@ -16,7 +16,9 @@ import {
 	YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ChartCardSkeleton } from "@/components/ui/chart-card-skeleton";
+import { SectionHeaderSkeleton } from "@/components/ui/section-header-skeleton";
+import { StatCardSkeleton } from "@/components/ui/stat-card-skeleton";
 
 /** Safe chart color accessor (falls back to first color on out-of-bounds). */
 function chartColor(index: number): string {
@@ -551,30 +553,48 @@ export default function DashboardPage() {
 	if (loading) {
 		return (
 			<div className="space-y-8">
-				{/* Section header skeleton */}
-				<div className="flex items-start gap-3">
-					<Skeleton className="h-9 w-9 rounded-lg" />
-					<div className="space-y-2">
-						<Skeleton className="h-5 w-32" />
-						<Skeleton className="h-4 w-56" />
+				{/* ── Recordings section skeleton ── */}
+				<section className="space-y-4">
+					<SectionHeaderSkeleton />
+					{/* Stat cards (4 cols) */}
+					<div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+						{Array.from({ length: 4 }, (_, i) => `rec-stat-${i}`).map((key) => (
+							<StatCardSkeleton key={key} />
+						))}
 					</div>
-				</div>
-				{/* Stat cards skeleton */}
-				<div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
-					{Array.from({ length: 4 }, (_, i) => `stat-${i}`).map((key) => (
-						<div key={key} className="rounded-card bg-secondary p-4 md:p-5 space-y-2">
-							<Skeleton className="h-3 w-20" />
-							<Skeleton className="h-7 w-16" />
+					{/* Row 1: monthly bar (2/3) + status donut (1/3) */}
+					<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+						<div className="lg:col-span-2">
+							<ChartCardSkeleton titleWidth="w-40" chartHeight="h-[220px]" />
 						</div>
-					))}
-				</div>
-				{/* Chart row skeleton */}
-				<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-					<div className="lg:col-span-2">
-						<Skeleton className="h-[280px] rounded-card" />
+						<ChartCardSkeleton titleWidth="w-32" chartHeight="h-[220px]" />
 					</div>
-					<Skeleton className="h-[280px] rounded-card" />
-				</div>
+					{/* Row 2: duration area (2/3) + format bar (1/3) */}
+					<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+						<div className="lg:col-span-2">
+							<ChartCardSkeleton titleWidth="w-36" chartHeight="h-[220px]" />
+						</div>
+						<ChartCardSkeleton titleWidth="w-40" chartHeight="h-[220px]" />
+					</div>
+				</section>
+
+				{/* ── OSS Storage section skeleton ── */}
+				<section className="space-y-4">
+					<SectionHeaderSkeleton />
+					{/* Stat cards (3 cols on md+) */}
+					<div className="grid grid-cols-1 gap-3 md:gap-4 md:grid-cols-3">
+						{Array.from({ length: 3 }, (_, i) => `oss-stat-${i}`).map((key) => (
+							<StatCardSkeleton key={key} />
+						))}
+					</div>
+					{/* Row 1: storage-by-month (2/3) + breakdown donut (1/3) */}
+					<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+						<div className="lg:col-span-2">
+							<ChartCardSkeleton titleWidth="w-36" chartHeight="h-[220px]" />
+						</div>
+						<ChartCardSkeleton titleWidth="w-36" chartHeight="h-[220px]" />
+					</div>
+				</section>
 			</div>
 		);
 	}

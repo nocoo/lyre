@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface TokenListItem {
 	id: string;
@@ -117,8 +118,29 @@ export function DeviceTokensSection() {
 	if (loading) {
 		return (
 			<div className="rounded-card bg-secondary p-5">
-				<div className="flex items-center justify-center py-8">
-					<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+				<div className="mb-4 flex items-center justify-between">
+					<div className="flex items-center gap-3">
+						<Skeleton className="h-9 w-9 rounded-lg" />
+						<div className="space-y-1.5">
+							<Skeleton className="h-4 w-32" />
+							<Skeleton className="h-3 w-64" />
+						</div>
+					</div>
+					<Skeleton className="h-8 w-28 rounded-md" />
+				</div>
+				<div className="space-y-2">
+					{Array.from({ length: 3 }, (_, i) => `token-${i}`).map((key) => (
+						<div
+							key={key}
+							className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5"
+						>
+							<div className="min-w-0 flex-1 space-y-1.5">
+								<Skeleton className="h-4 w-40" />
+								<Skeleton className="h-3 w-32" />
+							</div>
+							<Skeleton className="h-8 w-8 rounded-md" />
+						</div>
+					))}
 				</div>
 			</div>
 		);

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface AiSettings {
 	provider: AiProvider | "";
@@ -208,8 +209,24 @@ export function AiSettingsSection() {
 	if (!loaded) {
 		return (
 			<div className="rounded-card bg-secondary p-5 h-full">
-				<div className="flex items-center justify-center py-8">
-					<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+				<div className="mb-4 flex items-center gap-3">
+					<Skeleton className="h-9 w-9 rounded-lg" />
+					<div className="space-y-1.5">
+						<Skeleton className="h-4 w-32" />
+						<Skeleton className="h-3 w-56" />
+					</div>
+				</div>
+				<div className="grid gap-4 sm:grid-cols-2">
+					{Array.from({ length: 4 }, (_, i) => `ai-field-${i}`).map((key) => (
+						<div key={key} className="space-y-1.5">
+							<Skeleton className="h-3 w-16" />
+							<Skeleton className="h-9 w-full rounded-md" />
+						</div>
+					))}
+				</div>
+				<div className="mt-4 flex items-center gap-2">
+					<Skeleton className="h-8 w-20 rounded-md" />
+					<Skeleton className="h-8 w-32 rounded-md" />
 				</div>
 			</div>
 		);

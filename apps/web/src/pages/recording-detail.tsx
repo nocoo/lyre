@@ -62,6 +62,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Markdown } from "@/components/ui/markdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { getTagColor } from "@/lib/badge-colors";
@@ -658,11 +659,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 	}, []);
 
 	if (loading) {
-		return (
-			<div className="flex min-h-full items-center justify-center">
-				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-			</div>
-		);
+		return <RecordingDetailSkeleton />;
 	}
 
 	if (!detail) return <NotFound />;
@@ -1642,6 +1639,68 @@ function EditableProperties({
 				)}
 				{titleSaving || notesSaving ? "Saving..." : "Save"}
 			</Button>
+		</div>
+	);
+}
+
+// ── Loading skeleton ──
+
+function RecordingDetailSkeleton() {
+	return (
+		<div className="space-y-5">
+			{/* Back link */}
+			<Skeleton className="h-4 w-40" />
+
+			{/* Header row: title + description on the left, action buttons on the right */}
+			<div className="flex items-start justify-between gap-4">
+				<div className="min-w-0 space-y-2">
+					<div className="flex items-center gap-2.5">
+						<Skeleton className="h-7 w-64" />
+						<Skeleton className="h-5 w-20 rounded-full" />
+					</div>
+					<Skeleton className="h-4 w-96" />
+				</div>
+				<div className="flex shrink-0 gap-2">
+					{Array.from({ length: 3 }, (_, i) => `hdr-btn-${i}`).map((key) => (
+						<Skeleton key={key} className="h-8 w-24 rounded-md" />
+					))}
+				</div>
+			</div>
+
+			{/* Row 1: Playback + File Info (2/3) | Properties (1/3) */}
+			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+				<div className="lg:col-span-2">
+					<div className="rounded-card bg-secondary p-4 h-full flex flex-col gap-4">
+						<Skeleton className="h-3 w-40" />
+						{/* Player row */}
+						<div className="flex items-center gap-3">
+							<Skeleton className="h-10 w-10 rounded-full" />
+							<Skeleton className="h-2 flex-1 rounded-full" />
+							<Skeleton className="h-4 w-14" />
+						</div>
+						{/* Metadata grid (mirrors 2×4 layout on lg) */}
+						<div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+							{Array.from({ length: 8 }, (_, i) => `meta-${i}`).map((key) => (
+								<div key={key} className="space-y-1.5">
+									<Skeleton className="h-3 w-16" />
+									<Skeleton className="h-4 w-24" />
+								</div>
+							))}
+						</div>
+					</div>
+				</div>
+				<div className="lg:col-span-1">
+					<div className="rounded-card bg-secondary p-4 h-full space-y-4">
+						{Array.from({ length: 4 }, (_, i) => `prop-${i}`).map((key) => (
+							<div key={key} className="space-y-1.5">
+								<Skeleton className="h-3 w-16" />
+								<Skeleton className="h-9 w-full rounded-md" />
+							</div>
+						))}
+						<Skeleton className="h-9 w-24 rounded-md" />
+					</div>
+				</div>
+			</div>
 		</div>
 	);
 }

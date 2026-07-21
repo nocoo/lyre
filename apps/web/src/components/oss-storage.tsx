@@ -34,6 +34,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatCardSkeleton } from "@/components/ui/stat-card-skeleton";
 import { cn } from "@/lib/utils";
 
 // ── Types (matching API response) ──
@@ -453,10 +455,29 @@ export function OssStorageSection() {
 
 	if (loading && !data) {
 		return (
-			<div className="rounded-card bg-secondary p-8">
-				<div className="flex flex-col items-center justify-center gap-3">
-					<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-					<p className="text-sm text-muted-foreground">Scanning OSS storage...</p>
+			<div className="space-y-6">
+				{/* Summary cards */}
+				<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+					{Array.from({ length: 4 }, (_, i) => `oss-sum-${i}`).map((key) => (
+						<StatCardSkeleton key={key} />
+					))}
+				</div>
+				{/* Action bar */}
+				<div className="flex items-center justify-between gap-3">
+					<Skeleton className="h-8 w-24 rounded-md" />
+					<Skeleton className="h-4 w-40" />
+				</div>
+				{/* User sections */}
+				<div className="space-y-2">
+					{Array.from({ length: 3 }, (_, i) => `oss-row-${i}`).map((key) => (
+						<div key={key} className="rounded-lg border border-border p-3 flex items-center gap-3">
+							<Skeleton className="h-4 w-4 rounded-sm" />
+							<Skeleton className="h-4 w-40" />
+							<div className="flex-1" />
+							<Skeleton className="h-4 w-16" />
+							<Skeleton className="h-4 w-20" />
+						</div>
+					))}
 				</div>
 			</div>
 		);

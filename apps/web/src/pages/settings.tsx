@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getTagColor } from "@/lib/badge-colors";
 import { cn } from "@/lib/utils";
 
@@ -326,9 +327,29 @@ function OrganizationSection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-card bg-secondary p-5 lg:col-span-2">
-				<div className="flex items-center justify-center py-8">
-					<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+			<div className="rounded-card bg-secondary p-5">
+				<div className="mb-4 flex items-center gap-3">
+					<Skeleton className="h-9 w-9 rounded-lg" />
+					<div className="space-y-1.5">
+						<Skeleton className="h-4 w-28" />
+						<Skeleton className="h-3 w-64" />
+					</div>
+				</div>
+				<div className="grid gap-6 lg:grid-cols-2">
+					{Array.from({ length: 2 }, (_, colIdx) => `org-col-${colIdx}`).map((colKey) => (
+						<div key={colKey} className="space-y-3">
+							<div className="flex items-center gap-2">
+								<Skeleton className="h-3.5 w-3.5 rounded-sm" />
+								<Skeleton className="h-3 w-16" />
+							</div>
+							<div className="space-y-2">
+								{Array.from({ length: 3 }, (_, i) => `${colKey}-row-${i}`).map((rowKey) => (
+									<Skeleton key={rowKey} className="h-6 w-full" />
+								))}
+							</div>
+							<Skeleton className="h-8 w-full rounded-md" />
+						</div>
+					))}
 				</div>
 			</div>
 		);
@@ -770,8 +791,25 @@ function BackySection() {
 	if (loading) {
 		return (
 			<div className="rounded-card bg-secondary p-5">
-				<div className="flex items-center justify-center py-8">
-					<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+				<div className="mb-4 flex items-center gap-3">
+					<Skeleton className="h-9 w-9 rounded-lg" />
+					<div className="space-y-1.5">
+						<Skeleton className="h-4 w-32" />
+						<Skeleton className="h-3 w-56" />
+					</div>
+				</div>
+				<div className="space-y-3 mb-4">
+					{Array.from({ length: 2 }, (_, i) => `backy-field-${i}`).map((key) => (
+						<div key={key} className="space-y-1.5">
+							<Skeleton className="h-3 w-24" />
+							<Skeleton className="h-9 w-full rounded-md" />
+						</div>
+					))}
+				</div>
+				<div className="flex gap-2">
+					<Skeleton className="h-8 w-20 rounded-md" />
+					<Skeleton className="h-8 w-24 rounded-md" />
+					<Skeleton className="h-8 w-24 rounded-md" />
 				</div>
 			</div>
 		);
@@ -1146,8 +1184,24 @@ function PullWebhookSection() {
 	if (loading) {
 		return (
 			<div className="rounded-card bg-secondary p-5">
-				<div className="flex items-center justify-center py-8">
-					<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+				<div className="mb-4 flex items-center gap-3">
+					<Skeleton className="h-9 w-9 rounded-lg" />
+					<div className="space-y-1.5">
+						<Skeleton className="h-4 w-28" />
+						<Skeleton className="h-3 w-64" />
+					</div>
+				</div>
+				<div className="space-y-3">
+					{Array.from({ length: 2 }, (_, i) => `pw-field-${i}`).map((key) => (
+						<div key={key} className="space-y-1.5">
+							<Skeleton className="h-3 w-24" />
+							<Skeleton className="h-9 w-full rounded-md" />
+						</div>
+					))}
+					<div className="flex gap-2 pt-2">
+						<Skeleton className="h-8 w-24 rounded-md" />
+						<Skeleton className="h-8 w-24 rounded-md" />
+					</div>
 				</div>
 			</div>
 		);
