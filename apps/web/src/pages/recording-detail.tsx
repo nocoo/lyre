@@ -1652,15 +1652,15 @@ function RecordingDetailSkeleton() {
 			<Skeleton className="h-4 w-40" />
 
 			{/* Header row: title + description on the left, action buttons on the right */}
-			<div className="flex items-start justify-between gap-4">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
 				<div className="min-w-0 space-y-2">
 					<div className="flex items-center gap-2.5">
-						<Skeleton className="h-7 w-64" />
+						<Skeleton className="h-7 w-40 sm:w-64" />
 						<Skeleton className="h-5 w-20 rounded-full" />
 					</div>
-					<Skeleton className="h-4 w-96" />
+					<Skeleton className="h-4 w-full max-w-[24rem]" />
 				</div>
-				<div className="flex shrink-0 gap-2">
+				<div className="flex shrink-0 flex-wrap gap-2">
 					{Array.from({ length: 3 }, (_, i) => `hdr-btn-${i}`).map((key) => (
 						<Skeleton key={key} className="h-8 w-24 rounded-md" />
 					))}
