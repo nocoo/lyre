@@ -1,5 +1,5 @@
 import { AlertCircle, Check, FileAudio, Loader2, Upload, X } from "lucide-react";
-import { type ChangeEvent, useCallback, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 // ── Types ──
 
@@ -121,6 +122,7 @@ export function UploadDialog({
 		percentage: 0,
 	});
 	const [errorMessage, setErrorMessage] = useState("");
+	const [dragging, setDragging] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const abortRef = useRef<XMLHttpRequest | null>(null);
 
@@ -131,6 +133,7 @@ export function UploadDialog({
 		setDescription("");
 		setProgress({ loaded: 0, total: 0, percentage: 0 });
 		setErrorMessage("");
+		setDragging(false);
 		abortRef.current = null;
 		if (fileInputRef.current) fileInputRef.current.value = "";
 	}, []);
@@ -149,9 +152,8 @@ export function UploadDialog({
 		[onOpenChange, reset],
 	);
 
-	const handleFileSelect = useCallback(
-		(e: ChangeEvent<HTMLInputElement>) => {
-			const selected = e.target.files?.[0];
+	const pickFile = useCallback(
+		(selected: File | null | undefined) => {
 			if (!selected) return;
 
 			// Validate type
@@ -180,6 +182,45 @@ export function UploadDialog({
 			setErrorMessage("");
 		},
 		[title],
+	);
+
+	const handleFileSelect = useCallback(
+		(e: ChangeEvent<HTMLInputElement>) => {
+			pickFile(e.target.files?.[0]);
+		},
+		[pickFile],
+	);
+
+	const handleDragEnter = useCallback((e: DragEvent<HTMLButtonElement>) => {
+		e.preventDefault();
+		e.stopPropagation();
+		setDragging(true);
+	}, []);
+
+	const handleDragOver = useCallback((e: DragEvent<HTMLButtonElement>) => {
+		e.preventDefault();
+		e.stopPropagation();
+		e.dataTransfer.dropEffect = "copy";
+		setDragging(true);
+	}, []);
+
+	const handleDragLeave = useCallback((e: DragEvent<HTMLButtonElement>) => {
+		e.preventDefault();
+		e.stopPropagation();
+		// Only clear if leaving the button entirely (not entering a child element)
+		const related = e.relatedTarget as Node | null;
+		if (related && e.currentTarget.contains(related)) return;
+		setDragging(false);
+	}, []);
+
+	const handleDrop = useCallback(
+		(e: DragEvent<HTMLButtonElement>) => {
+			e.preventDefault();
+			e.stopPropagation();
+			setDragging(false);
+			pickFile(e.dataTransfer.files?.[0]);
+		},
+		[pickFile],
 	);
 
 	const handleUpload = useCallback(async () => {
@@ -311,10 +352,25 @@ export function UploadDialog({
 							<button
 								type="button"
 								onClick={() => fileInputRef.current?.click()}
-								className="border-border hover:bg-accent hover:text-accent-foreground flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors"
+								onDragEnter={handleDragEnter}
+								onDragOver={handleDragOver}
+								onDragLeave={handleDragLeave}
+								onDrop={handleDrop}
+								className={cn(
+									"flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors",
+									dragging
+										? "border-primary bg-primary/5 text-primary"
+										: "border-border hover:bg-accent hover:text-accent-foreground",
+								)}
 							>
-								<Upload className="text-muted-foreground h-6 w-6" />
-								<span className="text-muted-foreground text-sm">Click to select file</span>
+								<Upload
+									className={cn("h-6 w-6", dragging ? "text-primary" : "text-muted-foreground")}
+								/>
+								<span
+									className={cn("text-sm", dragging ? "text-primary" : "text-muted-foreground")}
+								>
+									{dragging ? "Drop to add audio file" : "Click or drop an audio file here"}
+								</span>
 							</button>
 						) : (
 							<div className="border-border flex items-center gap-3 rounded-lg border p-3">
