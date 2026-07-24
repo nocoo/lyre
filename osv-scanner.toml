@@ -23,15 +23,3 @@ reason = "Indirect: picomatch via micromatch/tinyglobby (build-time only)"
 id = "GHSA-c2c7-rcm5-vvqj"
 ignoreUntil = 2026-09-23T00:00:00Z
 reason = "Indirect: picomatch via micromatch/tinyglobby (build-time only)"
-
-# ============================================
-# postcss (build-time tailwind/shadcn devDependency)
-# ============================================
-# GHSA-qx2v-qp2m-jg93 requires parsing untrusted CSS; here postcss only runs
-# at build time against developer-authored CSS, so the parsing-error vector
-# is not reachable.
-
-[[IgnoredVulns]]
-id = "GHSA-qx2v-qp2m-jg93"
-ignoreUntil = 2026-09-23T00:00:00Z
-reason = "Indirect: postcss via @tailwindcss/postcss/shadcn (build-time only, no untrusted CSS)"
