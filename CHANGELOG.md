@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.7.1 (2026-07-24)
+
+### 🚀 Features
+
+- feat(web): add per-page skeleton screens matching real layouts (a96b920)
+- feat(web): add drag-and-drop support to upload dialog (5b4d035)
+
+### 🐛 Bug Fixes
+
+- fix(web): stack recording detail skeleton header on mobile (d1f697b)
+- fix(web): make skeleton visible in dark mode (09416a4)
+
+### 📝 Other Changes
+
+- chore(deps): upgrade hono, react-router, postcss, sharp for CVE fixes (121bb82)
+- refactor(web): shrink first-paint loader to logo + pulse (da03a26)
+
+
 ## v1.7.0 (2026-07-15)
 
 ### 🚀 Features
