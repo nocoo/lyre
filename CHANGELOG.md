@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.7.2 (2026-09-03)
+
+### 🚀 Features
+
+- feat: fill sidebar avatar from lizheng.blog (641dcef)
+
 ## v1.7.1 (2026-07-24)
 
 ### 🚀 Features
