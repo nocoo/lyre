@@ -53,7 +53,6 @@ export default defineConfig({
 				"packages/api/src/db/drivers/**/*.ts",
 				// Frontend pure helpers — exercised by apps/web/src/__tests__/*.
 				"apps/web/src/lib/api.ts",
-				"apps/web/src/lib/theme-utils.ts",
 				"apps/web/src/lib/utils.ts",
 			],
 			exclude: [

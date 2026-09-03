@@ -36,6 +36,5 @@ const AVATAR_COLORS = [
 
 export function getAvatarColor(name: string): string {
 	const hash = hashString(name);
-	const index = hash % AVATAR_COLORS.length;
-	return AVATAR_COLORS[index] ?? AVATAR_COLORS[0];
+	return AVATAR_COLORS[hash % AVATAR_COLORS.length] as (typeof AVATAR_COLORS)[number];
 }
