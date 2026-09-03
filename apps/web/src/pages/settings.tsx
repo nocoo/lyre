@@ -611,6 +611,15 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 	);
 }
 
+function EnvironmentBadge({ environment, className }: { environment: string; className?: string }) {
+	const isProd = environment.toLowerCase() === "prod";
+	return (
+		<Badge variant={isProd ? "blue" : "success"} className={className}>
+			{environment.toUpperCase()}
+		</Badge>
+	);
+}
+
 function formatFileSize(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -822,12 +831,7 @@ function BackySection() {
 				<div className="flex-1">
 					<div className="flex items-center gap-2">
 						<h2 className="text-sm font-medium text-basalt-foreground">Remote Backup</h2>
-						<Badge
-							variant={environment === "prod" ? "destructive" : "secondary"}
-							className="text-[10px] px-1.5 py-0"
-						>
-							{environment}
-						</Badge>
+						<EnvironmentBadge environment={environment} className="px-1.5 py-0 text-[10px]" />
 					</div>
 					<p className="text-xs text-basalt-muted-foreground">
 						Push a full backup to Backy for off-site storage.
@@ -1061,12 +1065,10 @@ function BackySection() {
 							{history.recent_backups.map((entry) => (
 								<LayerCard.Well key={entry.id} className="px-3 py-2">
 									<div className="flex items-center gap-1.5 mb-1">
-										<Badge
-											variant={entry.environment === "prod" ? "destructive" : "secondary"}
-											className="text-[10px] px-1 py-0"
-										>
-											{entry.environment}
-										</Badge>
+										<EnvironmentBadge
+											environment={entry.environment}
+											className="px-1 py-0 text-[10px]"
+										/>
 										<span className="text-[10px] text-basalt-muted-foreground ml-auto">
 											{formatTimeAgo(entry.created_at)}
 										</span>
