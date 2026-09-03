@@ -1,7 +1,24 @@
 import { isNavItemActive, isRecordingsPath } from "@lyre/api/lib/sidebar-nav";
 import {
+	Avatar,
+	AvatarFallback,
+	AvatarImage,
+	Button,
+	Sidebar,
+	SidebarFooter,
+	SidebarGroup,
+	SidebarHeader,
+	SidebarIconItem,
+	SidebarItem,
+	SidebarNav,
+	SidebarSearch,
+	SidebarUser,
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@nocoo/basalt";
+import {
 	Bot,
-	ChevronUp,
 	HardDrive,
 	Key,
 	LayoutDashboard,
@@ -11,68 +28,14 @@ import {
 	Search,
 	Settings,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
-import { Link } from "react-router";
+import { useNavigate } from "react-router";
 import { GlobalSearch } from "@/components/global-search";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSession } from "@/hooks/use-me";
 import { ACCESS_LOGOUT_URL } from "@/lib/access";
 import { useLocationPathname } from "@/lib/router-compat";
 import { cn, getAvatarColor } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/version";
 import { FolderSidebar, FolderSidebarCollapsed } from "./folder-sidebar";
-import { useSidebar } from "./sidebar-context";
-
-// ── Nav group section (collapsible label + children) ──
-
-function NavGroupSection({
-	label,
-	defaultOpen = true,
-	children,
-}: {
-	label: string;
-	defaultOpen?: boolean;
-	children: ReactNode;
-}) {
-	const [open, setOpen] = useState(defaultOpen);
-
-	return (
-		<Collapsible open={open} onOpenChange={setOpen}>
-			<div className="px-3 mt-2">
-				<CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2.5">
-					<span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-						{label}
-					</span>
-					<span className="flex h-5 w-5 shrink-0 items-center justify-center">
-						<ChevronUp
-							className={cn(
-								"h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
-								!open && "rotate-180",
-							)}
-							strokeWidth={1.5}
-						/>
-					</span>
-				</CollapsibleTrigger>
-			</div>
-			<div
-				className="grid overflow-hidden"
-				style={{
-					gridTemplateRows: open ? "1fr" : "0fr",
-					transition: "grid-template-rows 200ms ease-out",
-				}}
-			>
-				<div className="min-h-0 overflow-hidden">
-					<div className="flex flex-col gap-0.5 px-3">{children}</div>
-				</div>
-			</div>
-		</Collapsible>
-	);
-}
-
-// ── Settings sub-items ──
 
 const settingsItems = [
 	{ href: "/settings", label: "General", icon: Settings, exact: true },
@@ -81,307 +44,217 @@ const settingsItems = [
 	{ href: "/settings/storage", label: "Storage", icon: HardDrive, exact: false },
 ];
 
-// ── Main sidebar ──
+function openSearch() {
+	document.dispatchEvent(
+		new KeyboardEvent("keydown", {
+			key: "k",
+			metaKey: true,
+			bubbles: true,
+		}),
+	);
+}
 
-export function Sidebar() {
+function signOut() {
+	window.location.href = ACCESS_LOGOUT_URL;
+}
+
+export function AppSidebar({
+	collapsed,
+	onToggle,
+}: {
+	collapsed: boolean;
+	onToggle: () => void;
+}) {
 	const pathname = useLocationPathname();
-	const { collapsed, toggle } = useSidebar();
+	const navigate = useNavigate();
 	const { data: session } = useSession();
-
 	const userName = session?.user?.name ?? "User";
 	const userImage = session?.user?.image;
 	const userInitial = userName[0] ?? "?";
-
 	const isRecordingsPage = isRecordingsPath(pathname);
 
-	return (
-		<TooltipProvider delayDuration={0}>
-			<aside
-				className={cn(
-					"sticky top-0 flex h-screen shrink-0 flex-col bg-background transition-all duration-300 ease-in-out overflow-hidden",
-					collapsed ? "w-[68px]" : "w-[260px]",
-				)}
-			>
-				{collapsed ? (
-					/* ── Collapsed (icon-only) view ── */
-					<div className="flex h-screen w-[68px] flex-col items-center">
-						{/* Logo */}
-						<div className="flex h-14 w-full items-center justify-start pl-6 pr-3">
-							<img src="/logo-24.png" alt="Lyre" width={24} height={24} className="shrink-0" />
-						</div>
+	const avatar = (
+		<Avatar className="h-9 w-9 shrink-0">
+			{userImage && <AvatarImage src={userImage} alt={userName} />}
+			<AvatarFallback className={cn("text-xs text-white", getAvatarColor(userName))}>
+				{userInitial}
+			</AvatarFallback>
+		</Avatar>
+	);
 
-						{/* Expand toggle */}
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<button
-									type="button"
-									onClick={toggle}
-									aria-label="Expand sidebar"
-									className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors mb-1"
-								>
-									<PanelLeft className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
-								</button>
-							</TooltipTrigger>
-							<TooltipContent side="right" sideOffset={8}>
-								Expand sidebar
-							</TooltipContent>
-						</Tooltip>
-
-						{/* Search icon */}
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<button
-									type="button"
-									onClick={() => {
-										document.dispatchEvent(
-											new KeyboardEvent("keydown", {
-												key: "k",
-												metaKey: true,
-												bubbles: true,
-											}),
-										);
-									}}
-									aria-label="Search (⌘K)"
-									className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors mb-2"
-								>
-									<Search className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
-								</button>
-							</TooltipTrigger>
-							<TooltipContent side="right" sideOffset={8}>
-								Search (⌘K)
-							</TooltipContent>
-						</Tooltip>
-
-						{/* Navigation icons */}
-						<nav className="flex flex-1 flex-col items-center gap-1 pt-1">
-							{/* Dashboard */}
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Link
-										to="/"
-										className={cn(
-											"relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-											pathname === "/"
-												? "bg-accent text-foreground"
-												: "text-muted-foreground hover:bg-accent hover:text-foreground",
-										)}
-									>
-										<LayoutDashboard className="h-4 w-4" strokeWidth={1.5} />
-									</Link>
-								</TooltipTrigger>
-								<TooltipContent side="right" sideOffset={8}>
-									Dashboard
-								</TooltipContent>
-							</Tooltip>
-
-							{/* Recordings */}
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Link
-										to="/recordings"
-										className={cn(
-											"relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-											isRecordingsPage
-												? "bg-accent text-foreground"
-												: "text-muted-foreground hover:bg-accent hover:text-foreground",
-										)}
-									>
-										<Mic className="h-4 w-4" strokeWidth={1.5} />
-									</Link>
-								</TooltipTrigger>
-								<TooltipContent side="right" sideOffset={8}>
-									Recordings
-								</TooltipContent>
-							</Tooltip>
-
-							{/* Folder tree — collapsed (icons only) */}
-							{isRecordingsPage && <FolderSidebarCollapsed />}
-
-							{/* Settings icons */}
-							{settingsItems.map((item) => {
-								const isActive = isNavItemActive(item, pathname);
-								return (
-									<Tooltip key={item.href}>
-										<TooltipTrigger asChild>
-											<Link
-												to={item.href}
-												className={cn(
-													"relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-													isActive
-														? "bg-accent text-foreground"
-														: "text-muted-foreground hover:bg-accent hover:text-foreground",
-												)}
-											>
-												<item.icon className="h-4 w-4" strokeWidth={1.5} />
-											</Link>
-										</TooltipTrigger>
-										<TooltipContent side="right" sideOffset={8}>
-											{item.label}
-										</TooltipContent>
-									</Tooltip>
-								);
-							})}
-						</nav>
-
-						{/* User avatar + sign out */}
-						<div className="py-3 flex justify-center w-full">
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<button
-										type="button"
-										onClick={() => (window.location.href = ACCESS_LOGOUT_URL)}
-										className="cursor-pointer"
-									>
-										<Avatar className="h-9 w-9">
-											{userImage && <AvatarImage src={userImage} alt={userName} />}
-											<AvatarFallback
-												className={cn("text-xs text-white", getAvatarColor(userName))}
-											>
-												{userInitial}
-											</AvatarFallback>
-										</Avatar>
-									</button>
-								</TooltipTrigger>
-								<TooltipContent side="right" sideOffset={8}>
-									{userName} — Sign out
-								</TooltipContent>
-							</Tooltip>
-						</div>
-					</div>
-				) : (
-					/* ── Expanded view ── */
-					<div className="flex h-screen w-[260px] flex-col">
-						{/* Header: logo + collapse toggle */}
-						<div className="px-3 h-14 flex items-center">
-							<div className="flex w-full items-center justify-between px-3">
-								<div className="flex items-center gap-3">
-									<img src="/logo-24.png" alt="Lyre" width={24} height={24} className="shrink-0" />
-									<span className="text-lg font-bold tracking-tighter">lyre</span>
-									<Badge
-										variant="secondary"
-										className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground"
-									>
-										v{APP_VERSION}
-									</Badge>
-								</div>
-								<button
-									type="button"
-									onClick={toggle}
-									aria-label="Collapse sidebar"
-									className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
-								>
-									<PanelLeft className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
-								</button>
-							</div>
-						</div>
-
-						{/* Search button */}
-						<div className="px-3 pb-1">
-							<button
-								type="button"
-								onClick={() => {
-									document.dispatchEvent(
-										new KeyboardEvent("keydown", {
-											key: "k",
-											metaKey: true,
-											bubbles: true,
-										}),
-									);
-								}}
-								className="flex w-full items-center gap-3 rounded-lg bg-secondary px-3 py-1.5 transition-colors hover:bg-accent cursor-pointer"
+	if (collapsed) {
+		return (
+			<Sidebar collapsed>
+				<SidebarHeader className="justify-center px-0">
+					<img src="/logo-24.png" alt="Lyre" width={24} height={24} className="h-5 w-5" />
+				</SidebarHeader>
+				<Button
+					variant="ghost"
+					size="icon"
+					className="mb-1 self-center"
+					onClick={onToggle}
+					aria-label="Expand sidebar"
+				>
+					<PanelLeft aria-hidden="true" />
+				</Button>
+				<Tooltip delayDuration={0}>
+					<TooltipTrigger asChild>
+						<SidebarIconItem
+							className="mb-2 self-center"
+							onClick={openSearch}
+							aria-label="Search (⌘K)"
+						>
+							<Search className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+						</SidebarIconItem>
+					</TooltipTrigger>
+					<TooltipContent side="right" sideOffset={8}>
+						Search (⌘K)
+					</TooltipContent>
+				</Tooltip>
+				<SidebarNav className="w-full items-center gap-1 pt-1">
+					<Tooltip delayDuration={0}>
+						<TooltipTrigger asChild>
+							<SidebarIconItem
+								active={pathname === "/"}
+								aria-label="Dashboard"
+								className="self-center"
+								onClick={() => navigate("/")}
 							>
-								<Search className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-								<span className="flex-1 text-left text-sm text-muted-foreground">Search</span>
-								<span className="flex h-7 w-7 shrink-0 items-center justify-center">
-									<kbd className="pointer-events-none hidden rounded-sm border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
-										⌘K
-									</kbd>
-								</span>
+								<LayoutDashboard className="h-4 w-4" strokeWidth={1.5} />
+							</SidebarIconItem>
+						</TooltipTrigger>
+						<TooltipContent side="right" sideOffset={8}>
+							Dashboard
+						</TooltipContent>
+					</Tooltip>
+					<Tooltip delayDuration={0}>
+						<TooltipTrigger asChild>
+							<SidebarIconItem
+								active={isRecordingsPage}
+								aria-label="Recordings"
+								className="self-center"
+								onClick={() => navigate("/recordings")}
+							>
+								<Mic className="h-4 w-4" strokeWidth={1.5} />
+							</SidebarIconItem>
+						</TooltipTrigger>
+						<TooltipContent side="right" sideOffset={8}>
+							Recordings
+						</TooltipContent>
+					</Tooltip>
+					{isRecordingsPage && <FolderSidebarCollapsed />}
+					{settingsItems.map((item) => {
+						const isActive = isNavItemActive(item, pathname);
+						return (
+							<Tooltip key={item.href} delayDuration={0}>
+								<TooltipTrigger asChild>
+									<SidebarIconItem
+										active={isActive}
+										aria-label={item.label}
+										className="self-center"
+										onClick={() => navigate(item.href)}
+									>
+										<item.icon className="h-4 w-4" strokeWidth={1.5} />
+									</SidebarIconItem>
+								</TooltipTrigger>
+								<TooltipContent side="right" sideOffset={8}>
+									{item.label}
+								</TooltipContent>
+							</Tooltip>
+						);
+					})}
+				</SidebarNav>
+				<SidebarFooter className="flex w-full justify-center px-0">
+					<Tooltip delayDuration={0}>
+						<TooltipTrigger asChild>
+							<button type="button" onClick={signOut} className="cursor-pointer" aria-label="Sign out">
+								{avatar}
 							</button>
-						</div>
+						</TooltipTrigger>
+						<TooltipContent side="right" sideOffset={8}>
+							{userName} — Sign out
+						</TooltipContent>
+					</Tooltip>
+				</SidebarFooter>
+				<GlobalSearch />
+			</Sidebar>
+		);
+	}
 
-						{/* Navigation groups */}
-						<nav className="flex-1 overflow-y-auto pt-1">
-							{/* General group */}
-							<NavGroupSection label="General">
-								<Link
-									to="/"
-									className={cn(
-										"flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-										pathname === "/"
-											? "bg-accent text-foreground"
-											: "text-muted-foreground hover:bg-accent hover:text-foreground",
-									)}
-								>
-									<LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-									<span className="flex-1 text-left">Dashboard</span>
-								</Link>
-							</NavGroupSection>
-
-							{/* Recordings group */}
-							<NavGroupSection label="Recordings">
-								<FolderSidebar />
-							</NavGroupSection>
-
-							{/* Settings group */}
-							<NavGroupSection label="Settings" defaultOpen>
-								{settingsItems.map((item) => {
-									const isActive = isNavItemActive(item, pathname);
-									return (
-										<Link
-											key={item.href}
-											to={item.href}
-											className={cn(
-												"flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-												isActive
-													? "bg-accent text-foreground"
-													: "text-muted-foreground hover:bg-accent hover:text-foreground",
-											)}
-										>
-											<item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-											<span className="flex-1 text-left">{item.label}</span>
-										</Link>
-									);
-								})}
-							</NavGroupSection>
-						</nav>
-
-						{/* User info + sign out */}
-						<div className="px-4 py-3">
-							<div className="flex items-center gap-3">
-								<Avatar className="h-9 w-9 shrink-0">
-									{userImage && <AvatarImage src={userImage} alt={userName} />}
-									<AvatarFallback className={cn("text-xs text-white", getAvatarColor(userName))}>
-										{userInitial}
-									</AvatarFallback>
-								</Avatar>
-								<div className="flex-1 min-w-0">
-									<p className="text-sm font-medium text-foreground truncate">{userName}</p>
-									<p className="text-xs text-muted-foreground truncate">
-										{session?.user?.email ?? ""}
-									</p>
-								</div>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<button
-											type="button"
-											onClick={() => (window.location.href = ACCESS_LOGOUT_URL)}
-											aria-label="Sign out"
-											className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-										>
-											<LogOut className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
-										</button>
-									</TooltipTrigger>
-									<TooltipContent side="top">Sign out</TooltipContent>
-								</Tooltip>
-							</div>
-						</div>
+	return (
+		<Sidebar collapsed={false}>
+			<SidebarHeader>
+				<div className="flex w-full items-center justify-between">
+					<div className="flex min-w-0 items-center gap-3">
+						<img src="/logo-24.png" alt="Lyre" width={24} height={24} className="h-5 w-5 shrink-0" />
+						<span className="truncate text-lg font-semibold text-basalt-foreground md:text-xl">
+							lyre
+						</span>
+						<span className="shrink-0 rounded-md bg-basalt-secondary px-1.5 py-0.5 text-[10px] leading-none font-medium text-basalt-muted-foreground">
+							v{APP_VERSION}
+						</span>
 					</div>
-				)}
-			</aside>
-
-			{/* Global search dialog (renders the CommandDialog) */}
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 shrink-0"
+						onClick={onToggle}
+						aria-label="Collapse sidebar"
+					>
+						<PanelLeft aria-hidden="true" />
+					</Button>
+				</div>
+			</SidebarHeader>
+			<div className="px-3 pb-1">
+				<SidebarSearch onClick={openSearch}>Search</SidebarSearch>
+			</div>
+			<SidebarNav className="pt-1">
+				<SidebarGroup label="General">
+					<SidebarItem active={pathname === "/"} onClick={() => navigate("/")}>
+						<LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+						<span className="flex-1 truncate text-left">Dashboard</span>
+					</SidebarItem>
+				</SidebarGroup>
+				<SidebarGroup label="Recordings">
+					<FolderSidebar />
+				</SidebarGroup>
+				<SidebarGroup label="Settings">
+					{settingsItems.map((item) => (
+						<SidebarItem
+							key={item.href}
+							active={isNavItemActive(item, pathname)}
+							onClick={() => navigate(item.href)}
+						>
+							<item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+							<span className="flex-1 truncate text-left">{item.label}</span>
+						</SidebarItem>
+					))}
+				</SidebarGroup>
+			</SidebarNav>
+			<SidebarFooter>
+				<SidebarUser
+					name={userName}
+					email={session?.user?.email ?? ""}
+					avatar={avatar}
+					action={
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8 shrink-0"
+									onClick={signOut}
+									aria-label="Sign out"
+								>
+									<LogOut className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent side="top">Sign out</TooltipContent>
+						</Tooltip>
+					}
+				/>
+			</SidebarFooter>
 			<GlobalSearch />
-		</TooltipProvider>
+		</Sidebar>
 	);
 }

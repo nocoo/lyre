@@ -1,158 +1,151 @@
-import { Menu, Rocket } from "lucide-react";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+	Button,
+	ContentIsland,
+	Sheet,
+	SheetContent,
+	SheetTitle,
+	ThemeToggle,
+} from "@nocoo/basalt";
+import { AppHeader } from "@nocoo/basalt/components/app-header";
+import { AppMain, AppShell as BasaltAppShell, AppSkipLink } from "@nocoo/basalt/components/app-shell";
+import { useTheme } from "@nocoo/basalt/providers/theme";
+import { Menu } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocationPathname } from "@/lib/router-compat";
-import { cn } from "@/lib/utils";
-import { Breadcrumbs } from "./breadcrumbs";
 import { BreadcrumbsProvider, useBreadcrumbs } from "./breadcrumbs-context";
 import { GitHubLink } from "./github-link";
-import { Sidebar } from "./sidebar";
-import { SidebarProvider, useSidebar } from "./sidebar-context";
-import { ThemeToggle } from "./theme-toggle";
+import { ScrollToTop } from "./scroll-to-top";
+import { AppSidebar } from "./sidebar";
 
 interface AppShellProps {
 	children: React.ReactNode;
 }
 
-/** Scroll threshold (px) before showing the scroll-to-top FAB */
 const SCROLL_THRESHOLD = 300;
+
+const FALLBACK_TITLE: Record<string, string> = {
+	"/": "Dashboard",
+	"/recordings": "Recordings",
+	"/settings": "General",
+	"/settings/ai": "AI Settings",
+	"/settings/storage": "Storage",
+	"/settings/tokens": "Device Tokens",
+};
+
+function headerTrail(
+	pathname: string,
+	items: { label: string; href?: string }[],
+): { breadcrumbs?: { href?: string; label: string }[]; title: string } {
+	if (pathname === "/") {
+		return { title: "Dashboard" };
+	}
+	const fallback = FALLBACK_TITLE[pathname] ?? (pathname.startsWith("/recordings/") ? "Detail" : "Lyre");
+	const current = items[items.length - 1];
+	const ancestors = [
+		{ href: "/", label: "Home" },
+		...items.slice(0, -1).map((item) => ({ href: item.href, label: item.label })),
+	];
+	return {
+		breadcrumbs: ancestors,
+		title: current?.label ?? fallback,
+	};
+}
 
 function AppShellInner({ children }: AppShellProps) {
 	const isMobile = useIsMobile();
-	const { mobileOpen, setMobileOpen } = useSidebar();
+	const [collapsed, setCollapsed] = useState(false);
+	const [mobileOpen, setMobileOpen] = useState(false);
 	const { items: breadcrumbItems } = useBreadcrumbs();
 	const pathname = useLocationPathname();
-	const scrollRef = useRef<HTMLDivElement>(null);
+	const { theme } = useTheme();
 	const [showScrollTop, setShowScrollTop] = useState(false);
+	const trail = headerTrail(pathname, breadcrumbItems);
 
-	// Close mobile sidebar on route change
-	// biome-ignore lint/correctness/useExhaustiveDependencies: pathname triggers the effect on route change
 	useEffect(() => {
 		setMobileOpen(false);
-	}, [pathname, setMobileOpen]);
+	}, [pathname]);
 
-	// Prevent body scroll when mobile sidebar is open
 	useEffect(() => {
-		if (mobileOpen) {
-			document.body.style.overflow = "hidden";
-		} else {
-			document.body.style.overflow = "";
-		}
+		document.body.style.overflow = mobileOpen ? "hidden" : "";
 		return () => {
 			document.body.style.overflow = "";
 		};
 	}, [mobileOpen]);
 
-	// Track scroll position on the content container
 	useEffect(() => {
-		const el = scrollRef.current;
-		if (!el) return;
-
-		const handleScroll = () => {
-			setShowScrollTop(el.scrollTop > SCROLL_THRESHOLD);
-		};
-
-		el.addEventListener("scroll", handleScroll, { passive: true });
-		return () => el.removeEventListener("scroll", handleScroll);
-	}, []);
-
-	// Reset scroll position on route change
-	// biome-ignore lint/correctness/useExhaustiveDependencies: pathname triggers the effect on route change
-	useEffect(() => {
-		scrollRef.current?.scrollTo({ top: 0 });
+		document.getElementById("island-scroll")?.scrollTo({ top: 0 });
+		setShowScrollTop(false);
 	}, [pathname]);
 
 	const scrollToTop = useCallback(() => {
-		scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+		document.getElementById("island-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
 	}, []);
 
+	const sidebar = (
+		<AppSidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
+	);
+
 	return (
-		<div className="flex min-h-screen w-full bg-background">
-			{/* Desktop sidebar */}
-			{!isMobile && (
-				<Suspense>
-					<Sidebar />
-				</Suspense>
+		<BasaltAppShell>
+			<AppSkipLink>Skip to main content</AppSkipLink>
+			{!isMobile ? (
+				sidebar
+			) : (
+				<Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+					<SheetContent
+						side="left"
+						className="w-[260px] max-w-[260px] border-0 bg-basalt-background p-0"
+					>
+						<SheetTitle className="sr-only">Navigation</SheetTitle>
+						<AppSidebar collapsed={false} onToggle={() => setMobileOpen(false)} />
+					</SheetContent>
+				</Sheet>
 			)}
-
-			{/* Mobile overlay */}
-			{isMobile && mobileOpen && (
-				<>
-					<button
-						type="button"
-						aria-label="Close navigation menu"
-						className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
-						onClick={() => setMobileOpen(false)}
-					/>
-					<div className="fixed inset-y-0 left-0 z-50 w-[260px]">
-						<Suspense>
-							<Sidebar />
-						</Suspense>
-					</div>
-				</>
-			)}
-
-			<main className="flex flex-1 flex-col min-h-screen min-w-0">
-				{/* Header */}
-				<header className="flex h-14 shrink-0 items-center justify-between px-4 md:px-6">
-					<div className="flex items-center gap-3">
-						{isMobile && (
-							<button
-								type="button"
+			<AppMain>
+				<AppHeader
+					leading={
+						isMobile ? (
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-8 w-8"
 								onClick={() => setMobileOpen(true)}
-								aria-label="Open navigation menu"
-								className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+								aria-label="Open navigation"
 							>
-								<Menu className="h-5 w-5" aria-hidden="true" strokeWidth={1.5} />
-							</button>
-						)}
-						<Breadcrumbs items={[{ label: "Home", href: "/" }, ...breadcrumbItems]} />
-					</div>
-					<div className="flex items-center gap-1">
-						<GitHubLink />
-						<ThemeToggle />
-					</div>
-				</header>
-
-				{/* Floating island content area */}
-				<div className="flex-1 px-2 pb-2 md:px-3 md:pb-3 relative">
-					<div
-						ref={scrollRef}
-						className="h-full rounded-[16px] md:rounded-[20px] bg-card p-3 md:p-5 overflow-y-auto"
+								<Menu aria-hidden="true" />
+							</Button>
+						) : null
+					}
+					breadcrumbs={trail.breadcrumbs}
+					title={trail.title}
+					actions={
+						<>
+							<GitHubLink />
+							<ThemeToggle aria-label={`Toggle theme (now ${theme})`} />
+						</>
+					}
+				/>
+				<div className="relative flex min-h-0 flex-1 flex-col px-2 pb-2 md:px-3 md:pb-3">
+					<ContentIsland
+						id="island-scroll"
+						onScroll={(event) => {
+							setShowScrollTop(event.currentTarget.scrollTop > SCROLL_THRESHOLD);
+						}}
 					>
 						{children}
-					</div>
-
-					{/* Scroll-to-top FAB */}
-					<button
-						type="button"
-						onClick={scrollToTop}
-						aria-label="Scroll to top"
-						className={cn(
-							"absolute bottom-6 right-6 z-30 flex h-10 w-10 items-center justify-center rounded-full",
-							"bg-primary text-primary-foreground shadow-lg",
-							"transition-all duration-300 ease-out",
-							"hover:bg-primary/90 hover:scale-110 active:scale-95",
-							"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-							showScrollTop
-								? "opacity-100 translate-y-0"
-								: "opacity-0 translate-y-4 pointer-events-none",
-						)}
-					>
-						<Rocket className="h-4.5 w-4.5" strokeWidth={1.5} />
-					</button>
+					</ContentIsland>
+					<ScrollToTop visible={showScrollTop} onClick={scrollToTop} />
 				</div>
-			</main>
-		</div>
+			</AppMain>
+		</BasaltAppShell>
 	);
 }
 
 export function AppShell({ children }: AppShellProps) {
 	return (
-		<SidebarProvider>
-			<BreadcrumbsProvider>
-				<AppShellInner>{children}</AppShellInner>
-			</BreadcrumbsProvider>
-		</SidebarProvider>
+		<BreadcrumbsProvider>
+			<AppShellInner>{children}</AppShellInner>
+		</BreadcrumbsProvider>
 	);
 }

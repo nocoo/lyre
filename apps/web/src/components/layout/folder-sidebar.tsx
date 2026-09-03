@@ -32,25 +32,25 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+	Input,
+	Label,
+	SidebarIconItem,
+	SidebarItem,
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@nocoo/basalt";
 import { useLocationPathname } from "@/lib/router-compat";
 import { cn } from "@/lib/utils";
 
@@ -95,8 +95,8 @@ function IconPicker({ value, onChange }: { value: string; onChange: (icon: strin
 					className={cn(
 						"flex h-9 w-9 items-center justify-center rounded-md transition-colors",
 						value === name
-							? "bg-accent text-foreground ring-2 ring-ring"
-							: "text-muted-foreground hover:bg-accent hover:text-foreground",
+							? "bg-basalt-accent text-basalt-foreground ring-2 ring-basalt-ring"
+							: "text-basalt-muted-foreground hover:bg-basalt-accent hover:text-basalt-foreground",
 					)}
 				>
 					<Icon className="h-4 w-4" strokeWidth={1.5} />
@@ -123,25 +123,16 @@ function FolderItem({
 }) {
 	return (
 		<div className="group relative">
-			<button
-				type="button"
-				onClick={onSelect}
-				className={cn(
-					"flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-					isActive
-						? "bg-accent text-foreground"
-						: "text-muted-foreground hover:bg-accent hover:text-foreground",
-				)}
-			>
+			<SidebarItem active={isActive} onClick={onSelect}>
 				{renderFolderIcon(isActive ? "folder-open" : folder.icon)}
 				<span className="flex-1 truncate text-left">{folder.name}</span>
-			</button>
-			<div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+			</SidebarItem>
+			<div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100">
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<button
 							type="button"
-							className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+							className="flex h-6 w-6 items-center justify-center rounded-md text-basalt-muted-foreground transition-colors hover:bg-basalt-accent hover:text-basalt-foreground"
 							onClick={(e) => e.stopPropagation()}
 						>
 							<MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -152,7 +143,10 @@ function FolderItem({
 							<Pencil className="h-4 w-4" />
 							Rename
 						</DropdownMenuItem>
-						<DropdownMenuItem variant="destructive" onClick={() => onDelete(folder)}>
+						<DropdownMenuItem
+							className="text-basalt-destructive"
+							onClick={() => onDelete(folder)}
+						>
 							<Trash2 className="h-4 w-4" />
 							Delete
 						</DropdownMenuItem>
@@ -208,7 +202,7 @@ function FolderDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-sm">
+			<DialogContent size="sm">
 				<form onSubmit={handleSubmit}>
 					<DialogHeader>
 						<DialogTitle>{isEdit ? "Rename Folder" : "New Folder"}</DialogTitle>
@@ -285,7 +279,7 @@ function DeleteFolderDialog({
 				</AlertDialogHeader>
 				<AlertDialogFooter>
 					<AlertDialogCancel>Cancel</AlertDialogCancel>
-					<AlertDialogAction variant="destructive" onClick={handleDelete} disabled={deleting}>
+					<AlertDialogAction onClick={handleDelete} disabled={deleting}>
 						{deleting ? "Deleting..." : "Delete"}
 					</AlertDialogAction>
 				</AlertDialogFooter>
@@ -406,35 +400,18 @@ export function FolderSidebar() {
 
 	return (
 		<>
-			{/* All recordings */}
-			<button
-				type="button"
+			<SidebarItem
+				active={isRecordingsPage && folderParam === null}
 				onClick={() => handleFolderSelect(null)}
-				className={cn(
-					"flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-					isRecordingsPage && folderParam === null
-						? "bg-accent text-foreground"
-						: "text-muted-foreground hover:bg-accent hover:text-foreground",
-				)}
 			>
 				<Mic className="h-4 w-4 shrink-0" strokeWidth={1.5} />
 				<span className="truncate">All Recordings</span>
-			</button>
+			</SidebarItem>
 
-			{/* Unfiled */}
-			<button
-				type="button"
-				onClick={() => handleFolderSelect("unfiled")}
-				className={cn(
-					"flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal transition-colors",
-					folderParam === "unfiled"
-						? "bg-accent text-foreground"
-						: "text-muted-foreground hover:bg-accent hover:text-foreground",
-				)}
-			>
+			<SidebarItem active={folderParam === "unfiled"} onClick={() => handleFolderSelect("unfiled")}>
 				<Inbox className="h-4 w-4 shrink-0" strokeWidth={1.5} />
 				<span className="truncate">Unfiled</span>
-			</button>
+			</SidebarItem>
 
 			{/* Dynamic folders */}
 			{folders.map((folder) => (
@@ -448,15 +425,10 @@ export function FolderSidebar() {
 				/>
 			))}
 
-			{/* New folder button */}
-			<button
-				type="button"
-				onClick={handleCreate}
-				className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-normal text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-			>
+			<SidebarItem onClick={handleCreate}>
 				<FolderPlus className="h-4 w-4 shrink-0" strokeWidth={1.5} />
 				<span className="truncate">New Folder</span>
-			</button>
+			</SidebarItem>
 
 			{/* Dialogs */}
 			<FolderDialog
@@ -516,65 +488,50 @@ export function FolderSidebarCollapsed() {
 	};
 
 	return (
-		<div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-border pt-2 mt-2">
-			{/* All recordings */}
-			<Tooltip>
+		<div className="mt-2 flex flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-basalt-border pt-2">
+			<Tooltip delayDuration={0}>
 				<TooltipTrigger asChild>
-					<button
-						type="button"
+					<SidebarIconItem
+						active={isRecordingsPage && folderParam === null}
+						aria-label="All Recordings"
+						className="self-center"
 						onClick={() => handleFolderSelect(null)}
-						className={cn(
-							"flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-							isRecordingsPage && folderParam === null
-								? "bg-accent text-foreground"
-								: "text-muted-foreground hover:bg-accent hover:text-foreground",
-						)}
 					>
 						<Mic className="h-4 w-4" strokeWidth={1.5} />
-					</button>
+					</SidebarIconItem>
 				</TooltipTrigger>
 				<TooltipContent side="right" sideOffset={8}>
 					All Recordings
 				</TooltipContent>
 			</Tooltip>
 
-			{/* Unfiled */}
-			<Tooltip>
+			<Tooltip delayDuration={0}>
 				<TooltipTrigger asChild>
-					<button
-						type="button"
+					<SidebarIconItem
+						active={folderParam === "unfiled"}
+						aria-label="Unfiled"
+						className="self-center"
 						onClick={() => handleFolderSelect("unfiled")}
-						className={cn(
-							"flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-							folderParam === "unfiled"
-								? "bg-accent text-foreground"
-								: "text-muted-foreground hover:bg-accent hover:text-foreground",
-						)}
 					>
 						<Inbox className="h-4 w-4" strokeWidth={1.5} />
-					</button>
+					</SidebarIconItem>
 				</TooltipTrigger>
 				<TooltipContent side="right" sideOffset={8}>
 					Unfiled
 				</TooltipContent>
 			</Tooltip>
 
-			{/* Dynamic folders */}
 			{folders.map((folder) => (
-				<Tooltip key={folder.id}>
+				<Tooltip key={folder.id} delayDuration={0}>
 					<TooltipTrigger asChild>
-						<button
-							type="button"
+						<SidebarIconItem
+							active={folderParam === folder.id}
+							aria-label={folder.name}
+							className="self-center"
 							onClick={() => handleFolderSelect(folder.id)}
-							className={cn(
-								"flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-								folderParam === folder.id
-									? "bg-accent text-foreground"
-									: "text-muted-foreground hover:bg-accent hover:text-foreground",
-							)}
 						>
 							{renderFolderIcon(folderParam === folder.id ? "folder-open" : folder.icon, "h-4 w-4")}
-						</button>
+						</SidebarIconItem>
 					</TooltipTrigger>
 					<TooltipContent side="right" sideOffset={8}>
 						{folder.name}
