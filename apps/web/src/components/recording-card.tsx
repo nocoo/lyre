@@ -1,4 +1,5 @@
 import { Badge } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { Calendar, Clock, HardDrive, Mic } from "lucide-react";
 import { Link } from "react-router";
 import type { RecordingCardVM } from "@/lib/recordings-list-vm";
@@ -9,65 +10,64 @@ interface RecordingCardProps {
 
 export function RecordingCard({ recording }: RecordingCardProps) {
 	return (
-		<Link
-			to={`/recordings/${recording.id}`}
-			className="group block rounded-basalt-card bg-basalt-secondary p-4 transition-colors hover:bg-basalt-accent/50"
-		>
-			{/* Header: icon + title + status */}
-			<div className="flex items-start gap-3">
-				<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-basalt-secondary">
-					<Mic className="h-5 w-5 text-basalt-muted-foreground" strokeWidth={1.5} />
-				</div>
-				<div className="flex-1 min-w-0">
-					<div className="flex items-center gap-2">
-						<h3 className="text-sm font-medium text-basalt-foreground truncate">
-							{recording.title}
-						</h3>
-						<Badge variant={recording.status.variant} className="shrink-0">
-							{recording.status.label}
-						</Badge>
+		<Link to={`/recordings/${recording.id}`} className="block">
+			<LayerCard className="group p-4 transition-colors hover:bg-basalt-accent/50">
+				{/* Header: icon + title + status */}
+				<div className="flex items-start gap-3">
+					<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-basalt-secondary">
+						<Mic className="h-5 w-5 text-basalt-muted-foreground" strokeWidth={1.5} />
 					</div>
-					{recording.description && (
-						<p className="mt-0.5 text-xs text-basalt-muted-foreground line-clamp-1">
-							{recording.description}
-						</p>
-					)}
+					<div className="flex-1 min-w-0">
+						<div className="flex items-center gap-2">
+							<h3 className="text-sm font-medium text-basalt-foreground truncate">
+								{recording.title}
+							</h3>
+							<Badge variant={recording.status.variant} className="shrink-0">
+								{recording.status.label}
+							</Badge>
+						</div>
+						{recording.description && (
+							<p className="mt-0.5 text-xs text-basalt-muted-foreground line-clamp-1">
+								{recording.description}
+							</p>
+						)}
+					</div>
 				</div>
-			</div>
 
-			{/* Footer: metadata */}
-			<div className="mt-3 flex items-center gap-4 text-xs text-basalt-muted-foreground">
-				<span className="flex items-center gap-1 tabular-nums">
-					<Clock className="h-3 w-3" strokeWidth={1.5} />
-					{recording.duration}
-				</span>
-				<span className="flex items-center gap-1">
-					<HardDrive className="h-3 w-3" strokeWidth={1.5} />
-					{recording.fileSize}
-				</span>
-				{recording.recordedAt && (
-					<span className="flex items-center gap-1">
-						<Calendar className="h-3 w-3" strokeWidth={1.5} />
-						{recording.recordedAt}
+				{/* Footer: metadata */}
+				<div className="mt-3 flex items-center gap-4 text-xs text-basalt-muted-foreground">
+					<span className="flex items-center gap-1 tabular-nums">
+						<Clock className="h-3 w-3" strokeWidth={1.5} />
+						{recording.duration}
 					</span>
-				)}
-				<span className="ml-auto">{recording.createdAtRelative}</span>
-			</div>
-
-			{/* Tags */}
-			{recording.colorTags.length > 0 && (
-				<div className="mt-2 flex flex-wrap gap-1">
-					{recording.colorTags.map((tag) => (
-						<Badge
-							key={tag.id}
-							variant="secondary"
-							className={`text-[10px] ${tag.bgClass} ${tag.textClass}`}
-						>
-							{tag.name}
-						</Badge>
-					))}
+					<span className="flex items-center gap-1">
+						<HardDrive className="h-3 w-3" strokeWidth={1.5} />
+						{recording.fileSize}
+					</span>
+					{recording.recordedAt && (
+						<span className="flex items-center gap-1">
+							<Calendar className="h-3 w-3" strokeWidth={1.5} />
+							{recording.recordedAt}
+						</span>
+					)}
+					<span className="ml-auto">{recording.createdAtRelative}</span>
 				</div>
-			)}
+
+				{/* Tags */}
+				{recording.colorTags.length > 0 && (
+					<div className="mt-2 flex flex-wrap gap-1">
+						{recording.colorTags.map((tag) => (
+							<Badge
+								key={tag.id}
+								variant="secondary"
+								className={`text-[10px] ${tag.bgClass} ${tag.textClass}`}
+							>
+								{tag.name}
+							</Badge>
+						))}
+					</div>
+				)}
+			</LayerCard>
 		</Link>
 	);
 }

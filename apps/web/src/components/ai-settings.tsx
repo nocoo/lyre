@@ -7,6 +7,7 @@ import {
 	type SdkType,
 } from "@lyre/api/contracts/ai";
 import { Badge, Button, Input, Label } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { Bot, Check, Loader2, Plug, Save, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -205,7 +206,7 @@ export function AiSettingsSection() {
 
 	if (!loaded) {
 		return (
-			<div className="rounded-basalt-card bg-basalt-secondary p-5 h-full">
+			<LayerCard className="p-5 h-full">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -225,12 +226,12 @@ export function AiSettingsSection() {
 					<Skeleton className="h-8 w-20 rounded-md" />
 					<Skeleton className="h-8 w-32 rounded-md" />
 				</div>
-			</div>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-5 h-full">
+		<LayerCard className="p-5 h-full">
 			<div className="mb-4 flex items-center gap-3">
 				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
 					<Bot className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
@@ -250,7 +251,7 @@ export function AiSettingsSection() {
 					<select
 						value={settings.provider}
 						onChange={(e) => handleProviderChange(e.target.value)}
-						className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
+						className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-control px-3 pr-8 text-sm"
 					>
 						<option value="">Select a provider...</option>
 						{ALL_PROVIDER_IDS.map((id) => {
@@ -273,7 +274,7 @@ export function AiSettingsSection() {
 							<select
 								value={presetModels.includes(settings.model) ? settings.model : CUSTOM_MODEL_VALUE}
 								onChange={(e) => handleModelSelect(e.target.value)}
-								className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
+								className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-control px-3 pr-8 text-sm"
 							>
 								{presetModels.map((m) => (
 									<option key={m} value={m}>
@@ -358,7 +359,7 @@ export function AiSettingsSection() {
 									sdkType: e.target.value as SdkType | "",
 								}))
 							}
-							className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
+							className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-control px-3 pr-8 text-sm"
 						>
 							<option value="openai">OpenAI</option>
 							<option value="anthropic">Anthropic</option>
@@ -378,7 +379,7 @@ export function AiSettingsSection() {
 									authType: e.target.value as AuthType | "",
 								}))
 							}
-							className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
+							className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-control px-3 pr-8 text-sm"
 						>
 							<option value="">Default (x-api-key / Bearer)</option>
 							<option value="bearer">Force Bearer</option>
@@ -478,6 +479,6 @@ export function AiSettingsSection() {
 					</Badge>
 				)}
 			</div>
-		</div>
+		</LayerCard>
 	);
 }

@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 
 interface ChartCardSkeletonProps {
 	/** Tailwind width class for the title bar (default "w-32"). */
@@ -16,12 +17,12 @@ export function ChartCardSkeleton({
 	chartHeight,
 }: ChartCardSkeletonProps) {
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-4 md:p-5 h-full">
+		<LayerCard className="p-4 md:p-5 h-full">
 			<div className="mb-4 flex items-center gap-2">
 				<Skeleton className="h-4 w-4 rounded-sm" />
 				<Skeleton className={`h-3 ${titleWidth}`} />
 			</div>
 			<Skeleton className={`${chartHeight} w-full`} />
-		</div>
+		</LayerCard>
 	);
 }

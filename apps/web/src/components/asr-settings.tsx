@@ -1,5 +1,6 @@
 import { ASR_FILETRANS_MODELS, DEFAULT_ASR_MODEL } from "@lyre/api/contracts/asr";
 import { Button, Label } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { AudioWaveform, Check, Loader2, Save } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,7 +47,7 @@ export function AsrSettingsSection() {
 
 	if (!loaded) {
 		return (
-			<div className="rounded-basalt-card bg-basalt-secondary p-5 h-full flex flex-col">
+			<LayerCard className="p-5 h-full flex flex-col">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -61,12 +62,12 @@ export function AsrSettingsSection() {
 				<div className="mt-auto pt-4">
 					<Skeleton className="h-8 w-20 rounded-md" />
 				</div>
-			</div>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-5 h-full flex flex-col">
+		<LayerCard className="p-5 h-full flex flex-col">
 			<div className="mb-4 flex items-center gap-3">
 				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
 					<AudioWaveform className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
@@ -84,7 +85,7 @@ export function AsrSettingsSection() {
 				<select
 					value={model}
 					onChange={(e) => setModel(e.target.value)}
-					className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
+					className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-control px-3 pr-8 text-sm"
 				>
 					{ASR_FILETRANS_MODELS.map((m) => (
 						<option key={m} value={m}>
@@ -106,6 +107,6 @@ export function AsrSettingsSection() {
 					{saved ? "Saved" : "Save"}
 				</Button>
 			</div>
-		</div>
+		</LayerCard>
 	);
 }

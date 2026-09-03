@@ -1,4 +1,5 @@
 import { Button } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { CassettePlayer } from "@/components/cassette-player";
@@ -199,8 +200,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 
 	const isEmbedded = variant === "embedded";
 
-	return (
-		<div className={isEmbedded ? "flex-1 min-h-0" : "rounded-basalt-card bg-basalt-secondary p-4"}>
+	const content = (
+		<>
 			{/* Hidden audio element */}
 			{/* biome-ignore lint/a11y/useMediaCaption: user-uploaded recordings have no separate caption track; transcripts are rendered via <TranscriptViewer> */}
 			<audio
@@ -310,6 +311,11 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 					</div>
 				</>
 			)}
-		</div>
+		</>
 	);
+
+	if (isEmbedded) {
+		return <div className="min-h-0 flex-1">{content}</div>;
+	}
+	return <LayerCard className="p-4">{content}</LayerCard>;
 });

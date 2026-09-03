@@ -1,4 +1,5 @@
 import { Badge, Button, Input, Label } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { Check, Copy, Key, Loader2, Plus, Smartphone, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -114,7 +115,7 @@ export function DeviceTokensSection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-basalt-card bg-basalt-secondary p-5">
+			<LayerCard className="p-5">
 				<div className="mb-4 flex items-center justify-between">
 					<div className="flex items-center gap-3">
 						<Skeleton className="h-9 w-9 rounded-lg" />
@@ -139,12 +140,12 @@ export function DeviceTokensSection() {
 						</div>
 					))}
 				</div>
-			</div>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-5">
+		<LayerCard className="p-5">
 			<div className="mb-4 flex items-center justify-between">
 				<div className="flex items-center gap-3">
 					<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
@@ -287,6 +288,6 @@ export function DeviceTokensSection() {
 					))}
 				</div>
 			)}
-		</div>
+		</LayerCard>
 	);
 }

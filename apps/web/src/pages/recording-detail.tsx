@@ -29,6 +29,7 @@ import {
 	toast,
 } from "@nocoo/basalt";
 import { InputArea } from "@nocoo/basalt/components/input-area";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { Command } from "cmdk";
 import {
@@ -780,7 +781,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 			{/* ── Row 1: Player + Metadata (2/3) | Properties (1/3) ── */}
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 				<div className="lg:col-span-2">
-					<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full flex flex-col gap-4">
+					<LayerCard className="p-4 h-full flex flex-col gap-4">
 						<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 							<Play className="h-3.5 w-3.5" strokeWidth={1.5} />
 							Playback &amp; File Info
@@ -807,7 +808,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 							folderName={vm.metadata.folderName}
 							tags={vm.metadata.resolvedTags}
 						/>
-					</div>
+					</LayerCard>
 				</div>
 				<div className="lg:col-span-1">
 					<EditableProperties
@@ -871,7 +872,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 			{vm.hasTranscription && vm.transcription && (
 				<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 					<div className="lg:col-span-2">
-						<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full">
+						<LayerCard className="p-4 h-full">
 							<div className="flex items-center justify-between mb-3">
 								<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 									<FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -913,7 +914,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 							) : (
 								<TranscriptFullText transcription={vm.transcription} />
 							)}
-						</div>
+						</LayerCard>
 					</div>
 					{vm.job?.isCompleted && (
 						<div className="lg:col-span-1">
@@ -1040,7 +1041,7 @@ function TranscribingCard({ status }: { status: string | null }) {
 		status === "PENDING" ? "Queued" : status === "RUNNING" ? "Processing" : "Submitting";
 
 	return (
-		<div className="flex items-center gap-3 rounded-basalt-card bg-basalt-secondary p-4">
+		<LayerCard className="flex items-center gap-3 p-4">
 			<Loader2 className="h-5 w-5 animate-spin text-basalt-muted-foreground" strokeWidth={1.5} />
 			<div>
 				<p className="text-sm font-medium text-basalt-foreground">
@@ -1053,13 +1054,13 @@ function TranscribingCard({ status }: { status: string | null }) {
 					This may take a few minutes depending on the audio length.
 				</p>
 			</div>
-		</div>
+		</LayerCard>
 	);
 }
 
 function JobErrorCard({ message }: { message: string }) {
 	return (
-		<div className="flex items-start gap-3 rounded-xl border border-destructive/50 bg-basalt-destructive/5 p-4">
+		<div className="flex items-start gap-3 rounded-xl border border-basalt-destructive/50 bg-basalt-destructive/5 p-4">
 			<AlertCircle className="h-5 w-5 shrink-0 text-basalt-destructive" strokeWidth={1.5} />
 			<div>
 				<p className="text-sm font-medium text-basalt-foreground">Transcription failed</p>
@@ -1085,7 +1086,7 @@ function JobInfoCard({
 	estimatedCost: string;
 }) {
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full">
+		<LayerCard className="p-4 h-full">
 			<p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-basalt-muted-foreground">
 				<Cpu className="h-3.5 w-3.5" strokeWidth={1.5} />
 				Job Details
@@ -1116,7 +1117,7 @@ function JobInfoCard({
 					<p className="text-sm text-basalt-foreground">{endTime}</p>
 				</div>
 			</div>
-		</div>
+		</LayerCard>
 	);
 }
 
@@ -1184,7 +1185,7 @@ function AiSummaryCard({
 	const buttonHandler = isRegenerate ? onRegenerate : onGenerate;
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full">
+		<LayerCard className="p-4 h-full">
 			<div className="flex items-center justify-between mb-3">
 				<div className="flex items-center gap-2 min-w-0">
 					<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
@@ -1268,7 +1269,7 @@ function AiSummaryCard({
 					No summary yet. Click &ldquo;Generate Summary&rdquo; to create one from the transcription.
 				</p>
 			)}
-		</div>
+		</LayerCard>
 	);
 }
 
@@ -1318,7 +1319,7 @@ function SaveIndicatorChip({
 
 function AiInfoCard({ provider, model }: { provider: string; model: string }) {
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full">
+		<LayerCard className="p-4 h-full">
 			<p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-basalt-muted-foreground">
 				<Settings className="h-3.5 w-3.5" strokeWidth={1.5} />
 				AI Configuration
@@ -1338,7 +1339,7 @@ function AiInfoCard({ provider, model }: { provider: string; model: string }) {
 					</p>
 				</div>
 			</div>
-		</div>
+		</LayerCard>
 	);
 }
 
@@ -1402,7 +1403,7 @@ function EditableProperties({
 	const selectedFolder = allFolders.find((f) => f.id === selectedFolderId);
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full space-y-4">
+		<LayerCard className="p-4 h-full space-y-4">
 			<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 				<Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
 				Properties
@@ -1636,7 +1637,7 @@ function EditableProperties({
 				)}
 				{titleSaving || notesSaving ? "Saving..." : "Save"}
 			</Button>
-		</div>
+		</LayerCard>
 	);
 }
 
@@ -1667,7 +1668,7 @@ function RecordingDetailSkeleton() {
 			{/* Row 1: Playback + File Info (2/3) | Properties (1/3) */}
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 				<div className="lg:col-span-2">
-					<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full flex flex-col gap-4">
+					<LayerCard className="p-4 h-full flex flex-col gap-4">
 						<Skeleton className="h-3 w-40" />
 						{/* Player row */}
 						<div className="flex items-center gap-3">
@@ -1684,10 +1685,10 @@ function RecordingDetailSkeleton() {
 								</div>
 							))}
 						</div>
-					</div>
+					</LayerCard>
 				</div>
 				<div className="lg:col-span-1">
-					<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full space-y-4">
+					<LayerCard className="p-4 h-full space-y-4">
 						{Array.from({ length: 4 }, (_, i) => `prop-${i}`).map((key) => (
 							<div key={key} className="space-y-1.5">
 								<Skeleton className="h-3 w-16" />
@@ -1695,7 +1696,7 @@ function RecordingDetailSkeleton() {
 							</div>
 						))}
 						<Skeleton className="h-9 w-24 rounded-md" />
-					</div>
+					</LayerCard>
 				</div>
 			</div>
 		</div>

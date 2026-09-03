@@ -1,6 +1,7 @@
 import {
 	Button,
 	Dialog,
+	DialogClose,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
@@ -477,6 +478,15 @@ export function UploadDialog({
 				</div>
 
 				<DialogFooter>
+					<DialogClose asChild>
+						<Button
+							variant="outline"
+							onClick={() => handleOpenChange(false)}
+							disabled={state === "uploading" || state === "creating"}
+						>
+							Cancel
+						</Button>
+					</DialogClose>
 					{state === "error" && (
 						<Button variant="outline" onClick={reset}>
 							Try Again

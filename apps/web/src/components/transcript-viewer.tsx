@@ -1,3 +1,4 @@
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { Check, ChevronDown, Copy, Loader2 } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -46,7 +47,7 @@ export function TranscriptViewer({
 	const activeIndex = findActiveSentenceIndex(transcription.sentences, currentTime);
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary">
+		<LayerCard>
 			{/* Tab header */}
 			<TranscriptTabs
 				sentenceCount={transcription.sentenceCount}
@@ -65,14 +66,14 @@ export function TranscriptViewer({
 					onSeek={onSeek}
 				/>
 			</div>
-		</div>
+		</LayerCard>
 	);
 }
 
 /** Full-text view of the transcript */
 export function TranscriptFullText({ transcription }: { transcription: TranscriptionVM }) {
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary">
+		<LayerCard>
 			<TranscriptTabs
 				sentenceCount={transcription.sentenceCount}
 				wordCount={transcription.wordCount}
@@ -84,7 +85,7 @@ export function TranscriptFullText({ transcription }: { transcription: Transcrip
 					{transcription.fullText}
 				</p>
 			</div>
-		</div>
+		</LayerCard>
 	);
 }
 

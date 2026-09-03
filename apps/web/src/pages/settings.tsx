@@ -1,4 +1,5 @@
 import { Badge, Button, Input, Label, toast } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import {
 	Check,
@@ -324,7 +325,7 @@ function OrganizationSection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-basalt-card bg-basalt-secondary p-5">
+			<LayerCard className="p-5">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -348,12 +349,12 @@ function OrganizationSection() {
 						</div>
 					))}
 				</div>
-			</div>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-5">
+		<LayerCard className="p-5">
 			<div className="mb-4 flex items-center gap-3">
 				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
 					<FolderOpen className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
@@ -421,7 +422,7 @@ function OrganizationSection() {
 					<InlineCreateForm placeholder="New tag name..." onCreate={createTag} />
 				</div>
 			</div>
-		</div>
+		</LayerCard>
 	);
 }
 
@@ -499,7 +500,7 @@ function BackupSection() {
 	const busy = exporting || importing;
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-5">
+		<LayerCard className="p-5">
 			<div className="mb-4 flex items-center gap-3">
 				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
 					<Database className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
@@ -553,7 +554,7 @@ function BackupSection() {
 					Import Backup
 				</Button>
 			</div>
-		</div>
+		</LayerCard>
 	);
 }
 
@@ -787,7 +788,7 @@ function BackySection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-basalt-card bg-basalt-secondary p-5">
+			<LayerCard className="p-5">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -808,12 +809,12 @@ function BackySection() {
 					<Skeleton className="h-8 w-24 rounded-md" />
 					<Skeleton className="h-8 w-24 rounded-md" />
 				</div>
-			</div>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-5">
+		<LayerCard className="p-5">
 			<div className="mb-4 flex items-center gap-3">
 				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
 					<CloudUpload className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
@@ -1097,7 +1098,7 @@ function BackySection() {
 					</p>
 				</div>
 			)}
-		</div>
+		</LayerCard>
 	);
 }
 
@@ -1185,7 +1186,7 @@ function PullWebhookSection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-basalt-card bg-basalt-secondary p-5">
+			<LayerCard className="p-5">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -1205,12 +1206,12 @@ function PullWebhookSection() {
 						<Skeleton className="h-8 w-24 rounded-md" />
 					</div>
 				</div>
-			</div>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<div className="rounded-basalt-card bg-basalt-secondary p-5">
+		<LayerCard className="p-5">
 			<div className="mb-4 flex items-center gap-3">
 				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
 					<Webhook className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
@@ -1342,7 +1343,7 @@ function PullWebhookSection() {
 					</div>
 				</div>
 			)}
-		</div>
+		</LayerCard>
 	);
 }
 

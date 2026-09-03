@@ -16,6 +16,7 @@ import {
 	Badge,
 	Button,
 } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import {
 	ArrowUpDown,
@@ -349,7 +350,7 @@ function RecordingsPageInner() {
 								{selectedIds.size === listVM.cards.length ? "Deselect all" : "Select all"}
 							</Button>
 
-							<div className="h-4 w-px bg-border" />
+							<div className="h-4 w-px bg-basalt-border" />
 
 							{/* Preset filters */}
 							<span className="text-xs text-basalt-muted-foreground">Quick select:</span>
@@ -469,10 +470,7 @@ function RecordingsPageInner() {
 					viewMode === "list" ? (
 						<div className="space-y-2">
 							{Array.from({ length: 5 }, (_, i) => `list-skeleton-${i}`).map((key) => (
-								<div
-									key={key}
-									className="flex items-start gap-3 rounded-basalt-card bg-basalt-secondary p-4"
-								>
+								<LayerCard key={key} className="flex items-start gap-3 p-4">
 									<Skeleton className="h-10 w-10 rounded-lg shrink-0" />
 									<div className="flex-1 space-y-2">
 										<Skeleton className="h-4 w-3/5" />
@@ -483,16 +481,13 @@ function RecordingsPageInner() {
 											<Skeleton className="h-3 w-20" />
 										</div>
 									</div>
-								</div>
+								</LayerCard>
 							))}
 						</div>
 					) : (
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 							{Array.from({ length: 6 }, (_, i) => `tile-skeleton-${i}`).map((key) => (
-								<div
-									key={key}
-									className="flex flex-col rounded-basalt-card bg-basalt-secondary p-4 h-[180px]"
-								>
+								<LayerCard key={key} className="flex flex-col p-4 h-[180px]">
 									<div className="flex items-center justify-between mb-3">
 										<Skeleton className="h-9 w-9 rounded-lg" />
 										<Skeleton className="h-5 w-16 rounded-full" />
@@ -505,7 +500,7 @@ function RecordingsPageInner() {
 										<Skeleton className="h-3 w-14" />
 										<Skeleton className="h-3 w-14" />
 									</div>
-								</div>
+								</LayerCard>
 							))}
 						</div>
 					)

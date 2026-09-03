@@ -1,4 +1,5 @@
 import { Badge, Checkbox } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import {
 	AlertCircle,
 	Calendar,
@@ -121,9 +122,9 @@ export function RecordingListItem({
 	// siblings so we don't nest <button> inside <button>.
 	if (selectable) {
 		return (
-			<div
+			<LayerCard
 				className={cn(
-					"group flex items-start gap-3 rounded-basalt-card bg-basalt-secondary p-4 transition-colors",
+					"group flex items-start gap-3 p-4 transition-colors",
 					selected
 						? "ring-1 ring-basalt-primary bg-basalt-primary/5"
 						: isFailed
@@ -145,19 +146,20 @@ export function RecordingListItem({
 				>
 					{body}
 				</button>
-			</div>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<Link
-			to={`/recordings/${recording.id}`}
-			className={cn(
-				"group flex items-start gap-3 rounded-basalt-card bg-basalt-secondary p-4 transition-colors hover:bg-basalt-accent/50",
-				isFailed ? "ring-1 ring-basalt-destructive/30" : "",
-			)}
-		>
-			{body}
+		<Link to={`/recordings/${recording.id}`} className="block">
+			<LayerCard
+				className={cn(
+					"group flex items-start gap-3 p-4 transition-colors hover:bg-basalt-accent/50",
+					isFailed ? "ring-1 ring-basalt-destructive/30" : "",
+				)}
+			>
+				{body}
+			</LayerCard>
 		</Link>
 	);
 }

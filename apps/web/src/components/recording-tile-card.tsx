@@ -1,4 +1,5 @@
 import { Badge, Checkbox } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { AlertCircle, Clock, FileAudio, FolderOpen, HardDrive, Mic, Sparkles } from "lucide-react";
 import { Link } from "react-router";
 import type { RecordingCardVM } from "@/lib/recordings-list-vm";
@@ -115,9 +116,9 @@ export function RecordingTileCard({
 	// interactive control inside another.
 	if (selectable) {
 		return (
-			<div
+			<LayerCard
 				className={cn(
-					"group relative flex flex-col rounded-basalt-card bg-basalt-secondary transition-colors h-full",
+					"group relative flex h-full flex-col transition-colors",
 					selected
 						? "ring-1 ring-basalt-primary bg-basalt-primary/5"
 						: isFailed
@@ -135,23 +136,24 @@ export function RecordingTileCard({
 				<button
 					type="button"
 					onClick={() => onToggleSelect?.(recording.id)}
-					className="flex flex-col w-full h-full text-left rounded-basalt-card p-4 pl-10 cursor-pointer"
+					className="flex h-full w-full cursor-pointer flex-col p-4 pl-10 text-left"
 				>
 					{body}
 				</button>
-			</div>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<Link
-			to={`/recordings/${recording.id}`}
-			className={cn(
-				"group flex flex-col rounded-basalt-card bg-basalt-secondary p-4 transition-colors hover:bg-basalt-accent/50 h-full",
-				isFailed ? "ring-1 ring-basalt-destructive/30" : "",
-			)}
-		>
-			{body}
+		<Link to={`/recordings/${recording.id}`} className="block h-full">
+			<LayerCard
+				className={cn(
+					"group flex h-full flex-col p-4 transition-colors hover:bg-basalt-accent/50",
+					isFailed ? "ring-1 ring-basalt-destructive/30" : "",
+				)}
+			>
+				{body}
+			</LayerCard>
 		</Link>
 	);
 }
