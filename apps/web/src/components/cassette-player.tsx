@@ -1,5 +1,5 @@
+import { Button } from "@nocoo/basalt";
 import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { AudioPlayerVM } from "@/lib/audio-player-vm";
 
 interface CassettePlayerProps {
@@ -44,7 +44,7 @@ export function CassettePlayer({
            stretching indefinitely on tall recording detail pages.
            Full-width, center-cropped: the image is stretched to fill
            and cropped as needed (never letterboxed). ── */}
-			<div className="relative w-full flex-1 min-h-0 max-h-[200px] rounded-lg overflow-hidden border border-border">
+			<div className="relative w-full flex-1 min-h-0 max-h-[200px] rounded-lg overflow-hidden border border-basalt-border">
 				{/* Background image */}
 				<img
 					src={COVER_URL}
@@ -67,11 +67,11 @@ export function CassettePlayer({
 			</div>
 
 			{/* ── Transport controls ── */}
-			<div className="rounded-lg bg-secondary/80 border border-border p-3 space-y-2.5">
+			<div className="rounded-lg bg-basalt-secondary/80 border border-basalt-border p-3 space-y-2.5">
 				{/* Progress bar */}
 				<div
 					ref={progressBarRef}
-					className="group relative h-2 cursor-pointer rounded-full bg-muted"
+					className="group relative h-2 cursor-pointer rounded-full bg-basalt-muted"
 					onClick={onProgressClick}
 					onKeyDown={onProgressKeyDown}
 					role="slider"
@@ -86,14 +86,14 @@ export function CassettePlayer({
 						style={{ width: `${vm.progress}%` }}
 					/>
 					<div
-						className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-foreground bg-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+						className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-foreground bg-basalt-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
 						style={{ left: `${vm.progress}%` }}
 					/>
 				</div>
 
 				{/* Controls row */}
 				<div className="flex items-center gap-2">
-					<span className="min-w-[4ch] text-xs tabular-nums text-muted-foreground font-mono">
+					<span className="min-w-[4ch] text-xs tabular-nums text-basalt-muted-foreground font-mono">
 						{vm.currentTimeDisplay}
 					</span>
 
@@ -142,7 +142,7 @@ export function CassettePlayer({
 						<Button
 							variant="secondary"
 							size="sm"
-							className="h-6 min-w-[3rem] px-2 text-xs tabular-nums font-mono border border-border"
+							className="h-6 min-w-[3rem] px-2 text-xs tabular-nums font-mono border border-basalt-border"
 							onClick={onSpeedCycle}
 							aria-label={`Playback speed ${vm.speedDisplay}`}
 						>
@@ -151,7 +151,7 @@ export function CassettePlayer({
 
 						<button
 							type="button"
-							className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
+							className="flex h-6 w-6 items-center justify-center rounded text-basalt-muted-foreground hover:text-basalt-foreground transition-colors"
 							onClick={onToggleMute}
 							aria-label={isMuted ? "Unmute" : "Mute"}
 						>
@@ -169,13 +169,13 @@ export function CassettePlayer({
 							step={0.05}
 							value={isMuted ? 0 : volume}
 							onChange={(e) => onVolumeChange(Number(e.target.value))}
-							className="h-1 w-14 cursor-pointer appearance-none rounded-full bg-muted accent-foreground
+							className="h-1 w-14 cursor-pointer appearance-none rounded-full bg-basalt-muted accent-foreground
                 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-foreground
                 [&::-moz-range-thumb]:h-2.5 [&::-moz-range-thumb]:w-2.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-foreground [&::-moz-range-thumb]:border-0"
 							aria-label="Volume"
 						/>
 
-						<span className="min-w-[4ch] text-right text-xs tabular-nums text-muted-foreground font-mono">
+						<span className="min-w-[4ch] text-right text-xs tabular-nums text-basalt-muted-foreground font-mono">
 							{vm.durationDisplay}
 						</span>
 					</div>

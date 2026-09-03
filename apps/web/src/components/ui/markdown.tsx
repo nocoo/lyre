@@ -13,34 +13,34 @@ export function Markdown({ children }: { children: string }) {
       components={{
         // Headings — compact sizing
         h1: ({ children: c }) => (
-          <h3 className="text-base font-semibold text-foreground mt-4 mb-1.5 first:mt-0">
+          <h3 className="text-base font-semibold text-basalt-foreground mt-4 mb-1.5 first:mt-0">
             {c}
           </h3>
         ),
         h2: ({ children: c }) => (
-          <h4 className="text-sm font-semibold text-foreground mt-3 mb-1 first:mt-0">
+          <h4 className="text-sm font-semibold text-basalt-foreground mt-3 mb-1 first:mt-0">
             {c}
           </h4>
         ),
         h3: ({ children: c }) => (
-          <h5 className="text-sm font-medium text-foreground mt-2.5 mb-1 first:mt-0">
+          <h5 className="text-sm font-medium text-basalt-foreground mt-2.5 mb-1 first:mt-0">
             {c}
           </h5>
         ),
         // Paragraphs
         p: ({ children: c }) => (
-          <p className="text-sm text-foreground leading-relaxed mb-2 last:mb-0">
+          <p className="text-sm text-basalt-foreground leading-relaxed mb-2 last:mb-0">
             {c}
           </p>
         ),
         // Lists
         ul: ({ children: c }) => (
-          <ul className="text-sm text-foreground list-disc pl-5 mb-2 space-y-0.5 last:mb-0">
+          <ul className="text-sm text-basalt-foreground list-disc pl-5 mb-2 space-y-0.5 last:mb-0">
             {c}
           </ul>
         ),
         ol: ({ children: c }) => (
-          <ol className="text-sm text-foreground list-decimal pl-5 mb-2 space-y-0.5 last:mb-0">
+          <ol className="text-sm text-basalt-foreground list-decimal pl-5 mb-2 space-y-0.5 last:mb-0">
             {c}
           </ol>
         ),
@@ -53,24 +53,24 @@ export function Markdown({ children }: { children: string }) {
         ),
         em: ({ children: c }) => <em className="italic">{c}</em>,
         code: ({ children: c }) => (
-          <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">
+          <code className="rounded bg-basalt-muted px-1 py-0.5 text-xs font-mono">
             {c}
           </code>
         ),
         // Block code
         pre: ({ children: c }) => (
-          <pre className="rounded-lg bg-muted p-3 text-xs font-mono overflow-x-auto mb-2 last:mb-0">
+          <pre className="rounded-lg bg-basalt-muted p-3 text-xs font-mono overflow-x-auto mb-2 last:mb-0">
             {c}
           </pre>
         ),
         // Blockquote
         blockquote: ({ children: c }) => (
-          <blockquote className="border-l-2 border-border pl-3 text-sm text-muted-foreground italic mb-2 last:mb-0">
+          <blockquote className="border-l-2 border-basalt-border pl-3 text-sm text-basalt-muted-foreground italic mb-2 last:mb-0">
             {c}
           </blockquote>
         ),
         // Horizontal rule
-        hr: () => <hr className="border-border my-3" />,
+        hr: () => <hr className="border-basalt-border my-3" />,
         // Table (GFM)
         table: ({ children: c }) => (
           <div className="overflow-x-auto mb-2 last:mb-0">
@@ -78,15 +78,15 @@ export function Markdown({ children }: { children: string }) {
           </div>
         ),
         thead: ({ children: c }) => (
-          <thead className="border-b border-border">{c}</thead>
+          <thead className="border-b border-basalt-border">{c}</thead>
         ),
         th: ({ children: c }) => (
-          <th className="text-left text-xs font-medium text-muted-foreground px-2 py-1.5">
+          <th className="text-left text-xs font-medium text-basalt-muted-foreground px-2 py-1.5">
             {c}
           </th>
         ),
         td: ({ children: c }) => (
-          <td className="text-sm px-2 py-1.5 border-b border-border/50">
+          <td className="text-sm px-2 py-1.5 border-b border-basalt-border/50">
             {c}
           </td>
         ),
@@ -94,7 +94,7 @@ export function Markdown({ children }: { children: string }) {
         a: ({ children: c, href }) => (
           <a
             href={href}
-            className="text-primary underline underline-offset-2 hover:text-primary/80"
+            className="text-basalt-primary underline underline-offset-2 hover:text-basalt-primary/80"
             target="_blank"
             rel="noopener noreferrer"
           >

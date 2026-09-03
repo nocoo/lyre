@@ -1,15 +1,15 @@
-import { Clock, FolderOpen, Mic } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { Badge } from "@/components/ui/badge";
 import {
-	CommandDialog,
+	Badge,
 	CommandEmpty,
 	CommandGroup,
 	CommandInput,
 	CommandItem,
 	CommandList,
-} from "@/components/ui/command";
+	CommandPalette,
+} from "@nocoo/basalt";
+import { Clock, FolderOpen, Mic } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { formatDuration, formatRelativeTime } from "@/lib/recordings-list-vm";
 
 interface SearchResult {
@@ -26,7 +26,7 @@ interface SearchResult {
 
 /**
  * Global search dialog triggered by Cmd+K.
- * Renders as a CommandDialog overlay — no visible trigger element.
+ * Renders as a CommandPalette overlay — no visible trigger element.
  * The sidebar dispatches the keydown event to open this.
  */
 export function GlobalSearch() {
@@ -97,22 +97,17 @@ export function GlobalSearch() {
 	}, [open]);
 
 	return (
-		<CommandDialog
-			open={open}
-			onOpenChange={setOpen}
-			title="Search Recordings"
-			description="Search by title, description, AI summary, or tags"
-		>
+		<CommandPalette open={open} onOpenChange={setOpen}>
 			<CommandInput placeholder="Search recordings..." value={query} onValueChange={setQuery} />
 			<CommandList>
 				{loading && (
-					<div className="py-6 text-center text-sm text-muted-foreground">Searching...</div>
+					<div className="py-6 text-center text-sm text-basalt-muted-foreground">Searching...</div>
 				)}
 				{!loading && query.trim() && results.length === 0 && (
 					<CommandEmpty>No recordings found.</CommandEmpty>
 				)}
 				{!loading && !query.trim() && (
-					<div className="py-6 text-center text-sm text-muted-foreground">
+					<div className="py-6 text-center text-sm text-basalt-muted-foreground">
 						Type to search recordings...
 					</div>
 				)}
@@ -125,7 +120,7 @@ export function GlobalSearch() {
 								onSelect={() => handleSelect(result.id)}
 								className="gap-3 cursor-pointer"
 							>
-								<Mic className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+								<Mic className="h-4 w-4 shrink-0 text-basalt-muted-foreground" strokeWidth={1.5} />
 								<div className="flex-1 min-w-0">
 									<div className="flex items-center gap-2">
 										<span className="text-sm font-medium truncate">{result.title}</span>
@@ -144,7 +139,7 @@ export function GlobalSearch() {
 											{result.status}
 										</Badge>
 									</div>
-									<div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+									<div className="flex items-center gap-2 text-xs text-basalt-muted-foreground mt-0.5">
 										{result.folder && (
 											<span className="flex items-center gap-1">
 												<FolderOpen className="h-3 w-3" strokeWidth={1.5} />
@@ -160,7 +155,7 @@ export function GlobalSearch() {
 										<span>{formatRelativeTime(result.createdAt)}</span>
 									</div>
 									{result.aiSummary && (
-										<p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+										<p className="text-xs text-basalt-muted-foreground mt-0.5 line-clamp-1">
 											{result.aiSummary}
 										</p>
 									)}
@@ -170,6 +165,6 @@ export function GlobalSearch() {
 					</CommandGroup>
 				)}
 			</CommandList>
-		</CommandDialog>
+		</CommandPalette>
 	);
 }

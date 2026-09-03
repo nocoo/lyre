@@ -5,6 +5,33 @@ import type {
 	TranscriptionJob,
 } from "@lyre/api/contracts/recordings";
 import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+	Badge,
+	Button,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	CommandSeparator,
+	Input,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	toast,
+} from "@nocoo/basalt";
+import { InputArea } from "@nocoo/basalt/components/input-area";
+import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { Command } from "cmdk";
+import {
 	AlertCircle,
 	ArrowLeft,
 	Calendar,
@@ -32,38 +59,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { toast } from "sonner";
 import { AudioPlayer, type AudioPlayerHandle } from "@/components/audio-player";
 import { useSetBreadcrumbs } from "@/components/layout";
 import { RegenerateFeedbackDialog } from "@/components/regenerate-feedback-dialog";
 import { TranscriptFullText, TranscriptViewer } from "@/components/transcript-viewer";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-	AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-	Command,
-	CommandEmpty,
-	CommandGroup,
-	CommandInput,
-	CommandItem,
-	CommandList,
-	CommandSeparator,
-} from "@/components/ui/command";
-import { Input } from "@/components/ui/input";
 import { Markdown } from "@/components/ui/markdown";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { getTagColor } from "@/lib/badge-colors";
 import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
@@ -677,31 +678,18 @@ function RecordingDetailContent({ id }: { id: string }) {
 
 	return (
 		<div className="space-y-5">
-			{/* Back link + header */}
-			<div className="space-y-4">
-				<Link
-					to="/recordings"
-					className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-				>
-					<ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
-					Back to recordings
-				</Link>
-
-				<div className="flex items-start justify-between gap-4">
-					<div className="min-w-0">
-						<div className="flex items-center gap-2.5">
-							<h1 className="text-2xl font-semibold truncate">{vm.metadata.title}</h1>
-							<Badge variant={vm.metadata.status.variant} className="shrink-0">
-								{vm.metadata.status.label}
-							</Badge>
-						</div>
-						{vm.metadata.description && (
-							<p className="mt-1 text-sm text-muted-foreground">{vm.metadata.description}</p>
-						)}
-					</div>
-
-					{/* Actions */}
-					<div className="flex shrink-0 gap-2">
+			<PageHeader
+				title={
+					<span className="flex min-w-0 items-center gap-2.5">
+						<span className="truncate">{vm.metadata.title}</span>
+						<Badge variant={vm.metadata.status.variant} className="shrink-0">
+							{vm.metadata.status.label}
+						</Badge>
+					</span>
+				}
+				description={vm.metadata.description ?? undefined}
+				actions={
+					<>
 						<Button
 							size="sm"
 							variant="outline"
@@ -716,7 +704,6 @@ function RecordingDetailContent({ id }: { id: string }) {
 							)}
 							Download
 						</Button>
-
 						{vm.metadata.canTranscribe && (
 							<Button
 								size="sm"
@@ -753,7 +740,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 								<Button
 									size="sm"
 									variant="outline"
-									className="gap-2 text-destructive hover:text-destructive"
+									className="gap-2 text-basalt-destructive hover:text-basalt-destructive"
 								>
 									<Trash2 className="h-4 w-4" strokeWidth={1.5} />
 									Delete
@@ -772,7 +759,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 									<AlertDialogAction
 										onClick={handleDelete}
 										disabled={deleting}
-										className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+										className="bg-basalt-destructive text-basalt-destructive-foreground hover:bg-basalt-destructive/90"
 									>
 										{deleting ? (
 											<>
@@ -786,15 +773,15 @@ function RecordingDetailContent({ id }: { id: string }) {
 								</AlertDialogFooter>
 							</AlertDialogContent>
 						</AlertDialog>
-					</div>
-				</div>
-			</div>
+					</>
+				}
+			/>
 
 			{/* ── Row 1: Player + Metadata (2/3) | Properties (1/3) ── */}
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 				<div className="lg:col-span-2">
-					<div className="rounded-card bg-secondary p-4 h-full flex flex-col gap-4">
-						<p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+					<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full flex flex-col gap-4">
+						<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 							<Play className="h-3.5 w-3.5" strokeWidth={1.5} />
 							Playback &amp; File Info
 						</p>
@@ -884,19 +871,19 @@ function RecordingDetailContent({ id }: { id: string }) {
 			{vm.hasTranscription && vm.transcription && (
 				<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 					<div className="lg:col-span-2">
-						<div className="rounded-card bg-secondary p-4 h-full">
+						<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full">
 							<div className="flex items-center justify-between mb-3">
-								<p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+								<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 									<FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
 									Transcript
 								</p>
-								<div className="flex items-center rounded-md border border-border p-0.5">
+								<div className="flex items-center rounded-md border border-basalt-border p-0.5">
 									<button
 										type="button"
 										className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
 											viewMode === "sentences"
 												? "bg-foreground text-background"
-												: "text-muted-foreground hover:text-foreground"
+												: "text-basalt-muted-foreground hover:text-basalt-foreground"
 										}`}
 										onClick={() => setViewMode("sentences")}
 									>
@@ -907,7 +894,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 										className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
 											viewMode === "fulltext"
 												? "bg-foreground text-background"
-												: "text-muted-foreground hover:text-foreground"
+												: "text-basalt-muted-foreground hover:text-basalt-foreground"
 										}`}
 										onClick={() => setViewMode("fulltext")}
 									>
@@ -961,7 +948,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 
 function NotFound() {
 	return (
-		<div className="flex min-h-full flex-col items-center justify-center text-muted-foreground">
+		<div className="flex min-h-full flex-col items-center justify-center text-basalt-muted-foreground">
 			<p className="text-lg font-medium">Recording not found</p>
 			<p className="mt-1 text-sm">The recording you&apos;re looking for doesn&apos;t exist.</p>
 			<Link to="/recordings">
@@ -1020,13 +1007,13 @@ function MetadataGrid({
 			<div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
 				{items.map((item) => (
 					<div key={item.label}>
-						<p className="text-xs font-medium text-muted-foreground">{item.label}</p>
-						<p className="mt-0.5 text-sm text-foreground truncate">{item.value}</p>
+						<p className="text-xs font-medium text-basalt-muted-foreground">{item.label}</p>
+						<p className="mt-0.5 text-sm text-basalt-foreground truncate">{item.value}</p>
 					</div>
 				))}
 			</div>
 			{tags.length > 0 && (
-				<div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
+				<div className="mt-3 flex flex-wrap gap-1.5 border-t border-basalt-border pt-3">
 					{tags.map((tag) => {
 						const color = getTagColor(tag.name);
 						return (
@@ -1053,14 +1040,16 @@ function TranscribingCard({ status }: { status: string | null }) {
 		status === "PENDING" ? "Queued" : status === "RUNNING" ? "Processing" : "Submitting";
 
 	return (
-		<div className="flex items-center gap-3 rounded-card bg-secondary p-4">
-			<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" strokeWidth={1.5} />
+		<div className="flex items-center gap-3 rounded-basalt-card bg-basalt-secondary p-4">
+			<Loader2 className="h-5 w-5 animate-spin text-basalt-muted-foreground" strokeWidth={1.5} />
 			<div>
-				<p className="text-sm font-medium text-foreground">
+				<p className="text-sm font-medium text-basalt-foreground">
 					Transcription in progress
-					<span className="ml-2 text-xs font-normal text-muted-foreground">({statusLabel})</span>
+					<span className="ml-2 text-xs font-normal text-basalt-muted-foreground">
+						({statusLabel})
+					</span>
 				</p>
-				<p className="text-xs text-muted-foreground">
+				<p className="text-xs text-basalt-muted-foreground">
 					This may take a few minutes depending on the audio length.
 				</p>
 			</div>
@@ -1070,11 +1059,11 @@ function TranscribingCard({ status }: { status: string | null }) {
 
 function JobErrorCard({ message }: { message: string }) {
 	return (
-		<div className="flex items-start gap-3 rounded-xl border border-destructive/50 bg-destructive/5 p-4">
-			<AlertCircle className="h-5 w-5 shrink-0 text-destructive" strokeWidth={1.5} />
+		<div className="flex items-start gap-3 rounded-xl border border-destructive/50 bg-basalt-destructive/5 p-4">
+			<AlertCircle className="h-5 w-5 shrink-0 text-basalt-destructive" strokeWidth={1.5} />
 			<div>
-				<p className="text-sm font-medium text-foreground">Transcription failed</p>
-				{message && <p className="mt-0.5 text-xs text-muted-foreground">{message}</p>}
+				<p className="text-sm font-medium text-basalt-foreground">Transcription failed</p>
+				{message && <p className="mt-0.5 text-xs text-basalt-muted-foreground">{message}</p>}
 			</div>
 		</div>
 	);
@@ -1096,35 +1085,35 @@ function JobInfoCard({
 	estimatedCost: string;
 }) {
 	return (
-		<div className="rounded-card bg-secondary p-4 h-full">
-			<p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-muted-foreground">
+		<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full">
+			<p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-basalt-muted-foreground">
 				<Cpu className="h-3.5 w-3.5" strokeWidth={1.5} />
 				Job Details
 			</p>
 			<div className="grid grid-cols-2 gap-x-6 gap-y-2">
 				<div>
-					<p className="text-xs text-muted-foreground">Model</p>
-					<p className="text-sm text-foreground font-mono">{model}</p>
+					<p className="text-xs text-basalt-muted-foreground">Model</p>
+					<p className="text-sm text-basalt-foreground font-mono">{model}</p>
 				</div>
 				<div>
-					<p className="text-xs text-muted-foreground">Audio Processed</p>
-					<p className="text-sm text-foreground">{usageSeconds}</p>
+					<p className="text-xs text-basalt-muted-foreground">Audio Processed</p>
+					<p className="text-sm text-basalt-foreground">{usageSeconds}</p>
 				</div>
 				<div>
-					<p className="text-xs text-muted-foreground">Estimated Cost</p>
-					<p className="text-sm text-foreground">{estimatedCost}</p>
+					<p className="text-xs text-basalt-muted-foreground">Estimated Cost</p>
+					<p className="text-sm text-basalt-foreground">{estimatedCost}</p>
 				</div>
 				<div>
-					<p className="text-xs text-muted-foreground">Processing Time</p>
-					<p className="text-sm text-foreground">{processingDuration}</p>
+					<p className="text-xs text-basalt-muted-foreground">Processing Time</p>
+					<p className="text-sm text-basalt-foreground">{processingDuration}</p>
 				</div>
 				<div>
-					<p className="text-xs text-muted-foreground">Submitted</p>
-					<p className="text-sm text-foreground">{submitTime}</p>
+					<p className="text-xs text-basalt-muted-foreground">Submitted</p>
+					<p className="text-sm text-basalt-foreground">{submitTime}</p>
 				</div>
 				<div>
-					<p className="text-xs text-muted-foreground">Completed</p>
-					<p className="text-sm text-foreground">{endTime}</p>
+					<p className="text-xs text-basalt-muted-foreground">Completed</p>
+					<p className="text-sm text-basalt-foreground">{endTime}</p>
 				</div>
 			</div>
 		</div>
@@ -1195,10 +1184,10 @@ function AiSummaryCard({
 	const buttonHandler = isRegenerate ? onRegenerate : onGenerate;
 
 	return (
-		<div className="rounded-card bg-secondary p-4 h-full">
+		<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full">
 			<div className="flex items-center justify-between mb-3">
 				<div className="flex items-center gap-2 min-w-0">
-					<p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+					<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 						<Sparkles className="h-3.5 w-3.5" strokeWidth={1.5} />
 						AI Summary
 					</p>
@@ -1237,7 +1226,7 @@ function AiSummaryCard({
           content yet — once streaming starts producing text the body
           renders markdown and the running hint moves inline below it). */}
 			{isRunning && !hasContent && (
-				<div className="flex items-center gap-2 py-3 text-muted-foreground">
+				<div className="flex items-center gap-2 py-3 text-basalt-muted-foreground">
 					<Loader2 className="h-4 w-4 animate-spin" />
 					<span className="text-sm">{runningLabel}</span>
 				</div>
@@ -1250,7 +1239,7 @@ function AiSummaryCard({
 				<div>
 					<Markdown>{display ?? ""}</Markdown>
 					{isRunning && (
-						<div className="flex items-center gap-1.5 mt-2 text-muted-foreground">
+						<div className="flex items-center gap-1.5 mt-2 text-basalt-muted-foreground">
 							<Loader2 className="h-3 w-3 animate-spin" />
 							<span className="text-xs">{runningLabel}</span>
 						</div>
@@ -1263,8 +1252,11 @@ function AiSummaryCard({
           badge in the header is the primary signal. */}
 			{status === "failed" && !isRunning && (
 				<div className={cn("flex items-start gap-2", hasContent ? "mt-3" : "py-2")}>
-					<AlertCircle className="h-4 w-4 shrink-0 text-destructive mt-0.5" strokeWidth={1.5} />
-					<p className="text-sm text-destructive">
+					<AlertCircle
+						className="h-4 w-4 shrink-0 text-basalt-destructive mt-0.5"
+						strokeWidth={1.5}
+					/>
+					<p className="text-sm text-basalt-destructive">
 						{error ?? "Summary generation failed. Try Retry."}
 					</p>
 				</div>
@@ -1272,7 +1264,7 @@ function AiSummaryCard({
 
 			{/* Empty state (never attempted, no error) */}
 			{!hasContent && !isRunning && status !== "failed" && (
-				<p className="text-sm text-muted-foreground py-2">
+				<p className="text-sm text-basalt-muted-foreground py-2">
 					No summary yet. Click &ldquo;Generate Summary&rdquo; to create one from the transcription.
 				</p>
 			)}
@@ -1296,7 +1288,7 @@ function SaveIndicatorChip({
 	if (indicator === null) return null;
 	if (indicator === "saving") {
 		return (
-			<span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+			<span className="inline-flex items-center gap-1 rounded-full bg-basalt-muted px-1.5 py-0.5 text-[10px] font-medium text-basalt-muted-foreground">
 				<Loader2 className="h-3 w-3 animate-spin" strokeWidth={1.5} />
 				Saving…
 			</span>
@@ -1313,7 +1305,7 @@ function SaveIndicatorChip({
 	// failed
 	return (
 		<span
-			className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive"
+			className="inline-flex items-center gap-1 rounded-full bg-basalt-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-basalt-destructive"
 			title={error ?? "Save failed"}
 		>
 			<AlertCircle className="h-3 w-3" strokeWidth={1.5} />
@@ -1326,22 +1318,24 @@ function SaveIndicatorChip({
 
 function AiInfoCard({ provider, model }: { provider: string; model: string }) {
 	return (
-		<div className="rounded-card bg-secondary p-4 h-full">
-			<p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-muted-foreground">
+		<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full">
+			<p className="flex items-center gap-1.5 mb-3 text-xs font-medium text-basalt-muted-foreground">
 				<Settings className="h-3.5 w-3.5" strokeWidth={1.5} />
 				AI Configuration
 			</p>
 			<div className="space-y-3">
 				<div>
-					<p className="text-xs text-muted-foreground">Provider</p>
-					<p className="mt-0.5 text-sm text-foreground">{provider || "Not configured"}</p>
+					<p className="text-xs text-basalt-muted-foreground">Provider</p>
+					<p className="mt-0.5 text-sm text-basalt-foreground">{provider || "Not configured"}</p>
 				</div>
 				<div>
-					<p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+					<p className="flex items-center gap-1.5 text-xs text-basalt-muted-foreground">
 						<Cpu className="h-3.5 w-3.5" strokeWidth={1.5} />
 						Model
 					</p>
-					<p className="mt-0.5 text-sm text-foreground font-mono">{model || "Not configured"}</p>
+					<p className="mt-0.5 text-sm text-basalt-foreground font-mono">
+						{model || "Not configured"}
+					</p>
 				</div>
 			</div>
 		</div>
@@ -1408,15 +1402,18 @@ function EditableProperties({
 	const selectedFolder = allFolders.find((f) => f.id === selectedFolderId);
 
 	return (
-		<div className="rounded-card bg-secondary p-4 h-full space-y-4">
-			<p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+		<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full space-y-4">
+			<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 				<Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
 				Properties
 			</p>
 
 			{/* Title */}
 			<div className="space-y-1.5">
-				<label htmlFor="recording-title" className="text-xs font-medium text-muted-foreground">
+				<label
+					htmlFor="recording-title"
+					className="text-xs font-medium text-basalt-muted-foreground"
+				>
 					Title
 					{titleSaving && <Loader2 className="h-3 w-3 animate-spin" />}
 				</label>
@@ -1434,7 +1431,7 @@ function EditableProperties({
 			<div className="space-y-1.5">
 				<label
 					htmlFor="recording-recorded-at"
-					className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+					className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground"
 				>
 					<Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />
 					Recorded Date
@@ -1450,7 +1447,7 @@ function EditableProperties({
 
 			{/* Folder picker */}
 			<div className="space-y-1.5">
-				<span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+				<span className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 					<Folder className="h-3.5 w-3.5" strokeWidth={1.5} />
 					Folder
 				</span>
@@ -1463,7 +1460,7 @@ function EditableProperties({
 									{selectedFolder.name}
 								</span>
 							) : (
-								<span className="text-muted-foreground">No folder</span>
+								<span className="text-basalt-muted-foreground">No folder</span>
 							)}
 							<ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
 						</Button>
@@ -1476,7 +1473,7 @@ function EditableProperties({
 										<Check
 											className={`h-3.5 w-3.5 ${selectedFolderId === null ? "opacity-100" : "opacity-0"}`}
 										/>
-										<span className="text-muted-foreground">No folder</span>
+										<span className="text-basalt-muted-foreground">No folder</span>
 									</CommandItem>
 									{allFolders.map((folder) => (
 										<CommandItem
@@ -1499,7 +1496,7 @@ function EditableProperties({
 
 			{/* Tags */}
 			<div className="space-y-1.5">
-				<span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+				<span className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 					<Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
 					Tags
 				</span>
@@ -1551,7 +1548,7 @@ function EditableProperties({
 										{newTagName.trim() ? (
 											<button
 												type="button"
-												className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+												className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-basalt-muted-foreground hover:text-basalt-foreground"
 												onClick={onCreateTag}
 												disabled={creatingTag}
 											>
@@ -1609,13 +1606,13 @@ function EditableProperties({
 			<div className="space-y-1.5">
 				<label
 					htmlFor="recording-notes"
-					className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+					className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground"
 				>
 					<StickyNote className="h-3.5 w-3.5" strokeWidth={1.5} />
 					Notes
 					{notesSaving && <Loader2 className="h-3 w-3 animate-spin" />}
 				</label>
-				<Textarea
+				<InputArea
 					id="recording-notes"
 					value={notes}
 					onChange={(e) => onNotesChange(e.target.value)}
@@ -1670,7 +1667,7 @@ function RecordingDetailSkeleton() {
 			{/* Row 1: Playback + File Info (2/3) | Properties (1/3) */}
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 				<div className="lg:col-span-2">
-					<div className="rounded-card bg-secondary p-4 h-full flex flex-col gap-4">
+					<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full flex flex-col gap-4">
 						<Skeleton className="h-3 w-40" />
 						{/* Player row */}
 						<div className="flex items-center gap-3">
@@ -1690,7 +1687,7 @@ function RecordingDetailSkeleton() {
 					</div>
 				</div>
 				<div className="lg:col-span-1">
-					<div className="rounded-card bg-secondary p-4 h-full space-y-4">
+					<div className="rounded-basalt-card bg-basalt-secondary p-4 h-full space-y-4">
 						{Array.from({ length: 4 }, (_, i) => `prop-${i}`).map((key) => (
 							<div key={key} className="space-y-1.5">
 								<Skeleton className="h-3 w-16" />

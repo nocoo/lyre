@@ -1,4 +1,6 @@
 import { CHART_COLORS, chart, chartAxis } from "@lyre/api/lib/palette";
+import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import { Clock, Database, Files, FileWarning, HardDrive, Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -15,9 +17,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartCardSkeleton } from "@/components/ui/chart-card-skeleton";
-import { SectionHeaderSkeleton } from "@/components/ui/section-header-skeleton";
 import { StatCardSkeleton } from "@/components/ui/stat-card-skeleton";
 
 /** Safe chart color accessor (falls back to first color on out-of-bounds). */
@@ -25,6 +25,7 @@ function chartColor(index: number): string {
 	return CHART_COLORS[index] ?? CHART_COLORS[0] ?? "#000000";
 }
 
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import {
 	buildOssStatCards,
 	buildRecordingStatCards,
@@ -51,13 +52,13 @@ function ChartTooltip({
 }) {
 	if (!active || !payload?.length) return null;
 	return (
-		<div className="rounded-widget bg-popover px-3 py-2">
-			{label && <p className="mb-1 text-xs text-muted-foreground">{label}</p>}
+		<div className="rounded-basalt-widget bg-basalt-popover px-3 py-2">
+			{label && <p className="mb-1 text-xs text-basalt-muted-foreground">{label}</p>}
 			{payload.map((entry) => (
 				<div key={entry.name} className="flex items-center gap-2 text-sm">
 					<div className="h-2 w-2 rounded-full" style={{ background: entry.color }} />
-					<span className="text-muted-foreground">{entry.name}:</span>
-					<span className="font-medium text-foreground font-display">
+					<span className="text-basalt-muted-foreground">{entry.name}:</span>
+					<span className="font-medium text-basalt-foreground font-display">
 						{formatter ? formatter(entry.value) : entry.value}
 					</span>
 				</div>
@@ -68,39 +69,15 @@ function ChartTooltip({
 
 // ── Section header ──
 
-function SectionHeader({
-	icon: Icon,
-	title,
-	description,
-}: {
-	icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-	title: string;
-	description: string;
-}) {
-	return (
-		<div className="flex items-start gap-3">
-			<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
-				<Icon className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-			</div>
-			<div>
-				<h2 className="text-lg font-semibold text-foreground">{title}</h2>
-				<p className="text-sm text-muted-foreground">{description}</p>
-			</div>
-		</div>
-	);
-}
-
-// ── Stat card ──
-
 function StatCard({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) {
 	return (
-		<div className="rounded-card bg-secondary p-4 md:p-5">
-			<p className="text-xs md:text-sm text-muted-foreground mb-1">{label}</p>
-			<h3 className="text-xl md:text-2xl font-semibold text-foreground font-display tracking-tight">
+		<LayerCard>
+			<p className="text-xs text-basalt-muted-foreground md:text-sm">{label}</p>
+			<p className="font-display text-xl font-semibold tracking-tight text-basalt-foreground md:text-2xl">
 				{value}
-			</h3>
-			{subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
-		</div>
+			</p>
+			{subtitle ? <p className="mt-0.5 text-xs text-basalt-muted-foreground">{subtitle}</p> : null}
+		</LayerCard>
 	);
 }
 
@@ -108,16 +85,16 @@ function StatCard({ label, value, subtitle }: { label: string; value: string; su
 
 function RecordingsByMonthChart({ data }: { data: { month: string; count: number }[] }) {
 	return (
-		<Card className="h-full rounded-card border-0 bg-secondary shadow-none">
-			<CardHeader>
+		<LayerCard className="h-full">
+			<LayerCard.Header>
 				<div className="flex items-center gap-2">
-					<Mic className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-					<CardTitle className="text-sm font-normal text-muted-foreground">
+					<Mic className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
+					<span className="text-sm font-normal text-basalt-muted-foreground">
 						Recordings by Month
-					</CardTitle>
+					</span>
 				</div>
-			</CardHeader>
-			<CardContent className="flex flex-col">
+			</LayerCard.Header>
+			<LayerCard.Body className="flex flex-col">
 				<div
 					className="flex-1 min-h-[200px]"
 					role="img"
@@ -150,23 +127,23 @@ function RecordingsByMonthChart({ data }: { data: { month: string; count: number
 						</BarChart>
 					</ResponsiveContainer>
 				</div>
-			</CardContent>
-		</Card>
+			</LayerCard.Body>
+		</LayerCard>
 	);
 }
 
 function DurationByMonthChart({ data }: { data: { month: string; duration: number }[] }) {
 	return (
-		<Card className="h-full rounded-card border-0 bg-secondary shadow-none">
-			<CardHeader>
+		<LayerCard className="h-full">
+			<LayerCard.Header>
 				<div className="flex items-center gap-2">
-					<Clock className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-					<CardTitle className="text-sm font-normal text-muted-foreground">
+					<Clock className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
+					<span className="text-sm font-normal text-basalt-muted-foreground">
 						Duration by Month
-					</CardTitle>
+					</span>
 				</div>
-			</CardHeader>
-			<CardContent className="flex flex-col">
+			</LayerCard.Header>
+			<LayerCard.Body className="flex flex-col">
 				<div
 					className="flex-1 min-h-[200px]"
 					role="img"
@@ -212,8 +189,8 @@ function DurationByMonthChart({ data }: { data: { month: string; duration: numbe
 						</AreaChart>
 					</ResponsiveContainer>
 				</div>
-			</CardContent>
-		</Card>
+			</LayerCard.Body>
+		</LayerCard>
 	);
 }
 
@@ -231,16 +208,16 @@ function StatusDonutChart({ data }: { data: { status: string; count: number }[] 
 	const total = chartData.reduce((s, d) => s + d.value, 0);
 
 	return (
-		<Card className="h-full rounded-card border-0 bg-secondary shadow-none">
-			<CardHeader>
+		<LayerCard className="h-full">
+			<LayerCard.Header>
 				<div className="flex items-center gap-2">
-					<Database className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-					<CardTitle className="text-sm font-normal text-muted-foreground">
+					<Database className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
+					<span className="text-sm font-normal text-basalt-muted-foreground">
 						Status Distribution
-					</CardTitle>
+					</span>
 				</div>
-			</CardHeader>
-			<CardContent className="flex flex-col">
+			</LayerCard.Header>
+			<LayerCard.Body className="flex flex-col">
 				<div className="flex flex-1 flex-col items-center min-h-0">
 					<div
 						className="flex-1 min-h-0 w-full flex items-center justify-center"
@@ -270,7 +247,7 @@ function StatusDonutChart({ data }: { data: { status: string; count: number }[] 
 					<div className="mt-3 grid w-full grid-cols-2 gap-x-4 gap-y-3">
 						{chartData.map((item) => (
 							<div key={item.name} className="flex flex-col items-center gap-0.5">
-								<span className="text-sm font-medium text-foreground font-display">
+								<span className="text-sm font-medium text-basalt-foreground font-display">
 									{total > 0 ? `${Math.round((item.value / total) * 100)}%` : "0%"}
 								</span>
 								<div className="flex items-center gap-1.5">
@@ -280,14 +257,14 @@ function StatusDonutChart({ data }: { data: { status: string; count: number }[] 
 											background: chartColor(item.colorIndex),
 										}}
 									/>
-									<span className="text-xs text-muted-foreground">{item.name}</span>
+									<span className="text-xs text-basalt-muted-foreground">{item.name}</span>
 								</div>
 							</div>
 						))}
 					</div>
 				</div>
-			</CardContent>
-		</Card>
+			</LayerCard.Body>
+		</LayerCard>
 	);
 }
 
@@ -304,16 +281,16 @@ function FormatBarChart({
 	}));
 
 	return (
-		<Card className="h-full rounded-card border-0 bg-secondary shadow-none">
-			<CardHeader>
+		<LayerCard className="h-full">
+			<LayerCard.Header>
 				<div className="flex items-center gap-2">
-					<Files className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-					<CardTitle className="text-sm font-normal text-muted-foreground">
+					<Files className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
+					<span className="text-sm font-normal text-basalt-muted-foreground">
 						Recordings by Format
-					</CardTitle>
+					</span>
 				</div>
-			</CardHeader>
-			<CardContent className="flex flex-col">
+			</LayerCard.Header>
+			<LayerCard.Body className="flex flex-col">
 				<div
 					className="flex-1 min-h-[200px]"
 					role="img"
@@ -345,8 +322,8 @@ function FormatBarChart({
 						</BarChart>
 					</ResponsiveContainer>
 				</div>
-			</CardContent>
-		</Card>
+			</LayerCard.Body>
+		</LayerCard>
 	);
 }
 
@@ -358,28 +335,28 @@ function OssStorageByMonthChart({
 	data: { month: string; uploads: number; results: number }[];
 }) {
 	return (
-		<Card className="h-full rounded-card border-0 bg-secondary shadow-none">
-			<CardHeader>
+		<LayerCard className="h-full">
+			<LayerCard.Header>
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-2">
-						<HardDrive className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-						<CardTitle className="text-sm font-normal text-muted-foreground">
+						<HardDrive className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
+						<span className="text-sm font-normal text-basalt-muted-foreground">
 							Storage by Month
-						</CardTitle>
+						</span>
 					</div>
 					<div className="flex items-center gap-4">
 						<div className="flex items-center gap-1.5">
 							<div className="h-2 w-2 rounded-full" style={{ background: chart.sky }} />
-							<span className="text-xs text-muted-foreground">Uploads</span>
+							<span className="text-xs text-basalt-muted-foreground">Uploads</span>
 						</div>
 						<div className="flex items-center gap-1.5">
 							<div className="h-2 w-2 rounded-full" style={{ background: chart.amber }} />
-							<span className="text-xs text-muted-foreground">Results</span>
+							<span className="text-xs text-basalt-muted-foreground">Results</span>
 						</div>
 					</div>
 				</div>
-			</CardHeader>
-			<CardContent className="flex flex-col">
+			</LayerCard.Header>
+			<LayerCard.Body className="flex flex-col">
 				<div
 					className="flex-1 min-h-[200px]"
 					role="img"
@@ -413,8 +390,8 @@ function OssStorageByMonthChart({
 						</BarChart>
 					</ResponsiveContainer>
 				</div>
-			</CardContent>
-		</Card>
+			</LayerCard.Body>
+		</LayerCard>
 	);
 }
 
@@ -446,33 +423,33 @@ function OssBreakdownDonut({ stats }: { stats: DashboardData["oss"] }) {
 
 	if (total === 0) {
 		return (
-			<Card className="h-full rounded-card border-0 bg-secondary shadow-none">
-				<CardHeader>
+			<LayerCard className="h-full">
+				<LayerCard.Header>
 					<div className="flex items-center gap-2">
-						<FileWarning className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-						<CardTitle className="text-sm font-normal text-muted-foreground">
+						<FileWarning className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
+						<span className="text-sm font-normal text-basalt-muted-foreground">
 							Storage Breakdown
-						</CardTitle>
+						</span>
 					</div>
-				</CardHeader>
-				<CardContent className="flex items-center justify-center min-h-[200px]">
-					<p className="text-sm text-muted-foreground">No storage data</p>
-				</CardContent>
-			</Card>
+				</LayerCard.Header>
+				<LayerCard.Body className="flex items-center justify-center min-h-[200px]">
+					<p className="text-sm text-basalt-muted-foreground">No storage data</p>
+				</LayerCard.Body>
+			</LayerCard>
 		);
 	}
 
 	return (
-		<Card className="h-full rounded-card border-0 bg-secondary shadow-none">
-			<CardHeader>
+		<LayerCard className="h-full">
+			<LayerCard.Header>
 				<div className="flex items-center gap-2">
-					<FileWarning className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-					<CardTitle className="text-sm font-normal text-muted-foreground">
+					<FileWarning className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
+					<span className="text-sm font-normal text-basalt-muted-foreground">
 						Storage Breakdown
-					</CardTitle>
+					</span>
 				</div>
-			</CardHeader>
-			<CardContent className="flex flex-col">
+			</LayerCard.Header>
+			<LayerCard.Body className="flex flex-col">
 				<div className="flex flex-1 flex-col items-center min-h-0">
 					<div
 						className="flex-1 min-h-0 w-full flex items-center justify-center"
@@ -502,7 +479,7 @@ function OssBreakdownDonut({ stats }: { stats: DashboardData["oss"] }) {
 					<div className="mt-3 grid w-full grid-cols-2 gap-x-4 gap-y-3">
 						{segments.map((item) => (
 							<div key={item.name} className="flex flex-col items-center gap-0.5">
-								<span className="text-sm font-medium text-foreground font-display">
+								<span className="text-sm font-medium text-basalt-foreground font-display">
 									{formatFileSize(item.value)}
 								</span>
 								<div className="flex items-center gap-1.5">
@@ -512,14 +489,14 @@ function OssBreakdownDonut({ stats }: { stats: DashboardData["oss"] }) {
 											background: chartColor(item.colorIndex),
 										}}
 									/>
-									<span className="text-xs text-muted-foreground">{item.name}</span>
+									<span className="text-xs text-basalt-muted-foreground">{item.name}</span>
 								</div>
 							</div>
 						))}
 					</div>
 				</div>
-			</CardContent>
-		</Card>
+			</LayerCard.Body>
+		</LayerCard>
 	);
 }
 
@@ -553,48 +530,39 @@ export default function DashboardPage() {
 	if (loading) {
 		return (
 			<div className="space-y-8">
-				{/* ── Recordings section skeleton ── */}
-				<section className="space-y-4">
-					<SectionHeaderSkeleton />
-					{/* Stat cards (4 cols) */}
+				<PageHeader title="Dashboard" description="Overview of recordings and object storage." />
+				<SectionRule title="Recordings">
 					<div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
 						{Array.from({ length: 4 }, (_, i) => `rec-stat-${i}`).map((key) => (
 							<StatCardSkeleton key={key} />
 						))}
 					</div>
-					{/* Row 1: monthly bar (2/3) + status donut (1/3) */}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 						<div className="lg:col-span-2">
 							<ChartCardSkeleton titleWidth="w-40" chartHeight="h-[220px]" />
 						</div>
 						<ChartCardSkeleton titleWidth="w-32" chartHeight="h-[220px]" />
 					</div>
-					{/* Row 2: duration area (2/3) + format bar (1/3) */}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 						<div className="lg:col-span-2">
 							<ChartCardSkeleton titleWidth="w-36" chartHeight="h-[220px]" />
 						</div>
 						<ChartCardSkeleton titleWidth="w-40" chartHeight="h-[220px]" />
 					</div>
-				</section>
-
-				{/* ── OSS Storage section skeleton ── */}
-				<section className="space-y-4">
-					<SectionHeaderSkeleton />
-					{/* Stat cards (3 cols on md+) */}
+				</SectionRule>
+				<SectionRule title="OSS Storage">
 					<div className="grid grid-cols-1 gap-3 md:gap-4 md:grid-cols-3">
 						{Array.from({ length: 3 }, (_, i) => `oss-stat-${i}`).map((key) => (
 							<StatCardSkeleton key={key} />
 						))}
 					</div>
-					{/* Row 1: storage-by-month (2/3) + breakdown donut (1/3) */}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 						<div className="lg:col-span-2">
 							<ChartCardSkeleton titleWidth="w-36" chartHeight="h-[220px]" />
 						</div>
 						<ChartCardSkeleton titleWidth="w-36" chartHeight="h-[220px]" />
 					</div>
-				</section>
+				</SectionRule>
 			</div>
 		);
 	}
@@ -602,8 +570,8 @@ export default function DashboardPage() {
 	if (error || !data) {
 		return (
 			<div className="flex min-h-full flex-col items-center justify-center gap-2">
-				<p className="text-sm text-destructive">Failed to load dashboard data</p>
-				<p className="text-xs text-muted-foreground">{error}</p>
+				<p className="text-sm text-basalt-destructive">Failed to load dashboard data</p>
+				<p className="text-xs text-basalt-muted-foreground">{error}</p>
 			</div>
 		);
 	}
@@ -613,61 +581,45 @@ export default function DashboardPage() {
 
 	return (
 		<div className="space-y-8">
-			{/* ── Recordings section ── */}
-			<section>
-				<SectionHeader
-					icon={Mic}
-					title="Recordings"
-					description="Overview of your audio recordings and transcription status."
-				/>
-
-				{/* Stat cards */}
-				<div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4 mt-4">
+			<PageHeader title="Dashboard" description="Overview of recordings and object storage." />
+			<SectionRule
+				title="Recordings"
+				hint="Overview of your audio recordings and transcription status."
+			>
+				<div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
 					{recStats.map((s) => (
 						<StatCard key={s.label} {...s} />
 					))}
 				</div>
-
-				{/* Row 1: monthly bar chart + status donut */}
-				<div className="grid grid-cols-1 gap-4 mt-4 lg:grid-cols-3">
+				<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 					<div className="lg:col-span-2">
 						<RecordingsByMonthChart data={data.recordings.byMonth} />
 					</div>
 					<StatusDonutChart data={data.recordings.byStatus} />
 				</div>
-
-				{/* Row 2: duration area chart + format bar chart */}
-				<div className="grid grid-cols-1 gap-4 mt-4 lg:grid-cols-3">
+				<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 					<div className="lg:col-span-2">
 						<DurationByMonthChart data={data.recordings.durationByMonth} />
 					</div>
 					<FormatBarChart data={data.recordings.byFormat} />
 				</div>
-			</section>
-
-			{/* ── OSS Storage section ── */}
-			<section>
-				<SectionHeader
-					icon={HardDrive}
-					title="OSS Storage"
-					description="Object storage usage, file distribution, and orphan detection."
-				/>
-
-				{/* Stat cards */}
-				<div className="grid grid-cols-1 gap-3 md:gap-4 md:grid-cols-3 mt-4">
+			</SectionRule>
+			<SectionRule
+				title="OSS Storage"
+				hint="Object storage usage, file distribution, and orphan detection."
+			>
+				<div className="grid grid-cols-1 gap-3 md:gap-4 md:grid-cols-3">
 					{ossStats.map((s) => (
 						<StatCard key={s.label} {...s} />
 					))}
 				</div>
-
-				{/* Row 1: monthly storage chart + breakdown donut */}
-				<div className="grid grid-cols-1 gap-4 mt-4 lg:grid-cols-3">
+				<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 					<div className="lg:col-span-2">
 						<OssStorageByMonthChart data={data.oss.sizeByMonth} />
 					</div>
 					<OssBreakdownDonut stats={data.oss} />
 				</div>
-			</section>
+			</SectionRule>
 		</div>
 	);
 }

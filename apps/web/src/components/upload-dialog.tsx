@@ -1,16 +1,16 @@
-import { AlertCircle, Check, FileAudio, Loader2, Upload, X } from "lucide-react";
-import { type ChangeEvent, type DragEvent, useCallback, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+	Input,
+	Label,
+} from "@nocoo/basalt";
+import { AlertCircle, Check, FileAudio, Loader2, Upload, X } from "lucide-react";
+import { type ChangeEvent, type DragEvent, useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 // ── Types ──
@@ -359,31 +359,39 @@ export function UploadDialog({
 								className={cn(
 									"flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors",
 									dragging
-										? "border-primary bg-primary/5 text-primary"
-										: "border-border hover:bg-accent hover:text-accent-foreground",
+										? "border-basalt-primary bg-basalt-primary/5 text-basalt-primary"
+										: "border-basalt-border hover:bg-basalt-accent hover:text-basalt-accent-foreground",
 								)}
 							>
 								<Upload
-									className={cn("h-6 w-6", dragging ? "text-primary" : "text-muted-foreground")}
+									className={cn(
+										"h-6 w-6",
+										dragging ? "text-basalt-primary" : "text-basalt-muted-foreground",
+									)}
 								/>
 								<span
-									className={cn("text-sm", dragging ? "text-primary" : "text-muted-foreground")}
+									className={cn(
+										"text-sm",
+										dragging ? "text-basalt-primary" : "text-basalt-muted-foreground",
+									)}
 								>
 									{dragging ? "Drop to add audio file" : "Click or drop an audio file here"}
 								</span>
 							</button>
 						) : (
-							<div className="border-border flex items-center gap-3 rounded-lg border p-3">
-								<FileAudio className="text-primary h-8 w-8 shrink-0" />
+							<div className="border-basalt-border flex items-center gap-3 rounded-lg border p-3">
+								<FileAudio className="text-basalt-primary h-8 w-8 shrink-0" />
 								<div className="min-w-0 flex-1">
 									<p className="truncate text-sm font-medium">{file.name}</p>
-									<p className="text-muted-foreground text-xs">{formatFileSize(file.size)}</p>
+									<p className="text-basalt-muted-foreground text-xs">
+										{formatFileSize(file.size)}
+									</p>
 								</div>
 								{state === "selected" && (
 									<button
 										type="button"
 										onClick={reset}
-										className="text-muted-foreground hover:text-foreground shrink-0"
+										className="text-basalt-muted-foreground hover:text-basalt-foreground shrink-0"
 									>
 										<X className="h-4 w-4" />
 									</button>
@@ -415,7 +423,7 @@ export function UploadDialog({
 					{/* Description (optional) */}
 					<div className="grid gap-2">
 						<Label htmlFor="recording-description">
-							Description <span className="text-muted-foreground">(optional)</span>
+							Description <span className="text-basalt-muted-foreground">(optional)</span>
 						</Label>
 						<Input
 							id="recording-description"
@@ -430,19 +438,19 @@ export function UploadDialog({
 					{(state === "uploading" || state === "creating") && (
 						<div className="grid gap-2">
 							<div className="flex items-center justify-between text-sm">
-								<span className="text-muted-foreground">
+								<span className="text-basalt-muted-foreground">
 									{state === "uploading"
 										? `Uploading... ${progress.percentage}%`
 										: "Saving recording..."}
 								</span>
-								<span className="text-muted-foreground">
+								<span className="text-basalt-muted-foreground">
 									{state === "uploading" &&
 										`${formatFileSize(progress.loaded)} / ${formatFileSize(progress.total)}`}
 								</span>
 							</div>
-							<div className="bg-secondary h-2 overflow-hidden rounded-full">
+							<div className="bg-basalt-secondary h-2 overflow-hidden rounded-full">
 								<div
-									className="bg-primary h-full transition-all duration-300"
+									className="bg-basalt-primary h-full transition-all duration-300"
 									style={{
 										width: state === "creating" ? "100%" : `${progress.percentage}%`,
 									}}

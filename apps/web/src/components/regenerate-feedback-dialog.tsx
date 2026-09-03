@@ -12,18 +12,18 @@
  * - Cancel and X close the dialog without triggering regeneration.
  */
 
-import { Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
+	Button,
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+} from "@nocoo/basalt";
+import { InputArea } from "@nocoo/basalt/components/input-area";
+import { Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const DEFAULT_MAX_LENGTH = 2000;
 
@@ -63,7 +63,7 @@ export function RegenerateFeedbackDialog({
 					</DialogDescription>
 				</DialogHeader>
 
-				<Textarea
+				<InputArea
 					autoFocus
 					value={feedback}
 					onChange={(e) => setFeedback(e.target.value)}
@@ -72,7 +72,7 @@ export function RegenerateFeedbackDialog({
 					className="min-h-32"
 				/>
 
-				<div className="flex justify-end text-xs text-muted-foreground">
+				<div className="flex justify-end text-xs text-basalt-muted-foreground">
 					{feedback.length}/{maxLength}
 				</div>
 

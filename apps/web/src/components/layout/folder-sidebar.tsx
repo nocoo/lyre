@@ -1,29 +1,6 @@
 import type { Folder } from "@lyre/api/contracts/recordings";
 import { isRecordingsPath } from "@lyre/api/lib/sidebar-nav";
 import {
-	Archive,
-	Bookmark,
-	BookOpen,
-	Briefcase,
-	FileAudio,
-	FolderClosed,
-	FolderOpen,
-	FolderPlus,
-	Headphones,
-	Heart,
-	Inbox,
-	type LucideIcon,
-	Mic,
-	MoreHorizontal,
-	Music,
-	Pencil,
-	Radio,
-	Star,
-	Trash2,
-} from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -51,6 +28,29 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@nocoo/basalt";
+import {
+	Archive,
+	Bookmark,
+	BookOpen,
+	Briefcase,
+	FileAudio,
+	FolderClosed,
+	FolderOpen,
+	FolderPlus,
+	Headphones,
+	Heart,
+	Inbox,
+	type LucideIcon,
+	Mic,
+	MoreHorizontal,
+	Music,
+	Pencil,
+	Radio,
+	Star,
+	Trash2,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useLocationPathname } from "@/lib/router-compat";
 import { cn } from "@/lib/utils";
 
@@ -143,10 +143,7 @@ function FolderItem({
 							<Pencil className="h-4 w-4" />
 							Rename
 						</DropdownMenuItem>
-						<DropdownMenuItem
-							className="text-basalt-destructive"
-							onClick={() => onDelete(folder)}
-						>
+						<DropdownMenuItem className="text-basalt-destructive" onClick={() => onDelete(folder)}>
 							<Trash2 className="h-4 w-4" />
 							Delete
 						</DropdownMenuItem>

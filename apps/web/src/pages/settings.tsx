@@ -1,3 +1,5 @@
+import { Badge, Button, Input, Label, toast } from "@nocoo/basalt";
+import { PageHeader } from "@nocoo/basalt/components/page-header";
 import {
 	Check,
 	CheckCircle2,
@@ -25,12 +27,7 @@ import {
 	XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { useSetBreadcrumbs } from "@/components/layout";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTagColor } from "@/lib/badge-colors";
 import { cn } from "@/lib/utils";
@@ -134,15 +131,15 @@ function EditableItem({
 	return (
 		<div className="group flex items-center gap-2">
 			{colorDot && <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", colorDot)} />}
-			<span className="text-sm text-foreground flex-1 truncate">{name}</span>
+			<span className="text-sm text-basalt-foreground flex-1 truncate">{name}</span>
 			<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
 				<Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditing(true)}>
-					<Pencil className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+					<Pencil className="h-3.5 w-3.5 text-basalt-muted-foreground" strokeWidth={1.5} />
 				</Button>
 				<Button
 					variant="ghost"
 					size="sm"
-					className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+					className="h-7 w-7 p-0 text-basalt-destructive hover:text-basalt-destructive"
 					onClick={handleDelete}
 					disabled={deleting}
 				>
@@ -179,7 +176,7 @@ function InlineCreateForm({
 	};
 
 	return (
-		<div className="flex items-center gap-2 pt-2 border-t border-border">
+		<div className="flex items-center gap-2 pt-2 border-t border-basalt-border">
 			<Input
 				value={name}
 				onChange={(e) => setName(e.target.value)}
@@ -327,7 +324,7 @@ function OrganizationSection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-card bg-secondary p-5">
+			<div className="rounded-basalt-card bg-basalt-secondary p-5">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -356,14 +353,14 @@ function OrganizationSection() {
 	}
 
 	return (
-		<div className="rounded-card bg-secondary p-5">
+		<div className="rounded-basalt-card bg-basalt-secondary p-5">
 			<div className="mb-4 flex items-center gap-3">
-				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-					<FolderOpen className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
+					<FolderOpen className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
 				</div>
 				<div>
-					<h2 className="text-sm font-medium text-foreground">Organization</h2>
-					<p className="text-xs text-muted-foreground">
+					<h2 className="text-sm font-medium text-basalt-foreground">Organization</h2>
+					<p className="text-xs text-basalt-muted-foreground">
 						Manage folders and tags for organizing recordings.
 					</p>
 				</div>
@@ -373,15 +370,15 @@ function OrganizationSection() {
 				{/* Folders */}
 				<div className="space-y-3">
 					<div className="flex items-center gap-2">
-						<FolderOpen className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
-						<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+						<FolderOpen className="h-3.5 w-3.5 text-basalt-muted-foreground" strokeWidth={1.5} />
+						<h3 className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 							Folders
 						</h3>
-						<span className="text-xs text-muted-foreground">({folders.length})</span>
+						<span className="text-xs text-basalt-muted-foreground">({folders.length})</span>
 					</div>
 					<div className="space-y-1.5">
 						{folders.length === 0 && (
-							<p className="text-xs text-muted-foreground py-2">No folders yet.</p>
+							<p className="text-xs text-basalt-muted-foreground py-2">No folders yet.</p>
 						)}
 						{folders.map((folder) => (
 							<EditableItem
@@ -398,15 +395,15 @@ function OrganizationSection() {
 				{/* Tags */}
 				<div className="space-y-3">
 					<div className="flex items-center gap-2">
-						<Tag className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
-						<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+						<Tag className="h-3.5 w-3.5 text-basalt-muted-foreground" strokeWidth={1.5} />
+						<h3 className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 							Tags
 						</h3>
-						<span className="text-xs text-muted-foreground">({tags.length})</span>
+						<span className="text-xs text-basalt-muted-foreground">({tags.length})</span>
 					</div>
 					<div className="space-y-1.5">
 						{tags.length === 0 && (
-							<p className="text-xs text-muted-foreground py-2">No tags yet.</p>
+							<p className="text-xs text-basalt-muted-foreground py-2">No tags yet.</p>
 						)}
 						{tags.map((tag) => {
 							const color = getTagColor(tag.name);
@@ -502,14 +499,14 @@ function BackupSection() {
 	const busy = exporting || importing;
 
 	return (
-		<div className="rounded-card bg-secondary p-5">
+		<div className="rounded-basalt-card bg-basalt-secondary p-5">
 			<div className="mb-4 flex items-center gap-3">
-				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-					<Database className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
+					<Database className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
 				</div>
 				<div>
-					<h2 className="text-sm font-medium text-foreground">Data Backup</h2>
-					<p className="text-xs text-muted-foreground">
+					<h2 className="text-sm font-medium text-basalt-foreground">Data Backup</h2>
+					<p className="text-xs text-basalt-muted-foreground">
 						Export or import all your data as a JSON file.
 					</p>
 				</div>
@@ -607,8 +604,8 @@ interface BackyHistoryData {
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
 	return (
 		<div className="flex items-baseline gap-2 text-xs">
-			<span className="text-muted-foreground shrink-0 w-24">{label}</span>
-			<span className="text-foreground font-mono break-all">{value}</span>
+			<span className="text-basalt-muted-foreground shrink-0 w-24">{label}</span>
+			<span className="text-basalt-foreground font-mono break-all">{value}</span>
 		</div>
 	);
 }
@@ -790,7 +787,7 @@ function BackySection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-card bg-secondary p-5">
+			<div className="rounded-basalt-card bg-basalt-secondary p-5">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -816,14 +813,14 @@ function BackySection() {
 	}
 
 	return (
-		<div className="rounded-card bg-secondary p-5">
+		<div className="rounded-basalt-card bg-basalt-secondary p-5">
 			<div className="mb-4 flex items-center gap-3">
-				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-					<CloudUpload className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
+					<CloudUpload className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
 				</div>
 				<div className="flex-1">
 					<div className="flex items-center gap-2">
-						<h2 className="text-sm font-medium text-foreground">Remote Backup</h2>
+						<h2 className="text-sm font-medium text-basalt-foreground">Remote Backup</h2>
 						<Badge
 							variant={environment === "prod" ? "destructive" : "secondary"}
 							className="text-[10px] px-1.5 py-0"
@@ -831,7 +828,7 @@ function BackySection() {
 							{environment}
 						</Badge>
 					</div>
-					<p className="text-xs text-muted-foreground">
+					<p className="text-xs text-basalt-muted-foreground">
 						Push a full backup to Backy for off-site storage.
 					</p>
 				</div>
@@ -870,7 +867,7 @@ function BackySection() {
 						<button
 							type="button"
 							onClick={() => setShowApiKey(!showApiKey)}
-							className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+							className="absolute right-2 top-1/2 -translate-y-1/2 text-basalt-muted-foreground hover:text-basalt-foreground"
 						>
 							{showApiKey ? (
 								<EyeOff className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -942,14 +939,14 @@ function BackySection() {
 
 			{/* Push result details */}
 			{result && (
-				<div className="space-y-3 border-t border-border pt-4">
+				<div className="space-y-3 border-t border-basalt-border pt-4">
 					{/* Status banner */}
 					<div
 						className={cn(
 							"flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
 							result.success
 								? "bg-green-500/10 text-green-700 dark:text-green-400"
-								: "bg-destructive/10 text-destructive",
+								: "bg-basalt-destructive/10 text-basalt-destructive",
 						)}
 					>
 						{result.success ? (
@@ -968,10 +965,10 @@ function BackySection() {
 					{/* Request details */}
 					{result.request && (
 						<div className="space-y-1.5">
-							<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+							<h3 className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 								Request
 							</h3>
-							<div className="rounded-lg bg-secondary/50 p-3 space-y-1">
+							<div className="rounded-lg bg-basalt-secondary/50 p-3 space-y-1">
 								<DetailRow label="URL" value={result.request.url} />
 								<DetailRow label="Method" value={result.request.method} />
 								<DetailRow label="Environment" value={result.request.environment} />
@@ -982,8 +979,10 @@ function BackySection() {
 									value={`${(result.request.fileSizeBytes / 1024).toFixed(1)} KB`}
 								/>
 							</div>
-							<div className="rounded-lg bg-secondary/50 p-3 space-y-1">
-								<h4 className="text-xs font-medium text-muted-foreground mb-1">Backup Contents</h4>
+							<div className="rounded-lg bg-basalt-secondary/50 p-3 space-y-1">
+								<h4 className="text-xs font-medium text-basalt-muted-foreground mb-1">
+									Backup Contents
+								</h4>
 								<div className="grid grid-cols-3 gap-x-4 gap-y-1">
 									{Object.entries(result.request.backupStats).map(([key, count]) => (
 										<DetailRow key={key} label={key} value={String(count)} />
@@ -996,14 +995,14 @@ function BackySection() {
 					{/* Response details */}
 					{result.response && (
 						<div className="space-y-1.5">
-							<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+							<h3 className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 								Response
 							</h3>
-							<div className="rounded-lg bg-secondary/50 p-3 space-y-1">
+							<div className="rounded-lg bg-basalt-secondary/50 p-3 space-y-1">
 								<DetailRow label="Status" value={result.response.status} />
 								<div className="text-xs">
-									<span className="text-muted-foreground">Body</span>
-									<pre className="mt-1 rounded bg-background p-2 text-xs font-mono text-foreground overflow-x-auto max-h-40 overflow-y-auto">
+									<span className="text-basalt-muted-foreground">Body</span>
+									<pre className="mt-1 rounded bg-basalt-background p-2 text-xs font-mono text-basalt-foreground overflow-x-auto max-h-40 overflow-y-auto">
 										{typeof result.response.body === "string"
 											? result.response.body
 											: JSON.stringify(result.response.body, null, 2)}
@@ -1017,11 +1016,11 @@ function BackySection() {
 
 			{/* Remote backup history */}
 			{configured && (
-				<div className="border-t border-border pt-4">
+				<div className="border-t border-basalt-border pt-4">
 					<div className="flex items-center justify-between mb-3">
 						<div className="flex items-center gap-1.5">
-							<History className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
-							<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+							<History className="h-3.5 w-3.5 text-basalt-muted-foreground" strokeWidth={1.5} />
+							<h3 className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 								Remote History
 							</h3>
 							{history && (
@@ -1034,7 +1033,7 @@ function BackySection() {
 							type="button"
 							onClick={loadHistory}
 							disabled={historyLoading}
-							className="text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+							className="text-basalt-muted-foreground hover:text-basalt-foreground disabled:opacity-40 disabled:cursor-not-allowed"
 							title="Refresh"
 						>
 							<RefreshCw
@@ -1046,12 +1045,12 @@ function BackySection() {
 
 					{historyLoading && !history && (
 						<div className="flex justify-center py-4">
-							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+							<Loader2 className="h-4 w-4 animate-spin text-basalt-muted-foreground" />
 						</div>
 					)}
 
 					{historyError && (
-						<div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive mb-2">
+						<div className="rounded-lg bg-basalt-destructive/10 px-3 py-2 text-xs text-basalt-destructive mb-2">
 							{historyError}
 						</div>
 					)}
@@ -1059,7 +1058,7 @@ function BackySection() {
 					{history && history.recent_backups.length > 0 && (
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
 							{history.recent_backups.map((entry) => (
-								<div key={entry.id} className="rounded-lg bg-secondary/50 px-3 py-2">
+								<div key={entry.id} className="rounded-lg bg-basalt-secondary/50 px-3 py-2">
 									<div className="flex items-center gap-1.5 mb-1">
 										<Badge
 											variant={entry.environment === "prod" ? "destructive" : "secondary"}
@@ -1067,14 +1066,17 @@ function BackySection() {
 										>
 											{entry.environment}
 										</Badge>
-										<span className="text-[10px] text-muted-foreground ml-auto">
+										<span className="text-[10px] text-basalt-muted-foreground ml-auto">
 											{formatTimeAgo(entry.created_at)}
 										</span>
 									</div>
-									<p className="text-xs text-foreground font-mono truncate" title={entry.tag}>
+									<p
+										className="text-xs text-basalt-foreground font-mono truncate"
+										title={entry.tag}
+									>
 										{entry.tag}
 									</p>
-									<p className="text-[10px] text-muted-foreground mt-0.5">
+									<p className="text-[10px] text-basalt-muted-foreground mt-0.5">
 										{formatFileSize(entry.file_size)}
 									</p>
 								</div>
@@ -1083,14 +1085,14 @@ function BackySection() {
 					)}
 
 					{history && history.recent_backups.length === 0 && (
-						<p className="text-xs text-muted-foreground py-2 text-center">No backups yet</p>
+						<p className="text-xs text-basalt-muted-foreground py-2 text-center">No backups yet</p>
 					)}
 				</div>
 			)}
 
 			{!configured && (
-				<div className="border-t border-border pt-4">
-					<p className="text-xs text-muted-foreground py-2 text-center">
+				<div className="border-t border-basalt-border pt-4">
+					<p className="text-xs text-basalt-muted-foreground py-2 text-center">
 						Configure webhook to view remote backup history
 					</p>
 				</div>
@@ -1183,7 +1185,7 @@ function PullWebhookSection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-card bg-secondary p-5">
+			<div className="rounded-basalt-card bg-basalt-secondary p-5">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -1208,14 +1210,14 @@ function PullWebhookSection() {
 	}
 
 	return (
-		<div className="rounded-card bg-secondary p-5">
+		<div className="rounded-basalt-card bg-basalt-secondary p-5">
 			<div className="mb-4 flex items-center gap-3">
-				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-					<Webhook className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
+					<Webhook className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
 				</div>
 				<div className="flex-1">
-					<h2 className="text-sm font-medium text-foreground">Pull Webhook</h2>
-					<p className="text-xs text-muted-foreground">
+					<h2 className="text-sm font-medium text-basalt-foreground">Pull Webhook</h2>
+					<p className="text-xs text-basalt-muted-foreground">
 						Allow Backy to trigger automatic backups via webhook.
 					</p>
 				</div>
@@ -1229,7 +1231,7 @@ function PullWebhookSection() {
 
 			{!hasPullKey ? (
 				<div className="space-y-3">
-					<p className="text-xs text-muted-foreground">
+					<p className="text-xs text-basalt-muted-foreground">
 						Generate a webhook key to allow Backy to call this endpoint and trigger automatic
 						backups.
 					</p>
@@ -1252,15 +1254,15 @@ function PullWebhookSection() {
 				<div className="space-y-3">
 					{/* Webhook URL */}
 					<div>
-						<Label className="text-xs text-muted-foreground">Webhook URL</Label>
+						<Label className="text-xs text-basalt-muted-foreground">Webhook URL</Label>
 						<div className="flex items-center gap-2 mt-1">
-							<code className="flex-1 rounded-md bg-secondary px-3 py-1.5 text-xs font-mono text-foreground truncate">
+							<code className="flex-1 rounded-md bg-basalt-secondary px-3 py-1.5 text-xs font-mono text-basalt-foreground truncate">
 								{webhookUrl}
 							</code>
 							<button
 								type="button"
 								onClick={() => copyToClipboard(webhookUrl, "url")}
-								className="text-muted-foreground hover:text-foreground shrink-0"
+								className="text-basalt-muted-foreground hover:text-basalt-foreground shrink-0"
 								title="Copy URL"
 							>
 								{copied === "url" ? (
@@ -1274,15 +1276,15 @@ function PullWebhookSection() {
 
 					{/* Webhook Key */}
 					<div>
-						<Label className="text-xs text-muted-foreground">Webhook Key</Label>
+						<Label className="text-xs text-basalt-muted-foreground">Webhook Key</Label>
 						<div className="flex items-center gap-2 mt-1">
-							<code className="flex-1 rounded-md bg-secondary px-3 py-1.5 text-xs font-mono text-foreground truncate">
+							<code className="flex-1 rounded-md bg-basalt-secondary px-3 py-1.5 text-xs font-mono text-basalt-foreground truncate">
 								{pullKey}
 							</code>
 							<button
 								type="button"
 								onClick={() => pullKey && copyToClipboard(pullKey, "key")}
-								className="text-muted-foreground hover:text-foreground shrink-0"
+								className="text-basalt-muted-foreground hover:text-basalt-foreground shrink-0"
 								title="Copy key"
 							>
 								{copied === "key" ? (
@@ -1295,13 +1297,13 @@ function PullWebhookSection() {
 					</div>
 
 					{/* Usage hint */}
-					<div className="rounded-lg bg-secondary/50 p-3 text-xs text-muted-foreground space-y-1">
-						<p className="font-medium text-foreground">Usage</p>
+					<div className="rounded-lg bg-basalt-secondary/50 p-3 text-xs text-basalt-muted-foreground space-y-1">
+						<p className="font-medium text-basalt-foreground">Usage</p>
 						<p>
 							Configure Backy to call this URL with the key in the{" "}
-							<code className="bg-background px-1 rounded">X-Webhook-Key</code> header:
+							<code className="bg-basalt-background px-1 rounded">X-Webhook-Key</code> header:
 						</p>
-						<pre className="rounded bg-background p-2 font-mono text-[11px] overflow-x-auto">
+						<pre className="rounded bg-basalt-background p-2 font-mono text-[11px] overflow-x-auto">
 							{`curl -X POST ${webhookUrl} \\
   -H "X-Webhook-Key: <your-key>"`}
 						</pre>
@@ -1326,7 +1328,7 @@ function PullWebhookSection() {
 						<Button
 							variant="outline"
 							size="sm"
-							className="gap-2 text-destructive hover:text-destructive"
+							className="gap-2 text-basalt-destructive hover:text-basalt-destructive"
 							onClick={handleRevoke}
 							disabled={revoking}
 						>
@@ -1351,13 +1353,7 @@ export default function SettingsGeneralPage() {
 
 	return (
 		<div className="space-y-6">
-			<div>
-				<h1 className="text-2xl font-semibold">General</h1>
-				<p className="mt-1 text-sm text-muted-foreground">
-					Manage folders, tags, and data backups.
-				</p>
-			</div>
-
+			<PageHeader title="General" description="Manage folders, tags, and data backups." />
 			<OrganizationSection />
 			<BackupSection />
 			<BackySection />

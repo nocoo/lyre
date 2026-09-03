@@ -46,7 +46,7 @@ export function TranscriptViewer({
 	const activeIndex = findActiveSentenceIndex(transcription.sentences, currentTime);
 
 	return (
-		<div className="rounded-card bg-secondary">
+		<div className="rounded-basalt-card bg-basalt-secondary">
 			{/* Tab header */}
 			<TranscriptTabs
 				sentenceCount={transcription.sentenceCount}
@@ -72,7 +72,7 @@ export function TranscriptViewer({
 /** Full-text view of the transcript */
 export function TranscriptFullText({ transcription }: { transcription: TranscriptionVM }) {
 	return (
-		<div className="rounded-card bg-secondary">
+		<div className="rounded-basalt-card bg-basalt-secondary">
 			<TranscriptTabs
 				sentenceCount={transcription.sentenceCount}
 				wordCount={transcription.wordCount}
@@ -80,7 +80,7 @@ export function TranscriptFullText({ transcription }: { transcription: Transcrip
 				copyText={transcription.fullText}
 			/>
 			<div className="p-4">
-				<p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+				<p className="whitespace-pre-wrap text-sm leading-relaxed text-basalt-foreground">
 					{transcription.fullText}
 				</p>
 			</div>
@@ -114,9 +114,9 @@ function TranscriptTabs({
 	}, [copyText]);
 
 	return (
-		<div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-			<span className="text-sm font-medium text-foreground">Transcript</span>
-			<div className="flex items-center gap-3 text-xs text-muted-foreground">
+		<div className="flex items-center justify-between border-b border-basalt-border px-4 py-2.5">
+			<span className="text-sm font-medium text-basalt-foreground">Transcript</span>
+			<div className="flex items-center gap-3 text-xs text-basalt-muted-foreground">
 				<span>{sentenceCount} sentences</span>
 				<span>{wordCount} words</span>
 				<span className="uppercase">{language}</span>
@@ -128,7 +128,7 @@ function TranscriptTabs({
 						"ml-1 flex h-6 w-6 items-center justify-center rounded-md transition-colors",
 						copied
 							? "text-emerald-500"
-							: "text-muted-foreground hover:text-foreground hover:bg-accent",
+							: "text-basalt-muted-foreground hover:text-basalt-foreground hover:bg-basalt-accent",
 					)}
 				>
 					{copied ? (
@@ -222,13 +222,13 @@ const SentenceRow = forwardRef<
 	ref,
 ) {
 	return (
-		<div ref={ref} className={cn("rounded-lg transition-colors", isActive && "bg-accent")}>
+		<div ref={ref} className={cn("rounded-lg transition-colors", isActive && "bg-basalt-accent")}>
 			{/* Sentence header row */}
 			<div className="group flex items-baseline gap-3 px-3 py-2">
 				{/* Timestamp button */}
 				<button
 					type="button"
-					className="shrink-0 text-xs leading-relaxed tabular-nums text-muted-foreground transition-colors hover:text-foreground"
+					className="shrink-0 text-xs leading-relaxed tabular-nums text-basalt-muted-foreground transition-colors hover:text-basalt-foreground"
 					onClick={() => onSeek?.(sentence.beginTimeMs / 1000)}
 					aria-label={`Seek to ${sentence.startTime}`}
 				>
@@ -238,7 +238,7 @@ const SentenceRow = forwardRef<
 				{/* Sentence text — clickable to expand */}
 				<button
 					type="button"
-					className="flex-1 text-left text-sm leading-relaxed text-foreground hover:text-foreground/80 transition-colors"
+					className="flex-1 text-left text-sm leading-relaxed text-basalt-foreground hover:text-basalt-foreground/80 transition-colors"
 					onClick={() => onToggle(sentence.id)}
 					aria-expanded={isExpanded}
 					aria-label={isExpanded ? "Collapse word details" : "Expand word details"}
@@ -249,7 +249,7 @@ const SentenceRow = forwardRef<
 				{/* Expand indicator */}
 				<ChevronDown
 					className={cn(
-						"h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-200 translate-y-[3px]",
+						"h-3.5 w-3.5 shrink-0 text-basalt-muted-foreground/50 transition-transform duration-200 translate-y-[3px]",
 						isExpanded && "rotate-180",
 					)}
 					strokeWidth={1.5}
@@ -259,16 +259,16 @@ const SentenceRow = forwardRef<
 			{/* Expanded word-level view */}
 			{isExpanded && (
 				<div className="px-3 pb-3">
-					<div className="ml-[calc(theme(spacing.3)+theme(fontSize.xs.1.lineHeight))] rounded-md bg-muted/50 px-3 py-2">
+					<div className="ml-[calc(theme(spacing.3)+theme(fontSize.xs.1.lineHeight))] rounded-md bg-basalt-muted/50 px-3 py-2">
 						{wordsLoading ? (
-							<div className="flex items-center gap-2 text-xs text-muted-foreground">
+							<div className="flex items-center gap-2 text-xs text-basalt-muted-foreground">
 								<Loader2 className="h-3 w-3 animate-spin" />
 								Loading word data...
 							</div>
 						) : words && words.length > 0 ? (
 							<WordKaraoke words={words} currentTime={currentTime} onSeek={onSeek} />
 						) : (
-							<p className="text-xs text-muted-foreground">No word-level data available</p>
+							<p className="text-xs text-basalt-muted-foreground">No word-level data available</p>
 						)}
 					</div>
 				</div>
@@ -298,8 +298,8 @@ function WordKaraoke({
 					className={cn(
 						"cursor-pointer rounded-sm transition-colors duration-100",
 						idx === activeWordIndex
-							? "bg-primary/20 text-primary font-medium"
-							: "text-foreground/80 hover:text-foreground hover:bg-muted",
+							? "bg-basalt-primary/20 text-basalt-primary font-medium"
+							: "text-basalt-foreground/80 hover:text-basalt-foreground hover:bg-basalt-muted",
 					)}
 					onClick={() => onSeek?.(word.beginTimeMs / 1000)}
 					role="button"

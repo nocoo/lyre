@@ -6,12 +6,9 @@ import {
 	CUSTOM_PROVIDER_INFO,
 	type SdkType,
 } from "@lyre/api/contracts/ai";
+import { Badge, Button, Input, Label } from "@nocoo/basalt";
 import { Bot, Check, Loader2, Plug, Save, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface AiSettings {
@@ -208,7 +205,7 @@ export function AiSettingsSection() {
 
 	if (!loaded) {
 		return (
-			<div className="rounded-card bg-secondary p-5 h-full">
+			<div className="rounded-basalt-card bg-basalt-secondary p-5 h-full">
 				<div className="mb-4 flex items-center gap-3">
 					<Skeleton className="h-9 w-9 rounded-lg" />
 					<div className="space-y-1.5">
@@ -233,14 +230,14 @@ export function AiSettingsSection() {
 	}
 
 	return (
-		<div className="rounded-card bg-secondary p-5 h-full">
+		<div className="rounded-basalt-card bg-basalt-secondary p-5 h-full">
 			<div className="mb-4 flex items-center gap-3">
-				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-					<Bot className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+				<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
+					<Bot className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
 				</div>
 				<div>
-					<h2 className="text-sm font-medium text-foreground">AI Configuration</h2>
-					<p className="text-xs text-muted-foreground">
+					<h2 className="text-sm font-medium text-basalt-foreground">AI Configuration</h2>
+					<p className="text-xs text-basalt-muted-foreground">
 						Configure LLM provider for AI-powered summaries.
 					</p>
 				</div>
@@ -253,7 +250,7 @@ export function AiSettingsSection() {
 					<select
 						value={settings.provider}
 						onChange={(e) => handleProviderChange(e.target.value)}
-						className="mt-1 h-9 w-full rounded-md border border-border bg-secondary px-3 pr-8 text-sm"
+						className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
 					>
 						<option value="">Select a provider...</option>
 						{ALL_PROVIDER_IDS.map((id) => {
@@ -276,7 +273,7 @@ export function AiSettingsSection() {
 							<select
 								value={presetModels.includes(settings.model) ? settings.model : CUSTOM_MODEL_VALUE}
 								onChange={(e) => handleModelSelect(e.target.value)}
-								className="mt-1 h-9 w-full rounded-md border border-border bg-secondary px-3 pr-8 text-sm"
+								className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
 							>
 								{presetModels.map((m) => (
 									<option key={m} value={m}>
@@ -361,7 +358,7 @@ export function AiSettingsSection() {
 									sdkType: e.target.value as SdkType | "",
 								}))
 							}
-							className="mt-1 h-9 w-full rounded-md border border-border bg-secondary px-3 pr-8 text-sm"
+							className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
 						>
 							<option value="openai">OpenAI</option>
 							<option value="anthropic">Anthropic</option>
@@ -381,7 +378,7 @@ export function AiSettingsSection() {
 									authType: e.target.value as AuthType | "",
 								}))
 							}
-							className="mt-1 h-9 w-full rounded-md border border-border bg-secondary px-3 pr-8 text-sm"
+							className="mt-1 h-9 w-full rounded-md border border-basalt-border bg-basalt-secondary px-3 pr-8 text-sm"
 						>
 							<option value="">Default (x-api-key / Bearer)</option>
 							<option value="bearer">Force Bearer</option>
@@ -408,7 +405,7 @@ export function AiSettingsSection() {
 				<div className="flex items-start justify-between gap-4 sm:col-span-2">
 					<div className="min-w-0">
 						<Label className="text-sm">Auto-summarize</Label>
-						<p className="mt-0.5 text-xs text-muted-foreground">
+						<p className="mt-0.5 text-xs text-basalt-muted-foreground">
 							Automatically generate a summary when transcription completes.
 						</p>
 					</div>
@@ -422,10 +419,10 @@ export function AiSettingsSection() {
 								autoSummarize: !s.autoSummarize,
 							}))
 						}
-						className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${settings.autoSummarize ? "bg-foreground" : "bg-secondary"}`}
+						className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${settings.autoSummarize ? "bg-foreground" : "bg-basalt-secondary"}`}
 					>
 						<span
-							className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-sm transition-transform ${settings.autoSummarize ? "translate-x-5" : "translate-x-0"}`}
+							className={`pointer-events-none block h-5 w-5 rounded-full bg-basalt-background shadow-sm transition-transform ${settings.autoSummarize ? "translate-x-5" : "translate-x-0"}`}
 						/>
 					</button>
 				</div>

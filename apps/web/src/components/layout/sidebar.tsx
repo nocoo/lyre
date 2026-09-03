@@ -58,13 +58,7 @@ function signOut() {
 	window.location.href = ACCESS_LOGOUT_URL;
 }
 
-export function AppSidebar({
-	collapsed,
-	onToggle,
-}: {
-	collapsed: boolean;
-	onToggle: () => void;
-}) {
+export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
 	const pathname = useLocationPathname();
 	const navigate = useNavigate();
 	const { data: session } = useSession();
@@ -167,7 +161,12 @@ export function AppSidebar({
 				<SidebarFooter className="flex w-full justify-center px-0">
 					<Tooltip delayDuration={0}>
 						<TooltipTrigger asChild>
-							<button type="button" onClick={signOut} className="cursor-pointer" aria-label="Sign out">
+							<button
+								type="button"
+								onClick={signOut}
+								className="cursor-pointer"
+								aria-label="Sign out"
+							>
 								{avatar}
 							</button>
 						</TooltipTrigger>
@@ -186,7 +185,13 @@ export function AppSidebar({
 			<SidebarHeader>
 				<div className="flex w-full items-center justify-between">
 					<div className="flex min-w-0 items-center gap-3">
-						<img src="/logo-24.png" alt="Lyre" width={24} height={24} className="h-5 w-5 shrink-0" />
+						<img
+							src="/logo-24.png"
+							alt="Lyre"
+							width={24}
+							height={24}
+							className="h-5 w-5 shrink-0"
+						/>
 						<span className="truncate text-lg font-semibold text-basalt-foreground md:text-xl">
 							lyre
 						</span>

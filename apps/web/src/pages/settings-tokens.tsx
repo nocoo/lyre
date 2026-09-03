@@ -1,3 +1,4 @@
+import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { DeviceTokensSection } from "@/components/device-tokens";
 import { useSetBreadcrumbs } from "@/components/layout";
 
@@ -6,13 +7,10 @@ export default function DeviceTokensPage() {
 
 	return (
 		<div className="space-y-6">
-			<div>
-				<h1 className="text-2xl font-semibold">Device Tokens</h1>
-				<p className="mt-1 text-sm text-muted-foreground">
-					Generate tokens for programmatic API access.
-				</p>
-			</div>
-
+			<PageHeader
+				title="Device Tokens"
+				description="Generate tokens for programmatic API access."
+			/>
 			<DeviceTokensSection />
 		</div>
 	);

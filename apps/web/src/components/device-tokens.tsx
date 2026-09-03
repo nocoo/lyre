@@ -1,9 +1,6 @@
+import { Badge, Button, Input, Label } from "@nocoo/basalt";
 import { Check, Copy, Key, Loader2, Plus, Smartphone, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface TokenListItem {
@@ -117,7 +114,7 @@ export function DeviceTokensSection() {
 
 	if (loading) {
 		return (
-			<div className="rounded-card bg-secondary p-5">
+			<div className="rounded-basalt-card bg-basalt-secondary p-5">
 				<div className="mb-4 flex items-center justify-between">
 					<div className="flex items-center gap-3">
 						<Skeleton className="h-9 w-9 rounded-lg" />
@@ -132,7 +129,7 @@ export function DeviceTokensSection() {
 					{Array.from({ length: 3 }, (_, i) => `token-${i}`).map((key) => (
 						<div
 							key={key}
-							className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5"
+							className="flex items-center justify-between rounded-lg border border-basalt-border px-3 py-2.5"
 						>
 							<div className="min-w-0 flex-1 space-y-1.5">
 								<Skeleton className="h-4 w-40" />
@@ -147,15 +144,15 @@ export function DeviceTokensSection() {
 	}
 
 	return (
-		<div className="rounded-card bg-secondary p-5">
+		<div className="rounded-basalt-card bg-basalt-secondary p-5">
 			<div className="mb-4 flex items-center justify-between">
 				<div className="flex items-center gap-3">
-					<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-						<Key className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+					<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-basalt-secondary">
+						<Key className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
 					</div>
 					<div>
-						<h2 className="text-sm font-medium text-foreground">Device Tokens</h2>
-						<p className="text-xs text-muted-foreground">
+						<h2 className="text-sm font-medium text-basalt-foreground">Device Tokens</h2>
+						<p className="text-xs text-basalt-muted-foreground">
 							Generate tokens for programmatic API access (e.g. macOS app).
 						</p>
 					</div>
@@ -247,9 +244,9 @@ export function DeviceTokensSection() {
 			{/* Token list */}
 			{tokens.length === 0 ? (
 				<div className="flex flex-col items-center justify-center py-8 text-center">
-					<Smartphone className="mb-2 h-8 w-8 text-muted-foreground/50" />
-					<p className="text-sm text-muted-foreground">No device tokens yet.</p>
-					<p className="text-xs text-muted-foreground/70">
+					<Smartphone className="mb-2 h-8 w-8 text-basalt-muted-foreground/50" />
+					<p className="text-sm text-basalt-muted-foreground">No device tokens yet.</p>
+					<p className="text-xs text-basalt-muted-foreground/70">
 						Create one to connect your macOS app or other devices.
 					</p>
 				</div>
@@ -258,7 +255,7 @@ export function DeviceTokensSection() {
 					{tokens.map((token) => (
 						<div
 							key={token.id}
-							className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5"
+							className="flex items-center justify-between rounded-lg border border-basalt-border px-3 py-2.5"
 						>
 							<div className="min-w-0 flex-1">
 								<div className="flex items-center gap-2">
@@ -269,14 +266,14 @@ export function DeviceTokensSection() {
 										</Badge>
 									)}
 								</div>
-								<p className="text-xs text-muted-foreground">
+								<p className="text-xs text-basalt-muted-foreground">
 									Created {formatRelativeTime(token.createdAt)}
 								</p>
 							</div>
 							<Button
 								variant="ghost"
 								size="sm"
-								className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+								className="h-8 w-8 p-0 text-basalt-muted-foreground hover:text-basalt-destructive"
 								onClick={() => handleDelete(token.id)}
 								disabled={deletingId === token.id}
 							>

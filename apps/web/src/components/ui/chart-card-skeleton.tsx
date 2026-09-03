@@ -9,14 +9,14 @@ interface ChartCardSkeletonProps {
 
 /**
  * Loading skeleton for a chart card (icon + title header + chart body).
- * Matches the `rounded-card bg-secondary` shell used by dashboard charts.
+ * Matches the `rounded-basalt-card bg-basalt-secondary` shell used by dashboard charts.
  */
 export function ChartCardSkeleton({
 	titleWidth = "w-32",
 	chartHeight,
 }: ChartCardSkeletonProps) {
 	return (
-		<div className="rounded-card bg-secondary p-4 md:p-5 h-full">
+		<div className="rounded-basalt-card bg-basalt-secondary p-4 md:p-5 h-full">
 			<div className="mb-4 flex items-center gap-2">
 				<Skeleton className="h-4 w-4 rounded-sm" />
 				<Skeleton className={`h-3 ${titleWidth}`} />

@@ -1,7 +1,7 @@
+import { Button } from "@nocoo/basalt";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { CassettePlayer } from "@/components/cassette-player";
-import { Button } from "@/components/ui/button";
 import {
 	cyclePlaybackSpeed,
 	type PlaybackSpeed,
@@ -200,7 +200,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 	const isEmbedded = variant === "embedded";
 
 	return (
-		<div className={isEmbedded ? "flex-1 min-h-0" : "rounded-card bg-secondary p-4"}>
+		<div className={isEmbedded ? "flex-1 min-h-0" : "rounded-basalt-card bg-basalt-secondary p-4"}>
 			{/* Hidden audio element */}
 			{/* biome-ignore lint/a11y/useMediaCaption: user-uploaded recordings have no separate caption track; transcripts are rendered via <TranscriptViewer> */}
 			<audio
@@ -232,10 +232,12 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 			) : (
 				/* ── Standalone: original compact layout ── */
 				<>
-					{title && <p className="mb-3 text-sm font-medium text-foreground truncate">{title}</p>}
+					{title && (
+						<p className="mb-3 text-sm font-medium text-basalt-foreground truncate">{title}</p>
+					)}
 					<div
 						ref={progressBarRef}
-						className="group relative mb-3 h-1.5 cursor-pointer rounded-full bg-secondary"
+						className="group relative mb-3 h-1.5 cursor-pointer rounded-full bg-basalt-secondary"
 						onClick={handleProgressClick}
 						onKeyDown={handleProgressKeyDown}
 						role="slider"
@@ -255,7 +257,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 						/>
 					</div>
 					<div className="flex items-center gap-2">
-						<span className="min-w-[4ch] text-xs tabular-nums text-muted-foreground">
+						<span className="min-w-[4ch] text-xs tabular-nums text-basalt-muted-foreground">
 							{vm.currentTimeDisplay}
 						</span>
 						<div className="flex flex-1 items-center justify-center gap-1">
@@ -301,7 +303,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 							>
 								{vm.speedDisplay}
 							</Button>
-							<span className="min-w-[4ch] text-right text-xs tabular-nums text-muted-foreground">
+							<span className="min-w-[4ch] text-right text-xs tabular-nums text-basalt-muted-foreground">
 								{vm.durationDisplay}
 							</span>
 						</div>

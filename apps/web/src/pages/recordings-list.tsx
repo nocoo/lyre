@@ -5,6 +5,19 @@ import type {
 	Tag,
 } from "@lyre/api/contracts/recordings";
 import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	Badge,
+	Button,
+} from "@nocoo/basalt";
+import { PageHeader } from "@nocoo/basalt/components/page-header";
+import {
 	ArrowUpDown,
 	CheckSquare,
 	LayoutGrid,
@@ -22,18 +35,6 @@ import { useSearchParams } from "react-router";
 import { useSetBreadcrumbs } from "@/components/layout";
 import { RecordingListItem } from "@/components/recording-list-item";
 import { RecordingTileCard } from "@/components/recording-tile-card";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UploadDialog } from "@/components/upload-dialog";
 import { useJobEvents } from "@/hooks/use-job-events";
@@ -256,88 +257,82 @@ function RecordingsPageInner() {
 	return (
 		<>
 			<div className={cn("space-y-4", listVM.isEmpty && !loading && "flex min-h-full flex-col")}>
-				{/* Header */}
-				<div className="flex items-center justify-between">
-					<h1 className="text-2xl font-semibold">Recordings</h1>
-					<div className="flex items-center gap-2">
-						{/* View toggle */}
-						<div className="flex items-center border border-border rounded-lg overflow-hidden">
-							<button
-								type="button"
-								onClick={() => setViewMode("list")}
-								className={cn(
-									"flex h-8 w-8 items-center justify-center transition-colors",
-									viewMode === "list"
-										? "bg-accent text-foreground"
-										: "text-muted-foreground hover:text-foreground hover:bg-accent/50",
-								)}
-								aria-label="List view"
-							>
-								<List className="h-4 w-4" strokeWidth={1.5} />
-							</button>
-							<button
-								type="button"
-								onClick={() => setViewMode("tile")}
-								className={cn(
-									"flex h-8 w-8 items-center justify-center transition-colors",
-									viewMode === "tile"
-										? "bg-accent text-foreground"
-										: "text-muted-foreground hover:text-foreground hover:bg-accent/50",
-								)}
-								aria-label="Grid view"
-							>
-								<LayoutGrid className="h-4 w-4" strokeWidth={1.5} />
-							</button>
-						</div>
-
-						{/* Filter toggle */}
-						<Button
-							variant={showFilters ? "secondary" : "outline"}
-							size="sm"
-							className="gap-1.5"
-							onClick={() => setShowFilters((v) => !v)}
-						>
-							<SlidersHorizontal className="h-4 w-4" strokeWidth={1.5} />
-							Filters
-							{statusFilter !== "all" && (
-								<span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px]">
-									1
-								</span>
-							)}
-						</Button>
-
-						{/* Manage toggle */}
-						{manageMode ? (
-							<Button variant="secondary" size="sm" className="gap-1.5" onClick={exitManageMode}>
-								<X className="h-4 w-4" strokeWidth={1.5} />
-								Done
-							</Button>
-						) : (
+				<PageHeader
+					title="Recordings"
+					actions={
+						<>
+							<div className="flex items-center overflow-hidden rounded-lg border border-basalt-border">
+								<button
+									type="button"
+									onClick={() => setViewMode("list")}
+									className={cn(
+										"flex h-8 w-8 items-center justify-center transition-colors",
+										viewMode === "list"
+											? "bg-basalt-accent text-basalt-foreground"
+											: "text-basalt-muted-foreground hover:bg-basalt-accent/50 hover:text-basalt-foreground",
+									)}
+									aria-label="List view"
+								>
+									<List className="h-4 w-4" strokeWidth={1.5} />
+								</button>
+								<button
+									type="button"
+									onClick={() => setViewMode("tile")}
+									className={cn(
+										"flex h-8 w-8 items-center justify-center transition-colors",
+										viewMode === "tile"
+											? "bg-basalt-accent text-basalt-foreground"
+											: "text-basalt-muted-foreground hover:bg-basalt-accent/50 hover:text-basalt-foreground",
+									)}
+									aria-label="Grid view"
+								>
+									<LayoutGrid className="h-4 w-4" strokeWidth={1.5} />
+								</button>
+							</div>
 							<Button
-								variant="outline"
+								variant={showFilters ? "secondary" : "outline"}
 								size="sm"
 								className="gap-1.5"
-								onClick={enterManageMode}
-								disabled={listVM.isEmpty}
+								onClick={() => setShowFilters((v) => !v)}
 							>
-								<Settings2 className="h-4 w-4" strokeWidth={1.5} />
-								Manage
+								<SlidersHorizontal className="h-4 w-4" strokeWidth={1.5} />
+								Filters
+								{statusFilter !== "all" && (
+									<span className="flex h-4 w-4 items-center justify-center rounded-full bg-basalt-primary text-[10px] text-basalt-primary-foreground">
+										1
+									</span>
+								)}
 							</Button>
-						)}
-
-						{/* Upload */}
-						{!manageMode && (
-							<Button size="sm" className="gap-2" onClick={() => setShowUpload(true)}>
-								<Mic className="h-4 w-4" strokeWidth={1.5} />
-								Upload
-							</Button>
-						)}
-					</div>
-				</div>
+							{manageMode ? (
+								<Button variant="secondary" size="sm" className="gap-1.5" onClick={exitManageMode}>
+									<X className="h-4 w-4" strokeWidth={1.5} />
+									Done
+								</Button>
+							) : (
+								<Button
+									variant="outline"
+									size="sm"
+									className="gap-1.5"
+									onClick={enterManageMode}
+									disabled={listVM.isEmpty}
+								>
+									<Settings2 className="h-4 w-4" strokeWidth={1.5} />
+									Manage
+								</Button>
+							)}
+							{!manageMode && (
+								<Button size="sm" className="gap-2" onClick={() => setShowUpload(true)}>
+									<Mic className="h-4 w-4" strokeWidth={1.5} />
+									Upload
+								</Button>
+							)}
+						</>
+					}
+				/>
 
 				{/* Manage mode toolbar */}
 				{manageMode && (
-					<div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+					<div className="space-y-3 rounded-lg border border-basalt-primary/20 bg-basalt-primary/5 p-3">
 						{/* Selection controls */}
 						<div className="flex items-center gap-2 flex-wrap">
 							<Button
@@ -357,7 +352,7 @@ function RecordingsPageInner() {
 							<div className="h-4 w-px bg-border" />
 
 							{/* Preset filters */}
-							<span className="text-xs text-muted-foreground">Quick select:</span>
+							<span className="text-xs text-basalt-muted-foreground">Quick select:</span>
 							{BULK_FILTER_PRESETS.map((preset) => (
 								<Badge
 									key={preset.id}
@@ -373,7 +368,7 @@ function RecordingsPageInner() {
 
 						{/* Selection count + delete action */}
 						<div className="flex items-center justify-between">
-							<p className="text-xs text-muted-foreground">
+							<p className="text-xs text-basalt-muted-foreground">
 								{selectedIds.size === 0
 									? "Click recordings to select them, or use quick-select presets above"
 									: `${selectedIds.size} recording${selectedIds.size !== 1 ? "s" : ""} selected`}
@@ -394,10 +389,10 @@ function RecordingsPageInner() {
 
 				{/* Filters panel */}
 				{showFilters && (
-					<div className="space-y-3 rounded-lg border border-border p-3">
+					<div className="space-y-3 rounded-lg border border-basalt-border p-3">
 						{/* Status filter */}
 						<div>
-							<p className="mb-1.5 text-xs font-medium text-muted-foreground">Status</p>
+							<p className="mb-1.5 text-xs font-medium text-basalt-muted-foreground">Status</p>
 							<div className="flex flex-wrap gap-1.5">
 								{STATUS_OPTIONS.map((opt) => (
 									<Badge
@@ -417,7 +412,7 @@ function RecordingsPageInner() {
 
 						{/* Sort */}
 						<div>
-							<p className="mb-1.5 text-xs font-medium text-muted-foreground">Sort by</p>
+							<p className="mb-1.5 text-xs font-medium text-basalt-muted-foreground">Sort by</p>
 							{/* biome-ignore lint/a11y/useSemanticElements: fieldset carries default form styles that fight the compact chip layout; role="group" is semantically equivalent */}
 							<div className="flex flex-wrap gap-1.5" role="group" aria-label="Sort options">
 								{SORT_OPTIONS.map((opt) => (
@@ -447,7 +442,7 @@ function RecordingsPageInner() {
 						{/* Tag filter */}
 						{tags.length > 0 && (
 							<div>
-								<p className="mb-1.5 text-xs font-medium text-muted-foreground">Tags</p>
+								<p className="mb-1.5 text-xs font-medium text-basalt-muted-foreground">Tags</p>
 								<div className="flex flex-wrap gap-1.5">
 									{tags.map((tag) => (
 										<Badge key={tag.id} variant="outline" className="cursor-pointer text-[10px]">
@@ -462,7 +457,7 @@ function RecordingsPageInner() {
 
 				{/* Results summary */}
 				<div className="flex items-center justify-between">
-					<p className="text-xs text-muted-foreground">
+					<p className="text-xs text-basalt-muted-foreground">
 						{loading
 							? "Loading..."
 							: `${listVM.total} recording${listVM.total !== 1 ? "s" : ""}${statusFilter !== "all" ? ` · ${statusFilter}` : ""}${folderParam ? ` · ${folderParam === "unfiled" ? "Unfiled" : folderParam}` : ""}`}
@@ -474,7 +469,10 @@ function RecordingsPageInner() {
 					viewMode === "list" ? (
 						<div className="space-y-2">
 							{Array.from({ length: 5 }, (_, i) => `list-skeleton-${i}`).map((key) => (
-								<div key={key} className="flex items-start gap-3 rounded-card bg-secondary p-4">
+								<div
+									key={key}
+									className="flex items-start gap-3 rounded-basalt-card bg-basalt-secondary p-4"
+								>
 									<Skeleton className="h-10 w-10 rounded-lg shrink-0" />
 									<div className="flex-1 space-y-2">
 										<Skeleton className="h-4 w-3/5" />
@@ -491,7 +489,10 @@ function RecordingsPageInner() {
 					) : (
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 							{Array.from({ length: 6 }, (_, i) => `tile-skeleton-${i}`).map((key) => (
-								<div key={key} className="flex flex-col rounded-card bg-secondary p-4 h-[180px]">
+								<div
+									key={key}
+									className="flex flex-col rounded-basalt-card bg-basalt-secondary p-4 h-[180px]"
+								>
 									<div className="flex items-center justify-between mb-3">
 										<Skeleton className="h-9 w-9 rounded-lg" />
 										<Skeleton className="h-5 w-16 rounded-full" />
@@ -509,7 +510,7 @@ function RecordingsPageInner() {
 						</div>
 					)
 				) : listVM.isEmpty && !loading ? (
-					<div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+					<div className="flex flex-1 flex-col items-center justify-center text-basalt-muted-foreground">
 						<Mic className="h-12 w-12 mb-3" strokeWidth={1} />
 						<p className="text-sm">No recordings found</p>
 						<p className="text-xs mt-1">
@@ -565,7 +566,7 @@ function RecordingsPageInner() {
 						>
 							Previous
 						</Button>
-						<span className="text-xs text-muted-foreground">
+						<span className="text-xs text-basalt-muted-foreground">
 							Page {listVM.page} of {listVM.totalPages}
 						</span>
 						<Button
@@ -601,10 +602,10 @@ function RecordingsPageInner() {
 							permanently deleted:
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/50 p-2">
+					<div className="max-h-40 overflow-y-auto rounded-md border border-basalt-border bg-basalt-muted/50 p-2">
 						<ul className="space-y-1">
 							{selectedItems.map((item) => (
-								<li key={item.id} className="text-sm text-foreground truncate">
+								<li key={item.id} className="text-sm text-basalt-foreground truncate">
 									{item.title}
 								</li>
 							))}
@@ -612,11 +613,7 @@ function RecordingsPageInner() {
 					</div>
 					<AlertDialogFooter>
 						<AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							onClick={handleBatchDelete}
-							disabled={deleting}
-						>
+						<AlertDialogAction onClick={handleBatchDelete} disabled={deleting}>
 							{deleting ? (
 								<>
 									<Loader2 className="h-4 w-4 animate-spin" />

@@ -1,7 +1,6 @@
+import { Badge, Checkbox } from "@nocoo/basalt";
 import { AlertCircle, Clock, FileAudio, FolderOpen, HardDrive, Mic, Sparkles } from "lucide-react";
 import { Link } from "react-router";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import type { RecordingCardVM } from "@/lib/recordings-list-vm";
 import { cn } from "@/lib/utils";
 
@@ -29,13 +28,13 @@ export function RecordingTileCard({
 				<div
 					className={cn(
 						"flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-						isFailed ? "bg-destructive/10" : "bg-secondary",
+						isFailed ? "bg-basalt-destructive/10" : "bg-basalt-secondary",
 					)}
 				>
 					{isFailed ? (
-						<AlertCircle className="h-4 w-4 text-destructive" strokeWidth={1.5} />
+						<AlertCircle className="h-4 w-4 text-basalt-destructive" strokeWidth={1.5} />
 					) : (
-						<Mic className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+						<Mic className="h-4 w-4 text-basalt-muted-foreground" strokeWidth={1.5} />
 					)}
 				</div>
 				<div className="flex items-center gap-1.5">
@@ -52,11 +51,13 @@ export function RecordingTileCard({
 			</div>
 
 			{/* Title */}
-			<h3 className="text-sm font-medium text-foreground truncate mb-1">{recording.title}</h3>
+			<h3 className="text-sm font-medium text-basalt-foreground truncate mb-1">
+				{recording.title}
+			</h3>
 
 			{/* Folder */}
 			{recording.folder && (
-				<span className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+				<span className="flex items-center gap-1 text-xs text-basalt-muted-foreground mb-1">
 					<FolderOpen className="h-3 w-3" strokeWidth={1.5} />
 					{recording.folder.name}
 				</span>
@@ -65,8 +66,11 @@ export function RecordingTileCard({
 			{/* AI summary (2 lines) */}
 			{recording.aiSummary && (
 				<div className="flex items-start gap-1.5 mb-2">
-					<Sparkles className="h-3 w-3 shrink-0 text-muted-foreground mt-0.5" strokeWidth={1.5} />
-					<p className="text-xs text-muted-foreground line-clamp-2">{recording.aiSummary}</p>
+					<Sparkles
+						className="h-3 w-3 shrink-0 text-basalt-muted-foreground mt-0.5"
+						strokeWidth={1.5}
+					/>
+					<p className="text-xs text-basalt-muted-foreground line-clamp-2">{recording.aiSummary}</p>
 				</div>
 			)}
 
@@ -74,7 +78,7 @@ export function RecordingTileCard({
 			<div className="flex-1" />
 
 			{/* Metadata badges */}
-			<div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
+			<div className="flex items-center gap-3 text-xs text-basalt-muted-foreground mt-2">
 				<span className="flex items-center gap-1 tabular-nums">
 					<Clock className="h-3 w-3" strokeWidth={1.5} />
 					{recording.duration}
@@ -113,12 +117,12 @@ export function RecordingTileCard({
 		return (
 			<div
 				className={cn(
-					"group relative flex flex-col rounded-card bg-secondary transition-colors h-full",
+					"group relative flex flex-col rounded-basalt-card bg-basalt-secondary transition-colors h-full",
 					selected
-						? "ring-1 ring-primary bg-primary/5"
+						? "ring-1 ring-basalt-primary bg-basalt-primary/5"
 						: isFailed
-							? "ring-1 ring-destructive/30 hover:bg-accent/50"
-							: "hover:bg-accent/50",
+							? "ring-1 ring-basalt-destructive/30 hover:bg-basalt-accent/50"
+							: "hover:bg-basalt-accent/50",
 				)}
 			>
 				<div className="absolute top-3 left-3 z-10">
@@ -131,7 +135,7 @@ export function RecordingTileCard({
 				<button
 					type="button"
 					onClick={() => onToggleSelect?.(recording.id)}
-					className="flex flex-col w-full h-full text-left rounded-card p-4 pl-10 cursor-pointer"
+					className="flex flex-col w-full h-full text-left rounded-basalt-card p-4 pl-10 cursor-pointer"
 				>
 					{body}
 				</button>
@@ -143,8 +147,8 @@ export function RecordingTileCard({
 		<Link
 			to={`/recordings/${recording.id}`}
 			className={cn(
-				"group flex flex-col rounded-card bg-secondary p-4 transition-colors hover:bg-accent/50 h-full",
-				isFailed ? "ring-1 ring-destructive/30" : "",
+				"group flex flex-col rounded-basalt-card bg-basalt-secondary p-4 transition-colors hover:bg-basalt-accent/50 h-full",
+				isFailed ? "ring-1 ring-basalt-destructive/30" : "",
 			)}
 		>
 			{body}

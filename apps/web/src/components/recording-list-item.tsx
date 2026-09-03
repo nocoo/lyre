@@ -1,3 +1,4 @@
+import { Badge, Checkbox } from "@nocoo/basalt";
 import {
 	AlertCircle,
 	Calendar,
@@ -9,8 +10,6 @@ import {
 	Sparkles,
 } from "lucide-react";
 import { Link } from "react-router";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import type { RecordingCardVM } from "@/lib/recordings-list-vm";
 import { cn } from "@/lib/utils";
 
@@ -35,17 +34,17 @@ export function RecordingListItem({
 			<div
 				className={cn(
 					"flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-					isFailed ? "bg-destructive/10" : "bg-secondary",
+					isFailed ? "bg-basalt-destructive/10" : "bg-basalt-secondary",
 				)}
 			>
 				{isFailed ? (
-					<AlertCircle className="h-5 w-5 text-destructive" strokeWidth={1.5} />
+					<AlertCircle className="h-5 w-5 text-basalt-destructive" strokeWidth={1.5} />
 				) : (
-					<Mic className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+					<Mic className="h-5 w-5 text-basalt-muted-foreground" strokeWidth={1.5} />
 				)}
 			</div>
 			<div className="flex-1 min-w-0">
-				<h3 className="text-sm font-medium text-foreground truncate">{recording.title}</h3>
+				<h3 className="text-sm font-medium text-basalt-foreground truncate">{recording.title}</h3>
 				<div className="mt-1 flex items-center gap-1.5">
 					<Badge variant={recording.status.variant} className="shrink-0 text-[10px]">
 						{recording.status.label}
@@ -59,7 +58,7 @@ export function RecordingListItem({
 				</div>
 
 				{/* Row 2: folder + metadata badges */}
-				<div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+				<div className="mt-1.5 flex items-center gap-3 text-xs text-basalt-muted-foreground flex-wrap">
 					{recording.folder && (
 						<span className="flex items-center gap-1">
 							<FolderOpen className="h-3 w-3" strokeWidth={1.5} />
@@ -86,8 +85,13 @@ export function RecordingListItem({
 				{/* Row 3: AI summary (2 lines max) */}
 				{recording.aiSummary && (
 					<div className="mt-2 flex items-start gap-1.5">
-						<Sparkles className="h-3 w-3 shrink-0 text-muted-foreground mt-0.5" strokeWidth={1.5} />
-						<p className="text-xs text-muted-foreground line-clamp-2">{recording.aiSummary}</p>
+						<Sparkles
+							className="h-3 w-3 shrink-0 text-basalt-muted-foreground mt-0.5"
+							strokeWidth={1.5}
+						/>
+						<p className="text-xs text-basalt-muted-foreground line-clamp-2">
+							{recording.aiSummary}
+						</p>
 					</div>
 				)}
 
@@ -119,12 +123,12 @@ export function RecordingListItem({
 		return (
 			<div
 				className={cn(
-					"group flex items-start gap-3 rounded-card bg-secondary p-4 transition-colors",
+					"group flex items-start gap-3 rounded-basalt-card bg-basalt-secondary p-4 transition-colors",
 					selected
-						? "ring-1 ring-primary bg-primary/5"
+						? "ring-1 ring-basalt-primary bg-basalt-primary/5"
 						: isFailed
-							? "ring-1 ring-destructive/30 hover:bg-accent/50"
-							: "hover:bg-accent/50",
+							? "ring-1 ring-basalt-destructive/30 hover:bg-basalt-accent/50"
+							: "hover:bg-basalt-accent/50",
 				)}
 			>
 				<div className="flex items-center pt-2.5">
@@ -149,8 +153,8 @@ export function RecordingListItem({
 		<Link
 			to={`/recordings/${recording.id}`}
 			className={cn(
-				"group flex items-start gap-3 rounded-card bg-secondary p-4 transition-colors hover:bg-accent/50",
-				isFailed ? "ring-1 ring-destructive/30" : "",
+				"group flex items-start gap-3 rounded-basalt-card bg-basalt-secondary p-4 transition-colors hover:bg-basalt-accent/50",
+				isFailed ? "ring-1 ring-basalt-destructive/30" : "",
 			)}
 		>
 			{body}

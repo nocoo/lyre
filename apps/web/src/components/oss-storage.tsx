@@ -6,6 +6,20 @@
  */
 
 import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	Badge,
+	Button,
+	Checkbox,
+	toast,
+} from "@nocoo/basalt";
+import {
 	AlertTriangle,
 	CheckCircle,
 	ChevronDown,
@@ -20,20 +34,6 @@ import {
 	User,
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatCardSkeleton } from "@/components/ui/stat-card-skeleton";
 import { cn } from "@/lib/utils";
@@ -99,7 +99,7 @@ function getFileIcon(key: string) {
 	if (["json", "txt", "md"].includes(ext)) {
 		return <FileText className="h-3.5 w-3.5 text-amber-500" strokeWidth={1.5} />;
 	}
-	return <File className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />;
+	return <File className="h-3.5 w-3.5 text-basalt-muted-foreground" strokeWidth={1.5} />;
 }
 
 function getFileName(key: string): string {
@@ -125,12 +125,12 @@ function SummaryCard({
 				"rounded-lg p-3",
 				variant === "warning" && "border border-amber-500/30 bg-amber-500/5",
 				variant === "success" && "border border-green-500/30 bg-green-500/5",
-				variant === "default" && "bg-secondary",
+				variant === "default" && "bg-basalt-secondary",
 			)}
 		>
-			<p className="text-xs text-muted-foreground">{label}</p>
+			<p className="text-xs text-basalt-muted-foreground">{label}</p>
 			<p className="text-lg font-semibold mt-0.5">{value}</p>
-			{sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+			{sub && <p className="text-xs text-basalt-muted-foreground mt-0.5">{sub}</p>}
 		</div>
 	);
 }
@@ -150,8 +150,10 @@ function FolderRow({
 	const isOrphan = !folder.hasDbRecord;
 
 	return (
-		<div className={cn("border-b border-border last:border-b-0", isOrphan && "bg-amber-500/5")}>
-			<div className="flex items-center gap-2 px-3 py-2 hover:bg-accent/50 transition-colors">
+		<div
+			className={cn("border-b border-basalt-border last:border-b-0", isOrphan && "bg-amber-500/5")}
+		>
+			<div className="flex items-center gap-2 px-3 py-2 hover:bg-basalt-accent/50 transition-colors">
 				{isOrphan && (
 					<Checkbox
 						checked={selected}
@@ -164,7 +166,7 @@ function FolderRow({
 				<button
 					type="button"
 					onClick={() => setExpanded(!expanded)}
-					className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+					className="flex items-center gap-1 text-basalt-muted-foreground hover:text-basalt-foreground transition-colors"
 				>
 					{expanded ? (
 						<ChevronDown className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -173,15 +175,20 @@ function FolderRow({
 					)}
 				</button>
 
-				<FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" strokeWidth={1.5} />
+				<FolderOpen
+					className="h-3.5 w-3.5 text-basalt-muted-foreground shrink-0"
+					strokeWidth={1.5}
+				/>
 
-				<span className="text-sm font-mono text-foreground truncate flex-1">{folder.id}</span>
+				<span className="text-sm font-mono text-basalt-foreground truncate flex-1">
+					{folder.id}
+				</span>
 
-				<span className="text-xs text-muted-foreground shrink-0">
+				<span className="text-xs text-basalt-muted-foreground shrink-0">
 					{folder.files.length} {folder.files.length === 1 ? "file" : "files"}
 				</span>
 
-				<span className="text-xs font-mono text-muted-foreground shrink-0 w-16 text-right">
+				<span className="text-xs font-mono text-basalt-muted-foreground shrink-0 w-16 text-right">
 					{formatBytes(folder.totalSize)}
 				</span>
 
@@ -201,8 +208,10 @@ function FolderRow({
 					{folder.files.map((file) => (
 						<div key={file.key} className="flex items-center gap-2 py-1 text-xs">
 							{getFileIcon(file.key)}
-							<span className="text-muted-foreground truncate flex-1">{getFileName(file.key)}</span>
-							<span className="text-muted-foreground font-mono shrink-0">
+							<span className="text-basalt-muted-foreground truncate flex-1">
+								{getFileName(file.key)}
+							</span>
+							<span className="text-basalt-muted-foreground font-mono shrink-0">
 								{formatBytes(file.size)}
 							</span>
 						</div>
@@ -230,32 +239,38 @@ function UserSection({
 	const totalOrphans = user.uploads.orphanFolders + user.results.orphanFolders;
 
 	return (
-		<div className="rounded-lg border border-border overflow-hidden">
+		<div className="rounded-lg border border-basalt-border overflow-hidden">
 			{/* User header */}
 			<button
 				type="button"
 				onClick={() => setExpanded(!expanded)}
-				className="flex w-full items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors"
+				className="flex w-full items-center gap-3 px-4 py-3 hover:bg-basalt-accent/50 transition-colors"
 			>
 				{expanded ? (
-					<ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
+					<ChevronDown
+						className="h-4 w-4 text-basalt-muted-foreground shrink-0"
+						strokeWidth={1.5}
+					/>
 				) : (
-					<ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
+					<ChevronRight
+						className="h-4 w-4 text-basalt-muted-foreground shrink-0"
+						strokeWidth={1.5}
+					/>
 				)}
 
-				<User className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={1.5} />
+				<User className="h-4 w-4 text-basalt-muted-foreground shrink-0" strokeWidth={1.5} />
 
 				<div className="flex-1 text-left min-w-0">
-					<span className="text-sm font-medium text-foreground">
+					<span className="text-sm font-medium text-basalt-foreground">
 						{user.userName ?? user.userId}
 					</span>
 					{user.userEmail && (
-						<span className="text-xs text-muted-foreground ml-2">{user.userEmail}</span>
+						<span className="text-xs text-basalt-muted-foreground ml-2">{user.userEmail}</span>
 					)}
 				</div>
 
 				<div className="flex items-center gap-3 shrink-0">
-					<span className="text-xs text-muted-foreground">{totalFiles} files</span>
+					<span className="text-xs text-basalt-muted-foreground">{totalFiles} files</span>
 					<span className="text-sm font-mono font-medium">{formatBytes(totalSize)}</span>
 					{totalOrphans > 0 && (
 						<Badge variant="warning" className="text-[10px]">
@@ -266,16 +281,16 @@ function UserSection({
 			</button>
 
 			{expanded && (
-				<div className="border-t border-border">
+				<div className="border-t border-basalt-border">
 					{/* Uploads section */}
 					{user.uploads.folders.length > 0 && (
 						<div>
-							<div className="px-4 py-2 bg-secondary/30">
+							<div className="px-4 py-2 bg-basalt-secondary/30">
 								<div className="flex items-center gap-2">
-									<span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+									<span className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 										Uploads
 									</span>
-									<span className="text-xs text-muted-foreground">
+									<span className="text-xs text-basalt-muted-foreground">
 										{user.uploads.totalFiles} files &middot; {formatBytes(user.uploads.totalSize)}
 									</span>
 									{user.uploads.orphanFolders > 0 && (
@@ -303,12 +318,12 @@ function UserSection({
 					{/* Results section */}
 					{user.results.folders.length > 0 && (
 						<div>
-							<div className="px-4 py-2 bg-secondary/30">
+							<div className="px-4 py-2 bg-basalt-secondary/30">
 								<div className="flex items-center gap-2">
-									<span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+									<span className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 										Results
 									</span>
-									<span className="text-xs text-muted-foreground">
+									<span className="text-xs text-basalt-muted-foreground">
 										{user.results.totalFiles} files &middot; {formatBytes(user.results.totalSize)}
 									</span>
 									{user.results.orphanFolders > 0 && (
@@ -334,7 +349,7 @@ function UserSection({
 					)}
 
 					{user.uploads.folders.length === 0 && user.results.folders.length === 0 && (
-						<p className="px-4 py-3 text-xs text-muted-foreground">No files found.</p>
+						<p className="px-4 py-3 text-xs text-basalt-muted-foreground">No files found.</p>
 					)}
 				</div>
 			)}
@@ -470,7 +485,10 @@ export function OssStorageSection() {
 				{/* User sections */}
 				<div className="space-y-2">
 					{Array.from({ length: 3 }, (_, i) => `oss-row-${i}`).map((key) => (
-						<div key={key} className="rounded-lg border border-border p-3 flex items-center gap-3">
+						<div
+							key={key}
+							className="rounded-lg border border-basalt-border p-3 flex items-center gap-3"
+						>
 							<Skeleton className="h-4 w-4 rounded-sm" />
 							<Skeleton className="h-4 w-40" />
 							<div className="flex-1" />
@@ -536,7 +554,7 @@ export function OssStorageSection() {
 
 				{selectedKeys.size > 0 && (
 					<div className="flex items-center gap-3">
-						<span className="text-xs text-muted-foreground">
+						<span className="text-xs text-basalt-muted-foreground">
 							{selectedKeys.size} files selected ({formatBytes(selectedSize)})
 						</span>
 						<Button
@@ -574,8 +592,8 @@ export function OssStorageSection() {
 						<div className="flex items-center gap-3 px-4 py-3 bg-amber-500/5">
 							<AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" strokeWidth={1.5} />
 							<div className="flex-1">
-								<span className="text-sm font-medium text-foreground">Unlinked Results</span>
-								<span className="text-xs text-muted-foreground ml-2">
+								<span className="text-sm font-medium text-basalt-foreground">Unlinked Results</span>
+								<span className="text-xs text-basalt-muted-foreground ml-2">
 									Cannot be attributed to any user
 								</span>
 							</div>
@@ -601,9 +619,9 @@ export function OssStorageSection() {
 				)}
 
 				{data.users.length === 0 && data.unlinkedResults.length === 0 && (
-					<div className="rounded-lg bg-secondary p-8 text-center">
+					<div className="rounded-lg bg-basalt-secondary p-8 text-center">
 						<CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" strokeWidth={1.5} />
-						<p className="text-sm text-muted-foreground">OSS storage is empty.</p>
+						<p className="text-sm text-basalt-muted-foreground">OSS storage is empty.</p>
 					</div>
 				)}
 			</div>
@@ -623,7 +641,7 @@ export function OssStorageSection() {
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleCleanup}
-							className="bg-destructive text-white hover:bg-destructive/90"
+							className="bg-basalt-destructive text-white hover:bg-basalt-destructive/90"
 						>
 							Delete {selectedKeys.size} files
 						</AlertDialogAction>

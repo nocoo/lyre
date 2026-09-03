@@ -2,13 +2,7 @@ import { Button } from "@nocoo/basalt";
 import { Rocket } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function ScrollToTop({
-	visible,
-	onClick,
-}: {
-	visible: boolean;
-	onClick: () => void;
-}) {
+export function ScrollToTop({ visible, onClick }: { visible: boolean; onClick: () => void }) {
 	return (
 		<Button
 			type="button"

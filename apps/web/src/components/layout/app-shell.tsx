@@ -1,13 +1,10 @@
-import {
-	Button,
-	ContentIsland,
-	Sheet,
-	SheetContent,
-	SheetTitle,
-	ThemeToggle,
-} from "@nocoo/basalt";
+import { Button, ContentIsland, Sheet, SheetContent, SheetTitle, ThemeToggle } from "@nocoo/basalt";
 import { AppHeader } from "@nocoo/basalt/components/app-header";
-import { AppMain, AppShell as BasaltAppShell, AppSkipLink } from "@nocoo/basalt/components/app-shell";
+import {
+	AppMain,
+	AppSkipLink,
+	AppShell as BasaltAppShell,
+} from "@nocoo/basalt/components/app-shell";
 import { useTheme } from "@nocoo/basalt/providers/theme";
 import { Menu } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -40,7 +37,8 @@ function headerTrail(
 	if (pathname === "/") {
 		return { title: "Dashboard" };
 	}
-	const fallback = FALLBACK_TITLE[pathname] ?? (pathname.startsWith("/recordings/") ? "Detail" : "Lyre");
+	const fallback =
+		FALLBACK_TITLE[pathname] ?? (pathname.startsWith("/recordings/") ? "Detail" : "Lyre");
 	const current = items[items.length - 1];
 	const ancestors = [
 		{ href: "/", label: "Home" },
@@ -62,6 +60,7 @@ function AppShellInner({ children }: AppShellProps) {
 	const [showScrollTop, setShowScrollTop] = useState(false);
 	const trail = headerTrail(pathname, breadcrumbItems);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: pathname triggers the effect on route change
 	useEffect(() => {
 		setMobileOpen(false);
 	}, [pathname]);
@@ -73,6 +72,7 @@ function AppShellInner({ children }: AppShellProps) {
 		};
 	}, [mobileOpen]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: pathname triggers the effect on route change
 	useEffect(() => {
 		document.getElementById("island-scroll")?.scrollTo({ top: 0 });
 		setShowScrollTop(false);
@@ -82,9 +82,7 @@ function AppShellInner({ children }: AppShellProps) {
 		document.getElementById("island-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
 	}, []);
 
-	const sidebar = (
-		<AppSidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
-	);
+	const sidebar = <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />;
 
 	return (
 		<BasaltAppShell>
