@@ -597,7 +597,7 @@ function RecordingsPageInner() {
 							permanently deleted:
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<div className="max-h-40 overflow-y-auto rounded-md border border-basalt-border bg-basalt-muted/50 p-2">
+					<LayerCard.Well className="max-h-40 overflow-y-auto p-2">
 						<ul className="space-y-1">
 							{selectedItems.map((item) => (
 								<li key={item.id} className="text-sm text-basalt-foreground truncate">
@@ -605,7 +605,7 @@ function RecordingsPageInner() {
 								</li>
 							))}
 						</ul>
-					</div>
+					</LayerCard.Well>
 					<AlertDialogFooter>
 						<AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
 						<AlertDialogAction onClick={handleBatchDelete} disabled={deleting}>

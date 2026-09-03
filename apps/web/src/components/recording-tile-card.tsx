@@ -120,7 +120,7 @@ export function RecordingTileCard({
 				className={cn(
 					"group relative flex h-full flex-col transition-colors",
 					selected
-						? "ring-1 ring-basalt-primary bg-basalt-primary/5"
+						? "ring-1 ring-basalt-primary !bg-basalt-primary/5"
 						: isFailed
 							? "ring-1 ring-basalt-destructive/30 hover:bg-basalt-accent/50"
 							: "hover:bg-basalt-accent/50",

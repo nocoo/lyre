@@ -126,7 +126,7 @@ export function RecordingListItem({
 				className={cn(
 					"group flex items-start gap-3 p-4 transition-colors",
 					selected
-						? "ring-1 ring-basalt-primary bg-basalt-primary/5"
+						? "ring-1 ring-basalt-primary !bg-basalt-primary/5"
 						: isFailed
 							? "ring-1 ring-basalt-destructive/30 hover:bg-basalt-accent/50"
 							: "hover:bg-basalt-accent/50",

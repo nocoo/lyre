@@ -19,6 +19,7 @@ import {
 	Checkbox,
 	toast,
 } from "@nocoo/basalt";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import {
 	AlertTriangle,
 	CheckCircle,
@@ -120,18 +121,17 @@ function SummaryCard({
 	variant?: "default" | "warning" | "success";
 }) {
 	return (
-		<div
+		<LayerCard
 			className={cn(
-				"rounded-lg p-3",
-				variant === "warning" && "border border-amber-500/30 bg-amber-500/5",
-				variant === "success" && "border border-green-500/30 bg-green-500/5",
-				variant === "default" && "bg-basalt-secondary",
+				"p-3",
+				variant === "warning" && "ring-1 ring-amber-500/30",
+				variant === "success" && "ring-1 ring-green-500/30",
 			)}
 		>
 			<p className="text-xs text-basalt-muted-foreground">{label}</p>
-			<p className="text-lg font-semibold mt-0.5">{value}</p>
-			{sub && <p className="text-xs text-basalt-muted-foreground mt-0.5">{sub}</p>}
-		</div>
+			<p className="mt-0.5 text-lg font-semibold">{value}</p>
+			{sub ? <p className="mt-0.5 text-xs text-basalt-muted-foreground">{sub}</p> : null}
+		</LayerCard>
 	);
 }
 
@@ -239,7 +239,7 @@ function UserSection({
 	const totalOrphans = user.uploads.orphanFolders + user.results.orphanFolders;
 
 	return (
-		<div className="rounded-lg border border-basalt-border overflow-hidden">
+		<LayerCard padding="none" outlined className="overflow-hidden">
 			{/* User header */}
 			<button
 				type="button"
@@ -353,7 +353,7 @@ function UserSection({
 					)}
 				</div>
 			)}
-		</div>
+		</LayerCard>
 	);
 }
 
@@ -485,16 +485,13 @@ export function OssStorageSection() {
 				{/* User sections */}
 				<div className="space-y-2">
 					{Array.from({ length: 3 }, (_, i) => `oss-row-${i}`).map((key) => (
-						<div
-							key={key}
-							className="rounded-lg border border-basalt-border p-3 flex items-center gap-3"
-						>
+						<LayerCard key={key} className="flex items-center gap-3 p-3" outlined>
 							<Skeleton className="h-4 w-4 rounded-sm" />
 							<Skeleton className="h-4 w-40" />
 							<div className="flex-1" />
 							<Skeleton className="h-4 w-16" />
 							<Skeleton className="h-4 w-20" />
-						</div>
+						</LayerCard>
 					))}
 				</div>
 			</div>
@@ -588,7 +585,7 @@ export function OssStorageSection() {
 
 				{/* Unlinked results */}
 				{data.unlinkedResults.length > 0 && (
-					<div className="rounded-lg border border-amber-500/30 overflow-hidden">
+					<LayerCard padding="none" outlined className="overflow-hidden ring-amber-500/30">
 						<div className="flex items-center gap-3 px-4 py-3 bg-amber-500/5">
 							<AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" strokeWidth={1.5} />
 							<div className="flex-1">
@@ -615,14 +612,16 @@ export function OssStorageSection() {
 								);
 							})}
 						</div>
-					</div>
+					</LayerCard>
 				)}
 
 				{data.users.length === 0 && data.unlinkedResults.length === 0 && (
-					<div className="rounded-lg bg-basalt-secondary p-8 text-center">
-						<CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" strokeWidth={1.5} />
-						<p className="text-sm text-basalt-muted-foreground">OSS storage is empty.</p>
-					</div>
+					<LayerCard>
+						<LayerCard.Empty
+							title="OSS storage is empty."
+							icon={<CheckCircle className="h-8 w-8 text-green-500" strokeWidth={1.5} />}
+						/>
+					</LayerCard>
 				)}
 			</div>
 

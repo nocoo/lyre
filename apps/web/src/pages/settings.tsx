@@ -969,7 +969,7 @@ function BackySection() {
 							<h3 className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 								Request
 							</h3>
-							<div className="rounded-lg bg-basalt-secondary/50 p-3 space-y-1">
+							<LayerCard.Well className="space-y-1">
 								<DetailRow label="URL" value={result.request.url} />
 								<DetailRow label="Method" value={result.request.method} />
 								<DetailRow label="Environment" value={result.request.environment} />
@@ -979,8 +979,8 @@ function BackySection() {
 									label="Size"
 									value={`${(result.request.fileSizeBytes / 1024).toFixed(1)} KB`}
 								/>
-							</div>
-							<div className="rounded-lg bg-basalt-secondary/50 p-3 space-y-1">
+							</LayerCard.Well>
+							<LayerCard.Well className="space-y-1">
 								<h4 className="text-xs font-medium text-basalt-muted-foreground mb-1">
 									Backup Contents
 								</h4>
@@ -989,7 +989,7 @@ function BackySection() {
 										<DetailRow key={key} label={key} value={String(count)} />
 									))}
 								</div>
-							</div>
+							</LayerCard.Well>
 						</div>
 					)}
 
@@ -999,17 +999,17 @@ function BackySection() {
 							<h3 className="text-xs font-medium text-basalt-muted-foreground uppercase tracking-wider">
 								Response
 							</h3>
-							<div className="rounded-lg bg-basalt-secondary/50 p-3 space-y-1">
+							<LayerCard.Well className="space-y-1">
 								<DetailRow label="Status" value={result.response.status} />
 								<div className="text-xs">
 									<span className="text-basalt-muted-foreground">Body</span>
-									<pre className="mt-1 rounded bg-basalt-background p-2 text-xs font-mono text-basalt-foreground overflow-x-auto max-h-40 overflow-y-auto">
+									<pre className="mt-1 max-h-40 overflow-x-auto overflow-y-auto rounded p-2 font-mono text-xs text-basalt-foreground">
 										{typeof result.response.body === "string"
 											? result.response.body
 											: JSON.stringify(result.response.body, null, 2)}
 									</pre>
 								</div>
-							</div>
+							</LayerCard.Well>
 						</div>
 					)}
 				</div>
@@ -1059,7 +1059,7 @@ function BackySection() {
 					{history && history.recent_backups.length > 0 && (
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
 							{history.recent_backups.map((entry) => (
-								<div key={entry.id} className="rounded-lg bg-basalt-secondary/50 px-3 py-2">
+								<LayerCard.Well key={entry.id} className="px-3 py-2">
 									<div className="flex items-center gap-1.5 mb-1">
 										<Badge
 											variant={entry.environment === "prod" ? "destructive" : "secondary"}
@@ -1080,7 +1080,7 @@ function BackySection() {
 									<p className="text-[10px] text-basalt-muted-foreground mt-0.5">
 										{formatFileSize(entry.file_size)}
 									</p>
-								</div>
+								</LayerCard.Well>
 							))}
 						</div>
 					)}
@@ -1298,17 +1298,17 @@ function PullWebhookSection() {
 					</div>
 
 					{/* Usage hint */}
-					<div className="rounded-lg bg-basalt-secondary/50 p-3 text-xs text-basalt-muted-foreground space-y-1">
+					<LayerCard.Well className="space-y-1 text-xs text-basalt-muted-foreground">
 						<p className="font-medium text-basalt-foreground">Usage</p>
 						<p>
 							Configure Backy to call this URL with the key in the{" "}
 							<code className="bg-basalt-background px-1 rounded">X-Webhook-Key</code> header:
 						</p>
-						<pre className="rounded bg-basalt-background p-2 font-mono text-[11px] overflow-x-auto">
+						<pre className="overflow-x-auto rounded p-2 font-mono text-[11px]">
 							{`curl -X POST ${webhookUrl} \\
   -H "X-Webhook-Key: <your-key>"`}
 						</pre>
-					</div>
+					</LayerCard.Well>
 
 					{/* Actions */}
 					<div className="flex items-center gap-2">
