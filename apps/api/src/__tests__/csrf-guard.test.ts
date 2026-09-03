@@ -25,15 +25,14 @@ const SELF = "https://lyre.hexly.ai";
 const NO_ENV = {} as Bindings;
 
 describe("csrfGuard — safe methods bypass the check", () => {
-	test.each([
-		"GET",
-		"HEAD",
-		"OPTIONS",
-	])("%s never gets blocked even without Origin", async (method) => {
-		const app = buildGuardedApp();
-		const res = await app.request(`${SELF}/api/folders`, { method }, NO_ENV);
-		expect(res.status).toBe(200);
-	});
+	test.each(["GET", "HEAD", "OPTIONS"])(
+		"%s never gets blocked even without Origin",
+		async (method) => {
+			const app = buildGuardedApp();
+			const res = await app.request(`${SELF}/api/folders`, { method }, NO_ENV);
+			expect(res.status).toBe(200);
+		},
+	);
 });
 
 describe("csrfGuard — unsafe methods require same-origin", () => {
@@ -51,28 +50,26 @@ describe("csrfGuard — unsafe methods require same-origin", () => {
 		expect(res.status).toBe(200);
 	});
 
-	test.each([
-		"POST",
-		"PUT",
-		"PATCH",
-		"DELETE",
-	])("%s with cross-origin Origin is rejected with 403", async (method) => {
-		const app = buildGuardedApp();
-		const res = await app.request(
-			`${SELF}/api/folders`,
-			{
-				method,
-				headers: {
-					Origin: "https://evil.example",
-					"content-type": "application/json",
+	test.each(["POST", "PUT", "PATCH", "DELETE"])(
+		"%s with cross-origin Origin is rejected with 403",
+		async (method) => {
+			const app = buildGuardedApp();
+			const res = await app.request(
+				`${SELF}/api/folders`,
+				{
+					method,
+					headers: {
+						Origin: "https://evil.example",
+						"content-type": "application/json",
+					},
+					body: "{}",
 				},
-				body: "{}",
-			},
-			NO_ENV,
-		);
-		expect(res.status).toBe(403);
-		expect(await res.json()).toEqual({ error: "forbidden_origin" });
-	});
+				NO_ENV,
+			);
+			expect(res.status).toBe(403);
+			expect(await res.json()).toEqual({ error: "forbidden_origin" });
+		},
+	);
 
 	test("POST with no Origin and no Referer is rejected", async () => {
 		const app = buildGuardedApp();
@@ -172,29 +169,27 @@ describe("csrfGuard — unsafe methods require same-origin", () => {
 });
 
 describe("csrfGuard — bearer-token clients are exempt", () => {
-	test.each([
-		"POST",
-		"PUT",
-		"PATCH",
-		"DELETE",
-	])("%s with Authorization: Bearer skips the Origin check entirely", async (method) => {
-		const app = buildGuardedApp();
-		// No Origin, cross-origin Referer — still allowed because of Bearer.
-		const res = await app.request(
-			`${SELF}/api/recordings`,
-			{
-				method,
-				headers: {
-					Authorization: "Bearer device-abc",
-					Referer: "https://evil.example/x",
-					"content-type": "application/json",
+	test.each(["POST", "PUT", "PATCH", "DELETE"])(
+		"%s with Authorization: Bearer skips the Origin check entirely",
+		async (method) => {
+			const app = buildGuardedApp();
+			// No Origin, cross-origin Referer — still allowed because of Bearer.
+			const res = await app.request(
+				`${SELF}/api/recordings`,
+				{
+					method,
+					headers: {
+						Authorization: "Bearer device-abc",
+						Referer: "https://evil.example/x",
+						"content-type": "application/json",
+					},
+					body: "{}",
 				},
-				body: "{}",
-			},
-			NO_ENV,
-		);
-		expect(res.status).toBe(200);
-	});
+				NO_ENV,
+			);
+			expect(res.status).toBe(200);
+		},
+	);
 
 	test("non-Bearer Authorization header is NOT exempt", async () => {
 		const app = buildGuardedApp();

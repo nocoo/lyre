@@ -29,11 +29,11 @@
 	},
 	"dependencies": {
 		"@nocoo/next-ai": "^0.4.0",
-		"ai": "^7.0.2",
+		"ai": "^7.0.83",
 		"drizzle-orm": "^0.45.1"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.3.10",
+		"@types/bun": "^1.4.0",
 		"typescript": "^7.0.2"
 	}
 }

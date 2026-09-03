@@ -35,13 +35,13 @@
 		"macos:dmg": "bash scripts/build-dmg.sh"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.3",
-		"@playwright/test": "^1.52.0",
+		"@biomejs/biome": "^2.5.10",
+		"@playwright/test": "^1.62.1",
 		"@types/better-sqlite3": "^7.6.13",
-		"@vitest/coverage-v8": "^4.1.5",
-		"better-sqlite3": "^12.9.0",
+		"@vitest/coverage-v8": "^4.1.11",
+		"better-sqlite3": "^12.11.1",
 		"husky": "^9.1.7",
-		"vitest": "^4.1.5"
+		"vitest": "^4.1.11"
 	},
 	"overrides": {
 		"ws": "^8.21.0",
