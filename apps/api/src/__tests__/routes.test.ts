@@ -26,8 +26,10 @@ describe("worker routes — happy path", () => {
 		const app = buildAppWithCtx(ctx);
 		const res = await app.request("/api/me");
 		expect(res.status).toBe(200);
-		const body = (await res.json()) as { email: string };
+		const body = (await res.json()) as { email: string; name: string; avatarUrl: string | null };
 		expect(body.email).toBe(user.email);
+		expect(body.name).toBe(user.name);
+		expect(body.avatarUrl).toBeNull();
 	});
 
 	test("GET /api/folders returns 200 list when authed", async () => {
