@@ -34,7 +34,11 @@ test.describe("Recordings", () => {
 
 		await page.goto("/recordings");
 		await expect(
-			page.getByRole("heading", { name: "Recordings", exact: true, level: 1 }),
+			page.locator("[data-basalt-surface-root]").getByRole("heading", {
+				name: "Recordings",
+				exact: true,
+				level: 1,
+			}),
 		).toBeVisible();
 		await expect(page.getByText("E2E Test Recording").first()).toBeVisible({
 			timeout: 10_000,

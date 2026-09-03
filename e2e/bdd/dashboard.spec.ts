@@ -5,7 +5,7 @@ test.describe("Dashboard", () => {
 		await page.goto("/");
 		await page.waitForLoadState("networkidle");
 
-		const dashboardLink = page.getByRole("link", { name: "Dashboard" }).first();
+		const dashboardLink = page.getByRole("button", { name: "Dashboard" }).first();
 		await expect(dashboardLink).toBeVisible({ timeout: 10_000 });
 	});
 
@@ -16,10 +16,14 @@ test.describe("Dashboard", () => {
 		await page.getByRole("button", { name: "All Recordings" }).click();
 		await expect(page).toHaveURL(/\/recordings/);
 		await expect(
-			page.getByRole("heading", { name: "Recordings", exact: true, level: 1 }),
+			page.locator("[data-basalt-surface-root]").getByRole("heading", {
+				name: "Recordings",
+				exact: true,
+				level: 1,
+			}),
 		).toBeVisible({ timeout: 10_000 });
 
-		await page.getByRole("link", { name: "Dashboard" }).first().click();
+		await page.getByRole("button", { name: "Dashboard" }).first().click();
 		await expect(page).toHaveURL("/");
 	});
 });
