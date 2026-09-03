@@ -419,7 +419,7 @@ export function AiSettingsSection() {
 								autoSummarize: !s.autoSummarize,
 							}))
 						}
-						className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${settings.autoSummarize ? "bg-foreground" : "bg-basalt-secondary"}`}
+						className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${settings.autoSummarize ? "bg-basalt-foreground" : "bg-basalt-secondary"}`}
 					>
 						<span
 							className={`pointer-events-none block h-5 w-5 rounded-full bg-basalt-background shadow-sm transition-transform ${settings.autoSummarize ? "translate-x-5" : "translate-x-0"}`}

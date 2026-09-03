@@ -882,7 +882,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 										type="button"
 										className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
 											viewMode === "sentences"
-												? "bg-foreground text-background"
+												? "bg-basalt-foreground text-basalt-background"
 												: "text-basalt-muted-foreground hover:text-basalt-foreground"
 										}`}
 										onClick={() => setViewMode("sentences")}
@@ -893,7 +893,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 										type="button"
 										className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
 											viewMode === "fulltext"
-												? "bg-foreground text-background"
+												? "bg-basalt-foreground text-basalt-background"
 												: "text-basalt-muted-foreground hover:text-basalt-foreground"
 										}`}
 										onClick={() => setViewMode("fulltext")}

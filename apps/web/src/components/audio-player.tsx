@@ -248,11 +248,11 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 						tabIndex={0}
 					>
 						<div
-							className="absolute inset-y-0 left-0 rounded-full bg-foreground"
+							className="absolute inset-y-0 left-0 rounded-full bg-basalt-foreground"
 							style={{ width: `${vm.progress}%` }}
 						/>
 						<div
-							className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+							className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-basalt-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
 							style={{ left: `${vm.progress}%` }}
 						/>
 					</div>

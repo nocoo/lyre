@@ -3,13 +3,13 @@
 // Use these constants everywhere instead of hardcoded HSL strings.
 
 /** Helper — wraps a CSS custom property name for inline style usage. */
-const v = (token: string) => `hsl(var(--${token}))`;
+const v = (token: string) => `hsl(var(--basalt-${token}))`;
 
 /**
  * Returns a CSS color string with alpha from a CSS custom property.
- * Usage: `withAlpha("chart-1", 0.12)` → `hsl(var(--chart-1) / 0.12)`
+ * Usage: `withAlpha("chart-1", 0.12)` → `hsl(var(--basalt-chart-1) / 0.12)`
  */
-export const withAlpha = (token: string, alpha: number) => `hsl(var(--${token}) / ${alpha})`;
+export const withAlpha = (token: string, alpha: number) => `hsl(var(--basalt-${token}) / ${alpha})`;
 
 // ── 24 sequential chart colors ──
 

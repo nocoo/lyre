@@ -82,11 +82,11 @@ export function CassettePlayer({
 					tabIndex={0}
 				>
 					<div
-						className="absolute inset-y-0 left-0 rounded-full bg-foreground"
+						className="absolute inset-y-0 left-0 rounded-full bg-basalt-foreground"
 						style={{ width: `${vm.progress}%` }}
 					/>
 					<div
-						className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-foreground bg-basalt-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+						className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-basalt-foreground bg-basalt-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
 						style={{ left: `${vm.progress}%` }}
 					/>
 				</div>
@@ -112,10 +112,10 @@ export function CassettePlayer({
 							type="button"
 							className={`
                 flex h-10 w-10 items-center justify-center rounded-full
-                border-2 border-foreground/20 bg-foreground text-background
+                border-2 border-basalt-foreground/20 bg-basalt-foreground text-basalt-background
                 transition-all duration-150
                 hover:scale-105 hover:shadow-lg active:scale-90 active:shadow-sm
-                ${isPlaying ? "ring-2 ring-foreground/20 ring-offset-2 ring-offset-secondary" : ""}
+                ${isPlaying ? "ring-2 ring-basalt-foreground/20 ring-offset-2 ring-offset-basalt-secondary" : ""}
               `}
 							onClick={onTogglePlay}
 							aria-label={isPlaying ? "Pause" : "Play"}
@@ -169,9 +169,9 @@ export function CassettePlayer({
 							step={0.05}
 							value={isMuted ? 0 : volume}
 							onChange={(e) => onVolumeChange(Number(e.target.value))}
-							className="h-1 w-14 cursor-pointer appearance-none rounded-full bg-basalt-muted accent-foreground
-                [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-foreground
-                [&::-moz-range-thumb]:h-2.5 [&::-moz-range-thumb]:w-2.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-foreground [&::-moz-range-thumb]:border-0"
+							className="h-1 w-14 cursor-pointer appearance-none rounded-full bg-basalt-muted accent-basalt-foreground
+                [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-basalt-foreground
+                [&::-moz-range-thumb]:h-2.5 [&::-moz-range-thumb]:w-2.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-basalt-foreground [&::-moz-range-thumb]:border-0"
 							aria-label="Volume"
 						/>
 

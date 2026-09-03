@@ -14,6 +14,7 @@
 	--basalt-primary: 13 62% 33%;
 	--basalt-primary-foreground: 0 0% 100%;
 	--basalt-ring: 13 62% 33%;
+	--basalt-chart-1: 13 62% 33%;
 }
 
 .dark,
@@ -21,6 +22,7 @@
 	--basalt-primary: 13 50% 38%;
 	--basalt-primary-foreground: 13 55% 92%;
 	--basalt-ring: 13 50% 38%;
+	--basalt-chart-1: 13 50% 38%;
 }
 
 @layer base {
