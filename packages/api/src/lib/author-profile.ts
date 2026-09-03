@@ -22,6 +22,16 @@ export function resetAuthorProfileCache(): void {
 	cache.clear();
 }
 
+export function authorProfileCacheSize(): number {
+	return cache.size;
+}
+
+function pruneExpired(now: number): void {
+	for (const [key, entry] of cache) {
+		if (entry.exp <= now) cache.delete(key);
+	}
+}
+
 export function normalizeEmail(email: string): string {
 	return email.trim().toLowerCase();
 }
@@ -56,12 +66,14 @@ export async function fetchAuthorProfile(
 	const now = Date.now();
 	const cached = cache.get(hash);
 	if (cached && cached.exp > now) return cached.profile;
+	if (cached) cache.delete(hash);
 
 	const url = `${AUTHOR_PROFILE_URL}?hash=${encodeURIComponent(hash)}`;
 	try {
 		const res = await fetchFn(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 		if (!res.ok) return EMPTY;
 		const profile = parseAuthorProfile(await res.json());
+		pruneExpired(now);
 		cache.set(hash, { profile, exp: now + AUTHOR_PROFILE_CACHE_TTL_MS });
 		return profile;
 	} catch {

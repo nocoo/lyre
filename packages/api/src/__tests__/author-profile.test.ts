@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	AUTHOR_PROFILE_CACHE_TTL_MS,
 	AUTHOR_PROFILE_URL,
+	authorProfileCacheSize,
 	fetchAuthorProfile,
 	hashEmail,
 	normalizeEmail,
@@ -120,5 +121,19 @@ describe("fetchAuthorProfile", () => {
 		vi.setSystemTime(new Date("2026-08-21T00:00:00Z").getTime() + AUTHOR_PROFILE_CACHE_TTL_MS + 1);
 		await fetchAuthorProfile(KNOWN_EMAIL, fetcher);
 		expect(fetcher).toHaveBeenCalledTimes(2);
+	});
+
+	it("prunes expired entries so unique users do not accumulate", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-21T00:00:00Z"));
+		const fetcher = vi.fn(async () => jsonRes({ name: "Zheng Li", avatar: AVATAR }));
+		await fetchAuthorProfile("a@example.com", fetcher);
+		await fetchAuthorProfile("b@example.com", fetcher);
+		expect(authorProfileCacheSize()).toBe(2);
+
+		vi.setSystemTime(new Date("2026-08-21T00:00:00Z").getTime() + AUTHOR_PROFILE_CACHE_TTL_MS + 1);
+		await fetchAuthorProfile("c@example.com", fetcher);
+		expect(authorProfileCacheSize()).toBe(1);
+		expect(fetcher).toHaveBeenCalledTimes(3);
 	});
 });
