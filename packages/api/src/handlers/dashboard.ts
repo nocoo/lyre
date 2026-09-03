@@ -149,10 +149,16 @@ export async function dashboardHandler(ctx: RuntimeContext): Promise<HandlerResp
 			.sort((a, b) => b.count - a.count),
 	};
 
-	const [uploadObjects, resultObjects] = await Promise.all([
-		listObjects(`uploads/${userId}/`, undefined, ctx.env),
-		listObjects("results/", undefined, ctx.env),
-	]);
+	let uploadObjects: Awaited<ReturnType<typeof listObjects>> = [];
+	let resultObjects: Awaited<ReturnType<typeof listObjects>> = [];
+	try {
+		[uploadObjects, resultObjects] = await Promise.all([
+			listObjects(`uploads/${userId}/`, undefined, ctx.env),
+			listObjects("results/", undefined, ctx.env),
+		]);
+	} catch (err) {
+		console.warn("[dashboard] OSS stats unavailable", err);
+	}
 
 	const recordingIdSet = new Set(allRecordings.map((r) => r.id));
 	const userJobIdSet = new Set<string>();
