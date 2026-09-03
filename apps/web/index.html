@@ -15,9 +15,10 @@
         try {
           const s = localStorage.getItem("theme");
           const d = window.matchMedia("(prefers-color-scheme:dark)").matches;
-          if (s === "dark" || (s !== "light" && d)) {
-            document.documentElement.classList.add("dark");
-          }
+          const isDark = s === "dark" || (s !== "light" && d);
+          document.documentElement.classList.toggle("dark", isDark);
+          document.documentElement.classList.toggle("light", !isDark);
+          document.documentElement.dataset.mode = isDark ? "dark" : "light";
         } catch {}
       })();
     </script>
