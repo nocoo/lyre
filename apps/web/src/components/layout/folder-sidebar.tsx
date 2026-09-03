@@ -199,7 +199,7 @@ function FolderDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent size="sm">
+			<DialogContent>
 				<form onSubmit={handleSubmit}>
 					<DialogHeader>
 						<DialogTitle>{isEdit ? "Rename Folder" : "New Folder"}</DialogTitle>
