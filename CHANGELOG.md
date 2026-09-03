@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.7.3 (2026-09-03)
+
+### 🐛 Bug Fixes
+
+- fix: prune expired lizheng.blog profile cache (fabdcc7)
+
+### 📝 Other Changes
+
+- chore(deps): bump remaining minor and patch deps (cbcbccd)
+- chore(deps): bump cve packages for osv gate (14dc376)
+- test: cover me handler name and avatar fallbacks (309ce80)
+
 ## v1.7.2 (2026-09-03)
 
 ### 🚀 Features
