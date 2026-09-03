@@ -77,6 +77,32 @@ describe("meHandler", () => {
 		});
 	});
 
+	it("falls back to email when Access name is null", async () => {
+		const { user } = await setupAuthedCtx();
+		user.name = null;
+		const res = await meHandler(makeCtx(user));
+		expect(res.status).toBe(200);
+		if (res.kind !== "json") throw new Error();
+		expect(res.body).toEqual({
+			email: user.email,
+			name: user.email,
+			avatarUrl: null,
+		});
+	});
+
+	it("keeps stored avatar when the profile has none", async () => {
+		const { user } = await setupAuthedCtx();
+		user.avatarUrl = "https://stored.example/a.jpg";
+		const ctx = makeCtx(user, { env: { NODE_ENV: "production" } });
+		const res = await meHandler(ctx, async () => jsonRes({ name: null, avatar: null }));
+		if (res.kind !== "json") throw new Error();
+		expect(res.body).toEqual({
+			email: user.email,
+			name: user.name,
+			avatarUrl: "https://stored.example/a.jpg",
+		});
+	});
+
 	it("skips lookup when PLAYWRIGHT=1", async () => {
 		const { user } = await setupAuthedCtx();
 		const ctx = makeCtx(user, { env: { NODE_ENV: "production", PLAYWRIGHT: "1" } });
