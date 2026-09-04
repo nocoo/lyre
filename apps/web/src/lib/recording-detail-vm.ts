@@ -196,14 +196,20 @@ export function toJobStatusVM(job: TranscriptionJob | null): JobStatusVM | null 
 		isRunning: job.status === "PENDING" || job.status === "RUNNING",
 		isCompleted: job.status === "SUCCEEDED",
 		isFailed: job.status === "FAILED",
-		submitTime: job.submitTime ?? "—",
-		endTime: job.endTime ?? "—",
+		submitTime: formatJobTimestamp(job.submitTime),
+		endTime: formatJobTimestamp(job.endTime),
 		processingDuration: computeProcessingDuration(job.submitTime, job.endTime),
 		usageSeconds: job.usageSeconds ? formatDuration(job.usageSeconds) : "—",
 		errorMessage: job.errorMessage ?? "",
 		model: ASR_MODEL,
 		estimatedCost: computeEstimatedCost(job.usageSeconds),
 	};
+}
+
+/** Strip fractional seconds from ASR job timestamps. */
+export function formatJobTimestamp(value: string | null): string {
+	if (!value) return "—";
+	return value.replace("T", " ").replace(/\.\d+/, "").replace(/Z$/, "").trim();
 }
 
 /** Compute duration between submit and end time strings */
