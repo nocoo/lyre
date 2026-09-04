@@ -9,9 +9,15 @@ describe("search endpoint", () => {
 });
 
 describe("dashboard endpoint", () => {
-	test("GET /api/dashboard returns 200 or 500", async () => {
+	test("GET /api/dashboard returns 200 with empty OSS stats when unconfigured", async () => {
 		const res = await get("/api/dashboard");
-		// 500 when OSS env vars are missing (expected in local E2E)
-		expect([200, 500]).toContain(res.status);
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			recordings: { totalCount: number };
+			oss: { total: { files: number; size: number } };
+		};
+		expect(body.recordings).toBeDefined();
+		expect(body.oss.total.files).toBe(0);
+		expect(body.oss.total.size).toBe(0);
 	});
 });
