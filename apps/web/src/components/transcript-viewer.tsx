@@ -1,5 +1,5 @@
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
-import { Check, ChevronDown, Copy, Loader2 } from "lucide-react";
+import { Check, ChevronDown, Copy, FileText, Loader2 } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import {
 	findActiveSentenceIndex,
@@ -44,20 +44,51 @@ export function TranscriptViewer({
 	currentTime = 0,
 	onSeek,
 }: TranscriptViewerProps) {
+	const [viewMode, setViewMode] = useState<"sentences" | "fulltext">("sentences");
 	const activeIndex = findActiveSentenceIndex(transcription.sentences, currentTime);
 
 	return (
-		<LayerCard>
-			{/* Tab header */}
-			<TranscriptTabs
-				sentenceCount={transcription.sentenceCount}
-				wordCount={transcription.wordCount}
-				language={transcription.language}
-				copyText={transcription.fullText}
-			/>
+		<LayerCard className="p-4 h-full">
+			<div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+				<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
+					<FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
+					Transcript
+				</p>
+				<div className="flex flex-wrap items-center gap-3">
+					<TranscriptMeta
+						sentenceCount={transcription.sentenceCount}
+						wordCount={transcription.wordCount}
+						language={transcription.language}
+						copyText={transcription.fullText}
+					/>
+					<div className="flex items-center rounded-md border border-basalt-border p-0.5">
+						<button
+							type="button"
+							className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+								viewMode === "sentences"
+									? "bg-basalt-foreground text-basalt-background"
+									: "text-basalt-muted-foreground hover:text-basalt-foreground"
+							}`}
+							onClick={() => setViewMode("sentences")}
+						>
+							Sentences
+						</button>
+						<button
+							type="button"
+							className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+								viewMode === "fulltext"
+									? "bg-basalt-foreground text-basalt-background"
+									: "text-basalt-muted-foreground hover:text-basalt-foreground"
+							}`}
+							onClick={() => setViewMode("fulltext")}
+						>
+							Full Text
+						</button>
+					</div>
+				</div>
+			</div>
 
-			{/* Content */}
-			<div className="p-4">
+			{viewMode === "sentences" ? (
 				<SentenceList
 					sentences={transcription.sentences}
 					recordingId={recordingId}
@@ -65,33 +96,18 @@ export function TranscriptViewer({
 					currentTime={currentTime}
 					onSeek={onSeek}
 				/>
-			</div>
-		</LayerCard>
-	);
-}
-
-/** Full-text view of the transcript */
-export function TranscriptFullText({ transcription }: { transcription: TranscriptionVM }) {
-	return (
-		<LayerCard>
-			<TranscriptTabs
-				sentenceCount={transcription.sentenceCount}
-				wordCount={transcription.wordCount}
-				language={transcription.language}
-				copyText={transcription.fullText}
-			/>
-			<div className="p-4">
+			) : (
 				<p className="whitespace-pre-wrap text-sm leading-relaxed text-basalt-foreground">
 					{transcription.fullText}
 				</p>
-			</div>
+			)}
 		</LayerCard>
 	);
 }
 
 // ── Internal components ──
 
-function TranscriptTabs({
+function TranscriptMeta({
 	sentenceCount,
 	wordCount,
 	language,
@@ -115,30 +131,27 @@ function TranscriptTabs({
 	}, [copyText]);
 
 	return (
-		<div className="flex items-center justify-between border-b border-basalt-border px-4 py-2.5">
-			<span className="text-sm font-medium text-basalt-foreground">Transcript</span>
-			<div className="flex items-center gap-3 text-xs text-basalt-muted-foreground">
-				<span>{sentenceCount} sentences</span>
-				<span>{wordCount} words</span>
-				<span className="uppercase">{language}</span>
-				<button
-					type="button"
-					onClick={handleCopy}
-					aria-label={copied ? "Copied" : "Copy transcript"}
-					className={cn(
-						"ml-1 flex h-6 w-6 items-center justify-center rounded-md transition-colors",
-						copied
-							? "text-emerald-500"
-							: "text-basalt-muted-foreground hover:text-basalt-foreground hover:bg-basalt-accent",
-					)}
-				>
-					{copied ? (
-						<Check className="h-3.5 w-3.5" strokeWidth={2} />
-					) : (
-						<Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
-					)}
-				</button>
-			</div>
+		<div className="flex items-center gap-3 text-xs text-basalt-muted-foreground">
+			<span>{sentenceCount} sentences</span>
+			<span>{wordCount} words</span>
+			<span className="uppercase">{language}</span>
+			<button
+				type="button"
+				onClick={handleCopy}
+				aria-label={copied ? "Copied" : "Copy transcript"}
+				className={cn(
+					"flex h-6 w-6 items-center justify-center rounded-md transition-colors",
+					copied
+						? "text-emerald-500"
+						: "text-basalt-muted-foreground hover:text-basalt-foreground hover:bg-basalt-accent",
+				)}
+			>
+				{copied ? (
+					<Check className="h-3.5 w-3.5" strokeWidth={2} />
+				) : (
+					<Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+				)}
+			</button>
 		</div>
 	);
 }

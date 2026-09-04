@@ -41,7 +41,6 @@ import {
 	ChevronsUpDown,
 	Cpu,
 	Download,
-	FileText,
 	Folder,
 	FolderOpen,
 	Loader2,
@@ -63,7 +62,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { AudioPlayer, type AudioPlayerHandle } from "@/components/audio-player";
 import { useSetBreadcrumbs } from "@/components/layout";
 import { RegenerateFeedbackDialog } from "@/components/regenerate-feedback-dialog";
-import { TranscriptFullText, TranscriptViewer } from "@/components/transcript-viewer";
+import { TranscriptViewer } from "@/components/transcript-viewer";
 import { Markdown } from "@/components/ui/markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useJobEvents } from "@/hooks/use-job-events";
@@ -88,7 +87,6 @@ function RecordingDetailContent({ id }: { id: string }) {
 	const navigate = useNavigate();
 	const playerRef = useRef<AudioPlayerHandle>(null);
 	const [currentTime, setCurrentTime] = useState(0);
-	const [viewMode, setViewMode] = useState<"sentences" | "fulltext">("sentences");
 	const [detail, setDetail] = useState<RecordingDetail | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -786,17 +784,14 @@ function RecordingDetailContent({ id }: { id: string }) {
 							<Play className="h-3.5 w-3.5" strokeWidth={1.5} />
 							Playback &amp; File Info
 						</p>
-						{/* Audio player */}
-						{audioUrl && (
-							<AudioPlayer
-								ref={playerRef}
-								src={audioUrl}
-								title={vm.metadata.title}
-								onTimeUpdate={handleTimeUpdate}
-								variant="embedded"
-							/>
-						)}
-						{/* File metadata */}
+						<AudioPlayer
+							ref={playerRef}
+							src={audioUrl ?? undefined}
+							title={vm.metadata.title}
+							durationSeconds={detail.duration ?? undefined}
+							onTimeUpdate={handleTimeUpdate}
+							variant="embedded"
+						/>
 						<MetadataGrid
 							fileName={vm.metadata.fileName}
 							fileSize={vm.metadata.fileSize}
@@ -806,7 +801,6 @@ function RecordingDetailContent({ id }: { id: string }) {
 							createdAt={vm.metadata.createdAt}
 							recordedAt={vm.metadata.recordedAt}
 							folderName={vm.metadata.folderName}
-							tags={vm.metadata.resolvedTags}
 						/>
 					</LayerCard>
 				</div>
@@ -872,49 +866,12 @@ function RecordingDetailContent({ id }: { id: string }) {
 			{vm.hasTranscription && vm.transcription && (
 				<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 					<div className="lg:col-span-2">
-						<LayerCard className="p-4 h-full">
-							<div className="flex items-center justify-between mb-3">
-								<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
-									<FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
-									Transcript
-								</p>
-								<div className="flex items-center rounded-md border border-basalt-border p-0.5">
-									<button
-										type="button"
-										className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-											viewMode === "sentences"
-												? "bg-basalt-foreground text-basalt-background"
-												: "text-basalt-muted-foreground hover:text-basalt-foreground"
-										}`}
-										onClick={() => setViewMode("sentences")}
-									>
-										Sentences
-									</button>
-									<button
-										type="button"
-										className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-											viewMode === "fulltext"
-												? "bg-basalt-foreground text-basalt-background"
-												: "text-basalt-muted-foreground hover:text-basalt-foreground"
-										}`}
-										onClick={() => setViewMode("fulltext")}
-									>
-										Full Text
-									</button>
-								</div>
-							</div>
-
-							{viewMode === "sentences" ? (
-								<TranscriptViewer
-									transcription={vm.transcription}
-									recordingId={id}
-									currentTime={currentTime}
-									onSeek={handleSeek}
-								/>
-							) : (
-								<TranscriptFullText transcription={vm.transcription} />
-							)}
-						</LayerCard>
+						<TranscriptViewer
+							transcription={vm.transcription}
+							recordingId={id}
+							currentTime={currentTime}
+							onSeek={handleSeek}
+						/>
 					</div>
 					{vm.job?.isCompleted && (
 						<div className="lg:col-span-1">
@@ -980,7 +937,6 @@ function MetadataGrid({
 	createdAt,
 	recordedAt,
 	folderName,
-	tags,
 }: {
 	fileName: string;
 	fileSize: string;
@@ -990,7 +946,6 @@ function MetadataGrid({
 	createdAt: string;
 	recordedAt: string;
 	folderName: string;
-	tags: TagType[];
 }) {
 	const items = [
 		{ label: "File", value: fileName },
@@ -1004,34 +959,13 @@ function MetadataGrid({
 	];
 
 	return (
-		<div>
-			<div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
-				{items.map((item) => (
-					<div key={item.label}>
-						<p className="text-xs font-medium text-basalt-muted-foreground">{item.label}</p>
-						<p className="mt-0.5 text-sm text-basalt-foreground truncate">{item.value}</p>
-					</div>
-				))}
-			</div>
-			{tags.length > 0 && (
-				<div className="mt-3 flex flex-wrap gap-1.5 border-t border-basalt-border pt-3">
-					{tags.map((tag) => {
-						const color = getTagColor(tag.name);
-						return (
-							<span
-								key={tag.id}
-								className={cn(
-									"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-									color.bg,
-									color.text,
-								)}
-							>
-								{tag.name}
-							</span>
-						);
-					})}
+		<div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
+			{items.map((item) => (
+				<div key={item.label}>
+					<p className="text-xs font-medium text-basalt-muted-foreground">{item.label}</p>
+					<p className="mt-0.5 text-sm text-basalt-foreground truncate">{item.value}</p>
 				</div>
-			)}
+			))}
 		</div>
 	);
 }

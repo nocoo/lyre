@@ -15,10 +15,12 @@ export interface AudioPlayerHandle {
 }
 
 interface AudioPlayerProps {
-	/** URL of the audio file */
-	src: string;
+	/** URL of the audio file. When omitted the cassette UI still renders. */
+	src?: string;
 	/** Title displayed above the player */
 	title?: string;
+	/** Fallback duration in seconds when the audio file is not loaded */
+	durationSeconds?: number;
 	/** Called on each time update with current time in seconds */
 	onTimeUpdate?: (currentTime: number) => void;
 	/** "standalone" wraps in a card; "embedded" renders borderless for nesting */
@@ -26,7 +28,7 @@ interface AudioPlayerProps {
 }
 
 export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(function AudioPlayer(
-	{ src, title, onTimeUpdate, variant = "standalone" },
+	{ src, title, durationSeconds, onTimeUpdate, variant = "standalone" },
 	ref,
 ) {
 	const audioRef = useRef<HTMLAudioElement>(null);
@@ -35,20 +37,27 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [currentTime, setCurrentTime] = useState(0);
-	const [duration, setDuration] = useState(0);
+	const [duration, setDuration] = useState(durationSeconds ?? 0);
 	const [speed, setSpeed] = useState<PlaybackSpeed>(1);
 	const [volume, setVolume] = useState(1);
 	const [isMuted, setIsMuted] = useState(false);
 
 	const vm = toAudioPlayerVM(currentTime, duration, speed);
 
+	useEffect(() => {
+		if (durationSeconds != null && durationSeconds > 0 && !src) {
+			setDuration(durationSeconds);
+		}
+	}, [durationSeconds, src]);
+
 	// Expose seekTo via ref
 	useImperativeHandle(ref, () => ({
 		seekTo: (time: number) => {
 			if (audioRef.current) {
 				audioRef.current.currentTime = time;
-				setCurrentTime(time);
 			}
+			setCurrentTime(time);
+			onTimeUpdate?.(time);
 		},
 	}));
 
@@ -98,28 +107,32 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 
 	// Playback controls
 	const togglePlay = useCallback(() => {
-		if (!audioRef.current) return;
+		if (!audioRef.current || !src) return;
 		if (isPlaying) {
 			audioRef.current.pause();
 		} else {
 			void audioRef.current.play();
 		}
 		setIsPlaying(!isPlaying);
-	}, [isPlaying]);
+	}, [isPlaying, src]);
 
 	const skipBack = useCallback(() => {
+		const next = Math.max(0, (audioRef.current?.currentTime ?? currentTime) - 10);
 		if (audioRef.current) {
-			audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
-			setCurrentTime(audioRef.current.currentTime);
+			audioRef.current.currentTime = next;
 		}
-	}, []);
+		setCurrentTime(next);
+		onTimeUpdate?.(next);
+	}, [currentTime, onTimeUpdate]);
 
 	const skipForward = useCallback(() => {
+		const next = Math.min(duration, (audioRef.current?.currentTime ?? currentTime) + 10);
 		if (audioRef.current) {
-			audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 10);
-			setCurrentTime(audioRef.current.currentTime);
+			audioRef.current.currentTime = next;
 		}
-	}, [duration]);
+		setCurrentTime(next);
+		onTimeUpdate?.(next);
+	}, [currentTime, duration, onTimeUpdate]);
 
 	const handleSpeedCycle = useCallback(() => {
 		const nextSpeed = cyclePlaybackSpeed(speed);
@@ -132,45 +145,52 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 	// Seek via progress bar click
 	const handleProgressClick = useCallback(
 		(e: React.MouseEvent<HTMLDivElement>) => {
-			if (!progressBarRef.current || !audioRef.current) return;
+			if (!progressBarRef.current) return;
 			const rect = progressBarRef.current.getBoundingClientRect();
 			const pct = ((e.clientX - rect.left) / rect.width) * 100;
 			const newTime = progressToTime(pct, duration);
-			audioRef.current.currentTime = newTime;
+			if (audioRef.current) {
+				audioRef.current.currentTime = newTime;
+			}
 			setCurrentTime(newTime);
+			onTimeUpdate?.(newTime);
 		},
-		[duration],
+		[duration, onTimeUpdate],
 	);
 
 	// Keyboard seek: Left/Right = ±5s, Home/End = start/end
 	const handleProgressKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLDivElement>) => {
-			if (!audioRef.current) return;
-			const audio = audioRef.current;
 			const step = 5;
+			const from = audioRef.current?.currentTime ?? currentTime;
+			let next = from;
 			let handled = true;
 			switch (e.key) {
 				case "ArrowLeft":
-					audio.currentTime = Math.max(0, audio.currentTime - step);
+					next = Math.max(0, from - step);
 					break;
 				case "ArrowRight":
-					audio.currentTime = Math.min(duration, audio.currentTime + step);
+					next = Math.min(duration, from + step);
 					break;
 				case "Home":
-					audio.currentTime = 0;
+					next = 0;
 					break;
 				case "End":
-					audio.currentTime = duration;
+					next = duration;
 					break;
 				default:
 					handled = false;
 			}
 			if (handled) {
 				e.preventDefault();
-				setCurrentTime(audio.currentTime);
+				if (audioRef.current) {
+					audioRef.current.currentTime = next;
+				}
+				setCurrentTime(next);
+				onTimeUpdate?.(next);
 			}
 		},
-		[duration],
+		[currentTime, duration, onTimeUpdate],
 	);
 
 	// Volume controls
@@ -202,15 +222,16 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 
 	const content = (
 		<>
-			{/* Hidden audio element */}
-			{/* biome-ignore lint/a11y/useMediaCaption: user-uploaded recordings have no separate caption track; transcripts are rendered via <TranscriptViewer> */}
-			<audio
-				ref={audioRef}
-				src={src}
-				preload="metadata"
-				onLoadedMetadata={handleLoadedMetadata}
-				onEnded={handleEnded}
-			/>
+			{src ? (
+				/* biome-ignore lint/a11y/useMediaCaption: user-uploaded recordings have no separate caption track; transcripts are rendered via <TranscriptViewer> */
+				<audio
+					ref={audioRef}
+					src={src}
+					preload="metadata"
+					onLoadedMetadata={handleLoadedMetadata}
+					onEnded={handleEnded}
+				/>
+			) : null}
 
 			{/* ── Embedded: cassette-style player ── */}
 			{isEmbedded ? (
