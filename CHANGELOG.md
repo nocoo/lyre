@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.8.0 (2026-09-04)
+
+### 🚀 Features
+
+- feat: migrate pages and controls to basalt (9f2419d)
+- feat: migrate app shell to basalt (8e1f1da)
+- feat: wire basalt css and burnt sienna (9eb9aed)
+
+### 🐛 Bug Fixes
+
+- fix: disable player when audio is missing (52c8598)
+- fix: skip dashboard oss only if unconfigured (c89ccaa)
+- fix: flatten transcript and show player (925ee66)
+- fix: drop milliseconds from job timestamps (42de7d1)
+- fix: skip dashboard oss when unconfigured (2ef2157)
+- fix: color remote backup env badges (ba35ab8)
+- fix: restore new-folder dialog width (412af7b)
+- fix: nest wells and selected card paint (b9438a3)
+- fix: restore dialog close and layer cards (9d0b44e)
+- fix: restore basalt tokens on charts and players (1a5ddf1)
+
+### 📝 Other Changes
+
+- docs: avoid seeding wrangler metadata sqlite (60257ee)
+- test: require dashboard 200 without oss (be1edbe)
+- test: seed local d1 with demo recordings (7ce08de)
+- chore: drop theme-utils from coverage include (ebc1625)
+- test: align e2e locators with basalt shell (7e32263)
+- chore: drop unused shadcn packages (21fa044)
+- chore: add @nocoo/basalt 2.0.2 (6e27320)
+
 ## v1.7.3 (2026-09-03)
 
 ### 🐛 Bug Fixes
