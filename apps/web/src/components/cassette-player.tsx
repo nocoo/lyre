@@ -17,6 +17,7 @@ interface CassettePlayerProps {
 	onVolumeChange: (volume: number) => void;
 	onToggleMute: () => void;
 	progressBarRef: React.RefObject<HTMLDivElement | null>;
+	unavailable?: boolean;
 }
 
 const COVER_URL = "https://s.zhe.to/dcd0e6e42358/20260222/4e6c5790-1868-4224-bacb-3ba795ecd1fb.jpg";
@@ -36,6 +37,7 @@ export function CassettePlayer({
 	onVolumeChange,
 	onToggleMute,
 	progressBarRef,
+	unavailable = false,
 }: CassettePlayerProps) {
 	return (
 		<div className="flex flex-col gap-3 h-full select-none">
@@ -67,19 +69,26 @@ export function CassettePlayer({
 			</div>
 
 			{/* ── Transport controls ── */}
-			<div className="rounded-lg bg-basalt-secondary/80 border border-basalt-border p-3 space-y-2.5">
+			<div
+				className={`rounded-lg bg-basalt-secondary/80 border border-basalt-border p-3 space-y-2.5 ${
+					unavailable ? "opacity-60" : ""
+				}`}
+			>
 				{/* Progress bar */}
 				<div
 					ref={progressBarRef}
-					className="group relative h-2 cursor-pointer rounded-full bg-basalt-muted"
-					onClick={onProgressClick}
-					onKeyDown={onProgressKeyDown}
+					className={`group relative h-2 rounded-full bg-basalt-muted ${
+						unavailable ? "cursor-not-allowed" : "cursor-pointer"
+					}`}
+					onClick={unavailable ? undefined : onProgressClick}
+					onKeyDown={unavailable ? undefined : onProgressKeyDown}
 					role="slider"
 					aria-label="Audio progress"
 					aria-valuenow={Math.round(vm.progress)}
 					aria-valuemin={0}
 					aria-valuemax={100}
-					tabIndex={0}
+					aria-disabled={unavailable}
+					tabIndex={unavailable ? -1 : 0}
 				>
 					<div
 						className="absolute inset-y-0 left-0 rounded-full bg-basalt-foreground"
@@ -103,6 +112,7 @@ export function CassettePlayer({
 							size="icon"
 							className="h-8 w-8 rounded-lg"
 							onClick={onSkipBack}
+							disabled={unavailable}
 							aria-label="Skip back 10 seconds"
 						>
 							<SkipBack className="h-4 w-4" strokeWidth={1.5} />
@@ -110,15 +120,16 @@ export function CassettePlayer({
 
 						<button
 							type="button"
+							disabled={unavailable}
 							className={`
                 flex h-10 w-10 items-center justify-center rounded-full
                 border-2 border-basalt-foreground/20 bg-basalt-foreground text-basalt-background
                 transition-all duration-150
-                hover:scale-105 hover:shadow-lg active:scale-90 active:shadow-sm
+                ${unavailable ? "cursor-not-allowed" : "hover:scale-105 hover:shadow-lg active:scale-90 active:shadow-sm"}
                 ${isPlaying ? "ring-2 ring-basalt-foreground/20 ring-offset-2 ring-offset-basalt-secondary" : ""}
               `}
 							onClick={onTogglePlay}
-							aria-label={isPlaying ? "Pause" : "Play"}
+							aria-label={unavailable ? "Audio unavailable" : isPlaying ? "Pause" : "Play"}
 						>
 							{isPlaying ? (
 								<Pause className="h-4.5 w-4.5" strokeWidth={2.5} />
@@ -132,6 +143,7 @@ export function CassettePlayer({
 							size="icon"
 							className="h-8 w-8 rounded-lg"
 							onClick={onSkipForward}
+							disabled={unavailable}
 							aria-label="Skip forward 10 seconds"
 						>
 							<SkipForward className="h-4 w-4" strokeWidth={1.5} />
@@ -144,6 +156,7 @@ export function CassettePlayer({
 							size="sm"
 							className="h-6 min-w-[3rem] px-2 text-xs tabular-nums font-mono border border-basalt-border"
 							onClick={onSpeedCycle}
+							disabled={unavailable}
 							aria-label={`Playback speed ${vm.speedDisplay}`}
 						>
 							{vm.speedDisplay}
@@ -151,7 +164,8 @@ export function CassettePlayer({
 
 						<button
 							type="button"
-							className="flex h-6 w-6 items-center justify-center rounded text-basalt-muted-foreground hover:text-basalt-foreground transition-colors"
+							disabled={unavailable}
+							className="flex h-6 w-6 items-center justify-center rounded text-basalt-muted-foreground hover:text-basalt-foreground transition-colors disabled:cursor-not-allowed"
 							onClick={onToggleMute}
 							aria-label={isMuted ? "Unmute" : "Mute"}
 						>
@@ -168,6 +182,7 @@ export function CassettePlayer({
 							max={1}
 							step={0.05}
 							value={isMuted ? 0 : volume}
+							disabled={unavailable}
 							onChange={(e) => onVolumeChange(Number(e.target.value))}
 							className="h-1 w-14 cursor-pointer appearance-none rounded-full bg-basalt-muted accent-basalt-foreground
                 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-basalt-foreground

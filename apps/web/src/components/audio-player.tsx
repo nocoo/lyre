@@ -50,6 +50,17 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 		}
 	}, [durationSeconds, src]);
 
+	// Apply queued seek/rate/volume only when the audio element mounts with a src.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: src mount is the only intended trigger
+	useEffect(() => {
+		const audio = audioRef.current;
+		if (!src || !audio) return;
+		audio.currentTime = currentTime;
+		audio.playbackRate = speed;
+		audio.volume = volume;
+		audio.muted = isMuted;
+	}, [src]);
+
 	// Expose seekTo via ref
 	useImperativeHandle(ref, () => ({
 		seekTo: (time: number) => {
@@ -117,22 +128,24 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 	}, [isPlaying, src]);
 
 	const skipBack = useCallback(() => {
+		if (!src) return;
 		const next = Math.max(0, (audioRef.current?.currentTime ?? currentTime) - 10);
 		if (audioRef.current) {
 			audioRef.current.currentTime = next;
 		}
 		setCurrentTime(next);
 		onTimeUpdate?.(next);
-	}, [currentTime, onTimeUpdate]);
+	}, [src, currentTime, onTimeUpdate]);
 
 	const skipForward = useCallback(() => {
+		if (!src) return;
 		const next = Math.min(duration, (audioRef.current?.currentTime ?? currentTime) + 10);
 		if (audioRef.current) {
 			audioRef.current.currentTime = next;
 		}
 		setCurrentTime(next);
 		onTimeUpdate?.(next);
-	}, [currentTime, duration, onTimeUpdate]);
+	}, [src, currentTime, duration, onTimeUpdate]);
 
 	const handleSpeedCycle = useCallback(() => {
 		const nextSpeed = cyclePlaybackSpeed(speed);
@@ -145,7 +158,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 	// Seek via progress bar click
 	const handleProgressClick = useCallback(
 		(e: React.MouseEvent<HTMLDivElement>) => {
-			if (!progressBarRef.current) return;
+			if (!src || !progressBarRef.current) return;
 			const rect = progressBarRef.current.getBoundingClientRect();
 			const pct = ((e.clientX - rect.left) / rect.width) * 100;
 			const newTime = progressToTime(pct, duration);
@@ -155,12 +168,13 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 			setCurrentTime(newTime);
 			onTimeUpdate?.(newTime);
 		},
-		[duration, onTimeUpdate],
+		[src, duration, onTimeUpdate],
 	);
 
 	// Keyboard seek: Left/Right = ±5s, Home/End = start/end
 	const handleProgressKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLDivElement>) => {
+			if (!src) return;
 			const step = 5;
 			const from = audioRef.current?.currentTime ?? currentTime;
 			let next = from;
@@ -190,7 +204,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 				onTimeUpdate?.(next);
 			}
 		},
-		[currentTime, duration, onTimeUpdate],
+		[src, currentTime, duration, onTimeUpdate],
 	);
 
 	// Volume controls
@@ -250,6 +264,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 					onVolumeChange={handleVolumeChange}
 					onToggleMute={handleToggleMute}
 					progressBarRef={progressBarRef}
+					unavailable={!src}
 				/>
 			) : (
 				/* ── Standalone: original compact layout ── */
@@ -259,7 +274,9 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 					)}
 					<div
 						ref={progressBarRef}
-						className="group relative mb-3 h-1.5 cursor-pointer rounded-full bg-basalt-secondary"
+						className={`group relative mb-3 h-1.5 rounded-full bg-basalt-secondary ${
+							src ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+						}`}
 						onClick={handleProgressClick}
 						onKeyDown={handleProgressKeyDown}
 						role="slider"
@@ -267,7 +284,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 						aria-valuenow={Math.round(vm.progress)}
 						aria-valuemin={0}
 						aria-valuemax={100}
-						tabIndex={0}
+						aria-disabled={!src}
+						tabIndex={src ? 0 : -1}
 					>
 						<div
 							className="absolute inset-y-0 left-0 rounded-full bg-basalt-foreground"
@@ -288,6 +306,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 								size="icon"
 								className="h-8 w-8"
 								onClick={skipBack}
+								disabled={!src}
 								aria-label="Skip back 10 seconds"
 							>
 								<SkipBack className="h-4 w-4" strokeWidth={1.5} />
@@ -297,7 +316,8 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 								size="icon"
 								className="h-9 w-9"
 								onClick={togglePlay}
-								aria-label={isPlaying ? "Pause" : "Play"}
+								disabled={!src}
+								aria-label={!src ? "Audio unavailable" : isPlaying ? "Pause" : "Play"}
 							>
 								{isPlaying ? (
 									<Pause className="h-5 w-5" strokeWidth={1.5} />
@@ -310,6 +330,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 								size="icon"
 								className="h-8 w-8"
 								onClick={skipForward}
+								disabled={!src}
 								aria-label="Skip forward 10 seconds"
 							>
 								<SkipForward className="h-4 w-4" strokeWidth={1.5} />
@@ -321,6 +342,7 @@ export const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(funct
 								size="sm"
 								className="h-6 min-w-[3rem] px-2 text-xs tabular-nums"
 								onClick={handleSpeedCycle}
+								disabled={!src}
 								aria-label={`Playback speed ${vm.speedDisplay}`}
 							>
 								{vm.speedDisplay}
