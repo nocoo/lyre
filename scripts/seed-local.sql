@@ -1,8 +1,7 @@
 -- Local wrangler --env test D1 seed for the E2E skip-auth user.
--- Re-runnable. Apply:
---   sqlite3 apps/api/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite < scripts/seed-local.sql
--- or from apps/api:
+-- Re-runnable. Apply from apps/api:
 --   wrangler d1 execute lyre-db-test --env test --local --file ../../scripts/seed-local.sql
+-- Or sqlite3 the hashed D1DatabaseObject/*.sqlite (not metadata.sqlite).
 
 INSERT OR IGNORE INTO users (id, email, name, avatar_url, created_at, updated_at)
 VALUES ('e2e-test-user', 'e2e@test.com', 'E2E Test User', NULL, 1785844800000, 1785844800000);
