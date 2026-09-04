@@ -8,7 +8,7 @@
 import { makeRepos } from "../db/repositories";
 import type { RecordingStatus } from "../lib/types";
 import type { RuntimeContext } from "../runtime/context";
-import { listObjects } from "../services/oss";
+import { isOssConfigured, listObjects } from "../services/oss";
 import { type HandlerResponse, json, unauthorized } from "./http";
 
 interface MonthlyCount {
@@ -151,13 +151,11 @@ export async function dashboardHandler(ctx: RuntimeContext): Promise<HandlerResp
 
 	let uploadObjects: Awaited<ReturnType<typeof listObjects>> = [];
 	let resultObjects: Awaited<ReturnType<typeof listObjects>> = [];
-	try {
+	if (isOssConfigured(ctx.env)) {
 		[uploadObjects, resultObjects] = await Promise.all([
 			listObjects(`uploads/${userId}/`, undefined, ctx.env),
 			listObjects("results/", undefined, ctx.env),
 		]);
-	} catch (err) {
-		console.warn("[dashboard] OSS stats unavailable", err);
 	}
 
 	const recordingIdSet = new Set(allRecordings.map((r) => r.id));

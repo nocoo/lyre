@@ -39,6 +39,12 @@ export function resolveBucket(env: LyreEnv): string {
 	return e.NODE_ENV === "production" ? BUCKET_PROD : BUCKET_DEV;
 }
 
+export function isOssConfigured(env: LyreEnv): boolean {
+	return Boolean(
+		env.OSS_ACCESS_KEY_ID && env.OSS_ACCESS_KEY_SECRET && env.OSS_REGION && env.OSS_ENDPOINT,
+	);
+}
+
 function getConfig(env: LyreEnv): OssConfig {
 	const e = env;
 	const accessKeyId = e.OSS_ACCESS_KEY_ID;
@@ -389,4 +395,5 @@ export const ossService = {
 	listObjects,
 	signV1,
 	resolveBucket,
+	isOssConfigured,
 };
