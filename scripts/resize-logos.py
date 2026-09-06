@@ -1,129 +1,84 @@
 #!/usr/bin/env python3
-"""
-Resize logo image for different use cases in the Lyre app.
+"""Generate Lyre application assets from the adopted family masters.
 
-Single-source pattern: ONE master logo.png generates ALL derived assets.
-
-Outputs:
-  public/          — Only for <img src="..."> references in components
-    logo-24.png      Sidebar logo
-    logo-80.png      Login page logo
-
-  src/app/         — Next.js file-based metadata convention (auto-discovered)
-    icon.png         Browser tab icon (32x32)
-    apple-icon.png   Apple touch icon (180x180)
-    favicon.ico      Multi-size favicon (16+32)
-    opengraph-image.png  OG image (1200x630)
+Run with: uv run --with pillow python scripts/resize-logos.py
+The transparent source, square tile and rounded tile share one composition.
 """
 
-from PIL import Image
 from pathlib import Path
 
-# Brand background color for OG image canvas
-BRAND_BG_COLOR = (24, 24, 27)  # zinc-900
+from PIL import Image, ImageChops, ImageDraw, ImageOps
+
+ROOT = Path(__file__).resolve().parent.parent
+SOURCE = ROOT / "logo.png"
+BRAND = ROOT / "assets" / "brand"
 
 
-def resize_maintaining_aspect(img: Image.Image, height: int) -> Image.Image:
-    """Resize image to specified height while maintaining aspect ratio."""
-    aspect_ratio = img.width / img.height
-    new_width = int(height * aspect_ratio)
-    return img.resize((new_width, height), Image.Resampling.LANCZOS)
+def save_png(image: Image.Image, relative: str, size: int) -> None:
+    destination = ROOT / relative
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    image.resize((size, size), Image.Resampling.LANCZOS).save(destination, "PNG")
+    print(f"  {relative}: {size}x{size}")
 
 
-def resize_to_square(img: Image.Image, size: int) -> Image.Image:
-    """Resize image to square, centering on transparent background."""
-    aspect_ratio = img.width / img.height
-    if aspect_ratio > 1:
-        new_width = size
-        new_height = int(size / aspect_ratio)
-    else:
-        new_height = size
-        new_width = int(size * aspect_ratio)
+def main() -> None:
+    foreground = Image.open(SOURCE).convert("RGBA")
+    square = Image.open(BRAND / "icon.png").convert("RGBA")
+    rounded = Image.open(BRAND / "icon-rounded.png").convert("RGBA")
+    if foreground.size != (2048, 2048) or square.size != foreground.size or rounded.size != foreground.size:
+        raise ValueError("All approved brand masters must share their 2048-square framing")
+    if square.getchannel("A").getextrema() != (255, 255) or rounded.getpixel((0, 0))[3] != 0:
+        raise ValueError("Square and rounded master roles are inconsistent")
+    save_png(rounded, "apps/web/public/logo-24.png", 24)
+    save_png(rounded, "apps/web/public/logo-80.png", 80)
+    save_png(square, "apps/web/public/icon.png", 32)
+    save_png(square, "apps/web/public/apple-icon.png", 180)
 
-    resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+    ico_path = ROOT / "apps/web/public/favicon.ico"
+    ico_path.parent.mkdir(parents=True, exist_ok=True)
+    ico_sizes = [(16, 16), (32, 32), (48, 48)]
+    square.save(ico_path, format="ICO", sizes=ico_sizes)
+    with Image.open(ico_path) as icon:
+        if icon.ico.sizes() != set(ico_sizes):
+            raise ValueError("Favicon is missing an expected embedded resolution")
+    print(f"  {ico_path.relative_to(ROOT)}: 16+32+48 ICO, verified")
 
-    # Create square canvas with transparent background
-    square = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    og = Image.new("RGB", (1200, 630), (24, 24, 27))
+    logo_size = round(630 * 0.4)
+    mark = rounded.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+    og.paste(mark, ((1200 - logo_size) // 2, (630 - logo_size) // 2), mark)
+    og_path = ROOT / "apps/web/public/opengraph-image.png"
+    og_path.parent.mkdir(parents=True, exist_ok=True)
+    og.save(og_path, "PNG")
+    print(f"  {og_path.relative_to(ROOT)}: 1200x630")
 
-    # Paste centered
-    x = (size - new_width) // 2
-    y = (size - new_height) // 2
-    square.paste(resized, (x, y), resized if resized.mode == "RGBA" else None)
+    # macOS PNG icons supply their own rounded silhouette inside the platform canvas.
+    macos = Image.new("RGBA", (1024, 1024))
+    tile = rounded.resize((824, 824), Image.Resampling.LANCZOS)
+    macos.alpha_composite(tile, (100, 100))
+    macos.save(BRAND / "icon-macos.png", "PNG")
+    for size in (16, 32, 64, 128, 256, 512, 1024):
+        save_png(macos, f"apps/macos/Lyre/Assets.xcassets/AppIcon.appiconset/icon_{size}.png", size)
 
-    return square
-
-
-def generate_og_image(img: Image.Image) -> Image.Image:
-    """Generate 1200x630 OG image with brand background and centered logo."""
-    width, height = 1200, 630
-
-    # RGB canvas (social platforms don't support alpha)
-    canvas = Image.new("RGB", (width, height), BRAND_BG_COLOR)
-
-    # Resize logo to ~40% of canvas height
-    logo_height = int(height * 0.4)
-    logo = resize_maintaining_aspect(img, logo_height)
-
-    # Center the logo
-    x = (width - logo.width) // 2
-    y = (height - logo.height) // 2
-
-    # Paste with alpha mask if RGBA
-    if logo.mode == "RGBA":
-        canvas.paste(logo, (x, y), logo)
-    else:
-        canvas.paste(logo, (x, y))
-
-    return canvas
-
-
-def main():
-    root = Path(__file__).parent.parent
-    public = root / "apps" / "web" / "public"
-    app_dir = root / "apps" / "web" / "src" / "app"
-    public.mkdir(exist_ok=True)
-
-    # Load source image
-    logo = Image.open(root / "logo.png").convert("RGBA")
-    print(f"Source logo: {logo.size}")
-
-    # --- public/: only <img src> assets ---
-
-    sidebar = resize_maintaining_aspect(logo, 24)
-    sidebar.save(public / "logo-24.png")
-    print(f"  public/logo-24.png: {sidebar.size}")
-
-    login = resize_maintaining_aspect(logo, 80)
-    login.save(public / "logo-80.png")
-    print(f"  public/logo-80.png: {login.size}")
-
-    # --- src/app/: Next.js file-based metadata (auto-discovered) ---
-
-    icon_32 = resize_to_square(logo, 32)
-    icon_32.save(app_dir / "icon.png")
-    print(f"  src/app/icon.png: 32x32")
-
-    apple_icon = resize_to_square(logo, 180)
-    apple_icon.save(app_dir / "apple-icon.png")
-    print(f"  src/app/apple-icon.png: 180x180")
-
-    # .ico with 16+32 embedded sizes
-    ico_16 = resize_to_square(logo, 16)
-    ico_32 = resize_to_square(logo, 32)
-    ico_16.save(
-        app_dir / "favicon.ico",
-        format="ICO",
-        append_images=[ico_32],
-        sizes=[(16, 16), (32, 32)],
-    )
-    print(f"  src/app/favicon.ico: 16x16 + 32x32")
-
-    # OG image (1200x630, RGB)
-    og = generate_og_image(logo)
-    og.save(app_dir / "opengraph-image.png")
-    print(f"  src/app/opengraph-image.png: {og.size}")
-
-    print("Done!")
+    # Preserve the established monochrome bird/recording-dot menu-bar identity.
+    luminance = ImageOps.grayscale(foreground)
+    dark_planes = luminance.point(lambda value: max(0, min(255, round((210 - value) * 255 / 80))))
+    silhouette = Image.new("RGBA", foreground.size)
+    silhouette.putalpha(ImageChops.multiply(dark_planes, foreground.getchannel("A")))
+    for scale, suffix in ((1, ""), (2, "@2x")):
+        size = 22 * scale
+        inset = 2 * scale
+        tray = Image.new("RGBA", (size, size))
+        mark = silhouette.resize((18 * scale, 18 * scale), Image.Resampling.LANCZOS)
+        tray.alpha_composite(mark, (inset, inset))
+        tray.save(ROOT / f"apps/macos/Lyre/Assets.xcassets/TrayIcon.imageset/tray-icon{suffix}.png", "PNG")
+        recording = tray.resize((size * 4, size * 4), Image.Resampling.LANCZOS)
+        draw = ImageDraw.Draw(recording)
+        draw.ellipse((13 * scale * 4, 1 * scale * 4, 21 * scale * 4, 9 * scale * 4), fill=(255, 59, 48, 255))
+        recording.resize((size, size), Image.Resampling.LANCZOS).save(
+            ROOT / f"apps/macos/Lyre/Assets.xcassets/TrayIconRecording.imageset/tray-icon-recording{suffix}.png", "PNG"
+        )
+    print("  macOS: 7 iconset sizes and 1x/2x idle/recording tray marks")
 
 
 if __name__ == "__main__":
