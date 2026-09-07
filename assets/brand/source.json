@@ -1,0 +1,37 @@
+{
+	"study": "lyre/2026-09-07-03",
+	"finishing": "01",
+	"method": "retained-original",
+	"generationCalls": 0,
+	"nativeDimensions": [2048, 2048],
+	"original": {
+		"path": "source/original.png",
+		"sha256": "1ba1c248228610d3e88e3428359391702f638cb44f1b42045c6a16861c2e581a",
+		"width": 2048,
+		"height": 2048,
+		"bytes": 3656299,
+		"repository": "https://github.com/nocoo/lyre",
+		"repositoryRevision": "f22d7fa974f0440477b148f1e22c42fc418caa51",
+		"sourcePath": "logo.png",
+		"sourceUrl": "https://github.com/nocoo/lyre/blob/f22d7fa974f0440477b148f1e22c42fc418caa51/logo.png"
+	},
+	"masters": {
+		"logo.png": {
+			"sha256": "1ba1c248228610d3e88e3428359391702f638cb44f1b42045c6a16861c2e581a",
+			"width": 2048,
+			"height": 2048
+		},
+		"assets/brand/icon.png": {
+			"sha256": "9dc87df1c4dc2dc050eabdb9671559766ae1199b9d1bca2ebdd44f95d5ba4d87",
+			"width": 2048,
+			"height": 2048
+		},
+		"assets/brand/icon-rounded.png": {
+			"sha256": "3774bb6be2c0cd89fb69d17ac13ee0cade73962f424215cf8ec1413ba4b797cf",
+			"width": 2048,
+			"height": 2048
+		}
+	},
+	"review": "https://hexly.ai/logos/lyre",
+	"archive": "https://github.com/nocoo/hexly.ai/tree/main/artwork/logo-family/lyre/2026-09-07-03"
+}
