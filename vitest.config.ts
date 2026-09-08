@@ -19,6 +19,7 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		include: [
+			"scripts/**/*.test.ts",
 			"packages/*/src/**/*.test.{ts,tsx}",
 			"apps/api/src/**/*.test.{ts,tsx}",
 			"apps/web/src/**/*.test.{ts,tsx}",

@@ -127,6 +127,8 @@
 			"!**/coverage",
 			"!**/.wrangler",
 			"!**/build",
+			"!test-results",
+			"!playwright-report",
 			"!apps/macos",
 			"!apps/api/static",
 			"!apps/web/dist",

@@ -16,6 +16,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "15.0"
+    LYRE_RUN_LIVE_RECORDING: "0"
 
 targets:
   Lyre:
@@ -61,3 +62,29 @@ targets:
         CODE_SIGN_IDENTITY: "Apple Development"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 93WWLTN9XU
+
+# Test actions use an empty Debug host. Run/Profile/Archive retain the app.
+schemes:
+  Lyre:
+    build:
+      targets:
+        Lyre: all
+    test:
+      config: Debug
+      targets:
+        - LyreTests
+      environmentVariables:
+        LYRE_TEST_HOST: "1"
+        LYRE_RUN_LIVE_RECORDING: "$(LYRE_RUN_LIVE_RECORDING)"
+  LyreTests:
+    build:
+      targets:
+        Lyre: [test]
+        LyreTests: [test]
+    test:
+      config: Debug
+      targets:
+        - LyreTests
+      environmentVariables:
+        LYRE_TEST_HOST: "1"
+        LYRE_RUN_LIVE_RECORDING: "$(LYRE_RUN_LIVE_RECORDING)"

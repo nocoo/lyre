@@ -10,29 +10,35 @@ import ScreenCaptureKit
 /// - Screen Recording permission (ScreenCaptureKit)
 /// - Microphone permission (AVFoundation)
 ///
-/// Tests skip gracefully when permissions are not available (CI-safe).
-/// Uses `withKnownIssue` to mark permission-dependent tests as expected
-/// failures when running without the required system permissions.
-@Suite("E2E Recording Lifecycle")
+/// Real recording is disabled by default, before probing permissions.
+/// Explicit live runs require existing permissions and an available display.
+@Suite(
+    "E2E Recording Lifecycle",
+    .serialized,
+    .enabled(
+        if: NativeTestPolicy.liveRecordingEnabled(environment: ProcessInfo.processInfo.environment),
+        "Requires explicit opt-in to record system audio and microphone"
+    )
+)
 struct RecordingE2ETests {
 
     /// Check if the required permissions are available **without triggering
     /// any system permission dialog**. Uses TCC preflight for Screen Recording
     /// and AVFoundation's read-only status for Microphone. If either is not
-    /// already granted, the test skips — the user grants permission from the
+    /// already granted, an opted-in test fails — the user grants permission from the
     /// UI (Permissions tab), not from a test-suite prompt that appears in the
     /// middle of `git commit` or CI.
     private static func hasPermissions() async -> Bool {
         // Screen Recording: read-only preflight, no dialog.
         guard PermissionManager.hasScreenRecordingPreauthorized() else {
-            print("[E2E] Screen Recording not preauthorized — skipping")
+            print("[E2E] Screen Recording not preauthorized")
             return false
         }
 
         // Microphone: read-only authorization status, no dialog.
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         guard micStatus == .authorized else {
-            print("[E2E] Microphone status = \(micStatus.rawValue) — skipping")
+            print("[E2E] Microphone status = \(micStatus.rawValue)")
             return false
         }
 
@@ -45,34 +51,52 @@ struct RecordingE2ETests {
                 onScreenWindowsOnly: true,
             )
             if content.displays.isEmpty {
-                print("[E2E] No displays available — skipping")
+                print("[E2E] No displays available")
                 return false
             }
             return true
         } catch {
-            print("[E2E] SCShareableContent failed: \(error) — skipping")
+            print("[E2E] SCShareableContent failed: \(error)")
             return false
+        }
+    }
+
+    /// Await capture shutdown before deleting this test's temporary files,
+    /// including when a test throws or its sleep is cancelled.
+    private static func withRecorder(
+        _ body: (RecordingManager) async throws -> Void
+    ) async throws {
+        try await NativeTestPolicy.requireLiveRecording(
+            environment: ProcessInfo.processInfo.environment,
+            permissions: hasPermissions
+        )
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lyre-e2e-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let recorder = RecordingManager(outputDirectory: tempDir)
+        do {
+            try await body(recorder)
+            if recorder.state == .recording {
+                _ = try await recorder.stopRecording()
+            }
+        } catch {
+            if recorder.state == .recording {
+                _ = try? await recorder.stopRecording()
+            }
+            throw error
         }
     }
 
     // MARK: - Full Lifecycle
 
     @Test func recordAndProduceM4AFile() async throws {
-        let canRun = await Self.hasPermissions()
-        guard canRun else {
-            withKnownIssue("Screen Recording + Microphone permissions required") {
-                throw PermissionSkip()
-            }
-            return
+        try await Self.withRecorder { recorder in
+            try await Self.assertRecordingLifecycle(recorder)
         }
+    }
 
-        // Set up recorder with a temp directory
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("lyre-e2e-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let recorder = RecordingManager(outputDirectory: tempDir)
+    private static func assertRecordingLifecycle(_ recorder: RecordingManager) async throws {
 
         // Verify initial state
         #expect(recorder.state == .idle)
@@ -166,62 +190,31 @@ struct RecordingE2ETests {
     // MARK: - Double Start Prevention
 
     @Test func cannotStartTwice() async throws {
-        let canRun = await Self.hasPermissions()
-        guard canRun else {
-            withKnownIssue("Screen Recording + Microphone permissions required") {
-                throw PermissionSkip()
-            }
-            return
-        }
-
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("lyre-e2e-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let recorder = RecordingManager(outputDirectory: tempDir)
-
-        try await recorder.startRecording()
-        defer { Task { try? await recorder.stopRecording() } }
-
-        do {
+        try await Self.withRecorder { recorder in
             try await recorder.startRecording()
-            Issue.record("Expected RecordingError.alreadyRecording")
-        } catch let error as RecordingManager.RecordingError {
-            #expect(error == .alreadyRecording)
+            do {
+                try await recorder.startRecording()
+                Issue.record("Expected RecordingError.alreadyRecording")
+            } catch let error as RecordingManager.RecordingError {
+                #expect(error == .alreadyRecording)
+            }
         }
     }
 
     // MARK: - Output File Naming
 
     @Test func outputFileHasExpectedName() async throws {
-        let canRun = await Self.hasPermissions()
-        guard canRun else {
-            withKnownIssue("Screen Recording + Microphone permissions required") {
-                throw PermissionSkip()
-            }
-            return
+        try await Self.withRecorder { recorder in
+            try await recorder.startRecording()
+            let fileURL = recorder.currentFileURL!
+
+            // Brief recording
+            try await Task.sleep(for: .milliseconds(500))
+            _ = try await recorder.stopRecording()
+
+            #expect(fileURL.pathExtension == "m4a")
+            #expect(fileURL.lastPathComponent.hasPrefix("Recording "))
+            #expect(fileURL.lastPathComponent.contains(" at "))
         }
-
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("lyre-e2e-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        let recorder = RecordingManager(outputDirectory: tempDir)
-
-        try await recorder.startRecording()
-        let fileURL = recorder.currentFileURL!
-
-        // Brief recording
-        try await Task.sleep(for: .milliseconds(500))
-        _ = try await recorder.stopRecording()
-
-        #expect(fileURL.pathExtension == "m4a")
-        #expect(fileURL.lastPathComponent.hasPrefix("Recording "))
-        #expect(fileURL.lastPathComponent.contains(" at "))
     }
 }
-
-/// Sentinel error for permission-skip in `withKnownIssue`.
-private struct PermissionSkip: Error {}

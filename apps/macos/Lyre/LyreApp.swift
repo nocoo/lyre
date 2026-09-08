@@ -1,7 +1,6 @@
 import os
 import SwiftUI
 
-@main
 struct LyreApp: App {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "LyreApp")
 

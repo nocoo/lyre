@@ -15,7 +15,5 @@ bun run typecheck
 # Developer cert matching the project's release team — running tests does
 # not need a real signature, but `release.ts` still uses the team cert
 # because it does not pass these overrides.
-cd apps/macos && \
-  xcodebuild test -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS" -quiet \
-    CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO && \
-  swiftlint lint --strict Lyre/ LyreTests/
+bun run test:macos
+cd apps/macos && swiftlint lint --strict Lyre/ LyreTests/

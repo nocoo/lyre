@@ -15,6 +15,8 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:coverage": "vitest run --coverage",
+		"test:macos": "bun run scripts/test-macos.ts",
+		"test:macos:live": "bun run scripts/test-macos.ts --live",
 		"typecheck": "bun run web:typecheck && bun run worker:typecheck && bun run api:typecheck",
 		"deploy": "bun run web:build && bun run --cwd apps/api deploy",
 		"web:dev": "bun run --cwd apps/web dev",
