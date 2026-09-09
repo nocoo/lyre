@@ -243,14 +243,26 @@ function main(): void {
 
 	// 5. Commit and tag
 	console.log("5️⃣  Committing and tagging...");
-	run("git add -A", { dryRun });
-	run(`git commit -m "release: v${newVersion}"`, { dryRun });
+	const releaseFiles = [
+		"package.json",
+		"apps/web/package.json",
+		"apps/api/package.json",
+		"packages/api/package.json",
+		"bun.lock",
+		"CHANGELOG.md",
+		"apps/macos/project.yml",
+		"apps/macos/Lyre.xcodeproj/project.pbxproj",
+		"apps/macos/Lyre.xcodeproj/xcshareddata/xcschemes/Lyre.xcscheme",
+		"apps/macos/Lyre.xcodeproj/xcshareddata/xcschemes/LyreTests.xcscheme",
+	].filter((p) => existsSync(pathResolve(PROJECT_ROOT, p)));
+	run(`git add ${releaseFiles.join(" ")}`, { dryRun });
+	run(`git commit -m "chore: release v${newVersion}"`, { dryRun });
 	run(`git tag v${newVersion}`, { dryRun });
 
 	// 6. Push
 	console.log("\n6️⃣  Pushing...");
 	run("git push", { dryRun });
-	run("git push --tags", { dryRun });
+	run(`git push origin v${newVersion}`, { dryRun });
 
 	// 7. GitHub release
 	console.log("\n7️⃣  Creating GitHub release...");
