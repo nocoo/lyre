@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.8.1 (2026-09-09)
+
+### 🚀 Features
+
+- feat: refine logo presentation (78b3a12)
+- feat: refine lyre animal identity (4e9f07b)
+
+### 🐛 Bug Fixes
+
+- fix: regenerate Bun 1.3.11 lockfile (a1b638c)
+- fix: fetch basalt tarball from npm registry (c2c5cf8)
+
+### 📝 Other Changes
+
+- chore: pin ci bun to 1.4.0 (bff86d6)
+- chore: stage release files explicitly (3e56e63)
+- chore: bump basalt to 2.1.2 (4f57a07)
+- docs: standardize bilingual project readme (3acc949)
+- test: isolate native host and opt in to audio capture (0e50ca0)
+- chore: defer lyre logo adoption (f22d7fa)
+
+
 ## v1.8.0 (2026-09-04)
 
 ### 🚀 Features
