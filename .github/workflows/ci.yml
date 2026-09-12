@@ -21,4 +21,3 @@ jobs:
       l2-command: "bun run test:e2e"
       l3: true
       l3-command: "bun run test:e2e:bdd"
-    secrets: inherit
