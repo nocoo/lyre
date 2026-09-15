@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.0.0 (2026-09-15)
+
+### 🚀 Features
+
+- feat(macos): redesign app and improve recording reliability (80589c4)
+
+### 🐛 Bug Fixes
+
+- fix: add release proof permissions (47d8807)
+
+### 📝 Other Changes
+
+- chore: pin base-ci to ad43150 (3276672)
+- chore: drop unused ci secrets inherit (fdb5ca2)
+- chore: pin base-ci to verified sha (77538d0)
+- chore: migrate workflows to base-ci (75eafbd)
+- chore: upgrade basalt to 2.1.7 (5aae610)
+- Remove unused apps/web mock-data module (70b0710)
+
+
 ## v1.8.1 (2026-09-09)
 
 ### 🚀 Features
