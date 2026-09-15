@@ -37,6 +37,8 @@ struct AppConfigTests {
         #expect(ctx.config.authToken == "")
         #expect(ctx.config.outputDirectory == AppConfig.defaultOutputDirectory())
         #expect(ctx.config.selectedInputDeviceID == nil)
+        #expect(!ctx.config.autoUploadEnabled)
+        #expect(ctx.config.autoUploadMinimumMinutes == 5)
         #expect(!ctx.config.isServerConfigured)
     }
 
@@ -71,6 +73,8 @@ struct AppConfigTests {
         let customDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("custom-recordings", isDirectory: true)
         ctx.config.outputDirectory = customDir
+        ctx.config.autoUploadEnabled = true
+        ctx.config.autoUploadMinimumMinutes = 12
         ctx.config.save()
 
         // Load into a fresh instance
@@ -78,6 +82,8 @@ struct AppConfigTests {
         #expect(loaded.serverURL == "https://lyre.test")
         #expect(loaded.authToken == "secret-token")
         #expect(loaded.outputDirectory == customDir)
+        #expect(loaded.autoUploadEnabled)
+        #expect(loaded.autoUploadMinimumMinutes == 12)
     }
 
     // MARK: - Auth token persisted in JSON
@@ -143,7 +149,7 @@ struct AppConfigTests {
             Issue.record("Failed to read config file")
             return
         }
-        guard let json = try? JSONDecoder().decode([String: String?].self, from: data) else {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             Issue.record("Failed to decode config JSON")
             return
         }
@@ -196,5 +202,42 @@ struct AppConfigTests {
 
         let loaded = AppConfig(configURL: ctx.configURL)
         #expect(loaded.authToken == "")
+    }
+
+    @Test func olderConfigKeepsAutomaticUploadsOff() throws {
+        let ctx = makeContext()
+        defer { ctx.cleanup() }
+        let legacy = #"{"serverURL":"https://lyre.test","authToken":"legacy-token"}"#
+        try Data(legacy.utf8).write(to: ctx.configURL)
+
+        let loaded = AppConfig(configURL: ctx.configURL)
+        #expect(!loaded.autoUploadEnabled)
+        #expect(loaded.autoUploadMinimumMinutes == 5)
+        #expect(loaded.authToken == "legacy-token")
+    }
+
+    @Test func disablingAutomaticUploadsRetainsThreshold() {
+        let ctx = makeContext()
+        defer { ctx.cleanup() }
+        ctx.config.autoUploadEnabled = true
+        ctx.config.autoUploadMinimumMinutes = 20
+        ctx.config.autoUploadEnabled = false
+        ctx.config.save()
+
+        let loaded = AppConfig(configURL: ctx.configURL)
+        #expect(!loaded.autoUploadEnabled)
+        #expect(loaded.autoUploadMinimumMinutes == 20)
+    }
+
+    @Test(arguments: [-1, 0, 1, 1440, 1441, Int.max])
+    func automaticUploadThresholdStaysWithinSupportedRange(minutes: Int) {
+        let ctx = makeContext()
+        defer { ctx.cleanup() }
+        ctx.config.autoUploadMinimumMinutes = minutes
+        ctx.config.save()
+
+        let expected = min(max(minutes, 1), 1440)
+        #expect(ctx.config.autoUploadMinimumMinutes == expected)
+        #expect(AppConfig(configURL: ctx.configURL).autoUploadMinimumMinutes == expected)
     }
 }

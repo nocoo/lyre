@@ -41,7 +41,7 @@ final class NSWorkspaceRunningAppsProvider: RunningAppsProviding {
 @MainActor
 final class SCShareableContentProvider: ShareableContentProviding {
     func currentTeamsWindows(bundleIDs: Set<String>) async throws -> [ShareableWindow] {
-        let content = try await SCShareableContent.current
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         return content.windows.compactMap { win -> ShareableWindow? in
             guard let bid = win.owningApplication?.bundleIdentifier,
                   bundleIDs.contains(bid) else { return nil }

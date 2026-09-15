@@ -63,7 +63,25 @@ final class AudioPlayerManager: NSObject, @unchecked Sendable {
             state = .playing(url)
             return
         }
+        load(url, autoplay: true)
+    }
 
+    /// Load the selected file without starting playback.
+    func prepare(_ url: URL) {
+        guard !isActive(url) else { return }
+        load(url, autoplay: false)
+    }
+
+    /// Seek without changing whether the player is playing or paused.
+    func seek(to seconds: TimeInterval) {
+        guard let player, seconds.isFinite, duration.isFinite, duration > 0 else { return }
+        let target = min(max(0, seconds), duration)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: .zero, toleranceAfter: .zero)
+        currentTime = target
+    }
+
+    private func load(_ url: URL, autoplay: Bool) {
         // Stop any current playback (drops the previous AVPlayerItem +
         // observers).
         stop()
@@ -120,8 +138,8 @@ final class AudioPlayerManager: NSObject, @unchecked Sendable {
         // Avoid stale duration leaking from a previous file; the async
         // load above replaces it as soon as the asset is ready.
         duration = 0
-        state = .playing(url)
-        p.play()
+        state = autoplay ? .playing(url) : .paused(url)
+        if autoplay { p.play() }
     }
 
     /// Pause the current playback.

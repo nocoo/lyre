@@ -22,6 +22,13 @@ final class UploadManager {
         case creating
         case completed(recordingId: String)
         case failed(String)
+
+        var isInProgress: Bool {
+            switch self {
+            case .preparing, .presigning, .uploading, .creating: true
+            case .idle, .completed, .failed: false
+            }
+        }
     }
 
     internal(set) var state: UploadState = .idle
@@ -103,9 +110,11 @@ final class UploadManager {
 
         // Cancel any in-progress upload
         currentTask?.cancel()
+        // Claim the file synchronously so navigation/deletion cannot race the task's first turn.
+        state = .preparing
 
         currentTask = Task { [weak self] in
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
             await self.performUpload(file: file)
         }
     }
@@ -132,13 +141,6 @@ final class UploadManager {
         let client = makeClient()
         let fileName = file.url.lastPathComponent
         let contentType = Constants.Audio.mimeType
-
-        // Flip state BEFORE any await so the UI switches to the
-        // progress view on the same click cycle. Downmix is
-        // AVAssetWriter work that can take a second or two, and
-        // during that window the user was previously staring at
-        // the same form with no feedback.
-        state = .preparing
 
         // Step 0: downmix any dual-track source into a single-track M4A
         // suitable for HTML5 <audio>. Falls through to the original file

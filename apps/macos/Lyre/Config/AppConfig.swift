@@ -14,6 +14,8 @@ final class AppConfig: @unchecked Sendable {
 
     /// Default server URL. Users can override in Settings.
     static let defaultServerURL = "https://lyre.hexly.ai"
+    static let defaultAutoUploadMinimumMinutes = 5
+    static let autoUploadMinuteRange = 1...1440
 
     // MARK: - Persisted properties
 
@@ -38,6 +40,23 @@ final class AppConfig: @unchecked Sendable {
     /// device is no longer available, this resets to nil (system default).
     var selectedInputDeviceID: String? {
         didSet { scheduleSave() }
+    }
+
+    /// Opt-in upload of newly finalized recordings; never scans existing files.
+    var autoUploadEnabled = false {
+        didSet { scheduleSave() }
+    }
+
+    /// A recording must be strictly longer than this threshold to upload automatically.
+    var autoUploadMinimumMinutes = defaultAutoUploadMinimumMinutes {
+        didSet {
+            let boundedMinutes = min(
+                max(autoUploadMinimumMinutes, Self.autoUploadMinuteRange.lowerBound),
+                Self.autoUploadMinuteRange.upperBound
+            )
+            if autoUploadMinimumMinutes != boundedMinutes { autoUploadMinimumMinutes = boundedMinutes }
+            scheduleSave()
+        }
     }
 
     // MARK: - Derived
@@ -77,6 +96,8 @@ final class AppConfig: @unchecked Sendable {
                 outputDirectory = URL(fileURLWithPath: dirPath, isDirectory: true)
             }
             selectedInputDeviceID = stored.selectedInputDeviceID
+            autoUploadEnabled = stored.autoUploadEnabled ?? false
+            autoUploadMinimumMinutes = stored.autoUploadMinimumMinutes ?? Self.defaultAutoUploadMinimumMinutes
 
             Self.logger.info("Config loaded from \(self.configURL.lastPathComponent)")
         } catch {
@@ -90,7 +111,9 @@ final class AppConfig: @unchecked Sendable {
             serverURL: serverURL.isEmpty ? nil : serverURL,
             authToken: authToken.isEmpty ? nil : authToken,
             outputDirectory: outputDirectory.path,
-            selectedInputDeviceID: selectedInputDeviceID
+            selectedInputDeviceID: selectedInputDeviceID,
+            autoUploadEnabled: autoUploadEnabled,
+            autoUploadMinimumMinutes: autoUploadMinimumMinutes
         )
 
         do {
@@ -140,4 +163,8 @@ private struct StoredConfig: Codable {
     var authToken: String?
     var outputDirectory: String?
     var selectedInputDeviceID: String?
+    // Optional on disk so existing configs decode without these new settings.
+    // swiftlint:disable:next discouraged_optional_boolean
+    var autoUploadEnabled: Bool?
+    var autoUploadMinimumMinutes: Int?
 }

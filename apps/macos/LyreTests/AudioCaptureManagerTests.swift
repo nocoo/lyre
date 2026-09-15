@@ -231,33 +231,38 @@ struct AudioCaptureManagerTests {
 
     // MARK: - Device Refresh
 
-    @Test func refreshDevicesPopulatesArray() {
+    @MainActor @Test func refreshDevicesTracksSystemDefaultWithoutChangingAutomaticPreference() {
         let manager = AudioCaptureManager()
+        let builtIn = AudioInputDevice(id: "built-in", name: "Mac Microphone")
+        let headset = AudioInputDevice(id: "headset", name: "Headset")
+        manager.inputDevicesProvider = { [builtIn, headset] }
+        manager.defaultInputDeviceIDProvider = { builtIn.id }
         manager.refreshDevices()
-        // We can't guarantee specific devices exist, but the array should be set
-        // (could be empty on CI with no audio devices)
-        #expect(manager.availableDevices.count >= 0)
+        #expect(manager.resolvedInputDevice.effectiveID == builtIn.id)
+        manager.defaultInputDeviceIDProvider = { headset.id }
+        manager.refreshDevices()
+        #expect(manager.availableDevices == [builtIn, headset])
+        #expect(manager.resolvedInputDevice.effectiveID == headset.id)
+        #expect(manager.selectedDeviceID == nil)
     }
 
-    @Test func refreshDevicesInstallsChangeListener() {
+    @MainActor @Test func disconnectedSavedDeviceReturnsAfterReconnect() {
         let manager = AudioCaptureManager()
+        let builtIn = AudioInputDevice(id: "built-in", name: "Mac Microphone")
+        let usb = AudioInputDevice(id: "usb", name: "USB Microphone")
+        manager.selectedDeviceID = usb.id
+        manager.defaultInputDeviceIDProvider = { builtIn.id }
+        manager.inputDevicesProvider = { [builtIn] }
         manager.refreshDevices()
-        // Calling refreshDevices twice should not crash (idempotent listener install)
+        #expect(manager.selectedDeviceID == usb.id)
+        #expect(manager.resolvedInputDevice.effectiveID == builtIn.id)
+        manager.inputDevicesProvider = { [builtIn, usb] }
         manager.refreshDevices()
-        #expect(manager.availableDevices.count >= 0)
-    }
-
-    @Test func enumerateDevicesFallsBackWhenSelectedDeviceDisappears() {
-        let manager = AudioCaptureManager()
-        // Simulate a selected device that doesn't exist in the real device list
-        manager.selectedDeviceID = "nonexistent-device-id"
-        // refreshDevices will enumerate real devices (which won't contain our fake ID)
+        #expect(manager.resolvedInputDevice.effectiveID == usb.id)
+        manager.inputDevicesProvider = { [] }
         manager.refreshDevices()
-        // The manager itself doesn't auto-clear on refreshDevices() — that's enumerateDevices()'s job.
-        // But we can test the AudioInputDevice model used for lookups
-        let fakeID = "nonexistent-device-id"
-        let exists = manager.availableDevices.contains { $0.id == fakeID }
-        #expect(!exists, "Nonexistent device should not appear in available devices")
+        #expect(manager.selectedDeviceID == usb.id)
+        #expect(manager.resolvedInputDevice.source == .unavailable)
     }
 
     // MARK: - Helpers

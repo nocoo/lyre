@@ -68,7 +68,7 @@ lyre/
 - **Build**: xcodegen → Xcode project → `xcodebuild`
 - **Networking**: URLSession (async/await)
 - **Testing**: Swift Testing (`xcodebuild test`), SwiftLint (lint)
-- **Code Signing**: Apple Development + Automatic signing (Team ID `93WWLTN9XU`)
+- **Code Signing**: Release uses Developer ID Application + Manual signing (Team ID `93WWLTN9XU`). Set `LYRE_CODE_SIGN_IDENTITY` when building a DMG; `LYRE_ALLOW_ADHOC=1` explicitly opts into ad-hoc signing, which cannot preserve a stable TCC identity across updates.
 
 ## Key Commands (run from repo root)
 
@@ -85,7 +85,7 @@ bun run test:coverage         # @lyre/api coverage gate
 
 # Deploy
 bun run deploy                # build SPA + publish Worker
-bun run macos:dmg             # build macOS release DMG (ad-hoc signed)
+bun run macos:dmg             # build macOS DMG; requires LYRE_CODE_SIGN_IDENTITY
 ```
 
 ### macOS app commands (run from `apps/macos/`)
@@ -136,9 +136,15 @@ Version is managed from the **root `package.json`** as the single source of trut
 4. Commit, push, then tag and release via `gh`.
 5. Build the macOS DMG and attach it to the GitHub release:
    ```bash
-   bun run macos:dmg                         # → build/Lyre-<version>.dmg
+   LYRE_CODE_SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' bun run macos:dmg
+   # → build/Lyre-<version>.dmg; notarize separately before distribution
    gh release upload v<version> build/Lyre-<version>.dmg
    ```
+
+   If no Developer ID certificate is available, `LYRE_ALLOW_ADHOC=1 bun run macos:dmg`
+   builds an ad-hoc DMG. Any release using this option must identify its signing
+   and notarization limitations in the release notes; system permissions may need
+   granting again after an update.
 
 ## Project Layout Detail
 

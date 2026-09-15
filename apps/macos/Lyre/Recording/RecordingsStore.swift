@@ -213,8 +213,9 @@ final class RecordingsStore: @unchecked Sendable {
     ///
     /// Called after a recording finishes so the finalized file size and duration
     /// replace the partial values captured while the file was still being written.
-    func refresh(url: URL) async {
-        guard let updated = await loadRecordingFile(url: url) else { return }
+    @discardableResult
+    func refresh(url: URL) async -> RecordingFile? {
+        guard let updated = await loadRecordingFile(url: url) else { return nil }
 
         if let index = recordings.firstIndex(where: { $0.id == url }) {
             recordings[index] = updated
@@ -224,6 +225,7 @@ final class RecordingsStore: @unchecked Sendable {
             recordings.sort { $0.createdAt > $1.createdAt }
         }
         Self.logger.info("Refreshed recording: \(url.lastPathComponent)")
+        return updated
     }
 
     // MARK: - Delete

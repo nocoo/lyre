@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lyre · macOS 界面预览</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f5f4f0;
+        --surface: #ffffff;
+        --ink: #262822;
+        --muted: #70736b;
+        --accent: #995020;
+        --line: #dedfd8;
+        --control: #edece7;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --canvas: #191a18;
+        --surface: #232522;
+        --ink: #e9ebe5;
+        --muted: #a3a79d;
+        --accent: #efac77;
+        --line: #3b3e37;
+        --control: #30332e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { max-width: 1392px; margin: auto; padding: 40px 36px 28px; }
+      a { color: var(--accent); text-underline-offset: 4px; }
+      a:hover { text-decoration-thickness: 2px; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+      header, .identity, .controls, .modes, .caption {
+        display: flex; align-items: center;
+      }
+      header { justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+      .identity { gap: 14px; }
+      .identity img { width: 52px; height: 52px; }
+      .eyebrow { color: var(--muted); font-size: 11px; letter-spacing: 1.5px; }
+      h1 { font-size: 25px; font-weight: 600; letter-spacing: -.6px; line-height: 1.35; margin: 3px 0 0; }
+      header a { font-size: 12px; white-space: nowrap; }
+      .controls {
+        justify-content: space-between; gap: 20px;
+        padding: 16px 0; border-block: 1px solid var(--line);
+      }
+      .choose { display: flex; align-items: center; gap: 12px; }
+      label { color: var(--muted); font-size: 12px; }
+      select, button {
+        color: var(--ink); font: inherit; font-size: 13px; height: 34px;
+        border: 1px solid var(--line); border-radius: 7px;
+      }
+      select { min-width: 224px; padding: 0 30px 0 10px; background: var(--surface); }
+      .modes { padding: 3px; margin: 0; border: 0; background: var(--control); border-radius: 9px; gap: 2px; }
+      .modes button { width: 62px; height: 28px; cursor: pointer; background: none; border-color: transparent; }
+      .modes button[aria-pressed="true"] { color: var(--canvas); background: var(--accent); }
+      figure { margin: 26px 0 0; }
+      .image-stage { display: grid; place-items: start center; }
+      #preview {
+        display: block; width: 100%; height: auto; border-radius: 18px;
+        box-shadow: 0 12px 40px #0000000b;
+      }
+      #preview.menu { max-width: 352px; }
+      #preview.notice { max-width: 440px; }
+      .caption { justify-content: space-between; align-items: baseline; gap: 20px; padding: 18px 0 10px; }
+      footer p { margin: 0; }
+      .caption strong { font-size: 14px; font-weight: 600; }
+      .caption p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+      .caption a { flex-shrink: 0; font-size: 12px; }
+      footer { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 16px; color: var(--muted); font-size: 11px; }
+      kbd { font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+      @media (max-width: 680px) {
+        main { padding: 24px 16px; }
+        header { align-items: flex-start; flex-direction: column; gap: 12px; }
+        h1 { font-size: 22px; }
+        .controls { align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+        .choose { flex: 1; }
+        select { flex: 1; min-width: 0; max-width: 280px; }
+        .caption { align-items: flex-start; }
+        #preview { border-radius: 8px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="identity">
+          <img src="../../../assets/brand/icon-rounded.png" alt="" />
+          <div>
+            <div class="eyebrow">LYRE / MACOS</div>
+            <h1>一个窗口，完整的录音工作空间。</h1>
+          </div>
+        </div>
+        <a href="../../09-macos-ui-redesign.md">设计与实现说明 ↗</a>
+      </header>
+      <section class="controls" aria-label="预览控制">
+        <div class="choose">
+          <label for="page">查看</label>
+          <select id="page">
+            <optgroup label="主要页面">
+              <option value="library">录音库</option>
+              <option value="permissions">权限</option>
+              <option value="settings">设置 · 录音</option>
+              <option value="auto-upload-settings">设置 · 自动上传已开启</option>
+              <option value="connection">设置 · 连接</option>
+              <option value="appearance">设置 · 外观</option>
+              <option value="about">关于 Lyre</option>
+            </optgroup>
+            <optgroup label="录音与上传">
+              <option value="recording">录制进行中</option>
+              <option value="busy">录制按钮 · 等待</option>
+              <option value="quick-record">菜单栏快捷控制</option>
+              <option value="upload">上传 · 信息填写</option>
+              <option value="uploading">上传 · 进行中</option>
+              <option value="upload-failed">上传 · 失败与重试</option>
+              <option value="uploaded">上传 · 已完成</option>
+              <option value="auto-uploading">自动上传 · 后台状态</option>
+              <option value="auto-upload-failed">自动上传 · 失败与重试</option>
+              <option value="permissions-ready">权限 · 已就绪</option>
+            </optgroup>
+            <optgroup label="权限、输入设备与提醒">
+              <option value="permissions-denied">权限 · 麦克风未获授权</option>
+              <option value="input-fallback">麦克风 · 断连后临时切换</option>
+              <option value="input-unavailable">麦克风 · 无可用输入</option>
+              <option value="meeting-settings">设置 · 会议提醒</option>
+              <option value="meeting-start">会议 · 开始提醒</option>
+              <option value="meeting-end">会议 · 结束提醒</option>
+              <option value="delete-confirmation">删除 · 确认对话框</option>
+              <option value="recording-error">录音 · 错误提示</option>
+            </optgroup>
+            <optgroup label="空状态与紧凑布局">
+              <option value="empty">首次使用 · 空录音库</option>
+              <option value="multiple">多选录音</option>
+              <option value="search-empty">搜索 · 无结果</option>
+              <option value="compact">紧凑窗口 · 录音库</option>
+              <option value="compact-settings">紧凑窗口 · 设置</option>
+              <option value="compact-upload">紧凑窗口 · 上传</option>
+              <option value="long-name">紧凑窗口 · 长文件名</option>
+              <option value="upload-empty-folder">上传时切换到空目录</option>
+            </optgroup>
+          </select>
+        </div>
+        <fieldset class="modes" aria-label="界面外观">
+          <button type="button" data-mode="light" aria-pressed="true">浅色</button>
+          <button type="button" data-mode="dark" aria-pressed="false">深色</button>
+        </fieldset>
+      </section>
+      <figure>
+        <div class="image-stage">
+          <img id="preview" src="screenshots/library-light.png" alt="Lyre 浅色录音库原生界面" />
+        </div>
+        <figcaption class="caption">
+          <div aria-live="polite">
+            <strong id="title">录音库</strong>
+            <p id="description">按日期整理录音，在右侧试听、查看文件信息和开始上传。</p>
+          </div>
+          <a id="original" href="screenshots/library-light.png" target="_blank" rel="noopener">查看原图 ↗</a>
+        </figcaption>
+      </figure>
+      <footer>
+        <p>2026.09.15 · 当前 SwiftUI 实现的原生窗口截图，全部使用示例数据。可用 <kbd>←</kbd> <kbd>→</kbd> 切换场景。</p>
+        <p>菜单栏场景使用独立预览宿主展示面板内容；正式应用中的设置、权限、关于与上传均在同一个主窗口导航。</p>
+      </footer>
+      <noscript><p>启用 JavaScript 可切换场景，或直接查看 <a href="screenshots/library-dark.png">深色录音库</a>。</p></noscript>
+    </main>
+    <script>
+      const descriptions = {
+        library: "按日期整理录音，在右侧试听、查看文件信息和开始上传。",
+        recording: "录制状态、计时和停止按钮常驻工具栏，导航到其他页面时仍然可见。",
+        busy: "操作等待期间保持按钮的尺寸与位置，避免重复启动或停止。",
+        permissions: "在同一窗口检查系统音频和麦克风权限，操作与状态共用固定的右侧列。",
+        "permissions-ready": "两项权限齐备后，可直接开始录制。",
+        settings: "自动上传默认关闭，默认时长为 5 分钟；与麦克风、保存目录、Teams 会议提醒集中在录音设置中。",
+        "auto-upload-settings": "启用后，录音停止并保存成功时自动上传超过设定时长的文件，原件保留在 Mac 上。",
+        "permissions-denied": "权限检查只读取系统状态；未获授权时提供明确的系统设置入口。",
+        "input-fallback": "已选择的麦克风暂时断开后保留偏好，并说明目前使用的替代输入。",
+        "input-unavailable": "没有可用麦克风时明确显示原因，避免静默选择未知设备。",
+        "meeting-settings": "会议提醒可选开启。只有从会议提醒启动的录音才会收到结束建议，录音始终由用户确认。",
+        "meeting-start": "实际非激活式原生面板：不夺走主窗口键盘焦点，20 秒后自动消失。",
+        "meeting-end": "实际会议结束提醒：保留正在进行的录音，等待用户选择停止或继续。",
+        "delete-confirmation": "共享对话框的删除样式，明确文件名与删除影响，默认键盘操作为取消。",
+        "recording-error": "实际主窗口错误 sheet，统一字号、间距与按钮尺寸。",
+        connection: "服务器地址、设备 Token 与连接检查；可达性和认证状态分别呈现。",
+        appearance: "跟随 macOS，或选择浅色与深色外观。",
+        upload: "上传直接接替录音详情，保留左侧导航、录音列表和全局录制控制。",
+        uploading: "按实际阶段显示进展，底部始终可以取消上传。",
+        "upload-failed": "保留已填信息，显示错误原因，并提供原位置重试。",
+        uploaded: "显示保存的标题、文件夹和标签，可以打开网页中的录音。",
+        "auto-uploading": "后台上传保留当前页面和播放状态；列表显示上传中、已完成与失败状态。",
+        "auto-upload-failed": "自动上传失败后可查看原因并重试，仍使用同一窗口内的上传流程。",
+        about: "保留原有品牌、版本、项目链接与问题反馈入口。",
+        multiple: "原生多选与删除确认保留在新的录音库布局中。",
+        "search-empty": "无结果时提供明确的提示和清除搜索入口，可以继续查找或返回全部录音。",
+        empty: "说明本地保存方式，并直接提供录制入口。",
+        compact: "紧凑窗口保持侧栏、列表与详情的边界，上传入口固定在底部。",
+        "compact-settings": "紧凑窗口中的自动上传设置；未配置服务器时提供连接入口，较长内容在工作区内滚动。",
+        "compact-upload": "上传表单可以滚动，取消和上传按钮保持可见。",
+        "long-name": "长文件名在标题中换行，列表使用中间省略；完整文件名仍可选择复制。",
+        "upload-empty-folder": "更换录音目录不会隐藏或重置当前上传，可以继续查看进度或取消。",
+        "quick-record": "菜单栏提供快捷录制、麦克风和最近录音入口，页面导航回到主窗口。",
+      };
+      const chooser = document.getElementById("page");
+      const preview = document.getElementById("preview");
+      const modes = [...document.querySelectorAll("[data-mode]")];
+      let mode = "light";
+      function render() {
+        const page = chooser.value;
+        const title = chooser.selectedOptions[0].textContent;
+        const source = `screenshots/${page}-${mode}.png`;
+        document.documentElement.dataset.theme = mode;
+        preview.src = source;
+        preview.alt = `Lyre ${title}${mode === "light" ? "，浅色" : "，深色"}原生界面`;
+        preview.classList.toggle("menu", page === "quick-record");
+        preview.classList.toggle("notice", page === "meeting-start" || page === "meeting-end");
+        document.getElementById("title").textContent = title;
+        document.getElementById("description").textContent = descriptions[page];
+        document.getElementById("original").href = source;
+        modes.forEach((button) => {
+          button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+        });
+        history.replaceState(null, "", `#${page}-${mode}`);
+      }
+      function readHash() {
+        const match = location.hash.slice(1).match(/^(.*)-(light|dark)$/);
+        if (match && Object.hasOwn(descriptions, match[1])) {
+          chooser.value = match[1];
+          mode = match[2];
+        }
+        render();
+      }
+      chooser.addEventListener("change", render);
+      modes.forEach((button) => {
+        button.addEventListener("click", () => { mode = button.dataset.mode; render(); });
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.target.closest("select") || event.metaKey || event.ctrlKey || event.altKey) return;
+        const direction = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+        if (!direction) return;
+        event.preventDefault();
+        chooser.selectedIndex = (chooser.selectedIndex + direction + chooser.options.length) % chooser.options.length;
+        render();
+      });
+      window.addEventListener("hashchange", readHash);
+      readHash();
+    </script>
+  </body>
+</html>

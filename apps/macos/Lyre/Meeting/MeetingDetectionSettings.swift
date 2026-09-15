@@ -17,12 +17,7 @@ final class MeetingDetectionSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        // Default on for the fresh-install case: the whole point of the
-        // feature is to unblock the missed-recording scenarios described in
-        // the spec, so opting-out is the exception.
-        if defaults.object(forKey: defaultsKey) == nil {
-            defaults.set(true, forKey: defaultsKey)
-        }
+        // Optional reminders start off. Preserve an existing user's choice.
         self.isEnabled = defaults.bool(forKey: defaultsKey)
     }
 }

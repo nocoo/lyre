@@ -24,7 +24,7 @@ A single Cloudflare Worker serves the web interface and API. D1 stores recording
 - Change playback speed, seek, jump by sentence, and view or copy full text. Word timestamps enable word highlighting and click-to-seek when available.
 - Generate Chinese summaries manually or enable summaries after transcription. Regeneration can include feedback.
 - Export and import metadata JSON, push backups to Backy manually, or let Backy trigger a backup through a webhook.
-- Record from the macOS menu bar, choose an input device and upload files. Teams meeting start/end reminders are enabled by default and can be disabled in Settings; starting or stopping recording requires confirmation after the reminder.
+- Record from the macOS menu bar, follow the system input or select a microphone, and upload files. Optional Teams reminders default to off on new installs, never take focus, and always require confirmation to start or stop a recording.
 
 ## Usage
 

@@ -3,7 +3,7 @@ import CoreMedia
 import Foundation
 @testable import Lyre
 
-@Suite("InputDeviceRestore Tests")
+@MainActor @Suite("InputDeviceRestore Tests")
 struct InputDeviceRestoreTests {
     private struct ConfigContext {
         let config: AppConfig
@@ -57,7 +57,7 @@ struct InputDeviceRestoreTests {
         #expect(capture.refreshCount == 1)
     }
 
-    @Test func savedIDMissingClearsConfigAndCapture() {
+    @Test func savedIDMissingPreservesConfigAndCapture() {
         let ctx = makeConfig(savedID: "ghost-mic")
         defer { ctx.cleanup() }
 
@@ -66,13 +66,13 @@ struct InputDeviceRestoreTests {
 
         let outcome = InputDeviceRestore.restore(config: ctx.config, capture: capture)
 
-        #expect(outcome == .clearedStale("ghost-mic"))
-        #expect(capture.selectedDeviceID == nil)
-        #expect(ctx.config.selectedInputDeviceID == nil)
+        #expect(outcome == .unavailable("ghost-mic"))
+        #expect(capture.selectedDeviceID == "ghost-mic")
+        #expect(ctx.config.selectedInputDeviceID == "ghost-mic")
         #expect(capture.refreshCount == 1)
     }
 
-    @Test func savedIDMissingWithNoAvailableDevicesStillClears() {
+    @Test func emptyEnumerationDoesNotErasePreference() {
         // Headless / CI: enumeration returns no devices.
         let ctx = makeConfig(savedID: "old-usb")
         defer { ctx.cleanup() }
@@ -82,9 +82,9 @@ struct InputDeviceRestoreTests {
 
         let outcome = InputDeviceRestore.restore(config: ctx.config, capture: capture)
 
-        #expect(outcome == .clearedStale("old-usb"))
-        #expect(ctx.config.selectedInputDeviceID == nil)
-        #expect(capture.selectedDeviceID == nil)
+        #expect(outcome == .unavailable("old-usb"))
+        #expect(ctx.config.selectedInputDeviceID == "old-usb")
+        #expect(capture.selectedDeviceID == "old-usb")
     }
 }
 

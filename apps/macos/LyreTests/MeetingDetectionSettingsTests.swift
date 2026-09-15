@@ -3,19 +3,25 @@ import Testing
 @testable import Lyre
 
 /// Unit tests for `MeetingDetectionSettings`. Verifies the fresh-install
-/// default (on), persistence round-trip, and idempotent honouring of a
+/// default (off), persistence round-trip, and idempotent honouring of a
 /// pre-existing UserDefaults value.
 @MainActor
 @Suite("MeetingDetectionSettings Tests")
 struct MeetingDetectionSettingsTests {
     private static let key = "meeting.detection.enabled"
 
-    @Test func freshInstall_defaultsToEnabled() {
+    @Test func freshInstall_defaultsToDisabled() {
         let defaults = Self.emptyDefaults()
         let settings = MeetingDetectionSettings(defaults: defaults)
 
-        #expect(settings.isEnabled == true)
-        #expect(defaults.bool(forKey: Self.key) == true)
+        #expect(settings.isEnabled == false)
+        #expect(defaults.bool(forKey: Self.key) == false)
+    }
+
+    @Test func existingEnabledValue_isRestored() {
+        let defaults = Self.emptyDefaults()
+        defaults.set(true, forKey: Self.key)
+        #expect(MeetingDetectionSettings(defaults: defaults).isEnabled)
     }
 
     @Test func existingDisabledValue_isRestored() {

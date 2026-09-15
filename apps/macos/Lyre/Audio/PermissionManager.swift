@@ -1,7 +1,6 @@
+import AppKit
 import AVFoundation
 import CoreGraphics
-import os
-import ScreenCaptureKit
 
 /// Manages macOS permissions required for audio recording.
 ///
@@ -11,8 +10,6 @@ import ScreenCaptureKit
 /// 2. **Microphone** — grants access to the mic input (your own voice).
 @Observable
 final class PermissionManager: @unchecked Sendable {
-    private static let logger = Logger(subsystem: Constants.subsystem, category: "PermissionManager")
-
     enum Status: Sendable, Equatable {
         case unknown
         case granted
@@ -22,6 +19,29 @@ final class PermissionManager: @unchecked Sendable {
     // internal(set) so @testable import can mutate for testing
     internal(set) var screenRecording: Status = .unknown
     internal(set) var microphone: Status = .unknown
+    private(set) var isRequestingMicrophone = false
+    private(set) var isRequestingScreenRecording = false
+
+    private let screenAccess: @MainActor () -> Bool
+    private let microphoneStatus: @MainActor () -> AVAuthorizationStatus
+    private let askForMicrophone: @MainActor () async -> Bool
+    private let askForScreenAccess: @MainActor () -> Bool
+
+    init(
+        screenAccess: @escaping @MainActor () -> Bool = { CGPreflightScreenCaptureAccess() },
+        microphoneStatus: @escaping @MainActor () -> AVAuthorizationStatus = {
+            AVCaptureDevice.authorizationStatus(for: .audio)
+        },
+        askForMicrophone: @escaping @MainActor () async -> Bool = {
+            await AVCaptureDevice.requestAccess(for: .audio)
+        },
+        askForScreenAccess: @escaping @MainActor () -> Bool = { CGRequestScreenCaptureAccess() }
+    ) {
+        self.screenAccess = screenAccess
+        self.microphoneStatus = microphoneStatus
+        self.askForMicrophone = askForMicrophone
+        self.askForScreenAccess = askForScreenAccess
+    }
 
     var allGranted: Bool {
         screenRecording == .granted && microphone == .granted
@@ -47,43 +67,32 @@ final class PermissionManager: @unchecked Sendable {
     /// spawning a permission prompt would be surprising or destructive
     /// (pre-commit hooks, headless test runs).
     ///
-    /// UI paths that legitimately want to prompt the user should keep
-    /// using `checkScreenRecording()` / `requestScreenRecording()`.
+    /// Only the explicit Allow Access action requests a grant.
     static func hasScreenRecordingPreauthorized() -> Bool {
         CGPreflightScreenCaptureAccess()
     }
 
     // MARK: - Check
 
-    /// Check both permissions without triggering system prompts (where possible).
-    func checkAll() async {
+    /// Refresh the navigation UI without making simply visiting a page request consent.
+    @MainActor func refreshStatusWithoutPrompt() async {
         await checkScreenRecording()
         await checkMicrophone()
     }
 
-    /// Check screen recording permission by attempting to enumerate shareable content.
-    /// ScreenCaptureKit will throw if the user has denied permission.
-    ///
-    /// **Side effect**: the first call on a freshly-installed app triggers the
-    /// macOS Screen Recording TCC dialog. This is intentional for UI flows
-    /// (About / Permissions tab) — the dialog IS the ask. Do NOT call this
-    /// from test code or any headless path; use
-    /// `hasScreenRecordingPreauthorized()` instead.
-    func checkScreenRecording() async {
-        do {
-            let content = try await SCShareableContent.current
-            Self.logger.info("Screen Recording: granted (\(content.displays.count) displays)")
-            screenRecording = .granted
-        } catch {
-            Self.logger.warning("Screen Recording: denied — \(error.localizedDescription)")
-            screenRecording = .denied
-        }
+    /// Recording entry points and passive UI refreshes never ask for consent.
+    @MainActor func checkAll() async {
+        await refreshStatusWithoutPrompt()
+    }
+
+    /// A content-enumeration failure is not evidence of a revoked permission.
+    @MainActor func checkScreenRecording() async {
+        screenRecording = screenAccess() ? .granted : (screenRecording == .unknown ? .unknown : .denied)
     }
 
     /// Check microphone permission using AVFoundation's authorization status.
-    func checkMicrophone() async {
-        let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        Self.logger.info("Microphone AVCaptureDevice status: \(status.rawValue)")
+    @MainActor func checkMicrophone() async {
+        let status = microphoneStatus()
         switch status {
         case .authorized:
             microphone = .granted
@@ -100,16 +109,24 @@ final class PermissionManager: @unchecked Sendable {
 
     /// Request microphone access. This triggers the system permission dialog
     /// if the user has not yet been asked.
-    func requestMicrophone() async {
-        let granted = await AVCaptureDevice.requestAccess(for: .audio)
+    @MainActor func requestMicrophone() async {
+        guard !isRequestingMicrophone else { return }
+        await checkMicrophone()
+        guard microphone == .unknown else { return }
+        isRequestingMicrophone = true
+        defer { isRequestingMicrophone = false }
+        let granted = await askForMicrophone()
         microphone = granted ? .granted : .denied
     }
 
-    /// Request screen recording permission by triggering a ScreenCaptureKit call.
-    /// On first use, this causes macOS to show the "Screen & System Audio Recording"
-    /// system alert. The user must grant permission in System Settings.
-    func requestScreenRecording() async {
+    /// macOS owns this consent dialog. Status is refreshed when the user returns.
+    @MainActor func requestScreenRecording() async {
+        guard !isRequestingScreenRecording else { return }
         await checkScreenRecording()
+        guard screenRecording != .granted else { return }
+        isRequestingScreenRecording = true
+        defer { isRequestingScreenRecording = false }
+        screenRecording = askForScreenAccess() ? .granted : .denied
     }
 
     // MARK: - System Settings

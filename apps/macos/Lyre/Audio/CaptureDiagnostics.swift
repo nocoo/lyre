@@ -20,7 +20,7 @@ struct CaptureDiagnostics: Equatable, Sendable {
     /// caller intentionally ran system-audio-only.
     let captureMicrophone: Bool
     /// UID actually handed to `SCStreamConfiguration.microphoneCaptureDeviceID`,
-    /// or `nil` when SCK chose internally (`InputDeviceResolver.Source.scPicked`).
+    /// or `nil` when no input was available after a hardware change.
     let effectiveDeviceID: String?
 
     /// Below this many elapsed milliseconds the "no mic audio" warning

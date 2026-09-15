@@ -6,6 +6,28 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MACOS_DIR="$ROOT_DIR/apps/macos"
 BUILD_DIR="$ROOT_DIR/build"
 ARCHIVE_PATH="$BUILD_DIR/Lyre.xcarchive"
+LYRE_SIGNING_IDENTITY="${LYRE_CODE_SIGN_IDENTITY:-}"
+LYRE_SIGNING_TEAM="${LYRE_DEVELOPMENT_TEAM:-93WWLTN9XU}"
+
+# TCC matches the signed app identity. Ad-hoc signatures change on every
+# build and cannot provide stable microphone authorization across updates.
+# Validate before touching the existing build directory.
+if [[ -z "$LYRE_SIGNING_IDENTITY" ]]; then
+  if [[ "${LYRE_ALLOW_ADHOC:-0}" == "1" ]]; then
+    LYRE_SIGNING_IDENTITY="-"
+    LYRE_SIGNING_TEAM=""
+  else
+    echo "ERROR: Set LYRE_CODE_SIGN_IDENTITY to your Developer ID Application certificate."
+    echo "Local-only builds can explicitly use LYRE_ALLOW_ADHOC=1; microphone grants may reset after updates."
+    exit 1
+  fi
+elif [[ "$LYRE_SIGNING_IDENTITY" != "Developer ID Application: "* ]]; then
+  echo "ERROR: LYRE_CODE_SIGN_IDENTITY must name a Developer ID Application certificate."
+  exit 1
+elif ! security find-identity -v -p codesigning | grep -F -- "\"$LYRE_SIGNING_IDENTITY\"" > /dev/null; then
+  echo "ERROR: The requested Developer ID Application identity is not available in the keychain."
+  exit 1
+fi
 
 VERSION=$(grep 'MARKETING_VERSION' "$MACOS_DIR/project.yml" | head -1 | sed 's/.*"\(.*\)"/\1/')
 DMG_NAME="Lyre-${VERSION}.dmg"
@@ -31,16 +53,16 @@ cd "$MACOS_DIR"
 xcodegen generate
 
 # --- Archive ---
-echo "==> Archiving (Release, ad-hoc signed)..."
+echo "==> Archiving (Release, signing: $LYRE_SIGNING_IDENTITY)..."
 xcodebuild archive \
   -project Lyre.xcodeproj \
   -scheme Lyre \
   -configuration Release \
   -archivePath "$ARCHIVE_PATH" \
   -destination "generic/platform=macOS" \
-  CODE_SIGN_IDENTITY="-" \
+  CODE_SIGN_IDENTITY="$LYRE_SIGNING_IDENTITY" \
   CODE_SIGN_STYLE=Manual \
-  DEVELOPMENT_TEAM="" \
+  DEVELOPMENT_TEAM="$LYRE_SIGNING_TEAM" \
   | tail -5
 
 # --- Extract .app from archive ---
@@ -50,8 +72,8 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
-echo "==> Ad-hoc signature check..."
-codesign --verify --deep "$APP_PATH" && echo "    OK" || echo "    WARN: signature check failed (expected for ad-hoc)"
+echo "==> Verifying signature..."
+codesign --verify --deep --strict "$APP_PATH"
 
 # --- Create DMG ---
 echo "==> Creating DMG..."
@@ -74,5 +96,8 @@ echo ""
 echo "==> Done! Output: $DMG_PATH"
 ls -lh "$DMG_PATH"
 echo ""
-echo "NOTE: This DMG is ad-hoc signed (no Apple Developer certificate)."
-echo "      Users must right-click → Open to bypass Gatekeeper on first launch."
+if [[ "$LYRE_SIGNING_IDENTITY" == "-" ]]; then
+  echo "NOTE: Local ad-hoc build. macOS permissions may need granting again after replacing this app."
+else
+  echo "NOTE: Developer ID signed. Notarize the app/DMG separately before distributing it."
+fi

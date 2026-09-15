@@ -12,8 +12,8 @@ import ScreenCaptureKit
 
 /// A microphone input device available for recording.
 struct AudioInputDevice: Identifiable, Equatable, Sendable {
-    let id: String       // AVCaptureDevice.uniqueID
-    let name: String     // AVCaptureDevice.localizedName
+    let id: String       // CoreAudio device UID, also used by ScreenCaptureKit
+    let name: String
 }
 
 /// Manages ScreenCaptureKit audio capture for both system audio and microphone.
@@ -50,8 +50,17 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
 
     /// Currently selected microphone device ID. Nil = system default.
     var selectedDeviceID: String?
+    private(set) var systemDefaultDeviceID: String?
+    // Internal setter also supports the isolated native design fixture.
+    var activeInputDevice: AudioInputDevice?
+    private(set) var inputRoutingError: String?
 
     private var stream: SCStream?
+    private var streamConfiguration: SCStreamConfiguration?
+    /// Picker changes affect the next recording; hardware changes repair this one.
+    private var recordingSelectedDeviceID: String?
+    private var routeUpdateTask: Task<Void, Never>?
+    private var routeNeedsUpdate = false
     private let mixer = AudioMixer()
     private let sampleRate: Int = Constants.Audio.sampleRateInt
     private let channelCount: Int = Constants.Audio.channelCountInt
@@ -95,82 +104,32 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     /// detection. Reset on each start.
     private(set) var lastCaptureDiagnostics: CaptureDiagnostics?
 
-    /// System-default input UID lookup. Overridable so tests do not
-    /// have to touch AVFoundation. Kept `internal` so unit tests in the
-    /// same module can inject a stub.
-    var defaultInputDeviceIDProvider: () -> String? = {
-        AVCaptureDevice.default(for: .audio)?.uniqueID
-    }
+    /// Injectable read-only probes; tests never need to capture live audio.
+    var defaultInputDeviceIDProvider: () -> String? = SystemAudioInputs.defaultDeviceID
+    var inputDevicesProvider: () -> [AudioInputDevice] = SystemAudioInputs.devices
 
     /// Timer that periodically drains the mixer and delivers mixed samples.
     private var drainTimer: Timer?
 
-    /// Whether CoreAudio device-change listener is installed.
-    private var isListeningForDeviceChanges = false
+    private var deviceListener: AudioObjectPropertyListenerBlock?
+    private var observedDeviceProperties: [AudioObjectPropertySelector] = []
 
-    // MARK: - Device Enumeration
-
-    /// Refresh the list of available microphone input devices using AVFoundation.
-    func refreshDevices() {
-        enumerateDevices()
-        installDeviceChangeListener()
-    }
-
-    /// Install a CoreAudio property listener that auto-refreshes the device list
-    /// whenever audio devices are connected or disconnected.
-    private func installDeviceChangeListener() {
-        guard !isListeningForDeviceChanges else { return }
-        isListeningForDeviceChanges = true
-
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-
-        let status = AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            DispatchQueue.main
-        ) { [weak self] _, _ in
-            Self.logger.debug("Audio device list changed, refreshing")
-            self?.enumerateDevices()
-        }
-
-        if status != noErr {
-            Self.logger.warning("Failed to install audio device change listener: \(status)")
-            isListeningForDeviceChanges = false
-        }
-    }
-
-    /// Enumerate audio input devices and update the list. Falls back to system default
-    /// if the currently selected device is no longer available.
-    private func enumerateDevices() {
-        let discovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInMicrophone, .external],
-            mediaType: .audio,
-            position: .unspecified
-        )
-        let newDevices = discovery.devices.map { device in
-            AudioInputDevice(id: device.uniqueID, name: device.localizedName)
-        }
-
-        guard newDevices != availableDevices else { return }
-        availableDevices = newDevices
-        Self.logger.info("Device list updated: \(newDevices.map(\.name).joined(separator: ", "))")
-
-        // If the selected device was unplugged, fall back to system default
-        if let selected = selectedDeviceID,
-           !newDevices.contains(where: { $0.id == selected }) {
-            Self.logger.info("Selected device \(selected) disconnected, falling back to default")
-            selectedDeviceID = nil
+    deinit {
+        routeUpdateTask?.cancel()
+        if let deviceListener {
+            for selector in observedDeviceProperties {
+                var address = SystemAudioInputs.address(selector)
+                AudioObjectRemovePropertyListenerBlock(
+                    AudioObjectID(kAudioObjectSystemObject), &address, .main, deviceListener
+                )
+            }
         }
     }
 
     // MARK: - Capture Control
 
     /// Start capturing system audio and microphone.
-    func startCapture() async throws {
+    @MainActor func startCapture() async throws {
         let content = try await SCShareableContent.current
 
         // Display required for content filter, even for audio-only capture.
@@ -194,26 +153,17 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         config.sampleRate = sampleRate
         config.channelCount = channelCount
 
-        // Microphone
+        refreshDevices()
+        recordingSelectedDeviceID = selectedDeviceID
+        let effective = resolvedInputDevice
+        guard let effectiveID = effective.effectiveID else { throw CaptureError.noMicrophoneFound }
+
+        // Microphone. Never hand SCK a stale UID or an implicit default.
         config.captureMicrophone = true
-        // Resolve the input device explicitly instead of letting SCK
-        // pick "system default" internally. On macOS 15 SCK's own
-        // default resolution can pick a device that produces no mic
-        // samples (AirPods H2H, aggregate devices, exclusive-mode USB),
-        // so we prefer to name the UID ourselves and log which UID we
-        // chose. `.scPicked` only happens when the system genuinely has
-        // no default input, in which case we fall through and let SCK
-        // do whatever it would have done — but at least the log shows
-        // it was our last resort.
-        let effective = InputDeviceResolver.resolve(
-            selected: selectedDeviceID,
-            availableDefault: defaultInputDeviceIDProvider()
-        )
-        if let effectiveID = effective.effectiveID {
-            config.microphoneCaptureDeviceID = effectiveID
-        }
+        config.microphoneCaptureDeviceID = effectiveID
         lastEffectiveDevice = effective
         lastCaptureMicrophone = config.captureMicrophone
+        inputRoutingError = nil
 
         mixer.reset()
         systemAudioBufferCount = 0
@@ -239,6 +189,10 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
 
         try await newStream.startCapture()
         stream = newStream
+        streamConfiguration = config
+        activeInputDevice = availableDevices.first { $0.id == effectiveID }
+        // Reconcile any hardware event that arrived while SCK was starting.
+        refreshDevices()
 
         // Start drain timer only when the legacy mixed callback has a
         // consumer. Dual-track recording leaves `onMixedSamples` nil
@@ -255,7 +209,18 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     }
 
     /// Stop capturing.
-    func stopCapture() async throws {
+    @MainActor func stopCapture() async throws {
+        let updateTask = routeUpdateTask
+        updateTask?.cancel()
+        routeNeedsUpdate = false
+        await updateTask?.value
+        defer {
+            stream = nil
+            streamConfiguration = nil
+            activeInputDevice = nil
+            inputRoutingError = nil
+            recordingSelectedDeviceID = nil
+        }
         await MainActor.run {
             drainTimer?.invalidate()
             drainTimer = nil
@@ -284,7 +249,6 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
         if let stream {
             try await stream.stopCapture()
         }
-        stream = nil
 
         // Flush remaining mixer samples only if the legacy mixed path
         // has a consumer; .dualTrack recording does not push into the
@@ -438,12 +402,99 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
 
     enum CaptureError: LocalizedError {
         case noDisplayFound
+        case noMicrophoneFound
 
         var errorDescription: String? {
             switch self {
             case .noDisplayFound:
                 return "No display found for ScreenCaptureKit content filter"
+            case .noMicrophoneFound:
+                return "No microphone is available. Connect a microphone or choose an input in macOS Sound settings."
             }
+        }
+    }
+}
+
+// MARK: - Input routes (control plane stays on the main actor)
+
+extension AudioCaptureManager {
+    var resolvedInputDevice: EffectiveInputDevice {
+        resolveInput(selected: selectedDeviceID)
+    }
+
+    private func resolveInput(selected: String?) -> EffectiveInputDevice {
+        InputDeviceResolver.resolve(
+            selected: selected,
+            availableDefault: systemDefaultDeviceID,
+            availableIDs: Set(availableDevices.map(\.id))
+        )
+    }
+
+    @MainActor func refreshDevices() {
+        availableDevices = inputDevicesProvider()
+        systemDefaultDeviceID = defaultInputDeviceIDProvider()
+        installDeviceChangeListeners()
+        scheduleRouteUpdate()
+    }
+
+    @MainActor private func installDeviceChangeListeners() {
+        if deviceListener == nil {
+            deviceListener = { [weak self] _, _ in
+                Task { @MainActor in self?.refreshDevices() }
+            }
+        }
+        guard let deviceListener else { return }
+        for selector in [kAudioHardwarePropertyDevices, kAudioHardwarePropertyDefaultInputDevice]
+            where !observedDeviceProperties.contains(selector) {
+            var address = SystemAudioInputs.address(selector)
+            let status = AudioObjectAddPropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject), &address, .main, deviceListener
+            )
+            if status == noErr {
+                observedDeviceProperties.append(selector)
+            } else {
+                Self.logger.warning("Input device listener failed: \(status)")
+            }
+        }
+    }
+
+    /// Coalesce Bluetooth reconnect bursts and serialize SCK updates. Stopping
+    /// capture cancels and drains this task before closing the stream.
+    @MainActor private func scheduleRouteUpdate() {
+        guard stream != nil else { return }
+        routeNeedsUpdate = true
+        guard routeUpdateTask == nil else { return }
+        routeUpdateTask = Task { @MainActor [weak self] in
+            defer { self?.routeUpdateTask = nil }
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            while let self, self.routeNeedsUpdate, !Task.isCancelled {
+                self.routeNeedsUpdate = false
+                await self.updateMicrophoneRoute()
+            }
+        }
+    }
+
+    @MainActor private func updateMicrophoneRoute() async {
+        guard let stream, let config = streamConfiguration else { return }
+        let effective = resolveInput(selected: recordingSelectedDeviceID)
+        guard effective.effectiveID != lastEffectiveDevice?.effectiveID || inputRoutingError != nil else { return }
+        let previousID = config.microphoneCaptureDeviceID
+        let previousCapture = config.captureMicrophone
+        config.microphoneCaptureDeviceID = effective.effectiveID
+        config.captureMicrophone = effective.effectiveID != nil
+        do {
+            try await stream.updateConfiguration(config)
+            // First-frame diagnostics read this on the sample queue.
+            sampleQueue.sync { lastEffectiveDevice = effective }
+            activeInputDevice = availableDevices.first { $0.id == effective.effectiveID }
+            inputRoutingError = effective.effectiveID == nil
+                ? "No microphone connected. System audio is still recording." : nil
+            Self.logger.info("Microphone route updated: \(effective.effectiveID ?? "unavailable")")
+        } catch {
+            config.microphoneCaptureDeviceID = previousID
+            config.captureMicrophone = previousCapture
+            inputRoutingError = "Couldn’t switch the microphone. Check your input before the next recording."
+            Self.logger.warning("Microphone route update failed: \(error.localizedDescription)")
         }
     }
 }

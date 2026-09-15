@@ -1,265 +1,266 @@
 import SwiftUI
 
-/// Upload form for sending a local recording to the Lyre server.
-///
-/// Opened from the RecordingsView context menu on a recording.
+/// The upload workflow lives in the selected recording's detail pane.
 struct UploadView: View {
     @Bindable var uploadManager: UploadManager
     let recording: RecordingFile
-    var onDismiss: () -> Void
+    @Bindable var config: AppConfig
+    var isAutomatic = false
+    let onDismiss: () -> Void
+    @Environment(\.lyrePreview) private var isPreview
 
-    @State private var hasStarted = false
+    private var isBusy: Bool { uploadManager.state.isInProgress }
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Header
-            header
-
-            Divider()
-
-            switch uploadManager.state {
-            case .idle, .failed:
-                uploadForm
-            case .preparing, .presigning, .uploading, .creating:
-                progressView
-            case .completed(let recordingId):
-                completedView(recordingId: recordingId)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                header
+                switch uploadManager.state {
+                case .idle, .failed: uploadForm
+                case .preparing, .presigning, .uploading, .creating: progress
+                case .completed: completed
+                }
             }
+            .padding(24)
+            .frame(maxWidth: 700, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .padding(24)
-        .frame(width: 460)
-        .onAppear {
-            if !hasStarted {
-                hasStarted = true
-                uploadManager.title = recording.filename
-                Task { await uploadManager.fetchMetadata() }
-            }
+        .safeAreaInset(edge: .bottom, spacing: 0) { actions }
+        .task(id: isBusy) {
+            if !isPreview, !isBusy, !isCompleted { await uploadManager.fetchMetadata() }
         }
     }
-
-    // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 4) {
-            Text("Upload Recording")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            HStack(spacing: 8) {
-                Label(recording.formattedDuration, systemImage: "clock")
-                Label(recording.formattedSize, systemImage: "doc")
+        VStack(alignment: .leading, spacing: 16) {
+            Button(action: onDismiss) {
+                Label("Back to recording", systemImage: "chevron.left").font(.system(size: 11))
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .buttonStyle(.plain).foregroundStyle(.secondary).disabled(isBusy && !isAutomatic)
+            .keyboardShortcut("[")
+            VStack(alignment: .leading, spacing: 9) {
+                Text(isAutomatic ? "Automatic upload" : "Upload recording")
+                    .font(.system(size: 22, weight: .semibold))
+                Text(recording.url.lastPathComponent).font(.system(size: 11))
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                Text("\(recording.formattedDuration)  ·  \(recording.formattedSize)")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
         }
     }
 
-    // MARK: - Upload Form
-
     private var uploadForm: some View {
-        VStack(spacing: 16) {
-            // Title
-            TextField("Title", text: $uploadManager.title, prompt: Text(recording.filename))
-                .textFieldStyle(.roundedBorder)
-
-            // Folder picker
-            if uploadManager.isFetchingMetadata {
-                HStack {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading folders & tags...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else if let metadataError = uploadManager.metadataError {
-                Label(metadataError, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.caption)
-            } else {
-                if !uploadManager.folders.isEmpty {
-                    Picker("Folder", selection: $uploadManager.selectedFolderID) {
-                        Text("None").tag(String?.none)
-                        ForEach(uploadManager.folders) { folder in
-                            Text(folder.name).tag(Optional(folder.id))
-                        }
+        VStack(alignment: .leading, spacing: 18) {
+            LyreCard {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Title").font(.system(size: 12, weight: .medium))
+                        TextField("Recording title", text: $uploadManager.title, prompt: Text(recording.filename))
+                            .textFieldStyle(.roundedBorder).controlSize(.large)
                     }
+                    metadataFields
                 }
-
-                // Tag selection
-                if !uploadManager.tags.isEmpty {
+            }
+            if case .failed(let message) = uploadManager.state {
+                Label {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Tags")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Text("Upload didn’t finish.").fontWeight(.semibold)
+                        Text(message).textSelection(.enabled)
+                    }
+                } icon: { Image(systemName: "exclamationmark.triangle") }
+                .font(.system(size: 12)).foregroundStyle(.red)
+                .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                .background(.red.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
+            }
+            Label {
+                Text("Your original stays on this Mac. After uploading, open Lyre on the web to start transcription.")
+                    .lineSpacing(3)
+            } icon: { Image(systemName: "internaldrive") }
+            .font(.system(size: 12)).foregroundStyle(.secondary)
+        }
+    }
 
-                        FlowLayout(spacing: 6) {
-                            ForEach(uploadManager.tags) { tag in
-                                TagChip(
-                                    name: tag.name,
-                                    isSelected: uploadManager.selectedTagIDs.contains(tag.id),
-                                    onToggle: {
-                                        if uploadManager.selectedTagIDs.contains(tag.id) {
-                                            uploadManager.selectedTagIDs.remove(tag.id)
-                                        } else {
-                                            uploadManager.selectedTagIDs.insert(tag.id)
-                                        }
-                                    }
-                                )
+    @ViewBuilder private var metadataFields: some View {
+        if uploadManager.isFetchingMetadata {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.mini)
+                Text("Loading folders and tags…").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+        } else if let error = uploadManager.metadataError {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 12)).foregroundStyle(.orange)
+                Button("Try again") {
+                    if !isPreview { Task { await uploadManager.fetchMetadata() } }
+                }
+                .buttonStyle(LyreButtonStyle())
+            }
+        } else {
+            Picker("Folder", selection: $uploadManager.selectedFolderID) {
+                Text("No folder").tag(String?.none)
+                ForEach(uploadManager.folders) { folder in
+                    Text(folder.name).tag(Optional(folder.id))
+                }
+            }
+            .font(.system(size: 12)).controlSize(.large)
+            if !uploadManager.tags.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Tags").font(.system(size: 12, weight: .medium))
+                    FlowLayout(spacing: 8) {
+                        ForEach(uploadManager.tags) { tag in
+                            TagChip(name: tag.name, isSelected: uploadManager.selectedTagIDs.contains(tag.id)) {
+                                if uploadManager.selectedTagIDs.contains(tag.id) {
+                                    uploadManager.selectedTagIDs.remove(tag.id)
+                                } else {
+                                    uploadManager.selectedTagIDs.insert(tag.id)
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+    }
 
-            // Error message
-            if case .failed(let message) = uploadManager.state {
-                Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                    .font(.caption)
-            }
-
-            // Action buttons
-            HStack {
-                Button("Cancel") { onDismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Upload") {
-                    uploadManager.upload(file: recording)
+    private var progress: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(spacing: 14) {
+                ProgressView().controlSize(.small)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(progressTitle).font(.system(size: 16, weight: .semibold))
+                    Text("Your original recording is safe on this Mac.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+            }.padding(.vertical, 12)
+            LyreCard {
+                VStack(alignment: .leading, spacing: 22) {
+                    progressStep("Prepare audio", index: 0)
+                    progressStep("Upload file", index: 1)
+                    progressStep("Save to your library", index: 2)
+                }
             }
         }
     }
 
-    // MARK: - Progress View
-
-    private var progressView: some View {
-        VStack(spacing: 16) {
-            if case .uploading(let progress) = uploadManager.state {
-                ProgressView(value: progress)
-                Text("Uploading to server...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if case .preparing = uploadManager.state {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Preparing recording...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if case .presigning = uploadManager.state {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Requesting upload URL...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if case .creating = uploadManager.state {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Creating recording...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Button("Cancel Upload") {
-                uploadManager.cancel()
-            }
-            .buttonStyle(.bordered)
+    private var stage: Int {
+        switch uploadManager.state {
+        case .preparing, .presigning: 0
+        case .uploading: 1
+        default: 2
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
     }
 
-    // MARK: - Completed View
+    private var progressTitle: String {
+        switch uploadManager.state {
+        case .preparing, .presigning: "Preparing your recording…"
+        case .uploading: "Uploading audio…"
+        default: "Saving to Lyre…"
+        }
+    }
 
-    private func completedView(recordingId: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.green)
+    private func progressStep(_ title: String, index: Int) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: index < stage
+                  ? "checkmark.circle.fill" : index == stage ? "circle.inset.filled" : "circle")
+                .foregroundStyle(index < stage ? .green : index == stage ? LyreTheme.accent : .secondary)
+            Text(title).foregroundStyle(index <= stage ? .primary : .secondary)
+        }
+        .font(.system(size: 13))
+    }
 
-            Text("Upload Complete")
-                .font(.headline)
-
-            // Upload summary
-            VStack(spacing: 4) {
-                Text(uploadManager.title.isEmpty ? recording.filename : uploadManager.title)
-                    .font(.subheadline)
-
-                if let folderName = selectedFolderName {
-                    Label(folderName, systemImage: "folder")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if !selectedTagNames.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "tag")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(selectedTagNames.joined(separator: ", "))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+    private var completed: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 42)).foregroundStyle(.green)
+            VStack(spacing: 9) {
+                Text("Ready in Lyre.").font(.system(size: 22, weight: .semibold))
+                Text("Your recording is uploaded.\nOpen Lyre to start a transcription.")
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).lineSpacing(4)
+            }
+            LyreCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(uploadManager.title.isEmpty ? recording.filename : uploadManager.title)
+                        .font(.system(size: 13, weight: .semibold)).textSelection(.enabled)
+                    if let folder = uploadManager.folders.first(where: { $0.id == uploadManager.selectedFolderID }) {
+                        Label(folder.name, systemImage: "folder").font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                    let names = uploadManager.tags
+                        .filter { uploadManager.selectedTagIDs.contains($0.id) }.map(\.name)
+                    if !names.isEmpty {
+                        Label(names.joined(separator: ", "), systemImage: "tag")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                 }
             }
+        }
+        .padding(.vertical, 16).frame(maxWidth: .infinity)
+    }
 
-            Button("Done") {
-                uploadManager.reset()
+    private var actions: some View {
+        HStack(spacing: 12) {
+            Button(isBusy ? "Cancel upload" : isCompleted ? "Done" : "Cancel") {
+                if isBusy { uploadManager.cancel() }
                 onDismiss()
             }
-            .keyboardShortcut(.defaultAction)
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(LyreButtonStyle()).keyboardShortcut(.cancelAction)
+            Spacer(minLength: 0)
+            if case .completed(let id) = uploadManager.state {
+                Button("Open in Lyre", systemImage: "arrow.up.right") { openRecording(id) }
+                    .buttonStyle(LyreButtonStyle(treatment: .accent)).keyboardShortcut(.defaultAction)
+            } else if !isBusy {
+                Button(uploadTitle, systemImage: "arrow.up") {
+                    if isPreview {
+                        uploadManager.state = .uploading(progress: 0)
+                    } else {
+                        uploadManager.upload(file: recording)
+                    }
+                }
+                .buttonStyle(LyreButtonStyle(treatment: .accent)).keyboardShortcut(.defaultAction)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .padding(.horizontal, 24).padding(.vertical, 18)
+        .background(LyreTheme.canvas)
+        .overlay(alignment: .top) { LyreTheme.separator.frame(height: 1) }
     }
 
-    // MARK: - Helpers
-
-    private var selectedFolderName: String? {
-        guard let id = uploadManager.selectedFolderID else { return nil }
-        return uploadManager.folders.first { $0.id == id }?.name
+    private var isCompleted: Bool {
+        if case .completed = uploadManager.state { return true }
+        return false
     }
 
-    private var selectedTagNames: [String] {
-        uploadManager.tags
-            .filter { uploadManager.selectedTagIDs.contains($0.id) }
-            .map(\.name)
+    private var uploadTitle: String {
+        if case .failed = uploadManager.state { return "Retry upload" }
+        return "Upload"
+    }
+
+    private func openRecording(_ id: String) {
+        guard !isPreview, let base = URL(string: config.serverURL) else { return }
+        NSWorkspace.shared.open(base.appendingPathComponent("recordings").appendingPathComponent(id))
     }
 }
-
-// MARK: - Tag Chip
 
 struct TagChip: View {
     let name: String
     let isSelected: Bool
-    var onToggle: () -> Void
+    let onToggle: () -> Void
 
     var body: some View {
-        Button {
-            onToggle()
-        } label: {
-            Text(name)
-                .font(.caption)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    isSelected ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.1),
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule().stroke(
-                        isSelected ? Color.accentColor : Color.clear,
-                        lineWidth: 1
-                    )
-                )
+        Button(action: onToggle) {
+            HStack(spacing: 5) {
+                if isSelected { Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)) }
+                Text(name).lineLimit(1).truncationMode(.middle)
+            }
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 10).frame(height: 26)
+            .frame(maxWidth: 180)
+            .foregroundStyle(isSelected ? LyreTheme.accent : .secondary)
+            .background(isSelected ? LyreTheme.accent.opacity(0.1) : LyreTheme.control, in: Capsule())
+            .overlay { Capsule().strokeBorder(isSelected ? LyreTheme.accent.opacity(0.3) : .clear, lineWidth: 1) }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain).help(name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
-
-// MARK: - Flow Layout (simple wrapping layout for tags)
 
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8

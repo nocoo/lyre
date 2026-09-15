@@ -67,6 +67,20 @@ struct UploadManagerTests {
         #expect(manager.state == .failed("Server not configured"))
     }
 
+    @Test func uploadClaimsFileBeforeTaskRunsAndCanBeCancelledImmediately() async {
+        let (config, cleanup) = makeConfig()
+        defer { cleanup() }
+        let manager = UploadManager(config: config)
+        let file = RecordingFile(url: URL(fileURLWithPath: "/unused.m4a"), fileSize: 0, createdAt: Date())
+
+        // Both operations run on the main actor before the task can read a file or use the network.
+        manager.upload(file: file)
+        #expect(manager.state.isInProgress)
+        manager.cancel()
+        await Task.yield()
+        #expect(manager.state == .idle)
+    }
+
     // MARK: - Reset
 
     @Test func resetClearsState() {

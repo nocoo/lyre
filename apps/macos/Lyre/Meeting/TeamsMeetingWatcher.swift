@@ -1,362 +1,244 @@
 import AppKit
 import Foundation
 import os
-import ScreenCaptureKit
 
-// Test seams (`RunningAppsProviding`, `ShareableContentProviding`,
-// `MeetingEventProviding`) and their production adapters live in
-// `MeetingProviders.swift` alongside this file.
-
-// MARK: - Watcher
-
-/// Cold-warm-hot polling watcher that publishes debounced Teams meeting state
-/// on `meetingEvents`. Contract & rationale live in
-/// `docs/07-teams-meeting-detector.md`.
+/// Best-effort, opt-in reminders. Start needs sustained call evidence; ending
+/// gets a longer grace period so muting, Space changes and I/O blips stay quiet.
 @MainActor
 final class TeamsMeetingWatcher: MeetingEventProviding {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "TeamsMeetingWatcher")
+    nonisolated static let teamsBundleIDs: Set<String> = ["com.microsoft.teams", "com.microsoft.teams2"]
+    static let startConfirmationSeconds: TimeInterval = 10
+    static let endConfirmationSeconds: TimeInterval = 30
 
-    // MARK: - Public
-
-    /// Emits only *debounced, confirmed* transitions. Baseline is silent.
-    /// `.bufferingNewest(1)` so long-running alerts do not stack stale events.
     let meetingEvents: AsyncStream<Bool>
-
-    // MARK: - Constants (v1.3 judgement contract)
-
-    // `teamsBundleIDs` is read from NSWorkspace observer closures that the
-    // system marks `@Sendable`; keep it nonisolated so the compiler can see
-    // the access is safe. The value is immutable so this is trivially OK.
-    nonisolated static let teamsBundleIDs: Set<String> = [
-        "com.microsoft.teams",   // Classic
-        "com.microsoft.teams2",  // New Teams
-    ]
-    static let meetingTitleSuffix: String = " | microsoft teams"
-    static let meetingHeadPrefixEnglish: String = "meeting"
-    static let meetingHeadSuffixEnglish: String = "'s meeting"
-    static let meetingHeadExact: Set<String> = ["meeting", "会议", "會議", "会议中"]
-    static let excludedTitles: Set<String> = [
-        "microsoft teams", "settings", "设置", "preferences", "",
-        "teams nrc", "select a certificate for authentication",
-    ]
-    static let minCandidateWidth: CGFloat = 200
-    static let minCandidateHeight: CGFloat = 200
-
-    private let coldInterval: TimeInterval = 30
-    private let warmInterval: TimeInterval = 5
-
-    // MARK: - Dependencies
-
+    private let eventContinuation: AsyncStream<Bool>.Continuation
     private let runningApps: RunningAppsProviding
     private let content: ShareableContentProviding
     private let permissions: RecordingPermissions
     private let audioActivity: TeamsAudioActivityProviding
-
-    // MARK: - Internal state
-
-    private let eventContinuation: AsyncStream<Bool>.Continuation
+    private let now: () -> TimeInterval
     private var tickTimer: Timer?
-    private var launchObserver: NSObjectProtocol?
-    private var terminateObserver: NSObjectProtocol?
+    private var workspaceObservers: [NSObjectProtocol] = []
+    private var observationTask: Task<Void, Never>?
+    private var generation = 0
+    private var isRunning = false
+    private var baselineDone = false
 
     private enum Tier { case cold, warm, hot }
     private var tier: Tier = .cold
-
-    // The two `Bool?`s below use nil deliberately to distinguish "no
-    // observation yet" from "observed false"; that tri-state is what powers
-    // baseline silence and two-tick debounce.
-    // swiftlint:disable:next discouraged_optional_boolean
+    // swiftlint:disable discouraged_optional_boolean
     private var confirmedActive: Bool?
-    // swiftlint:disable:next discouraged_optional_boolean
-    private var lastRawJudgement: Bool?
-    private var baselineDone: Bool = false
-    private var sckUnauthorizedLogged: Bool = false
-
-    // MARK: - Init
+    private var pendingActive: Bool?
+    // swiftlint:enable discouraged_optional_boolean
+    private var pendingSince: TimeInterval?
 
     init(
         runningApps: RunningAppsProviding,
         content: ShareableContentProviding,
         permissions: RecordingPermissions,
-        audioActivity: TeamsAudioActivityProviding = CoreAudioTeamsAudioActivityProvider()
+        audioActivity: TeamsAudioActivityProviding = CoreAudioTeamsAudioActivityProvider(),
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
         self.runningApps = runningApps
         self.content = content
         self.permissions = permissions
         self.audioActivity = audioActivity
-
-        var continuation: AsyncStream<Bool>.Continuation?
-        self.meetingEvents = AsyncStream<Bool>(bufferingPolicy: .bufferingNewest(1)) {
-            continuation = $0
-        }
-        // swiftlint:disable:next force_unwrapping
-        self.eventContinuation = continuation!
+        self.now = now
+        let pair = AsyncStream<Bool>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        meetingEvents = pair.stream
+        eventContinuation = pair.continuation
     }
 
-    // MARK: - Lifecycle
-
-    /// First bring-up. Installs the NSWorkspace observers, computes the tier,
-    /// and kicks off the baseline tick. Paired with `stopAndFinish()`.
     func start() {
+        guard !isRunning else { return }
+        isRunning = true
         installWorkspaceObservers()
         recomputeTier(runTickImmediately: true)
     }
 
-    /// Pause without teardown: cancels the timer, removes observers, and
-    /// clears baseline / debounce state. The AsyncStream continuation is
-    /// **not** finished — `for await` consumers stay parked until `resume()`.
-    /// Used when the user flips the detector off in Settings.
     func suspend() {
+        isRunning = false
+        invalidateObservation()
         tickTimer?.invalidate()
         tickTimer = nil
-        if let obs = launchObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(obs)
-        }
-        if let obs = terminateObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(obs)
-        }
-        launchObserver = nil
-        terminateObserver = nil
+        for observer in workspaceObservers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+        workspaceObservers = []
         tier = .cold
         baselineDone = false
-        lastRawJudgement = nil
         confirmedActive = nil
-        sckUnauthorizedLogged = false
+        handleObservationUnavailable()
     }
 
-    /// Resume from a suspended state. Equivalent to a fresh `start()`.
     func resume() { start() }
 
-    /// Permanent teardown: `suspend()` + finish the stream so consumers exit.
     func stopAndFinish() {
         suspend()
         eventContinuation.finish()
     }
 
-    // MARK: - NSWorkspace observers
-
     private func installWorkspaceObservers() {
-        // Idempotent: `start()`/`resume()` may be called on an already-armed
-        // watcher (e.g. user rapidly toggles the Settings switch). Without
-        // this guard the previous NSObjectProtocol tokens are overwritten
-        // and the underlying observers leak until process exit.
-        guard launchObserver == nil, terminateObserver == nil else { return }
+        guard workspaceObservers.isEmpty else { return }
         let center = NSWorkspace.shared.notificationCenter
-        launchObserver = center.addObserver(
-            forName: NSWorkspace.didLaunchApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  let bid = app.bundleIdentifier,
-                  Self.teamsBundleIDs.contains(bid) else { return }
-            Task { @MainActor in self?.recomputeTier(runTickImmediately: true) }
-        }
-        terminateObserver = center.addObserver(
-            forName: NSWorkspace.didTerminateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  let bid = app.bundleIdentifier,
-                  Self.teamsBundleIDs.contains(bid) else { return }
-            Task { @MainActor in self?.recomputeTier(runTickImmediately: false) }
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            workspaceObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                      let bundleID = app.bundleIdentifier, Self.teamsBundleIDs.contains(bundleID) else { return }
+                Task { @MainActor in
+                    guard let self, self.isRunning else { return }
+                    self.recomputeTier(runTickImmediately: true)
+                }
+            })
         }
     }
 
-    // MARK: - Tier control
+    private func invalidateObservation() {
+        generation += 1
+        observationTask?.cancel()
+        observationTask = nil
+    }
 
     private func recomputeTier(runTickImmediately: Bool) {
-        let teamsAlive = runningApps.isBundleRunning(anyOf: Self.teamsBundleIDs)
-        let newTier: Tier
-        if teamsAlive {
-            newTier = (confirmedActive == true) ? .hot : .warm
+        let alive = runningApps.isBundleRunning(anyOf: Self.teamsBundleIDs)
+        if alive {
+            tier = confirmedActive == true ? .hot : .warm
         } else {
-            newTier = .cold
-            // Teams disappeared → any prior "in meeting" state is stale.
-            // Emit a false transition so the coordinator can dismiss / offer
-            // the stop prompt path; then reset debounce state.
-            if confirmedActive == true {
-                confirmedActive = false
-                eventContinuation.yield(false)
-            } else {
-                confirmedActive = false
-            }
-            lastRawJudgement = false
+            tier = .cold
+            invalidateObservation()
+            if confirmedActive == true { eventContinuation.yield(false) }
+            confirmedActive = false
+            // Establish an idle baseline even when Teams was not running at launch.
+            baselineDone = true
+            handleObservationUnavailable()
         }
-        tier = newTier
         rescheduleTimer()
-        if runTickImmediately {
-            Task { @MainActor in self.tick() }
-        }
+        if runTickImmediately { tick() }
     }
 
     private func rescheduleTimer() {
+        guard isRunning else { return }
         tickTimer?.invalidate()
-        let interval = (tier == .cold) ? coldInterval : warmInterval
-        tickTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        tickTimer = Timer.scheduledTimer(withTimeInterval: tier == .cold ? 30 : 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
     }
 
-    // MARK: - Tick
-
     private func tick() {
-        switch tier {
-        case .cold:
+        guard isRunning else { return }
+        if tier == .cold {
             if runningApps.isBundleRunning(anyOf: Self.teamsBundleIDs) {
                 recomputeTier(runTickImmediately: true)
             }
-        case .warm, .hot:
-            Task { @MainActor in await checkTeamsWindows() }
+            return
+        }
+        guard observationTask == nil else { return }
+        let currentGeneration = generation
+        observationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.observe(generation: currentGeneration)
+            if self.generation == currentGeneration { self.observationTask = nil }
         }
     }
 
-    private func checkTeamsWindows() async {
-        // Primary signal: CoreAudio process-tap. Robust across Space
-        // switches, minimized windows, all-day meeting scenarios, and Teams
-        // title changes — none of those affect whether Teams holds the mic.
-        // See docs/07 v2.0 rationale.
-        if audioActivity.isBundleUsingInput(anyOf: Self.teamsBundleIDs) == true {
+    private func observationIsCurrent(_ expectedGeneration: Int) -> Bool {
+        !Task.isCancelled && isRunning && generation == expectedGeneration
+    }
+
+    private func observe(generation expectedGeneration: Int) async {
+        guard observationIsCurrent(expectedGeneration) else { return }
+        guard runningApps.isBundleRunning(anyOf: Self.teamsBundleIDs) else {
+            recomputeTier(runTickImmediately: false)
+            return
+        }
+        let audio = audioActivity.activity(for: Self.teamsBundleIDs)
+        if audio?.isDuplex == true {
             applyDebounced(rawActive: true)
             return
         }
-        // Audio signal returned false or nil → fall back to the window
-        // heuristic. This covers the "Teams meeting in progress but mic is
-        // muted" edge case where a browser-hosted call drops mic input
-        // entirely (native Teams keeps it — but be defensive), and the
-        // rare macOS < 14.4 fallback (Lyre targets 15+ so unreachable in
-        // production, but the provider returns nil in that branch).
-        //
-        // SCK not granted → stay inactive silently, log at most once per
-        // watcher lifetime. Deliberately does NOT feed the debounce channel:
-        // a transient permission gap must not become a meeting-ended event
-        // that would trigger the coordinator's Stop prompt. See
-        // docs/07 (SCK unauthorized contract) + DQ-7.
-        guard permissions.screenCaptureGranted else {
-            if !sckUnauthorizedLogged {
-                Self.logger.info("Screen Recording not granted; detector stays inactive")
-                sckUnauthorizedLogged = true
-            }
-            handleObservationUnavailable()
-            return
-        }
+        await permissions.checkAll()
+        guard observationIsCurrent(expectedGeneration) else { return }
+        guard permissions.screenCaptureGranted else { handleObservationUnavailable(); return }
+        await observeWindows(audio: audio, generation: expectedGeneration)
+    }
+
+    private func observeWindows(audio: TeamsAudioActivity?, generation expectedGeneration: Int) async {
         do {
             let windows = try await content.currentTeamsWindows(bundleIDs: Self.teamsBundleIDs)
-            applyDebounced(rawActive: Self.judgeMeeting(from: windows))
+            guard observationIsCurrent(expectedGeneration) else { return }
+            guard runningApps.isBundleRunning(anyOf: Self.teamsBundleIDs) else {
+                recomputeTier(runTickImmediately: false)
+                return
+            }
+            guard let audio else { handleObservationUnavailable(); return }
+            let meetingWindow = Self.judgeMeeting(from: windows)
+            if confirmedActive == true {
+                applyDebounced(rawActive: audio.isRunning || meetingWindow)
+            } else {
+                // A mic preview, two chat windows or an idle meeting title
+                // alone cannot start a new meeting cycle.
+                applyDebounced(rawActive: audio.isRunning && meetingWindow)
+            }
         } catch {
-            // Best-effort: treat SCK query failure the same way as missing
-            // permission — silent, and specifically not a false transition.
-            Self.logger.warning("SCK query failed: \(error.localizedDescription)")
+            guard observationIsCurrent(expectedGeneration) else { return }
+            Self.logger.debug("Meeting observation unavailable: \(error.localizedDescription)")
             handleObservationUnavailable()
         }
     }
 
-    /// Called when we cannot observe the current SCK state (permission
-    /// missing / API failure). Resets the raw-judgement history so that the
-    /// next authorised tick starts fresh, but preserves `confirmedActive`
-    /// and never yields — the coordinator must not see this as a meeting
-    /// transition.
     private func handleObservationUnavailable() {
-        lastRawJudgement = nil
-        // baselineDone stays true: we still know the last confirmed state,
-        // we're just refusing to advance it while blind. confirmedActive is
-        // deliberately untouched so the tray / logs can still reflect the
-        // last real observation.
+        pendingActive = nil
+        pendingSince = nil
     }
 
-    // MARK: - Judgement (v1.3 contract, pure)
-
-    /// See docs/07-teams-meeting-detector.md — the v1.3 heuristic requires
-    /// on-screen + adequately sized candidates before applying either the
-    /// count rule or the title-slot rule.
+    /// Window count carries no meeting evidence. Offscreen meeting windows
+    /// still count: moving to another Space or minimizing is not ending a call.
     static func judgeMeeting(from windows: [ShareableWindow]) -> Bool {
-        let candidates = windows.filter { win in
-            let title = (win.title ?? "").lowercased()
-            guard !excludedTitles.contains(title) else { return false }
-            guard win.isOnScreen else { return false }
-            guard win.frame.width >= minCandidateWidth,
-                  win.frame.height >= minCandidateHeight else { return false }
-            return true
+        windows.contains {
+            teamsBundleIDs.contains($0.bundleID) && $0.frame.width >= 200 && $0.frame.height >= 200
+                && isMeetingTitle($0.title)
         }
-        if candidates.count >= 2 { return true }
-        for win in candidates where isMeetingTitle(win.title) {
-            return true
-        }
-        return false
     }
 
-    /// v1.3 title-slot rule: title must end in `meetingTitleSuffix` and the
-    /// pre-suffix head (split on " | ") must look like a meeting subject.
     static func isMeetingTitle(_ title: String?) -> Bool {
-        let lower = (title ?? "").lowercased()
-        guard lower.hasSuffix(meetingTitleSuffix) else { return false }
-        let head = String(
-            lower.split(separator: " | ", maxSplits: 1, omittingEmptySubsequences: false)
-                .first ?? ""
-        )
-        if meetingHeadExact.contains(head) { return true }
-        if head.hasPrefix(meetingHeadPrefixEnglish) { return true }
-        if head.hasSuffix(meetingHeadSuffixEnglish) { return true }
-        return false
+        let lower = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let suffix = " | microsoft teams"
+        guard lower.hasSuffix(suffix) else { return false }
+        let head = String(lower.dropLast(suffix.count))
+        guard !head.contains(" | ") else { return false }
+        if ["meeting", "会议", "會議", "会议中"].contains(head) { return true }
+        if head.hasPrefix("meeting in "), head.count > "meeting in ".count { return true }
+        return head.hasSuffix("'s meeting") && head.count > "'s meeting".count
     }
-
-    // MARK: - Debounce + baseline
 
     private func applyDebounced(rawActive: Bool) {
         if !baselineDone {
-            // Baseline: seed internal state so we know the *current* value
-            // but never surface it as a transition — startup should not
-            // pop a prompt for a meeting already in progress.
-            confirmedActive = rawActive
-            lastRawJudgement = rawActive
             baselineDone = true
-            if rawActive {
-                // Move to hot without recording a transition — no yield.
-                tier = .hot
-                rescheduleTimer()
-            }
+            confirmedActive = rawActive
+            tier = rawActive ? .hot : .warm
+            rescheduleTimer()
             return
         }
-        // Two consecutive raw ticks with the same value flip confirmedActive.
-        if lastRawJudgement == rawActive, confirmedActive != rawActive {
-            confirmedActive = rawActive
-            eventContinuation.yield(rawActive)
-            recomputeTier(runTickImmediately: false)
+        guard confirmedActive != rawActive else { handleObservationUnavailable(); return }
+        let instant = now()
+        if pendingActive != rawActive || pendingSince == nil {
+            pendingActive = rawActive
+            pendingSince = instant
+            return
         }
-        lastRawJudgement = rawActive
-    }
-
-    // MARK: - Test hooks
-
-    #if DEBUG
-    /// Feed one raw judgement into the debounce state machine. Test-only
-    /// affordance to exercise judgement/debounce without spinning a Timer.
-    @MainActor
-    func testingSubmit(rawActive: Bool) {
-        applyDebounced(rawActive: rawActive)
-    }
-
-    /// Test-only: recompute the tier as if an NSWorkspace notification just
-    /// fired. Lets tests exercise the "Teams process terminated" path
-    /// without spinning up a real NSRunningApplication.
-    @MainActor
-    func testingRecomputeTier() {
+        let required = rawActive ? Self.startConfirmationSeconds : Self.endConfirmationSeconds
+        guard let pendingSince, instant - pendingSince >= required else { return }
+        confirmedActive = rawActive
+        handleObservationUnavailable()
+        eventContinuation.yield(rawActive)
         recomputeTier(runTickImmediately: false)
     }
 
-    /// Test-only: exercise the observation-unavailable branch (SCK denied /
-    /// SCK provider throws) without going through `checkTeamsWindows()`.
-    @MainActor
-    func testingHandleObservationUnavailable() {
-        handleObservationUnavailable()
-    }
-
-    @MainActor
+    #if DEBUG
+    func testingSubmit(rawActive: Bool) { applyDebounced(rawActive: rawActive) }
+    func testingRecomputeTier() { recomputeTier(runTickImmediately: false) }
+    func testingHandleObservationUnavailable() { handleObservationUnavailable() }
+    func testingTick() async { tick(); await observationTask?.value }
     // swiftlint:disable:next discouraged_optional_boolean
     var testingConfirmedActive: Bool? { confirmedActive }
-
-    @MainActor
-    var testingTier: String { String(describing: tier) }
     #endif
 }

@@ -76,11 +76,17 @@ struct RecordingActionControllerTests {
         let expectedURL = URL(fileURLWithPath: "/tmp/lyre-test.m4a")
         recorder.stopURL = expectedURL
         let store = FakeRecordingsStore()
+        store.refreshedRecording = RecordingFile(url: expectedURL, fileSize: 1024, createdAt: Date(), duration: 301)
         let alerts = FakeAlertPresenter()
+        var saved: [RecordingFile] = []
         let controller = RecordingActionController(
             recorder: recorder,
             recordingsStore: store,
-            alertPresenter: alerts
+            alertPresenter: alerts,
+            onRecordingSaved: {
+                #expect(store.refreshCount == 1)
+                saved.append($0)
+            }
         )
 
         await controller.requestStop()
@@ -90,16 +96,22 @@ struct RecordingActionControllerTests {
         #expect(store.lastRefreshURL == expectedURL)
         #expect(controller.elapsedDisplay == "00:00")
         #expect(alerts.errorCount == 0)
+        #expect(saved.count == 1)
+        #expect(saved.first?.url == expectedURL)
+        #expect(saved.first?.duration == 301)
+        #expect(saved.first?.fileSize == 1024)
     }
 
     @Test func requestStop_whenIdle_isNoOp() async {
         let recorder = FakeRecorder()  // state = .idle by default
         let store = FakeRecordingsStore()
         let alerts = FakeAlertPresenter()
+        var savedCount = 0
         let controller = RecordingActionController(
             recorder: recorder,
             recordingsStore: store,
-            alertPresenter: alerts
+            alertPresenter: alerts,
+            onRecordingSaved: { _ in savedCount += 1 }
         )
 
         await controller.requestStop()
@@ -107,6 +119,7 @@ struct RecordingActionControllerTests {
         #expect(recorder.stopCount == 0)
         #expect(store.refreshCount == 0)
         #expect(alerts.errorCount == 0)
+        #expect(savedCount == 0)
     }
 
     @Test func requestStop_failure_surfacesAlertAndSkipsRefresh() async {
@@ -115,10 +128,12 @@ struct RecordingActionControllerTests {
         recorder.stopShouldThrow = FakeError.simulated("finalize failed")
         let store = FakeRecordingsStore()
         let alerts = FakeAlertPresenter()
+        var savedCount = 0
         let controller = RecordingActionController(
             recorder: recorder,
             recordingsStore: store,
-            alertPresenter: alerts
+            alertPresenter: alerts,
+            onRecordingSaved: { _ in savedCount += 1 }
         )
 
         await controller.requestStop()
@@ -128,6 +143,21 @@ struct RecordingActionControllerTests {
         #expect(alerts.errorCount == 1)
         #expect(alerts.lastErrorTitle == "Recording Error")
         #expect(alerts.lastErrorMessage.contains("finalize failed"))
+        #expect(savedCount == 0)
+    }
+
+    @Test func requestStop_missingFileDoesNotNotifyUpload() async {
+        let recorder = FakeRecorder()
+        recorder.state = .recording
+        let store = FakeRecordingsStore()
+        var savedCount = 0
+        let controller = RecordingActionController(
+            recorder: recorder, recordingsStore: store, alertPresenter: FakeAlertPresenter(),
+            onRecordingSaved: { _ in savedCount += 1 }
+        )
+        await controller.requestStop()
+        #expect(store.refreshCount == 1)
+        #expect(savedCount == 0)
     }
 
     @Test func setRecordingsStore_redirectsPostStopRefreshToNewStore() async {
@@ -329,6 +359,34 @@ struct RecordingActionControllerTests {
     }
 }
 
+extension RecordingActionControllerTests {
+    @Test func concurrentEntryPointsCannotStartOrStopTwice() async {
+        let recorder = FakeRecorder()
+        recorder.yieldDuringActions = true
+        let store = FakeRecordingsStore()
+        let controller = RecordingActionController(
+            recorder: recorder, recordingsStore: store, alertPresenter: FakeAlertPresenter()
+        )
+        async let first = controller.requestStart()
+        async let second = controller.requestStart()
+        let ids = await [first, second].compactMap { $0 }
+        #expect(ids.count == 1)
+        #expect(controller.recordingID == ids.first)
+        #expect(recorder.startCount == 1)
+        #expect(!controller.isBusy)
+        async let stopA: Void = controller.requestStop()
+        async let stopB: Void = controller.requestStop()
+        _ = await (stopA, stopB)
+        #expect(recorder.stopCount == 1)
+        #expect(store.refreshCount == 1)
+        #expect(controller.recordingID == nil)
+        #expect(!controller.isBusy)
+        let nextID = await controller.requestStart()
+        #expect(nextID != ids.first)
+        await controller.requestStop()
+    }
+}
+
 // MARK: - Fakes
 
 @MainActor
@@ -340,6 +398,7 @@ private final class FakeRecorder: RecordingLifecycleManaging {
     var stopURL = URL(fileURLWithPath: "/tmp/fake-recording.m4a")
     var startShouldThrow: Error?
     var stopShouldThrow: Error?
+    var yieldDuringActions = false
     /// Snapshot the controller reads after a successful stop to decide
     /// whether to raise a non-fatal warning. Default `nil` keeps the
     /// pre-existing tests exercising the healthy stop path.
@@ -347,6 +406,7 @@ private final class FakeRecorder: RecordingLifecycleManaging {
 
     func startRecording() async throws {
         startCount += 1
+        if yieldDuringActions { await Task.yield() }
         if let err = startShouldThrow { throw err }
         state = .recording
     }
@@ -354,6 +414,7 @@ private final class FakeRecorder: RecordingLifecycleManaging {
     @discardableResult
     func stopRecording() async throws -> URL {
         stopCount += 1
+        if yieldDuringActions { await Task.yield() }
         if let err = stopShouldThrow { throw err }
         state = .idle
         return stopURL
@@ -364,10 +425,12 @@ private final class FakeRecorder: RecordingLifecycleManaging {
 private final class FakeRecordingsStore: RecordingsRefreshing {
     var refreshCount = 0
     var lastRefreshURL: URL?
+    var refreshedRecording: RecordingFile?
 
-    func refresh(url: URL) async {
+    func refresh(url: URL) async -> RecordingFile? {
         refreshCount += 1
         lastRefreshURL = url
+        return refreshedRecording
     }
 }
 
@@ -385,10 +448,12 @@ private final class FakeAlertPresenter: AlertPresenting {
         message: String,
         primary: String,
         secondary: String
-    ) -> Bool {
+    ) async -> Bool {
         choiceCount += 1
         return choiceReturn
     }
+
+    func dismissChoice() {}
 
     func presentError(title: String, message: String) {
         errorCount += 1

@@ -60,16 +60,19 @@ cd ../..
 打包命令从仓库根目录执行：
 
 ```bash
-bun run macos:dmg
+LYRE_CODE_SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' \
+LYRE_DEVELOPMENT_TEAM=TEAMID bun run macos:dmg
 ```
 
-脚本会删除并重建仓库 `build/`、重新生成 Xcode 工程、archive，再产生 `build/Lyre-<version>.dmg`。当前脚本采用 ad-hoc 签名，没有 notarization 步骤；GitHub Release 的安装包附件需维护者另外上传。
+脚本先验证签名身份，再删除并重建仓库 `build/`、重新生成 Xcode 工程、archive，产生 `build/Lyre-<version>.dmg`。本地临时构建可显式使用 `LYRE_ALLOW_ADHOC=1 bun run macos:dmg`，但更换 ad-hoc 构建可能导致麦克风重新授权。正式版本应保持稳定的 Developer ID 身份；脚本没有 notarization 步骤，分发前需另行公证。GitHub Release 附件由维护者上传。
 
 客户端默认服务器为 `https://lyre.hexly.ai`，用网页生成的设备 Token 认证；服务地址可在设置中修改。配置位于 `~/Library/Application Support/Lyre/config.json`，包含 Token，当前实现未将它存入 Keychain。录音默认目录为 `~/Music/Lyre Recordings/`，可在设置中修改。
 
 麦克风与系统音频由 ScreenCaptureKit 采集，默认双轨写入本地 M4A；可用时生成音轨角色的 `.tracks.json` 旁文件。上传前尝试混为单轨以适配网页播放，混音失败时回退上传原文件，可能影响浏览器播放；本地原文件不被替换。
 
-Teams 检测默认开启，可在设置中关闭。检测结果触发确认提示，由使用者决定开始 / 停止录音。它依赖本机 Teams 状态、窗口观察和已有权限，不能把提醒当作会议参与或录音成功的证明。
+自动输入跟随 macOS 当前输入设备；指定的麦克风暂时断连时保留偏好并回退，重连后恢复。自动上传默认关闭，默认时长阈值为 5 分钟，成功保存且严格超过阈值才会触发。
+
+Teams 提醒在新安装时默认关闭，升级保留已有设置。提醒不抢焦点且会自动消失；停止建议只针对从会议提醒开始的同一次录音，所有启停均需用户选择。它依赖本机音频、窗口观察和已有权限，不能把提醒当作会议参与或录音成功的证明。实现和验证边界见[可靠性优化](10-macos-recording-reliability.md)。
 
 ## 备份与存储范围
 

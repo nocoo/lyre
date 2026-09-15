@@ -26,7 +26,7 @@ extension RecordingManager: RecordingLifecycleManaging {}
 
 @MainActor
 protocol RecordingsRefreshing: AnyObject {
-    func refresh(url: URL) async
+    @discardableResult func refresh(url: URL) async -> RecordingFile?
 }
 
 extension RecordingsStore: RecordingsRefreshing {}

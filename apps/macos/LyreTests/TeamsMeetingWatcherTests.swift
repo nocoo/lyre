@@ -3,621 +3,289 @@ import Foundation
 import Testing
 @testable import Lyre
 
-// swiftlint:disable file_length
-//
-// These tests document the v1.3 judgeMeeting contract fully (F1/F2/F3
-// regressions) plus the lifecycle behaviour of the debounce state machine.
-// Splitting into multiple files would obscure the single suite against a
-// single production type.
+@MainActor @Suite("Teams call evidence and watcher lifecycle")
+struct TeamsMeetingWatcherTests {
+    @Test(arguments: [
+        ("Meeting in Sprint | Microsoft Teams", true),
+        ("Alice's Meeting | Microsoft Teams", true),
+        ("会议 | Microsoft Teams", true),
+        ("會議 | Microsoft Teams", true),
+        ("会议中 | Microsoft Teams", true),
+        ("Chat | Calling/Meeting/Devices | General | Microsoft Teams", false),
+        ("Meetings | Microsoft Teams", false),
+        ("Meeting notes | Microsoft Teams", false),
+        ("Foo Meeting Bar | Microsoft Teams", false),
+        ("Sprint Planning | Microsoft Teams", false),
+        ("Meeting in Sprint", false),
+    ])
+    func titleRequiresAnExplicitMeetingSlot(_ title: String, expected: Bool) {
+        #expect(TeamsMeetingWatcher.isMeetingTitle(title) == expected)
+    }
 
-/// Small helper so table-style test cases are readable.
-private func win(
-    _ bid: String = "com.microsoft.teams2",
-    title: String?,
-    onScreen: Bool = true,
-    width: CGFloat = 800,
-    height: CGFloat = 600
+    @Test func multipleChatWindowsAreNotAMeeting() {
+        let windows = [window("Chat | General | Microsoft Teams"), window("Sprint Planning | Microsoft Teams")]
+        #expect(!TeamsMeetingWatcher.judgeMeeting(from: windows))
+    }
+
+    @Test func minimizedAndOtherSpaceMeetingWindowsRemainEvidence() {
+        #expect(TeamsMeetingWatcher.judgeMeeting(from: [window("会议 | Microsoft Teams", onScreen: false)]))
+        #expect(!TeamsMeetingWatcher.judgeMeeting(from: [
+            window("会议 | Microsoft Teams", bundleID: "another.app"),
+            window("会议 | Microsoft Teams", width: 1)
+        ]))
+    }
+
+    @Test func startupBaselineIsSilent() async {
+        let context = WatcherContext()
+        context.watcher.testingSubmit(rawActive: true)
+        #expect(context.watcher.testingConfirmedActive == true)
+        #expect(await finishAndCollect(context.watcher).isEmpty)
+    }
+
+    @Test func startsNeedTenSecondsAndEndsNeedThirtySeconds() async {
+        let context = WatcherContext()
+        context.submit(false, at: 0)
+        context.submit(true, at: 1)
+        context.submit(true, at: 10.9)
+        #expect(context.watcher.testingConfirmedActive == false)
+        context.submit(true, at: 11)
+        #expect(context.watcher.testingConfirmedActive == true)
+        context.submit(false, at: 12)
+        context.submit(false, at: 41.9)
+        #expect(context.watcher.testingConfirmedActive == true)
+        context.submit(false, at: 42)
+        #expect(context.watcher.testingConfirmedActive == false)
+        #expect(await finishAndCollect(context.watcher) == [false])
+    }
+
+    @Test func noiseAndUnavailableObservationResetTheGracePeriod() {
+        let context = WatcherContext()
+        defer { context.watcher.stopAndFinish() }
+        context.submit(true, at: 0)
+        context.submit(false, at: 1)
+        context.submit(true, at: 20)
+        context.submit(false, at: 21)
+        context.watcher.testingHandleObservationUnavailable()
+        context.submit(false, at: 100)
+        #expect(context.watcher.testingConfirmedActive == true)
+        context.submit(false, at: 129)
+        #expect(context.watcher.testingConfirmedActive == true)
+        context.submit(false, at: 130)
+        #expect(context.watcher.testingConfirmedActive == false)
+    }
+
+    @Test func teamsNotRunningAtLaunchStillAllowsFirstMeetingReminder() async {
+        let context = WatcherContext()
+        context.apps.alive = false
+        context.watcher.start()
+        #expect(context.watcher.testingConfirmedActive == false)
+        context.apps.alive = true
+        context.audio.result = TeamsAudioActivity(input: true, output: true)
+        context.time = 1
+        await context.watcher.testingTick()
+        context.time = 11
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == true)
+        #expect(await finishAndCollect(context.watcher) == [true])
+    }
+
+    @Test func duplexAudioSurvivesSpaceChangesWithoutAWindowQuery() async {
+        let context = WatcherContext()
+        context.audio.result = TeamsAudioActivity(input: true, output: true)
+        context.watcher.start()
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == true)
+        #expect(context.content.callCount == 0)
+        #expect(await finishAndCollect(context.watcher).isEmpty)
+    }
+
+    @Test func microphonePreviewAndTwoChatsDoNotStartAMeeting() async {
+        let context = WatcherContext()
+        defer { context.watcher.stopAndFinish() }
+        context.audio.result = TeamsAudioActivity(input: true, output: false)
+        context.content.windows = [window("Chat | General | Microsoft Teams"), window("Another chat")]
+        context.watcher.start()
+        await context.watcher.testingTick()
+        context.time = 100
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == false)
+    }
+
+    @Test func oneWayAudioNeedsAnExplicitMeetingWindow() async {
+        let context = WatcherContext()
+        defer { context.watcher.stopAndFinish() }
+        context.audio.result = TeamsAudioActivity(input: false, output: true)
+        context.watcher.start()
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == false)
+        context.content.windows = [window("Meeting in Sprint | Microsoft Teams")]
+        context.time = 1
+        await context.watcher.testingTick()
+        context.time = 11
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == true)
+    }
+
+    @Test func mutedOffscreenMeetingDoesNotEndRecording() async {
+        let context = WatcherContext()
+        defer { context.watcher.stopAndFinish() }
+        context.audio.result = TeamsAudioActivity(input: true, output: true)
+        context.watcher.start()
+        await context.watcher.testingTick()
+        context.audio.result = TeamsAudioActivity(input: false, output: false)
+        context.content.windows = [window("会议 | Microsoft Teams", onScreen: false)]
+        context.time = 1
+        await context.watcher.testingTick()
+        context.time = 100
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == true)
+    }
+
+    @Test func unknownAudioOrFailedWindowQueryNeverMeansMeetingEnded() async {
+        let context = WatcherContext()
+        defer { context.watcher.stopAndFinish() }
+        context.audio.result = TeamsAudioActivity(input: true, output: true)
+        context.watcher.start()
+        await context.watcher.testingTick()
+        context.audio.result = nil
+        context.time = 1
+        await context.watcher.testingTick()
+        context.time = 100
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == true)
+        context.audio.result = TeamsAudioActivity(input: false, output: false)
+        context.content.shouldThrow = true
+        context.time = 200
+        await context.watcher.testingTick()
+        context.time = 300
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == true)
+    }
+
+    @Test func missingPermissionNeverEnumeratesWindows() async {
+        let context = WatcherContext()
+        context.permissions.granted = false
+        context.watcher.start()
+        await context.watcher.testingTick()
+        #expect(context.content.callCount == 0)
+        #expect(await finishAndCollect(context.watcher).isEmpty)
+    }
+
+    @Test func processExitEndsOnlyAPreviouslyConfirmedMeeting() async {
+        let context = WatcherContext()
+        context.submit(true, at: 0)
+        context.apps.alive = false
+        context.watcher.testingRecomputeTier()
+        #expect(context.watcher.testingConfirmedActive == false)
+        #expect(await finishAndCollect(context.watcher) == [false])
+    }
+
+    @Test func queriesDoNotOverlapAndLateResultsAfterSuspendAreIgnored() async {
+        let context = WatcherContext()
+        context.audio.result = TeamsAudioActivity(input: true, output: false)
+        context.content.windows = [window("会议 | Microsoft Teams")]
+        context.content.isBlocked = true
+        context.watcher.start()
+        await waitUntil { context.content.callCount == 1 }
+        let extraTick = Task { await context.watcher.testingTick() }
+        await Task.yield()
+        #expect(context.content.callCount == 1)
+        context.watcher.suspend()
+        context.content.release()
+        await extraTick.value
+        #expect(context.watcher.testingConfirmedActive == nil)
+        context.audio.result = TeamsAudioActivity(input: false, output: false)
+        context.content.windows = []
+        context.watcher.resume()
+        await context.watcher.testingTick()
+        #expect(context.watcher.testingConfirmedActive == false)
+        #expect(await finishAndCollect(context.watcher).isEmpty)
+    }
+
+    @Test func repeatedStartAndSuspendAreSafeAndStreamFinishes() async {
+        let context = WatcherContext()
+        context.watcher.start()
+        context.watcher.start()
+        await context.watcher.testingTick()
+        context.watcher.suspend()
+        context.watcher.suspend()
+        context.watcher.resume()
+        await context.watcher.testingTick()
+        #expect(await finishAndCollect(context.watcher).isEmpty)
+    }
+}
+
+private func window(
+    _ title: String, onScreen: Bool = true, bundleID: String = "com.microsoft.teams2", width: CGFloat = 800
 ) -> ShareableWindow {
-    ShareableWindow(
-        bundleID: bid,
-        title: title,
-        isOnScreen: onScreen,
-        frame: CGRect(x: 0, y: 0, width: width, height: height)
+    ShareableWindow(bundleID: bundleID, title: title, isOnScreen: onScreen,
+                    frame: CGRect(x: 0, y: 0, width: width, height: 600))
+}
+
+@MainActor private final class WatcherContext {
+    let apps = FakeRunningApps()
+    let content = FakeContent()
+    let permissions = FakePermissions()
+    let audio = FakeAudioActivity()
+    var time: TimeInterval = 0
+    lazy var watcher = TeamsMeetingWatcher(
+        runningApps: apps, content: content, permissions: permissions, audioActivity: audio,
+        now: { [weak self] in self?.time ?? 0 }
     )
-}
-
-@MainActor
-@Suite("TeamsMeetingWatcher — judgeMeeting v1.3 contract")
-struct TeamsMeetingWatcherJudgeTests {
-    // MARK: - Count judgement (F1 + F3 regression)
-
-    @Test func count_twoOnScreenSizedNonExcluded_yieldsTrue() {
-        let windows = [
-            win(title: "Meeting in Sprint | Microsoft Teams"),
-            win(title: "Alice's Meeting | Microsoft Teams"),
-        ]
-        #expect(TeamsMeetingWatcher.judgeMeeting(from: windows) == true)
-    }
-
-    @Test func count_offscreenCandidateDoesNotContributeToCount() {
-        // Use titles that deliberately do NOT hit the title-slot rule, so
-        // a `true` result would prove count>=2 mistakenly counted the
-        // offscreen window. `"Chat"` head + `Microsoft Teams` suffix hits
-        // neither the prefix nor the suffix nor the exact rule.
-        let windows = [
-            win(title: "Chat | Alpha | Microsoft Teams", onScreen: false),
-            win(title: "Chat | Beta | Microsoft Teams"),
-        ]
-        // Sanity: title-slot alone must be false for both candidates.
-        #expect(TeamsMeetingWatcher.isMeetingTitle(windows[0].title) == false)
-        #expect(TeamsMeetingWatcher.isMeetingTitle(windows[1].title) == false)
-        // Full judgement: with 1 offscreen dropped, count is 1, no title-slot
-        // hit → must be false.
-        #expect(TeamsMeetingWatcher.judgeMeeting(from: windows) == false)
-    }
-
-    @Test func count_undersizedCandidateDoesNotContributeToCount() {
-        let windows = [
-            win(title: "Chat Popout", width: 150, height: 150),
-            win(title: "Random Panel", width: 100, height: 100),
-        ]
-        #expect(TeamsMeetingWatcher.judgeMeeting(from: windows) == false)
-    }
-
-    // MARK: - Title slot judgement (positive)
-
-    @Test func titleSlot_meetingInSubject_yieldsTrue() {
-        #expect(TeamsMeetingWatcher.isMeetingTitle("Meeting in Sprint | Microsoft Teams") == true)
-    }
-
-    @Test func titleSlot_apostropheSMeeting_yieldsTrue() {
-        #expect(TeamsMeetingWatcher.isMeetingTitle("Alice's Meeting | Microsoft Teams") == true)
-    }
-
-    @Test func titleSlot_exactChineseMeeting_yieldsTrue() {
-        #expect(TeamsMeetingWatcher.isMeetingTitle("会议 | Microsoft Teams") == true)
-        #expect(TeamsMeetingWatcher.isMeetingTitle("會議 | Microsoft Teams") == true)
-        #expect(TeamsMeetingWatcher.isMeetingTitle("会议中 | Microsoft Teams") == true)
-    }
-
-    // MARK: - Title slot judgement (F2 negatives)
-
-    @Test func titleSlot_chatChannelContainingMeetingWord_yieldsFalse() {
-        // F2 regression: Chat channel names that happen to contain "meeting"
-        // must not fire the detector on idle.
-        let title = "Chat | Calling/Meeting/Devices | General | Microsoft Teams"
-        #expect(TeamsMeetingWatcher.isMeetingTitle(title) == false)
-    }
-
-    @Test func titleSlot_freeformSubjectWithoutMeetingWord_yieldsFalse() {
-        #expect(TeamsMeetingWatcher.isMeetingTitle("讨论 | Microsoft Teams") == false)
-    }
-
-    @Test func titleSlot_missingSuffix_yieldsFalse() {
-        #expect(TeamsMeetingWatcher.isMeetingTitle("Random Chat") == false)
-    }
-
-    @Test func titleSlot_meetingWordInMiddle_yieldsFalse() {
-        // head = "foo meeting bar" — neither prefix nor suffix rule matches.
-        #expect(TeamsMeetingWatcher.isMeetingTitle("Foo Meeting Bar | Microsoft Teams") == false)
-    }
-
-    // MARK: - Excluded titles (F3 regression)
-
-    @Test func excludedTitle_teamsNRC_isDropped() {
-        let windows = [
-            win(title: "Teams NRC", width: 1, height: 1),
-            win(title: "Select a certificate for authentication", width: 512, height: 286),
-        ]
-        // Both are excluded (or fail the size gate); no title-slot hit either.
-        #expect(TeamsMeetingWatcher.judgeMeeting(from: windows) == false)
-    }
-
-    @Test func excludedTitle_mainWindow_isDropped() {
-        let windows = [
-            win(title: "Microsoft Teams"),
-            win(title: "Settings"),
-        ]
-        #expect(TeamsMeetingWatcher.judgeMeeting(from: windows) == false)
-    }
-
-    // MARK: - Real-world regression: idle chat scene
-
-    @Test func idleChatSceneWithHelperClutter_yieldsFalse() {
-        // Reproduces the Phase 0 probe payload: 14 offscreen/small helper
-        // windows plus 1 on-screen "Chat | ... | Microsoft Teams" main
-        // window. Must be inactive, otherwise Lyre will pop the prompt
-        // whenever the user just has Teams open.
-        var windows: [ShareableWindow] = []
-        windows.append(win(title: "Microsoft Teams", onScreen: false))
-        for _ in 0..<8 {
-            windows.append(win(title: "", onScreen: false, width: 3360, height: 30))
-        }
-        windows.append(win(title: "Select a certificate for authentication",
-                           onScreen: false, width: 512, height: 286))
-        windows.append(win(title: "Select a certificate for authentication",
-                           onScreen: false, width: 512, height: 286))
-        windows.append(win(title: "", onScreen: false, width: 45, height: 19))
-        windows.append(win(title: "", onScreen: false, width: 84, height: 77))
-        windows.append(win(title: "Teams NRC", onScreen: false, width: 1, height: 1))
-        windows.append(win(
-            title: "Chat | Calling/Meeting/Devices | General | Microsoft Teams",
-            onScreen: true,
-            width: 1680,
-            height: 1860
-        ))
-
-        #expect(TeamsMeetingWatcher.judgeMeeting(from: windows) == false)
-    }
-
-    // MARK: - Real-world positive: main + separate meeting window
-
-    @Test func mainPlusSeparateMeetingWindow_yieldsTrue() {
-        // Main window (chat title, does NOT hit title-slot rule) + a
-        // separate on-screen meeting window that also does not hit the
-        // title-slot rule (subject-only, no "meeting" head). Count judgement
-        // must catch this.
-        let windows = [
-            win(title: "Chat | General | Microsoft Teams"),
-            win(title: "Sprint Planning | Microsoft Teams"),
-        ]
-        #expect(TeamsMeetingWatcher.judgeMeeting(from: windows) == true)
+    func submit(_ active: Bool, at time: TimeInterval) {
+        self.time = time
+        watcher.testingSubmit(rawActive: active)
     }
 }
 
-@MainActor
-@Suite("TeamsMeetingWatcher — debounce + baseline + lifecycle")
-struct TeamsMeetingWatcherLifecycleTests {
-    // MARK: - Baseline
-
-    @Test func baseline_activeState_seedsWithoutYield() async {
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-
-        watcher.testingSubmit(rawActive: true)  // baseline tick lands true
-
-        #expect(watcher.testingConfirmedActive == true)
-
-        // Confirm the stream does not yield a baseline event. Read with a
-        // short timeout: if anything shows up in the buffer it is a bug.
-        await withTimeoutExpectingNoEvent(watcher.meetingEvents, ms: 20)
-    }
-
-    @Test func baseline_inactiveState_seedsWithoutYield() async {
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        watcher.testingSubmit(rawActive: false)
-        #expect(watcher.testingConfirmedActive == false)
-        await withTimeoutExpectingNoEvent(watcher.meetingEvents, ms: 20)
-    }
-
-    // MARK: - Debounce
-
-    @Test func debounce_requiresTwoMatchingTicks_beforeYielding() async throws {
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        // Baseline false, then need two consecutive `true` to flip.
-        watcher.testingSubmit(rawActive: false)  // baseline
-        watcher.testingSubmit(rawActive: true)   // 1st raw true — no flip yet
-        #expect(watcher.testingConfirmedActive == false)
-        watcher.testingSubmit(rawActive: true)   // 2nd raw true — flip
-        #expect(watcher.testingConfirmedActive == true)
-
-        let first = try await nextEvent(watcher.meetingEvents, timeoutMs: 200)
-        #expect(first == true)
-    }
-
-    @Test func debounce_transientNoiseIsIgnored() async {
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        watcher.testingSubmit(rawActive: false)  // baseline
-        watcher.testingSubmit(rawActive: true)   // single noise tick
-        watcher.testingSubmit(rawActive: false)  // back to false
-        watcher.testingSubmit(rawActive: false)  // confirmed still false — no yield
-        #expect(watcher.testingConfirmedActive == false)
-        await withTimeoutExpectingNoEvent(watcher.meetingEvents, ms: 20)
-    }
-
-    // MARK: - SCK permission gate
-
-    @Test func sckNotGranted_producesSilentInactive() async throws {
-        // From cold start with SCK not granted, the watcher must not call
-        // the SCK provider at all and must not yield any events. Baseline
-        // is intentionally never established because we cannot observe.
-        let content = FakeContent()
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: content,
-            permissions: FakePerms(sck: false),
-            audioActivity: FakeAudioActivity()
-        )
-        watcher.start()
-
-        // Give the initial tick a chance to run + observe the SCK provider
-        // was never called and no event was yielded.
-        try await Task.sleep(nanoseconds: 30_000_000)  // 30ms
-        #expect(content.callCount == 0)
-        await withTimeoutExpectingNoEvent(watcher.meetingEvents, ms: 20)
-
-        watcher.stopAndFinish()
-    }
-
-    @Test func sckRevokedAfterActive_doesNotYieldFalse() async {
-        // Regression for C6 blocker: once `confirmedActive == true`,
-        // subsequent unauthorised ticks must not flip via the debounce
-        // path and yield a false transition (which C7 would treat as
-        // "meeting ended" and pop a Stop prompt).
-        let content = FakeContent()
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: content,
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        // Seed baseline as active via the debounce hook (avoids waiting on
-        // real timers) and confirm it is set.
-        watcher.testingSubmit(rawActive: true)
-        #expect(watcher.testingConfirmedActive == true)
-
-        // Simulate two ticks that hit the observation-unavailable branch —
-        // whether the cause is a revoked TCC or the SCK API throwing, the
-        // watcher must skip provider calls entirely and never yield a
-        // false transition through the debounce path.
-        watcher.testingHandleObservationUnavailable()
-        watcher.testingHandleObservationUnavailable()
-
-        // No provider calls were made (checkTeamsWindows short-circuits in
-        // both branches), and no yield reached the stream.
-        #expect(content.callCount == 0)
-        await withTimeoutExpectingNoEvent(watcher.meetingEvents, ms: 20)
-        // confirmedActive stays at its last confirmed value so tray / logs
-        // still reflect the last true observation.
-        #expect(watcher.testingConfirmedActive == true)
-    }
-
-    @Test func sckThrows_doesNotYieldFalse() async {
-        // SCK provider throwing must be treated as a transient observation
-        // failure, not as "meeting ended". Same contract as revoked
-        // permission — no yield, no flip.
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        watcher.testingSubmit(rawActive: true)   // baseline active
-        #expect(watcher.testingConfirmedActive == true)
-
-        // Exercise the observation-unavailable branch twice (mirrors two
-        // consecutive SCK throws) and prove no false transition escaped.
-        watcher.testingHandleObservationUnavailable()
-        watcher.testingHandleObservationUnavailable()
-
-        await withTimeoutExpectingNoEvent(watcher.meetingEvents, ms: 20)
-        #expect(watcher.testingConfirmedActive == true)
-    }
-
-    // MARK: - Termination
-
-    @Test func teamsTerminates_whileActive_yieldsFalseImmediately() async throws {
-        let running = FakeRunningApps(alive: true)
-        let watcher = TeamsMeetingWatcher(
-            runningApps: running,
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        // Move to confirmed active without touching production timers.
-        watcher.testingSubmit(rawActive: true)  // baseline true
-        #expect(watcher.testingConfirmedActive == true)
-
-        // Simulate the process leaving: flip running-apps to false and
-        // recompute (production goes through the NSWorkspace notification,
-        // which lands in `recomputeTier` — we exercise that path directly).
-        running.alive = false
-        watcher.testingRecomputeTier()
-
-        let event = try await nextEvent(watcher.meetingEvents, timeoutMs: 200)
-        #expect(event == false)
-        #expect(watcher.testingConfirmedActive == false)
-    }
-
-    // MARK: - Suspend/resume
-
-    @Test func suspend_thenResume_reusesSameStream() async throws {
-        // Suspend must not finish the stream. After a suspend/resume cycle,
-        // the same for-await consumer must still receive events from the
-        // debounced state machine. We drive the debouncer directly via the
-        // testing hook so timer/provider ticks do not race the assertion.
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        watcher.suspend()   // no-op given we haven't started, but exercises teardown
-        watcher.resume()    // resume must not throw / finish stream
-
-        // Manually drive baseline + a confirmed true transition via the
-        // debounce state machine (no real Timer / provider involved).
-        watcher.testingSubmit(rawActive: false)  // baseline
-        watcher.testingSubmit(rawActive: true)   // 1st raw true — no yield
-        watcher.testingSubmit(rawActive: true)   // 2nd — yield true
-
-        let event = try await nextEvent(watcher.meetingEvents, timeoutMs: 200)
-        #expect(event == true)
-
-        // Explicit teardown: `suspend()` again to invalidate the timer that
-        // `resume()` scheduled, then finish the stream.
-        watcher.stopAndFinish()
-    }
-
-    @Test func stopAndFinish_endsStream() async {
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        watcher.start()
-        watcher.stopAndFinish()
-
-        var collected: [Bool] = []
-        for await value in watcher.meetingEvents {
-            collected.append(value)
-        }
-        // Loop must terminate; may or may not have events depending on
-        // whether the initial tick fired before finish, but the key
-        // invariant is that we exit rather than block forever.
-        #expect(collected.count <= 1)
-    }
-
-    // MARK: - Reentrance safety
-
-    @Test func startTwice_thenSuspend_leavesObserversDetached() async {
-        // Regression: `start()` (and thus `resume()`) unconditionally
-        // installed the NSWorkspace observers, overwriting the previous
-        // NSObjectProtocol tokens and leaking the old observers because
-        // `suspend()` could only remove whichever token pair was current.
-        // The install path is now idempotent — this test wires the same
-        // sequence and asserts the watcher survives it cleanly.
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: FakeAudioActivity()
-        )
-        watcher.start()
-        watcher.start()   // must not double-install / crash
-        watcher.suspend() // must clear both observer tokens
-
-        // Drive the debouncer to prove state is still consistent after the
-        // double-start + suspend cycle.
-        watcher.testingSubmit(rawActive: false)
-        watcher.testingSubmit(rawActive: true)
-        watcher.testingSubmit(rawActive: true)
-        #expect(watcher.testingConfirmedActive == true)
-
-        watcher.stopAndFinish()
-    }
-
-    // MARK: - Process-audio primary signal (v2.0)
-
-    @Test func processAudio_true_isSufficientEvenWithNoWindows() async throws {
-        // Space-switch scenario: main meeting window off current Space, no
-        // compact view visible → SCK window list empty → old judgeMeeting
-        // would return false. But Teams process still holds the mic, so
-        // the process-tap signal keeps the watcher active. This is the
-        // whole point of v2.0.
-        let audio = FakeAudioActivity(result: true)
-        let content = FakeContent()   // no windows to return
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: content,
-            permissions: FakePerms(sck: true),
-            audioActivity: audio
-        )
-        watcher.start()
-        try await Task.sleep(nanoseconds: 30_000_000)  // let baseline tick fire
-        #expect(watcher.testingConfirmedActive == true)
-        // Critical: no SCK query happened because process-tap short-circuited
-        // ahead of the window path.
-        #expect(content.callCount == 0)
-        watcher.stopAndFinish()
-    }
-
-    @Test func processAudio_falseButWindowsSayActive_fallbackKeepsHot() async throws {
-        // Fallback path: Teams released the mic (e.g. user mid-meeting hits
-        // mute for a moment in a browser-hosted call) but the meeting UI
-        // is still on screen. Window heuristic must catch it.
-        let audio = FakeAudioActivity(result: false)
-        let content = FakeContent()
-        content.windowsToReturn = [
-            ShareableWindow(
-                bundleID: "com.microsoft.teams2",
-                title: "Meeting in Sprint | Microsoft Teams",
-                isOnScreen: true,
-                frame: CGRect(x: 100, y: 100, width: 800, height: 600)
-            )
-        ]
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: content,
-            permissions: FakePerms(sck: true),
-            audioActivity: audio
-        )
-        watcher.start()
-        try await Task.sleep(nanoseconds: 30_000_000)
-        #expect(watcher.testingConfirmedActive == true)
-        // SCK was consulted because process-tap said false.
-        #expect(content.callCount >= 1)
-        watcher.stopAndFinish()
-    }
-
-    @Test func processAudio_nil_treatsAsFalseAndFallsBackToWindows() async throws {
-        // Provider returns nil (macOS < 14.4 / CoreAudio blip). Must not
-        // hard-fail — flow into the window path just like process-tap == false.
-        let audio = FakeAudioActivity(result: nil)
-        let content = FakeContent()   // empty → inactive
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: content,
-            permissions: FakePerms(sck: true),
-            audioActivity: audio
-        )
-        watcher.start()
-        try await Task.sleep(nanoseconds: 30_000_000)
-        #expect(watcher.testingConfirmedActive == false)
-        #expect(content.callCount >= 1)  // fallback engaged
-        watcher.stopAndFinish()
-    }
-
-    @Test func processAudio_flipsFromTrueToFalse_windowsAlsoEmpty_yieldsFalseAfterDebounce() async throws {
-        // Full end-to-end: audio said true (meeting starts), then flips to
-        // false (Teams releases mic AND no meeting UI) — two consecutive
-        // ticks of "false" must be observed before the debouncer yields.
-        // Uses testingSubmit to drive the debouncer directly so the test
-        // does not race real Timer ticks.
-        let audio = FakeAudioActivity(result: true)
-        let watcher = TeamsMeetingWatcher(
-            runningApps: FakeRunningApps(alive: true),
-            content: FakeContent(),
-            permissions: FakePerms(sck: true),
-            audioActivity: audio
-        )
-        // Baseline via the audio-true path.
-        watcher.testingSubmit(rawActive: true)
-        #expect(watcher.testingConfirmedActive == true)
-
-        // Meeting ends. Two consecutive false ticks flip.
-        watcher.testingSubmit(rawActive: false)
-        #expect(watcher.testingConfirmedActive == true)  // first false absorbed
-        watcher.testingSubmit(rawActive: false)
-        #expect(watcher.testingConfirmedActive == false)
-
-        let event = try await nextEvent(watcher.meetingEvents, timeoutMs: 200)
-        #expect(event == false)
-        watcher.stopAndFinish()
-    }
-}
-
-// MARK: - Fakes
-
-@MainActor
-private final class FakeRunningApps: RunningAppsProviding {
-    var alive: Bool
-    init(alive: Bool) { self.alive = alive }
+@MainActor private final class FakeRunningApps: RunningAppsProviding {
+    var alive = true
     func isBundleRunning(anyOf ids: Set<String>) -> Bool { alive }
 }
 
-@MainActor
-private final class FakeContent: ShareableContentProviding {
-    var windowsToReturn: [ShareableWindow] = []
-    var errorToThrow: Error?
+@MainActor private final class FakeContent: ShareableContentProviding {
+    var windows: [ShareableWindow] = []
+    var shouldThrow = false
     var callCount = 0
+    var isBlocked = false
+    private var continuation: CheckedContinuation<Void, Never>?
 
     func currentTeamsWindows(bundleIDs: Set<String>) async throws -> [ShareableWindow] {
         callCount += 1
-        if let error = errorToThrow { throw error }
-        return windowsToReturn
+        if isBlocked { await withCheckedContinuation { continuation = $0 } }
+        if shouldThrow { throw CocoaError(.fileReadUnknown) }
+        return windows
+    }
+
+    func release() {
+        isBlocked = false
+        continuation?.resume()
+        continuation = nil
     }
 }
 
-private final class FakePerms: RecordingPermissions, @unchecked Sendable {
-    var allGranted: Bool { sck }
-    var needsSetup: Bool { !sck }
-    var screenCaptureGranted: Bool { sck }
-    private let sck: Bool
-    init(sck: Bool) { self.sck = sck }
+private final class FakePermissions: RecordingPermissions {
+    var granted = true
+    var allGranted: Bool { granted }
+    var needsSetup: Bool { !granted }
+    var screenCaptureGranted: Bool { granted }
     func checkAll() async {}
 }
 
-// swiftlint:disable discouraged_optional_boolean
-@MainActor
-private final class FakeAudioActivity: TeamsAudioActivityProviding {
-    /// nil = "cannot tell" (mimics CoreAudio API blip / macOS < 14.4);
-    /// false = definitively no; true = a Teams process holds the mic.
-    var result: Bool?
-    private(set) var callCount = 0
-    init(result: Bool? = false) { self.result = result }
-    func isBundleUsingInput(anyOf bundleIDs: Set<String>) -> Bool? {
-        callCount += 1
-        return result
-    }
-}
-// swiftlint:enable discouraged_optional_boolean
-
-// MARK: - Stream helpers
-
-/// Wait up to `ms` milliseconds for the *next* event on `stream`. Times out
-/// as a Swift Testing failure — used when we expect an event but don't want
-/// the test to hang forever.
-private func nextEvent(
-    _ stream: AsyncStream<Bool>,
-    timeoutMs: Int
-) async throws -> Bool {
-    try await withThrowingTaskGroup(of: Bool.self) { group in
-        group.addTask {
-            for await value in stream { return value }
-            throw StreamTimeoutError.streamEnded
-        }
-        group.addTask {
-            try await Task.sleep(nanoseconds: UInt64(timeoutMs) * 1_000_000)
-            throw StreamTimeoutError.timedOut
-        }
-        let result = try await group.next()!
-        group.cancelAll()
-        return result
-    }
+@MainActor private final class FakeAudioActivity: TeamsAudioActivityProviding {
+    var result: TeamsAudioActivity? = TeamsAudioActivity(input: false, output: false)
+    func activity(for bundleIDs: Set<String>) -> TeamsAudioActivity? { result }
 }
 
-/// Assert that no event arrives in `ms` milliseconds. Used to prove baseline
-/// silence — a false positive here indicates the debounce contract regressed.
-private func withTimeoutExpectingNoEvent(
-    _ stream: AsyncStream<Bool>,
-    ms: Int
-) async {
-    let outcome = await withTaskGroup(of: OneOrTimeout.self) { group in
-        group.addTask {
-            for await _ in stream { return .event }
-            return .streamEnded
-        }
-        group.addTask {
-            try? await Task.sleep(nanoseconds: UInt64(ms) * 1_000_000)
-            return .timeout
-        }
-        let first = await group.next() ?? .timeout
-        group.cancelAll()
-        return first
-    }
-    #expect(outcome == .timeout || outcome == .streamEnded)
+@MainActor private func finishAndCollect(_ watcher: TeamsMeetingWatcher) async -> [Bool] {
+    watcher.stopAndFinish()
+    var events: [Bool] = []
+    for await event in watcher.meetingEvents { events.append(event) }
+    return events
 }
 
-private enum StreamTimeoutError: Error {
-    case timedOut
-    case streamEnded
+@MainActor private func waitUntil(_ predicate: () -> Bool) async {
+    let deadline = Date().addingTimeInterval(2)
+    while !predicate() && Date() < deadline { await Task.yield() }
+    #expect(predicate())
 }
-
-private enum OneOrTimeout: Equatable {
-    case event
-    case timeout
-    case streamEnded
-}
-
-// swiftlint:enable file_length

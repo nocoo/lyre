@@ -120,6 +120,54 @@ struct AudioPlayerManagerTests {
 
     // MARK: - Fixtures
 
+    @Test @MainActor
+    func preparingAndSeekingDoNotStartPlayback() async throws {
+        let url = try Self.writeSilentFixture()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let manager = AudioPlayerManager()
+        defer { manager.stop() }
+        manager.prepare(url)
+        for _ in 0..<100 where manager.duration == 0 {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(manager.duration > 0)
+        #expect(manager.state == .paused(url))
+        manager.seek(to: 0.2)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(abs(manager.currentTime - 0.2) < 0.05)
+        #expect(manager.state == .paused(url))
+
+        // Returning from another navigation destination must retain the playhead.
+        manager.prepare(url)
+        #expect(abs(manager.currentTime - 0.2) < 0.05)
+        #expect(manager.state == .paused(url))
+    }
+
+    @Test @MainActor
+    func seekingClampsToFileAndRejectsNonfiniteTimes() async throws {
+        let url = try Self.writeSilentFixture()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let manager = AudioPlayerManager()
+        defer { manager.stop() }
+        manager.prepare(url)
+        for _ in 0..<100 where manager.duration == 0 {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(manager.duration > 0)
+        manager.seek(to: -15)
+        #expect(manager.currentTime == 0)
+        manager.seek(to: 9_999)
+        #expect(manager.currentTime == manager.duration)
+        manager.seek(to: .nan)
+        manager.seek(to: .infinity)
+        #expect(manager.currentTime.isFinite)
+        #expect(manager.state == .paused(url))
+        manager.stop()
+        manager.seek(to: 1)
+        #expect(manager.currentTime == 0)
+        #expect(manager.state == .stopped)
+    }
+
     private static func writeSilentFixture(name: String = "silent.m4a") throws -> URL {
         // 0.5 s of silent PCM written to disk so AVPlayer has a real
         // file to attach to. AVAssetWriter would be more rigorous but

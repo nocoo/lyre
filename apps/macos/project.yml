@@ -44,9 +44,9 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
       configs:
         Release:
-          CODE_SIGN_IDENTITY: "-"
+          CODE_SIGN_IDENTITY: "Developer ID Application"
           CODE_SIGN_STYLE: Manual
-          DEVELOPMENT_TEAM: ""
+          DEVELOPMENT_TEAM: 93WWLTN9XU
 
   LyreTests:
     type: bundle.unit-test

@@ -1,49 +1,26 @@
 import Foundation
-import os
 
-/// Consumes the debounced meeting-state stream from a `MeetingEventProviding`
-/// (typically `TeamsMeetingWatcher`) and decides whether to pop the
-/// Start-Recording or Stop-Recording prompt through `AlertPresenting`. All
-/// side effects on the recording pipeline itself go through
-/// `RecordingActionHandling` so tray + coordinator share one entry point.
-///
-/// Contract summary (see `docs/07-teams-meeting-detector.md`):
-/// * Baseline state is silent — the stream never yields it.
-/// * `settings.isEnabled == false` swallows in-flight events, but the
-///   watcher lifecycle is owned by `LyreApp`, not here.
-/// * Only one alert is on screen at a time; new events during a prompt are
-///   dropped (upstream `.bufferingNewest(1)` guarantees we never queue
-///   stale ones). NSAlert.runModal runs a nested RunLoop that keeps
-///   draining MainActor tasks, so the stream consumer keeps reading events
-///   during a modal and the `isPromptPresented` gate must be observable to
-///   them; that is why dispatch happens synchronously (gate flipped before
-///   we spawn the modal task) rather than inside a blocking `await`.
-/// * Per-meeting suppression: one Start prompt and one Stop prompt per
-///   meeting cycle, no more.
+/// Optional reminders never own a modal run loop or stop a manual recording.
+/// Every confirmation is checked again against the current meeting and session.
 @MainActor
 final class MeetingPromptCoordinator {
-    private static let logger = Logger(subsystem: Constants.subsystem, category: "MeetingPromptCoordinator")
-
     private let watcher: MeetingEventProviding
     private let action: RecordingActionHandling
     private let alertPresenter: AlertPresenting
     private let settings: MeetingDetectionSettings
 
     private var consumeTask: Task<Void, Never>?
-    /// True while an NSAlert is on screen (or scheduled to appear in the
-    /// current sync dispatch). Set synchronously in `dispatch(active:)` so
-    /// any event that arrives before the modal Task begins is still gated,
-    /// and cleared by the modal Task's `defer`.
-    private var isPromptPresented: Bool = false
-    /// Per-meeting suppression flags. Reset only when we observe a
-    /// `false → true` transition into a *new* meeting cycle.
-    private var startPromptShownForCurrentMeeting: Bool = false
-    private var stopPromptShownForCurrentMeeting: Bool = false
-    // The last event value we observed, so we can distinguish a real
-    // `false → true` transition from a stray repeated `true` (upstream
-    // should collapse these but the coordinator must be defensive).
+    private var promptTask: Task<Void, Never>?
+    private var pendingPrompt: PromptKind?
+    private var revision = 0
+    private var meetingRecordingID: UUID?
     // swiftlint:disable:next discouraged_optional_boolean
     private var lastObservedActive: Bool?
+
+    private enum PromptKind {
+        case start
+        case stop(UUID)
+    }
 
     init(
         watcher: MeetingEventProviding,
@@ -57,164 +34,119 @@ final class MeetingPromptCoordinator {
         self.settings = settings
     }
 
-    /// Begin consuming the meeting-state stream. Idempotent: calling twice
-    /// only leaves one consumer alive.
-    ///
-    /// The consumer body is deliberately synchronous with respect to the
-    /// modal: `dispatch` returns immediately after flipping the reentrance
-    /// gate and launching a child Task to run the prompt. That way the
-    /// consumer keeps iterating while a modal is on screen, and any
-    /// event that arrives during the modal is dropped by the gate rather
-    /// than sitting in `.bufferingNewest(1)` until the modal returns —
-    /// which would otherwise land as a Stop prompt right after a Start
-    /// (DQ-8 in docs/07-teams-meeting-detector.md).
     func start() {
-        consumeTask?.cancel()
+        guard consumeTask == nil else { return }
         consumeTask = Task { @MainActor [weak self] in
             guard let stream = self?.watcher.meetingEvents else { return }
             for await active in stream {
+                guard !Task.isCancelled else { return }
                 self?.dispatch(active: active)
             }
         }
     }
 
-    /// Stop consuming (does not touch the underlying stream itself). Safe to
-    /// call repeatedly; used by `LyreApp` on app teardown.
     func stop() {
         consumeTask?.cancel()
         consumeTask = nil
+        cancelPrompt()
     }
 
-    /// Convenience wrapper for tests that want to drive the state machine
-    /// without spinning up the `AsyncStream` consumer task. Production
-    /// callers always go through `start()`.
-    @MainActor
+    /// Called with the settings switch, including when the main window closes.
+    func settingsDidChange() {
+        cancelPrompt()
+        meetingRecordingID = nil
+        lastObservedActive = nil
+    }
+
+    /// Called by the shared recording controller, independent of view lifetime.
+    func recordingStateDidChange() {
+        if let pendingPrompt, !isEligible(pendingPrompt) { cancelPrompt() }
+        if meetingRecordingID != action.recordingID { meetingRecordingID = nil }
+    }
+
+    /// Direct entry for deterministic tests; production consumes the stream.
     func handle(active: Bool) async {
-        guard let kind = evaluate(active: active) else { return }
-        // Gate was flipped synchronously by evaluate(); await the prompt
-        // task so tests observe alert side effects before assertions run.
-        await runPrompt(kind)
+        await dispatch(active: active)?.value
     }
 
-    // MARK: - Dispatch (synchronous)
-
-    private enum PromptKind {
-        case start
-        case stop
-    }
-
-    /// Called synchronously from the stream consumer. Advances the internal
-    /// state machine and, if a prompt is warranted, flips the reentrance
-    /// gate + launches an async Task to run the modal.
-    private func dispatch(active: Bool) {
-        guard let kind = evaluate(active: active) else { return }
-        Task { @MainActor [weak self] in
-            await self?.runPrompt(kind)
-        }
-    }
-
-    /// Combined off-switch, reentrance, per-meeting suppression and gating
-    /// check. Flips `isPromptPresented` **synchronously** when it returns
-    /// a non-nil kind, so any event that races into the consumer before
-    /// the modal Task starts is dropped by the gate.
-    private func evaluate(active: Bool) -> PromptKind? {
-        // Off-switch: honour it inside the handler so watcher lifecycle
-        // stays owned by LyreApp. Even when disabled, keep
-        // `lastObservedActive` current so re-enabling mid-meeting will not
-        // spuriously replay the last transition as a "new" one.
-        guard settings.isEnabled else {
-            lastObservedActive = active
-            return nil
-        }
-        // Reentrance guard: an alert is on screen or scheduled to appear.
-        // Drop the *prompt* side-effect for this event, but still record
-        // the observation so the next `false → true` transition is
-        // recognised as a new meeting cycle. Without this update, a
-        // `false` yielded during a Start prompt would be dropped silently
-        // and `lastObservedActive` would stay `true`; then the next real
-        // `true` (a genuinely new meeting) would not reset the
-        // per-meeting suppression flags and the Start prompt would be
-        // wrongly suppressed for the rest of the process lifetime.
-        guard !isPromptPresented else {
-            lastObservedActive = active
-            return nil
-        }
-
-        // Only reset per-meeting suppression on a genuine `false → true`
-        // transition into a fresh meeting. A repeated `true` (should not
-        // happen through the debounced watcher, but be defensive) must not
-        // re-arm the Start prompt.
-        let isNewMeetingStart = active && (lastObservedActive ?? false) == false
-        if isNewMeetingStart {
-            startPromptShownForCurrentMeeting = false
-            stopPromptShownForCurrentMeeting = false
-        }
+    @discardableResult
+    private func dispatch(active: Bool) -> Task<Void, Never>? {
+        guard settings.isEnabled else { settingsDidChange(); return nil }
+        guard lastObservedActive != active else { return nil }
         lastObservedActive = active
+        cancelPrompt()
 
-        let kind: PromptKind?
+        let kind: PromptKind
         if active {
-            kind = evaluateStart()
+            meetingRecordingID = nil
+            kind = .start
         } else {
-            kind = evaluateEnd()
+            guard let recordingID = meetingRecordingID else { return nil }
+            kind = .stop(recordingID)
         }
-        if kind != nil {
-            isPromptPresented = true
+        guard isEligible(kind) else { return nil }
+        pendingPrompt = kind
+        let currentRevision = revision
+        let task = Task<Void, Never> { @MainActor [weak self] in
+            await self?.runPrompt(kind, revision: currentRevision)
         }
-        return kind
+        promptTask = task
+        return task
     }
 
-    private func evaluateStart() -> PromptKind? {
-        guard action.state == .idle else { return nil }
-        guard !startPromptShownForCurrentMeeting else { return nil }
-        startPromptShownForCurrentMeeting = true
-        return .start
-    }
-
-    private func evaluateEnd() -> PromptKind? {
-        guard action.state == .recording else { return nil }
-        guard !stopPromptShownForCurrentMeeting else { return nil }
-        stopPromptShownForCurrentMeeting = true
-        return .stop
-    }
-
-    // MARK: - Prompts (async)
-
-    private func runPrompt(_ kind: PromptKind) async {
+    private func isEligible(_ kind: PromptKind) -> Bool {
+        guard settings.isEnabled, !action.isBusy else { return false }
         switch kind {
         case .start:
-            let confirmed = alertPresenter.presentChoice(
-                title: String(localized: "Teams meeting detected"),
-                message: String(localized: "Start recording this meeting?"),
-                primary: String(localized: "Start Recording"),
+            return lastObservedActive == true && action.state == .idle
+        case .stop(let recordingID):
+            return lastObservedActive == false && action.state == .recording
+                && action.recordingID == recordingID && meetingRecordingID == recordingID
+        }
+    }
+
+    private func cancelPrompt() {
+        revision += 1
+        promptTask?.cancel()
+        promptTask = nil
+        pendingPrompt = nil
+        alertPresenter.dismissChoice()
+    }
+
+    private func runPrompt(_ kind: PromptKind, revision currentRevision: Int) async {
+        guard !Task.isCancelled, revision == currentRevision, isEligible(kind) else { return }
+        let confirmed: Bool
+        switch kind {
+        case .start:
+            confirmed = await alertPresenter.presentChoice(
+                title: String(localized: "A meeting may be starting"),
+                message: String(localized: "Teams is using call audio. Record this conversation when you’re ready."),
+                primary: String(localized: "Start recording"),
                 secondary: String(localized: "Not now")
             )
-            if confirmed {
-                await action.requestStart()
-            } else {
-                Self.logger.info("User dismissed Start prompt for this meeting")
+        case .stop:
+            confirmed = await alertPresenter.presentChoice(
+                title: String(localized: "Your meeting may have ended"),
+                message: String(localized: "Teams call activity has stopped. Your recording is still running."),
+                primary: String(localized: "Stop recording"),
+                secondary: String(localized: "Keep recording")
+            )
+        }
+        // Drain a transition delivered just as a button was clicked.
+        await Task.yield()
+        guard !Task.isCancelled, revision == currentRevision else { return }
+        pendingPrompt = nil
+        promptTask = nil
+        guard confirmed, isEligible(kind) else { return }
+        switch kind {
+        case .start:
+            let recordingID = await action.requestStart()
+            if revision == currentRevision, settings.isEnabled, lastObservedActive == true {
+                meetingRecordingID = recordingID
             }
         case .stop:
-            let confirmed = alertPresenter.presentChoice(
-                title: String(localized: "Teams meeting ended"),
-                message: String(localized: "Stop recording?"),
-                primary: String(localized: "Stop Recording"),
-                secondary: String(localized: "Keep Recording")
-            )
-            if confirmed {
-                await action.requestStop()
-            } else {
-                Self.logger.info("User chose to keep recording after meeting ended")
-            }
+            await action.requestStop()
+            meetingRecordingID = nil
         }
-        // Give the stream consumer at least one MainActor scheduling turn to
-        // drain any event that was yielded into the stream *during* the
-        // modal (fake or NSAlert). Those buffered events must observe
-        // `isPromptPresented == true` and be dropped by the gate; without
-        // this yield, a prompt path whose `await`s do not actually suspend
-        // (a fast-returning fake, or a real recorder call that completes
-        // synchronously) can clear the gate before the consumer runs, and
-        // the stale event slips through as a follow-up prompt (DQ-8).
-        await Task.yield()
-        isPromptPresented = false
     }
 }

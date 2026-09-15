@@ -112,6 +112,41 @@ struct RecordingManagerTests {
 
 @Suite("RecordingManager dual-mode wiring")
 struct RecordingManagerDualModeTests {
+    @MainActor @Test func firstStartRefreshesAnUnknownPermissionSnapshot() async throws {
+        let permissions = PermissionManager(screenAccess: { true }, microphoneStatus: { .authorized })
+        let capture = FakeCapture()
+        let manager = RecordingManager(
+            permissions: permissions, capture: capture, encoderFactory: { FakeEncoder() }, outputDirectory: tempDir()
+        )
+        #expect(permissions.needsSetup)
+        try await manager.startRecording()
+        #expect(permissions.allGranted)
+        #expect(capture.startCount == 1)
+        _ = try await manager.stopRecording()
+    }
+
+    @Test func failedInputStartCleansUpAndAllowsRetry() async throws {
+        let capture = FakeCapture()
+        capture.startShouldThrow = AudioCaptureManager.CaptureError.noMicrophoneFound
+        let encoder = FakeEncoder()
+        let manager = RecordingManager(
+            permissions: FakePermissions(allGranted: true), capture: capture,
+            encoderFactory: { encoder }, outputDirectory: tempDir()
+        )
+        await #expect(throws: AudioCaptureManager.CaptureError.self) { try await manager.startRecording() }
+        #expect(manager.state == .idle)
+        #expect(manager.lastError != nil)
+        #expect(capture.onRawSystemBuffer == nil)
+        #expect(capture.onRawMicBuffer == nil)
+        #expect(capture.onStreamError == nil)
+        #expect(encoder.finalizeCount == 1)
+        capture.startShouldThrow = nil
+        try await manager.startRecording()
+        #expect(manager.state == .recording)
+        #expect(manager.lastError == nil)
+        _ = try await manager.stopRecording()
+    }
+
     @Test func dualTrackPathSetsUpEncoderWithDualMode() async throws {
         let perms = FakePermissions(allGranted: true)
         let cap = FakeCapture()
@@ -371,9 +406,13 @@ private final class FakeCapture: AudioCapturing, @unchecked Sendable {
     var startCount = 0
     var stopCount = 0
     var stopShouldThrow: Error?
+    var startShouldThrow: Error?
 
     func refreshDevices() { /* no-op in tests */ }
-    func startCapture() async throws { startCount += 1 }
+    func startCapture() async throws {
+        startCount += 1
+        if let startShouldThrow { throw startShouldThrow }
+    }
     func stopCapture() async throws {
         stopCount += 1
         if let err = stopShouldThrow { throw err }
@@ -398,6 +437,7 @@ private final class FakeEncoder: AudioEncoding, @unchecked Sendable {
     /// stored AND thrown — matches the production contract that writer
     /// failures surface via both channels.
     var finalizeShouldThrow: Error?
+    var finalizeCount = 0
 
     private var lastErrorStorage: Error?
     var lastError: Error? { lastErrorStorage }
@@ -422,6 +462,7 @@ private final class FakeEncoder: AudioEncoding, @unchecked Sendable {
     }
 
     func finalize() async throws {
+        finalizeCount += 1
         lastErrorStorage = finalizeLastError
         if let err = finalizeShouldThrow ?? finalizeLastError {
             // Match the production contract: writer failures both set

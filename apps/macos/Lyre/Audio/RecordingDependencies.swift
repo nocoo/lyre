@@ -18,7 +18,7 @@ protocol RecordingPermissions: AnyObject {
     /// TeamsMeetingWatcher to skip SCShareableContent calls when the user has
     /// not granted the permission; see docs/07-teams-meeting-detector.md.
     var screenCaptureGranted: Bool { get }
-    func checkAll() async
+    @MainActor func checkAll() async
 }
 
 extension PermissionManager: RecordingPermissions {}
@@ -43,9 +43,9 @@ protocol AudioCapturing: AnyObject {
     var onRawMicBuffer: ((CMSampleBuffer) -> Void)? { get set }
     var onStreamError: ((Error) -> Void)? { get set }
 
-    func refreshDevices()
-    func startCapture() async throws
-    func stopCapture() async throws
+    @MainActor func refreshDevices()
+    @MainActor func startCapture() async throws
+    @MainActor func stopCapture() async throws
 }
 
 extension AudioCaptureManager: AudioCapturing {}

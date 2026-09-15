@@ -8,7 +8,9 @@ import os
 @MainActor
 protocol RecordingActionHandling: AnyObject {
     var state: RecordingManager.State { get }
-    func requestStart() async
+    var isBusy: Bool { get }
+    var recordingID: UUID? { get }
+    @discardableResult func requestStart() async -> UUID?
     func requestStop() async
 }
 
@@ -32,12 +34,16 @@ final class RecordingActionController: RecordingActionHandling {
     /// would refresh the stale store and the UI would miss the new file.
     private var recordingsStore: RecordingsRefreshing
     private let alertPresenter: AlertPresenting
+    private let onRecordingSaved: (RecordingFile) -> Void
 
     /// Own tracked, stored state so SwiftUI's `@Observable` diffing fires
     /// on the tray whenever start/stop transitions. Reading `recorder.state`
     /// as a computed proxy defeats observation because the proxy is not
     /// registered with the tracking runtime.
     private(set) var state: RecordingManager.State
+    private(set) var isBusy = false
+    private(set) var recordingID: UUID?
+    var onStateChange: (() -> Void)?
     /// Human-readable `mm:ss` string driven by the elapsed timer. TrayMenu
     /// reads this directly instead of holding a private timer.
     private(set) var elapsedDisplay: String = "00:00"
@@ -46,11 +52,13 @@ final class RecordingActionController: RecordingActionHandling {
     init(
         recorder: RecordingLifecycleManaging,
         recordingsStore: RecordingsRefreshing,
-        alertPresenter: AlertPresenting
+        alertPresenter: AlertPresenting,
+        onRecordingSaved: @escaping (RecordingFile) -> Void = { _ in }
     ) {
         self.recorder = recorder
         self.recordingsStore = recordingsStore
         self.alertPresenter = alertPresenter
+        self.onRecordingSaved = onRecordingSaved
         self.state = recorder.state
     }
 
@@ -60,31 +68,43 @@ final class RecordingActionController: RecordingActionHandling {
         self.recordingsStore = store
     }
 
-    func requestStart() async {
+    @discardableResult func requestStart() async -> UUID? {
         // Defensive: coordinator + tray tapping at the same time must not
         // double-start. `RecordingManager.startRecording()` also guards, but
         // we swallow the redundant call here to avoid a bogus alert.
-        guard state == .idle else { return }
+        guard state == .idle, !isBusy else { return nil }
+        isBusy = true
+        onStateChange?()
+        defer { isBusy = false; onStateChange?() }
         do {
             try await recorder.startRecording()
             state = .recording
+            recordingID = UUID()
             startElapsedTimer()
+            return recordingID
         } catch {
             Self.logger.error("Start failed: \(error.localizedDescription)")
             alertPresenter.presentError(
                 title: "Recording Failed",
                 message: error.localizedDescription
             )
+            return nil
         }
     }
 
     func requestStop() async {
-        guard state == .recording else { return }
+        guard state == .recording, !isBusy else { return }
+        isBusy = true
+        onStateChange?()
+        defer { isBusy = false; onStateChange?() }
         stopElapsedTimer()
         do {
             let url = try await recorder.stopRecording()
             state = .idle
-            await recordingsStore.refresh(url: url)
+            recordingID = nil
+            if let recording = await recordingsStore.refresh(url: url) {
+                onRecordingSaved(recording)
+            }
             // Non-fatal diagnostic surface. Stop success is not
             // affected by this — the fileURL is already returned and
             // the store already refreshed above. If the capture
@@ -102,6 +122,7 @@ final class RecordingActionController: RecordingActionHandling {
             // Even on error the recorder path resets its own state; mirror
             // that here so the UI does not stay stuck in `.recording`.
             state = recorder.state
+            if state == .idle { recordingID = nil }
             Self.logger.error("Stop failed: \(error.localizedDescription)")
             alertPresenter.presentError(
                 title: "Recording Error",
@@ -137,6 +158,8 @@ final class RecordingActionController: RecordingActionHandling {
             Self.logger.warning("Recorder state diverged (idle) — mirroring and tearing down timer")
             stopElapsedTimer()
             state = .idle
+            recordingID = nil
+            onStateChange?()
             return
         }
         let seconds = Int(recorder.elapsedSeconds)

@@ -150,7 +150,17 @@ final class RecordingManager: @unchecked Sendable {
         }
 
         // Start capture
-        try await capture.startCapture()
+        do {
+            try await capture.startCapture()
+        } catch {
+            // A missing/disconnected input must not leave callbacks connected
+            // to an unfinished encoder when the user retries.
+            cleanupCaptureCallbacks()
+            encoder = nil
+            try? await enc.finalize()
+            lastError = error
+            throw error
+        }
 
         currentFileURL = fileURL
         recordingStartTime = Date()

@@ -1,58 +1,56 @@
 import Testing
 @testable import Lyre
 
-@Suite("InputDeviceResolver Tests")
+@Suite("Input device resolution")
 struct InputDeviceResolverTests {
-    @Test func savedSelectionWinsOverSystemDefault() {
-        let out = InputDeviceResolver.resolve(
-            selected: "usb-mic",
-            availableDefault: "built-in"
+    @Test func connectedSelectionWinsOverSystemDefault() {
+        let route = InputDeviceResolver.resolve(
+            selected: "usb", availableDefault: "built-in", availableIDs: ["usb", "built-in"]
         )
-        #expect(out.selectedID == "usb-mic")
-        #expect(out.effectiveID == "usb-mic")
-        #expect(out.source == .saved)
+        #expect(route == EffectiveInputDevice(selectedID: "usb", effectiveID: "usb", source: .saved))
     }
 
-    @Test func savedSelectionUsedEvenWhenSystemDefaultMissing() {
-        // We do not verify the saved id against the device list here —
-        // that is InputDeviceRestore's job at startup. The resolver's
-        // contract is "if the user asked for X, ask SCK for X".
-        let out = InputDeviceResolver.resolve(
-            selected: "usb-mic",
-            availableDefault: nil
+    @Test func disconnectedSelectionUsesDefaultAndReconnectsWithoutLosingPreference() {
+        let fallback = InputDeviceResolver.resolve(
+            selected: "usb", availableDefault: "built-in", availableIDs: ["built-in"]
         )
-        #expect(out.effectiveID == "usb-mic")
-        #expect(out.source == .saved)
+        #expect(fallback == EffectiveInputDevice(selectedID: "usb", effectiveID: "built-in", source: .default))
+        let reconnected = InputDeviceResolver.resolve(
+            selected: fallback.selectedID, availableDefault: "built-in", availableIDs: ["usb", "built-in"]
+        )
+        #expect(reconnected.effectiveID == "usb")
+        #expect(reconnected.source == .saved)
     }
 
-    @Test func nilSelectionResolvesToSystemDefaultAndDoesNotWriteBack() {
-        let out = InputDeviceResolver.resolve(
-            selected: nil,
-            availableDefault: "built-in"
-        )
-        #expect(out.selectedID == nil, "auto stays auto — must not be written back to config")
-        #expect(out.effectiveID == "built-in")
-        #expect(out.source == .default)
+    @Test func automaticFollowsDefaultWithoutSavingIt() {
+        for device in ["built-in", "headset"] {
+            let route = InputDeviceResolver.resolve(
+                selected: nil, availableDefault: device, availableIDs: ["built-in", "headset"]
+            )
+            #expect(route.selectedID == nil)
+            #expect(route.effectiveID == device)
+            #expect(route.source == .default)
+        }
     }
 
-    @Test func nilSelectionWithNoSystemDefaultFallsThroughToSCK() {
-        let out = InputDeviceResolver.resolve(
-            selected: nil,
-            availableDefault: nil
+    @Test func unavailableDefaultIsNeverPassedToScreenCaptureKit() {
+        let route = InputDeviceResolver.resolve(
+            selected: "usb", availableDefault: "disconnected", availableIDs: ["built-in"]
         )
-        #expect(out.selectedID == nil)
-        #expect(out.effectiveID == nil, "no UID to hand SCK; caller must not set microphoneCaptureDeviceID")
-        #expect(out.source == .scPicked)
+        #expect(route.selectedID == "usb")
+        #expect(route.effectiveID == nil)
+        #expect(route.source == .unavailable)
     }
 
-    @Test func selectedIDNotReplacedByDifferentDefault() {
-        // Regression: earlier draft accidentally overrode saved with
-        // default when the two disagreed.
-        let out = InputDeviceResolver.resolve(
-            selected: "usb-mic",
-            availableDefault: "built-in"
-        )
-        #expect(out.effectiveID == "usb-mic")
-        #expect(out.effectiveID != "built-in")
+    @Test func savedInputStillWorksWithoutSystemDefault() {
+        let route = InputDeviceResolver.resolve(selected: "usb", availableDefault: nil, availableIDs: ["usb"])
+        #expect(route.effectiveID == "usb")
+        #expect(route.source == .saved)
+    }
+
+    @Test func noInputsDoesNotDelegateAnUnknownDefaultToSCK() {
+        let route = InputDeviceResolver.resolve(selected: nil, availableDefault: nil, availableIDs: [])
+        #expect(route.effectiveID == nil)
+        #expect(route.source == .unavailable)
     }
 }
