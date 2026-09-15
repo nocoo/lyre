@@ -76,8 +76,8 @@ final class LyreAlertPresenter: AlertPresenting {
     private func showNextError() {
         guard let error = errors.first else { return }
         let view = LyreDialogView(
-            title: error.title, message: error.message, symbol: "exclamationmark.triangle",
-            eyebrow: "RECORDING", tone: .caution, primary: "Got it",
+            title: error.title, message: error.message, symbol: "exclamationmark.octagon.fill",
+            eyebrow: "RECORDING", tone: .error, primary: "Close", primarySymbol: "xmark",
             onPrimary: { [weak self] in self?.dismissError() }
         )
         let panel = makePanel(view)

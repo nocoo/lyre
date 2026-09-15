@@ -12,6 +12,9 @@ struct MainWindowView: View {
     @Binding var settingsSection: SettingsView.SectionTab
     var isRequestingRecording = false
     let onToggleRecording: () -> Void
+    var canReopen = false
+    var reopenError: String?
+    var onReopen: () -> Void = {}
     @Environment(\.lyrePreview) private var isPreview
     @AppStorage("appearance") private var appearance = "system"
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -51,6 +54,9 @@ struct MainWindowView: View {
                 .background(LyreTheme.canvas)
         }
         .navigationSplitViewStyle(.balanced)
+        // A continuous canvas also covers the space beneath Tahoe's inset sidebar.
+        .background(LyreTheme.canvas.ignoresSafeArea())
+        .containerBackground(LyreTheme.canvas, for: .window)
         .navigationTitle(selectedTab.title)
         .tint(LyreTheme.accent)
         .preferredColorScheme(appearance == "system" ? nil : appearance == "dark" ? .dark : .light)
@@ -67,7 +73,8 @@ struct MainWindowView: View {
         }
         .task(id: ObjectIdentifier(recordingsStore)) {
             guard !isPreview else { return }
-            await recorder.permissionsObservable?.refreshStatusWithoutPrompt()
+            // Also finish a Settings round-trip if the window was closed while away.
+            await recorder.permissionsObservable?.handleApplicationActivation()
             recordingsStore.startWatching()
             await recordingsStore.scan()
             guard !Task.isCancelled else { return }
@@ -78,7 +85,7 @@ struct MainWindowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             guard !isPreview else { return }
-            Task { await recorder.permissions.checkAll() }
+            Task { await recorder.permissionsObservable?.handleApplicationActivation() }
             recorder.capture.refreshDevices()
         }
         .onDisappear {
@@ -110,6 +117,7 @@ struct MainWindowView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             .scrollDisabled(true)
 
             if library.isUploading {
@@ -162,7 +170,7 @@ struct MainWindowView: View {
             }
             if tab == .permissions && recorder.permissions.needsSetup {
                 Image(systemName: "circle.fill")
-                    .font(.system(size: 6)).foregroundStyle(.orange)
+                    .font(.system(size: 6)).foregroundStyle(LyreTheme.warning)
                     .accessibilityLabel("Setup needed")
             }
         }
@@ -191,7 +199,10 @@ struct MainWindowView: View {
                     permissions: permissions,
                     isRecording: actionController.state == .recording,
                     isRequestingRecording: isRequestingRecording,
-                    onRecord: onToggleRecording
+                    onRecord: onToggleRecording,
+                    canReopen: canReopen,
+                    reopenError: reopenError,
+                    onReopen: onReopen
                 )
             } else {
                 ContentUnavailableView("Permissions unavailable", systemImage: "checkmark.shield")
@@ -218,16 +229,18 @@ struct MainWindowView: View {
                 Text(actionController.elapsedDisplay).monospacedDigit().frame(minWidth: 42, alignment: .leading)
                 if let capture = recorder.captureObservable {
                     if let error = capture.inputRoutingError {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(LyreTheme.error)
                             .help(error).accessibilityLabel(error)
                     } else if let device = capture.activeInputDevice {
                         Text(device.name).foregroundStyle(.secondary).lineLimit(1).frame(maxWidth: 150)
                     }
                 }
             } else {
-                Image(systemName: "waveform").foregroundStyle(.tertiary)
-                Text(recorder.permissions.needsSetup ? "Permissions needed" : "Ready to record")
-                    .foregroundStyle(.secondary)
+                LyreStatusLabel(
+                    title: recorder.permissions.needsSetup ? "Permissions needed" : "Ready to record",
+                    symbol: recorder.permissions.needsSetup ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
+                    color: recorder.permissions.needsSetup ? LyreTheme.warning : LyreTheme.success
+                )
             }
         }
         .font(.system(size: 12))

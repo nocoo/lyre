@@ -47,8 +47,8 @@ struct RecordingsView: View {
             if let deleteError {
                 LyreDialogView(
                     title: "Couldn’t delete recording", message: deleteError,
-                    symbol: "exclamationmark.triangle", eyebrow: "YOUR LIBRARY", tone: .caution,
-                    primary: "Got it", onPrimary: dismissDialog
+                    symbol: "exclamationmark.octagon.fill", eyebrow: "YOUR LIBRARY", tone: .error,
+                    primary: "Close", primarySymbol: "xmark", onPrimary: dismissDialog
                 )
             } else {
                 LyreDialogView(
@@ -58,7 +58,8 @@ struct RecordingsView: View {
                     symbol: "trash", eyebrow: "YOUR LIBRARY", tone: .destructive,
                     detail: pendingDeletion.count == 1 ? pendingDeletion.first?.url.lastPathComponent
                         : "\(pendingDeletion.count) recordings selected",
-                    primary: "Delete", secondary: "Cancel", onPrimary: deletePending, onSecondary: dismissDialog
+                    primary: "Delete", primarySymbol: "trash", secondary: "Cancel",
+                    onPrimary: deletePending, onSecondary: dismissDialog
                 )
             }
         }
@@ -109,7 +110,8 @@ struct RecordingsView: View {
             } description: {
                 Text("Try another filename or date, or clear your search to see all recordings.")
             } actions: {
-                Button("Clear search") { library.search = "" }.buttonStyle(LyreButtonStyle())
+                Button("Clear", systemImage: "xmark.circle") { library.search = "" }
+                    .buttonStyle(LyreButtonStyle()).help("Clear the recording search")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -177,8 +179,9 @@ struct RecordingsView: View {
             } description: {
                 Text("Select one recording to listen, or delete the selected files.")
             } actions: {
-                Button("Delete selected…", role: .destructive) { confirmDeletion(selected) }
+                Button("Delete", systemImage: "trash", role: .destructive) { confirmDeletion(selected) }
                     .buttonStyle(LyreButtonStyle())
+                    .help("Delete the selected recordings")
             }
         } else if let recording = selected.first {
             RecordingDetailView(
@@ -215,7 +218,8 @@ struct RecordingsView: View {
     }
 
     @ViewBuilder private func recordingMenu(_ recording: RecordingFile) -> some View {
-        Button(library.player.isPlaying(recording.url) ? "Pause" : "Play") {
+        Button(library.player.isPlaying(recording.url) ? "Pause" : "Play",
+               systemImage: library.player.isPlaying(recording.url) ? "pause.fill" : "play.fill") {
             library.selection = [recording.url]
             if isPreview {
                 if !library.player.isActive(recording.url) { library.player.currentTime = 0 }
@@ -226,17 +230,19 @@ struct RecordingsView: View {
                 library.player.toggle(recording.url)
             }
         }
-        Button("Upload to Lyre…", systemImage: "arrow.up.doc") {
+        Button("Upload", systemImage: "arrow.up.doc") {
             library.selection = [recording.url]
             library.beginUpload(recording)
         }
         .disabled((!config.isServerConfigured && library.automaticUploads[recording.url] == nil)
                   || !library.canLeaveUpload)
-        Button("Show in Finder", systemImage: "folder") {
+        .help("Upload this recording to Lyre")
+        Button("Reveal", systemImage: "folder") {
             if !isPreview { NSWorkspace.shared.activateFileViewerSelecting([recording.url]) }
         }
+        .help("Show this recording in Finder")
         Divider()
-        Button("Delete…", systemImage: "trash", role: .destructive) { confirmDeletion([recording]) }
+        Button("Delete", systemImage: "trash", role: .destructive) { confirmDeletion([recording]) }
             .disabled(library.isBeingUploaded(recording))
     }
 
@@ -317,10 +323,10 @@ struct RecordingRow: View {
             ProgressView().controlSize(.mini).frame(width: 14, height: 14)
                 .help("Uploading automatically").accessibilityLabel("Uploading automatically")
         case .completed:
-            Image(systemName: "checkmark.icloud").foregroundStyle(.green)
+            Image(systemName: "checkmark.icloud").foregroundStyle(LyreTheme.success)
                 .help("Uploaded to Lyre").accessibilityLabel("Uploaded to Lyre")
         case .failed:
-            Image(systemName: "exclamationmark.icloud").foregroundStyle(.orange)
+            Image(systemName: "exclamationmark.icloud").foregroundStyle(LyreTheme.error)
                 .help("Automatic upload failed. Open the recording to retry.")
                 .accessibilityLabel("Automatic upload failed")
         case .idle, nil: EmptyView()

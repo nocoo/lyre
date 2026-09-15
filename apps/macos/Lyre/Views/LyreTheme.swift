@@ -7,6 +7,9 @@ enum LyreTheme {
     static let surface = adaptive("surface", light: 0xFFFFFF, dark: 0x232522)
     static let control = adaptive("control", light: 0xEDECE7, dark: 0x30332E)
     static let recording = adaptive("recording", light: 0xB63F35, dark: 0xFF9286)
+    static let success = adaptive("success", light: 0x28734F, dark: 0x83C99A)
+    static let warning = adaptive("warning", light: 0x916000, dark: 0xE8BD69)
+    static let error = adaptive("error", light: 0xB13636, dark: 0xF5938C)
     static let separator = Color.primary.opacity(0.09)
     static let controlHeight: CGFloat = 32
     static let pageInset: CGFloat = 28
@@ -56,12 +59,14 @@ private struct LyreButtonBody: View {
     }
 
     var body: some View {
-        configuration.label
+        label
             .font(.system(size: 13, weight: .medium))
             .lineLimit(1)
             .padding(.horizontal, iconOnly ? 0 : 12)
             .frame(width: iconOnly ? LyreTheme.controlHeight : nil, height: LyreTheme.controlHeight)
-            .foregroundStyle(treatment == .standard ? Color.primary : LyreTheme.surface)
+            .foregroundStyle(treatment == .standard
+                             ? (configuration.role == .destructive ? LyreTheme.error : Color.primary)
+                             : LyreTheme.surface)
             .background(fill, in: RoundedRectangle(cornerRadius: 8))
             .overlay {
                 RoundedRectangle(cornerRadius: 8)
@@ -73,6 +78,32 @@ private struct LyreButtonBody: View {
             }
             .opacity(isEnabled ? 1 : 0.45)
             .onHover { hovered = $0 }
+    }
+
+    @ViewBuilder private var label: some View {
+        if iconOnly {
+            configuration.label.labelStyle(.iconOnly)
+        } else {
+            configuration.label.labelStyle(.titleAndIcon)
+        }
+    }
+}
+
+/// A colored symbol makes status scannable while keeping its message legible.
+struct LyreStatusLabel: View {
+    let title: String
+    let symbol: String
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: symbol)
+                .foregroundStyle(color)
+                .frame(width: 14)
+                .accessibilityHidden(true)
+            Text(title).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -160,7 +191,7 @@ struct LyreRecordingButton: View {
                     }
                 }
                 .frame(width: 16, height: 16)
-                Text(isBusy ? "Please wait…" : isRecording ? "Stop recording" : "Record")
+                Text(isBusy ? (isRecording ? "Saving" : "Starting") : (isRecording ? "Stop" : "Record"))
             }
             .frame(width: fillsWidth ? nil : 120)
             .frame(maxWidth: fillsWidth ? .infinity : nil)

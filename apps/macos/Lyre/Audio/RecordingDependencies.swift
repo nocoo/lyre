@@ -19,9 +19,16 @@ protocol RecordingPermissions: AnyObject {
     /// not granted the permission; see docs/07-teams-meeting-detector.md.
     var screenCaptureGranted: Bool { get }
     @MainActor func checkAll() async
+    @MainActor func prepareForRecording() async throws
+    @MainActor func reportScreenCaptureFailure(_ error: Error)
 }
 
 extension PermissionManager: RecordingPermissions {}
+
+extension RecordingPermissions {
+    @MainActor func prepareForRecording() async throws { await checkAll() }
+    @MainActor func reportScreenCaptureFailure(_ error: Error) {}
+}
 
 /// Full UI + action surface for `AudioCaptureManager`. The SwiftUI
 /// menus poke at `availableDevices` / `selectedDeviceID` /

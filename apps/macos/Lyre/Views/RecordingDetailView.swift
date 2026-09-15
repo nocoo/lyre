@@ -52,9 +52,10 @@ struct RecordingDetailView: View {
                     .tracking(0.9).foregroundStyle(.secondary)
                 Spacer()
                 Menu {
-                    Button("Show in Finder", systemImage: "folder") { reveal() }
+                    Button("Reveal", systemImage: "folder") { reveal() }
+                        .help("Show this recording in Finder")
                     Divider()
-                    Button("Delete…", systemImage: "trash", role: .destructive, action: onDelete)
+                    Button("Delete", systemImage: "trash", role: .destructive, action: onDelete)
                         .disabled(automaticUploadState?.isInProgress == true)
                 } label: {
                     Image(systemName: "ellipsis").frame(width: 32, height: 32)
@@ -123,7 +124,9 @@ struct RecordingDetailView: View {
             VStack(spacing: 10) {
                 Rectangle().fill(LyreTheme.separator).frame(height: 1)
                 if waveformFailed {
-                    Text("Waveform unavailable").font(.system(size: 11)).foregroundStyle(.secondary)
+                    LyreStatusLabel(title: "Waveform unavailable", symbol: "exclamationmark.triangle.fill",
+                                    color: LyreTheme.warning)
+                        .font(.system(size: 11))
                 } else {
                     ProgressView("Reading audio…").controlSize(.small).font(.system(size: 11))
                 }
@@ -153,8 +156,8 @@ struct RecordingDetailView: View {
 
     private var uploadAction: some View {
         HStack(spacing: 12) {
-            Image(systemName: "arrow.up.doc").font(.system(size: 22, weight: .light))
-                .foregroundStyle(LyreTheme.accent)
+            Image(systemName: uploadStatusSymbol).font(.system(size: 22, weight: .light))
+                .foregroundStyle(uploadStatusColor)
             VStack(alignment: .leading, spacing: 5) {
                 Text(uploadHeading).font(.system(size: 13, weight: .semibold))
                 Text(uploadDescription)
@@ -162,9 +165,12 @@ struct RecordingDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
-            Button(hasAutomaticUpload ? "View upload" : isServerConfigured ? "Upload…" : "Connect…",
+            Button(hasAutomaticUpload ? "View" : isServerConfigured ? "Upload" : "Connect",
+                   systemImage: hasAutomaticUpload ? "arrow.right" : isServerConfigured ? "arrow.up.doc" : "link",
                    action: hasAutomaticUpload || isServerConfigured ? onUpload : onOpenSettings)
                 .buttonStyle(LyreButtonStyle())
+                .help(hasAutomaticUpload ? "View the automatic upload"
+                      : isServerConfigured ? "Upload this recording to Lyre" : "Configure the Lyre connection")
         }
         .padding(.horizontal, 24).padding(.vertical, 18)
         .background(LyreTheme.canvas)
@@ -173,6 +179,22 @@ struct RecordingDetailView: View {
 
     private var hasAutomaticUpload: Bool {
         automaticUploadState != nil && automaticUploadState != .idle
+    }
+
+    private var uploadStatusSymbol: String {
+        switch automaticUploadState {
+        case .completed: "checkmark.icloud"
+        case .failed: "exclamationmark.icloud"
+        default: "arrow.up.doc"
+        }
+    }
+
+    private var uploadStatusColor: Color {
+        switch automaticUploadState {
+        case .completed: LyreTheme.success
+        case .failed: LyreTheme.error
+        default: LyreTheme.accent
+        }
     }
 
     private var uploadHeading: String {

@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import CoreGraphics
+import os
 
 /// Manages macOS permissions required for audio recording.
 ///
@@ -10,6 +11,8 @@ import CoreGraphics
 /// 2. **Microphone** — grants access to the mic input (your own voice).
 @Observable
 final class PermissionManager: @unchecked Sendable {
+    private static let logger = Logger(subsystem: "ai.hexly.lyre", category: "Permissions")
+
     enum Status: Sendable, Equatable {
         case unknown
         case granted
@@ -21,11 +24,16 @@ final class PermissionManager: @unchecked Sendable {
     internal(set) var microphone: Status = .unknown
     private(set) var isRequestingMicrophone = false
     private(set) var isRequestingScreenRecording = false
+    private(set) var screenRecordingIssue: String?
+    private var verifiedScreenRecording: Status?
+    private var screenVerificationTask: Task<ScreenCapturePermissionProbe.Result, Never>?
+    private var shouldVerifyAfterSettings = false
 
     private let screenAccess: @MainActor () -> Bool
     private let microphoneStatus: @MainActor () -> AVAuthorizationStatus
     private let askForMicrophone: @MainActor () async -> Bool
-    private let askForScreenAccess: @MainActor () -> Bool
+    private let screenCaptureProbe: @MainActor () async -> ScreenCapturePermissionProbe.Result
+    private let openSystemSettings: @MainActor (URL) -> Void
 
     init(
         screenAccess: @escaping @MainActor () -> Bool = { CGPreflightScreenCaptureAccess() },
@@ -35,12 +43,16 @@ final class PermissionManager: @unchecked Sendable {
         askForMicrophone: @escaping @MainActor () async -> Bool = {
             await AVCaptureDevice.requestAccess(for: .audio)
         },
-        askForScreenAccess: @escaping @MainActor () -> Bool = { CGRequestScreenCaptureAccess() }
+        screenCaptureProbe: @escaping @MainActor () async -> ScreenCapturePermissionProbe.Result = {
+            await ScreenCapturePermissionProbe.check()
+        },
+        openSystemSettings: @escaping @MainActor (URL) -> Void = { _ = NSWorkspace.shared.open($0) }
     ) {
         self.screenAccess = screenAccess
         self.microphoneStatus = microphoneStatus
         self.askForMicrophone = askForMicrophone
-        self.askForScreenAccess = askForScreenAccess
+        self.screenCaptureProbe = screenCaptureProbe
+        self.openSystemSettings = openSystemSettings
     }
 
     var allGranted: Bool {
@@ -58,16 +70,9 @@ final class PermissionManager: @unchecked Sendable {
         screenRecording == .granted
     }
 
-    /// Non-interactive probe for Screen Recording permission. Returns
-    /// `true` only when TCC has already recorded a grant for this app;
-    /// **never triggers a system dialog**.
-    ///
-    /// Uses `CGPreflightScreenCaptureAccess()`, Apple's documented
-    /// read-only check. Prefer this in tests / CI / any code path where
-    /// spawning a permission prompt would be surprising or destructive
-    /// (pre-commit hooks, headless test runs).
-    ///
-    /// Only the explicit Allow Access action requests a grant.
+    /// Conservative, non-prompting gate for opt-in live tests. A false result
+    /// can be stale for this process and must not block interactive recording
+    /// without checking ScreenCaptureKit itself.
     static func hasScreenRecordingPreauthorized() -> Bool {
         CGPreflightScreenCaptureAccess()
     }
@@ -80,14 +85,85 @@ final class PermissionManager: @unchecked Sendable {
         await checkMicrophone()
     }
 
-    /// Recording entry points and passive UI refreshes never ask for consent.
+    /// Passive checks never ask for consent; recording preparation is explicit.
     @MainActor func checkAll() async {
         await refreshStatusWithoutPrompt()
     }
 
-    /// A content-enumeration failure is not evidence of a revoked permission.
+    /// Preflight is only a hint: macOS can cache it for this process's lifetime.
+    /// A ScreenCaptureKit verdict takes precedence over either cached value.
     @MainActor func checkScreenRecording() async {
+        if let verifiedScreenRecording {
+            screenRecording = verifiedScreenRecording
+            return
+        }
         screenRecording = screenAccess() ? .granted : (screenRecording == .unknown ? .unknown : .denied)
+    }
+
+    /// User-initiated recording must be able to recover from a false preflight.
+    /// The recorder still asks ScreenCaptureKit to start, which enforces access.
+    @MainActor func prepareForRecording() async throws {
+        await checkAll()
+        guard microphone == .granted, screenRecording != .granted else { return }
+        if case .unavailable(let message) = await verifyScreenRecordingAccess() {
+            throw VerificationError.unavailable(message)
+        }
+    }
+
+    /// Explicit "Check access" / "Refresh status" action. No audio is captured.
+    @MainActor func verifyRecordingAccess() async {
+        await checkMicrophone()
+        await verifyScreenRecordingAccess()
+    }
+
+    /// Only returning from a Settings action initiated by Lyre performs an
+    /// interactive verification. Ordinary activations remain non-prompting.
+    @MainActor func handleApplicationActivation() async {
+        await checkAll()
+        guard shouldVerifyAfterSettings else { return }
+        shouldVerifyAfterSettings = false
+        await verifyScreenRecordingAccess()
+    }
+
+    @discardableResult
+    @MainActor private func verifyScreenRecordingAccess() async -> ScreenCapturePermissionProbe.Result {
+        if let screenVerificationTask { return await screenVerificationTask.value }
+        isRequestingScreenRecording = true
+        screenRecordingIssue = nil
+        let task = Task<ScreenCapturePermissionProbe.Result, Never> { @MainActor [self] in
+            let result = await screenCaptureProbe()
+            // An actual capture denial can invalidate an older, still-running check.
+            guard !Task.isCancelled else { return .denied }
+            switch result {
+            case .granted:
+                verifiedScreenRecording = .granted
+                screenRecording = .granted
+            case .denied:
+                verifiedScreenRecording = .denied
+                screenRecording = .denied
+            case .unavailable(let message):
+                screenRecordingIssue = message
+            }
+            Self.logger.info("ScreenCaptureKit access check: \(String(describing: result), privacy: .public)")
+            isRequestingScreenRecording = false
+            screenVerificationTask = nil
+            return result
+        }
+        screenVerificationTask = task
+        return await task.value
+    }
+
+    /// Neither a stale positive preflight nor a late check may erase a real
+    /// access denial from a recording or meeting-content query.
+    @MainActor func reportScreenCaptureFailure(_ error: Error) {
+        guard ScreenCapturePermissionProbe.result(for: error) == .denied else { return }
+        screenVerificationTask?.cancel()
+        screenVerificationTask = nil
+        isRequestingScreenRecording = false
+        verifiedScreenRecording = .denied
+        screenRecording = .denied
+        screenRecordingIssue = nil
+        Self.logger.notice("ScreenCaptureKit reported an access denial; access needs verification.")
     }
 
     /// Check microphone permission using AVFoundation's authorization status.
@@ -119,31 +195,38 @@ final class PermissionManager: @unchecked Sendable {
         microphone = granted ? .granted : .denied
     }
 
-    /// macOS owns this consent dialog. Status is refreshed when the user returns.
+    /// Request via the capture framework, not the process-cached CG request API.
     @MainActor func requestScreenRecording() async {
-        guard !isRequestingScreenRecording else { return }
-        await checkScreenRecording()
         guard screenRecording != .granted else { return }
-        isRequestingScreenRecording = true
-        defer { isRequestingScreenRecording = false }
-        screenRecording = askForScreenAccess() ? .granted : .denied
+        await verifyScreenRecordingAccess()
     }
 
     // MARK: - System Settings
 
     /// Open the Screen Recording pane in System Settings.
-    func openScreenRecordingSettings() {
+    @MainActor func openScreenRecordingSettings() {
+        shouldVerifyAfterSettings = true
         let url = URL(
             string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
         )!
-        NSWorkspace.shared.open(url)
+        openSystemSettings(url)
     }
 
     /// Open the Microphone pane in System Settings.
-    func openMicrophoneSettings() {
+    @MainActor func openMicrophoneSettings() {
         let url = URL(
             string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
         )!
-        NSWorkspace.shared.open(url)
+        openSystemSettings(url)
+    }
+
+    enum VerificationError: LocalizedError {
+        case unavailable(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .unavailable(let message): "Could not verify system audio access. \(message)"
+            }
+        }
     }
 }

@@ -16,7 +16,9 @@
 
 ## 权限
 
-`PermissionManager.checkAll()` 现在只读取 `CGPreflightScreenCaptureAccess` 和 `AVCaptureDevice.authorizationStatus`。后台检测和访问页面不会申请权限，也不会因为窗口查询失败把授权改成 denied。检查与显式申请在 MainActor 上执行；麦克风申请会合并重复点击，已允许或已拒绝时不会重新发起申请。
+以下记录的是 **v2.0.0 的实现**。后续发现 CG 预检在进程内可能保持旧值，已增加 ScreenCaptureKit 的显式核验与重新打开恢复入口，详见[系统音频权限修复](11-macos-system-audio-permissions.md)。
+
+v2.0.0 的 `PermissionManager.checkAll()` 只读取 `CGPreflightScreenCaptureAccess` 和 `AVCaptureDevice.authorizationStatus`。后台检测和访问页面不会申请权限，也不会因为窗口查询失败把授权改成 denied。检查与显式申请在 MainActor 上执行；麦克风申请会合并重复点击，已允许或已拒绝时不会重新发起申请。
 
 `LyreApp.toggleRecording()` 先刷新再决定是否导航到权限页；共享录音管理器仍在开始前刷新状态。停止录音不受新的权限状态阻挡。权限页继续在用户返回系统设置后更新，并提供 Allow access / Open Settings / Allowed 的明确状态。
 

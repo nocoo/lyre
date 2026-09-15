@@ -23,12 +23,14 @@ struct TrayMenu: View {
                 LyreBrandMark(size: 32)
                 Text("Lyre").font(.system(size: 16, weight: .semibold))
                 Spacer()
-                HStack(spacing: 6) {
-                    Circle().fill(isRecording ? LyreTheme.recording : .secondary.opacity(0.5))
-                        .frame(width: 6, height: 6)
-                    Text(isRecording ? "Recording" : recorder.permissions.needsSetup ? "Setup needed" : "Ready")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                }
+                LyreStatusLabel(
+                    title: isRecording ? "Recording" : recorder.permissions.needsSetup ? "Setup needed" : "Ready",
+                    symbol: isRecording ? "record.circle.fill"
+                        : recorder.permissions.needsSetup ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
+                    color: isRecording ? LyreTheme.recording
+                        : recorder.permissions.needsSetup ? LyreTheme.warning : LyreTheme.success
+                )
+                .font(.system(size: 11))
             }
             VStack(spacing: 7) {
                 Text(actionController.elapsedDisplay)
@@ -49,8 +51,8 @@ struct TrayMenu: View {
                 InputDeviceStatus(recorder: recorder)
             }
             if recorder.permissions.needsSetup {
-                Button("Set up recording access…", action: onOpenPermissions)
-                    .font(.system(size: 12)).buttonStyle(.plain).foregroundStyle(LyreTheme.accent)
+                Button("Permissions", systemImage: "checkmark.shield", action: onOpenPermissions)
+                    .buttonStyle(LyreButtonStyle()).help("Set up microphone and system audio access")
             }
             Divider()
             if let recording = recordingsStore.recordings.first {
@@ -76,7 +78,7 @@ struct TrayMenu: View {
             }
             Divider()
             HStack(spacing: 14) {
-                Button("Recordings", action: openMainWindow)
+                Button("Recordings", systemImage: "waveform", action: openMainWindow)
                 Spacer(minLength: 0)
                 Button("Settings", systemImage: "gearshape", action: onOpenSettings).labelStyle(.iconOnly)
                 Button("Show recordings folder", systemImage: "folder") {
@@ -84,9 +86,10 @@ struct TrayMenu: View {
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: config.outputDirectory.path)
                     }
                 }.labelStyle(.iconOnly)
-                Button("Quit") { if !isPreview { NSApp.terminate(nil) } }
+                Button("Quit", systemImage: "power") { if !isPreview { NSApp.terminate(nil) } }
             }
             .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+            .labelStyle(.titleAndIcon)
         }
         .padding(20).frame(width: 332)
         .background(LyreTheme.canvas).tint(LyreTheme.accent)

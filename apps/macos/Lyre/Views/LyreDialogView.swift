@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Shared layout for app-owned confirmations, errors and optional reminders.
 struct LyreDialogView: View {
-    enum Tone { case standard, caution, destructive }
+    enum Tone { case standard, caution, error, destructive }
 
     let title: String
     let message: String
@@ -12,12 +12,19 @@ struct LyreDialogView: View {
     var detail: String?
     var isReminder = false
     let primary: String
+    var primarySymbol = "checkmark"
     var secondary: String?
     let onPrimary: () -> Void
     var onSecondary: () -> Void = {}
     @AppStorage("appearance") private var appearance = "system"
 
-    private var color: Color { tone == .destructive ? LyreTheme.recording : LyreTheme.accent }
+    private var color: Color {
+        switch tone {
+        case .standard: LyreTheme.accent
+        case .caution: LyreTheme.warning
+        case .error, .destructive: LyreTheme.error
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -53,9 +60,11 @@ struct LyreDialogView: View {
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
                 if let secondary {
-                    Button(action: onSecondary) { Text(secondary).frame(minWidth: 104) }
-                        .buttonStyle(LyreButtonStyle())
-                        .keyboardShortcut(tone == .destructive ? .defaultAction : .cancelAction)
+                    Button(action: onSecondary) {
+                        Label(secondary, systemImage: "xmark").frame(minWidth: 64)
+                    }
+                    .buttonStyle(LyreButtonStyle())
+                    .keyboardShortcut(tone == .destructive ? .defaultAction : .cancelAction)
                 }
                 if tone == .destructive {
                     primaryButton
@@ -74,7 +83,9 @@ struct LyreDialogView: View {
     }
 
     private var primaryButton: some View {
-        Button(action: onPrimary) { Text(primary).frame(minWidth: 120) }
-            .buttonStyle(LyreButtonStyle(treatment: tone == .destructive ? .recording : .accent))
+        Button(action: onPrimary) {
+            Label(primary, systemImage: primarySymbol).frame(minWidth: 80)
+        }
+        .buttonStyle(LyreButtonStyle(treatment: tone == .destructive ? .recording : .accent))
     }
 }

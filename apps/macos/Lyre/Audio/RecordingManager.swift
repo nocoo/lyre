@@ -111,7 +111,7 @@ final class RecordingManager: @unchecked Sendable {
         }
 
         // Verify permissions
-        await permissions.checkAll()
+        try await permissions.prepareForRecording()
         guard permissions.allGranted else {
             throw RecordingError.permissionDenied
         }
@@ -153,6 +153,7 @@ final class RecordingManager: @unchecked Sendable {
         do {
             try await capture.startCapture()
         } catch {
+            await permissions.reportScreenCaptureFailure(error)
             // A missing/disconnected input must not leave callbacks connected
             // to an unfinished encoder when the user retries.
             cleanupCaptureCallbacks()
@@ -271,6 +272,7 @@ final class RecordingManager: @unchecked Sendable {
         // Best-effort recovery: always finalize encoder even if capture
         // stop fails, to avoid corrupting the output file.
         Task {
+            await permissions.reportScreenCaptureFailure(error)
             // Try to stop capture, but don't let failure prevent finalization
             do {
                 try await capture.stopCapture()

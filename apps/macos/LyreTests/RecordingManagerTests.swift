@@ -110,10 +110,95 @@ struct RecordingManagerTests {
 
 // MARK: - Protocol seam suite (task #5 commit 2)
 
+@MainActor @Suite("Recording permission recovery")
+struct RecordingPermissionRecoveryTests {
+    @Test func falsePreflightDoesNotPreventAnActuallyAuthorizedRecording() async throws {
+        let permissions = PermissionManager(
+            screenAccess: { false }, microphoneStatus: { .authorized }, screenCaptureProbe: { .granted }
+        )
+        let capture = FakeCapture()
+        let directory = tempDir()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let manager = RecordingManager(
+            permissions: permissions, capture: capture, encoderFactory: { FakeEncoder() }, outputDirectory: directory
+        )
+        try await manager.startRecording()
+        #expect(permissions.allGranted)
+        #expect(manager.state == .recording)
+        #expect(capture.startCount == 1)
+        _ = try await manager.stopRecording()
+    }
+
+    @Test func actualStartDenialUpdatesThePermissionPageAndAllowsRechecking() async throws {
+        let permissions = PermissionManager(
+            screenAccess: { true }, microphoneStatus: { .authorized }, screenCaptureProbe: { .granted }
+        )
+        let capture = FakeCapture()
+        capture.startShouldThrow = NSError(domain: SCStreamErrorDomain, code: SCStreamError.userDeclined.rawValue)
+        let encoder = FakeEncoder()
+        let directory = tempDir()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let manager = RecordingManager(
+            permissions: permissions, capture: capture, encoderFactory: { encoder }, outputDirectory: directory
+        )
+        await #expect(throws: (any Error).self) { try await manager.startRecording() }
+        await permissions.checkAll()
+        #expect(permissions.screenRecording == .denied)
+        #expect(encoder.finalizeCount == 1)
+        #expect(capture.onStreamError == nil)
+        capture.startShouldThrow = nil
+        try await manager.startRecording()
+        #expect(permissions.allGranted)
+        #expect(manager.state == .recording)
+        _ = try await manager.stopRecording()
+    }
+
+    @Test func streamConsentFailureInvalidatesPermissionAndStillFinalizesTheFile() async throws {
+        let permissions = PermissionManager(
+            screenAccess: { true }, microphoneStatus: { .authorized }, screenCaptureProbe: { .granted }
+        )
+        let capture = FakeCapture()
+        let encoder = FakeEncoder()
+        let directory = tempDir()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let manager = RecordingManager(
+            permissions: permissions, capture: capture, encoderFactory: { encoder }, outputDirectory: directory
+        )
+        try await manager.startRecording()
+        capture.onStreamError?(NSError(domain: SCStreamErrorDomain, code: SCStreamError.userDeclined.rawValue))
+        let deadline = ContinuousClock.now + .seconds(2)
+        while manager.state != .idle && ContinuousClock.now < deadline { await Task.yield() }
+        #expect(manager.state == .idle)
+        await permissions.checkAll()
+        #expect(permissions.screenRecording == .denied)
+        #expect(encoder.finalizeCount == 1)
+        #expect(capture.onStreamError == nil)
+    }
+
+    @Test func unavailablePermissionServiceDoesNotStartCaptureOrCreateAnEncoder() async {
+        let permissions = PermissionManager(
+            screenAccess: { false }, microphoneStatus: { .authorized },
+            screenCaptureProbe: { .unavailable("Capture service did not respond") }
+        )
+        let capture = FakeCapture()
+        let encoder = FakeEncoder()
+        let manager = RecordingManager(
+            permissions: permissions, capture: capture, encoderFactory: { encoder }, outputDirectory: tempDir()
+        )
+        await #expect(throws: PermissionManager.VerificationError.self) { try await manager.startRecording() }
+        #expect(permissions.screenRecording == .unknown)
+        #expect(capture.startCount == 0)
+        #expect(encoder.setupURL == nil)
+        #expect(manager.state == .idle)
+    }
+}
+
 @Suite("RecordingManager dual-mode wiring")
 struct RecordingManagerDualModeTests {
     @MainActor @Test func firstStartRefreshesAnUnknownPermissionSnapshot() async throws {
-        let permissions = PermissionManager(screenAccess: { true }, microphoneStatus: { .authorized })
+        let permissions = PermissionManager(
+            screenAccess: { true }, microphoneStatus: { .authorized }, screenCaptureProbe: { .granted }
+        )
         let capture = FakeCapture()
         let manager = RecordingManager(
             permissions: permissions, capture: capture, encoderFactory: { FakeEncoder() }, outputDirectory: tempDir()

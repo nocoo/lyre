@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.0.1 (2026-09-15)
+
+### 🐛 Bug Fixes
+
+- fix(macos): verify system audio access with ScreenCaptureKit and recover from stale permission checks
+- fix(macos): protect permission recovery while recording or uploading
+- fix(macos): unify the sidebar background and distinguish ready, warning, and error states with color
+- fix(macos): use icon-and-word actions and restore Play / Pause menu icons
+
 ## v2.0.0 (2026-09-15)
 
 ### 🚀 Features

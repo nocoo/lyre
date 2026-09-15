@@ -21,6 +21,7 @@ struct RecordingLibraryStateTests {
         #expect(library.player.state == .stopped)
         #expect(library.recordingToUpload?.url == old.url)
         #expect(library.isUploading)
+        #expect(library.hasActiveUploads)
         // A second selection must not replace the upload already owned by the window.
         library.beginUpload(next)
         #expect(library.recordingToUpload?.url == old.url)
@@ -129,6 +130,10 @@ struct RecordingLibraryStateTests {
         #expect(library.canLeaveUpload)
         #expect(library.isBeingUploaded(file))
 
+        // Relaunch protection must include uploads that are not the visible draft.
+        #expect(!library.isUploading)
+        #expect(library.hasActiveUploads)
+
         library.beginUpload(file)
         #expect(library.uploadManager === background)
         #expect(library.isShowingAutomaticUpload)
@@ -143,6 +148,7 @@ struct RecordingLibraryStateTests {
         library.closeUpload()
         #expect(background.state == .completed(recordingId: "uploaded-id"))
         #expect(!library.isBeingUploaded(file))
+        #expect(!library.hasActiveUploads)
     }
 
     @Test func unconfiguredAutomaticUploadHasVisibleRetryableFailure() throws {

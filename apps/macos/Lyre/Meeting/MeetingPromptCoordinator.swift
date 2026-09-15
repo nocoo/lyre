@@ -13,6 +13,7 @@ final class MeetingPromptCoordinator {
     private var promptTask: Task<Void, Never>?
     private var pendingPrompt: PromptKind?
     private var revision = 0
+    private var isSuspended = false
     private var meetingRecordingID: UUID?
     // swiftlint:disable:next discouraged_optional_boolean
     private var lastObservedActive: Bool?
@@ -51,6 +52,13 @@ final class MeetingPromptCoordinator {
         cancelPrompt()
     }
 
+    /// Pause during an app relaunch without cancelling the shared event stream.
+    /// If opening the new instance fails, the existing consumer can resume.
+    func setSuspended(_ suspended: Bool) {
+        isSuspended = suspended
+        settingsDidChange()
+    }
+
     /// Called with the settings switch, including when the main window closes.
     func settingsDidChange() {
         cancelPrompt()
@@ -71,7 +79,7 @@ final class MeetingPromptCoordinator {
 
     @discardableResult
     private func dispatch(active: Bool) -> Task<Void, Never>? {
-        guard settings.isEnabled else { settingsDidChange(); return nil }
+        guard settings.isEnabled, !isSuspended else { settingsDidChange(); return nil }
         guard lastObservedActive != active else { return nil }
         lastObservedActive = active
         cancelPrompt()
@@ -95,7 +103,7 @@ final class MeetingPromptCoordinator {
     }
 
     private func isEligible(_ kind: PromptKind) -> Bool {
-        guard settings.isEnabled, !action.isBusy else { return false }
+        guard settings.isEnabled, !isSuspended, !action.isBusy else { return false }
         switch kind {
         case .start:
             return lastObservedActive == true && action.state == .idle
@@ -121,15 +129,15 @@ final class MeetingPromptCoordinator {
             confirmed = await alertPresenter.presentChoice(
                 title: String(localized: "A meeting may be starting"),
                 message: String(localized: "Teams is using call audio. Record this conversation when you’re ready."),
-                primary: String(localized: "Start recording"),
-                secondary: String(localized: "Not now")
+                primary: String(localized: "Record"),
+                secondary: String(localized: "Later")
             )
         case .stop:
             confirmed = await alertPresenter.presentChoice(
                 title: String(localized: "Your meeting may have ended"),
                 message: String(localized: "Teams call activity has stopped. Your recording is still running."),
-                primary: String(localized: "Stop recording"),
-                secondary: String(localized: "Keep recording")
+                primary: String(localized: "Stop"),
+                secondary: String(localized: "Continue")
             )
         }
         // Drain a transition delivered just as a button was clicked.

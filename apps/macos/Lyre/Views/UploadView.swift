@@ -34,10 +34,11 @@ struct UploadView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 16) {
             Button(action: onDismiss) {
-                Label("Back to recording", systemImage: "chevron.left").font(.system(size: 11))
+                Label("Back", systemImage: "chevron.left").font(.system(size: 11))
             }
             .buttonStyle(.plain).foregroundStyle(.secondary).disabled(isBusy && !isAutomatic)
             .keyboardShortcut("[")
+            .help("Return to the recording")
             VStack(alignment: .leading, spacing: 9) {
                 Text(isAutomatic ? "Automatic upload" : "Upload recording")
                     .font(.system(size: 22, weight: .semibold))
@@ -64,13 +65,15 @@ struct UploadView: View {
             if case .failed(let message) = uploadManager.state {
                 Label {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Upload didn’t finish.").fontWeight(.semibold)
+                        Text("Upload didn’t finish.").fontWeight(.semibold).foregroundStyle(.primary)
                         Text(message).textSelection(.enabled)
                     }
-                } icon: { Image(systemName: "exclamationmark.triangle") }
-                .font(.system(size: 12)).foregroundStyle(.red)
+                } icon: {
+                    Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(LyreTheme.error)
+                }
+                .font(.system(size: 12)).foregroundStyle(.secondary)
                 .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                .background(.red.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
+                .background(LyreTheme.error.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
             }
             Label {
                 Text("Your original stays on this Mac. After uploading, open Lyre on the web to start transcription.")
@@ -88,12 +91,13 @@ struct UploadView: View {
             }
         } else if let error = uploadManager.metadataError {
             VStack(alignment: .leading, spacing: 10) {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12)).foregroundStyle(.orange)
-                Button("Try again") {
+                LyreStatusLabel(title: error, symbol: "exclamationmark.triangle.fill", color: LyreTheme.warning)
+                    .font(.system(size: 12))
+                Button("Retry", systemImage: "arrow.clockwise") {
                     if !isPreview { Task { await uploadManager.fetchMetadata() } }
                 }
                 .buttonStyle(LyreButtonStyle())
+                .help("Reload folders and tags")
             }
         } else {
             Picker("Folder", selection: $uploadManager.selectedFolderID) {
@@ -162,7 +166,7 @@ struct UploadView: View {
         HStack(spacing: 12) {
             Image(systemName: index < stage
                   ? "checkmark.circle.fill" : index == stage ? "circle.inset.filled" : "circle")
-                .foregroundStyle(index < stage ? .green : index == stage ? LyreTheme.accent : .secondary)
+                .foregroundStyle(index < stage ? LyreTheme.success : index == stage ? LyreTheme.accent : .secondary)
             Text(title).foregroundStyle(index <= stage ? .primary : .secondary)
         }
         .font(.system(size: 13))
@@ -170,7 +174,7 @@ struct UploadView: View {
 
     private var completed: some View {
         VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 42)).foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 42)).foregroundStyle(LyreTheme.success)
             VStack(spacing: 9) {
                 Text("Ready in Lyre.").font(.system(size: 22, weight: .semibold))
                 Text("Your recording is uploaded.\nOpen Lyre to start a transcription.")
@@ -198,17 +202,19 @@ struct UploadView: View {
 
     private var actions: some View {
         HStack(spacing: 12) {
-            Button(isBusy ? "Cancel upload" : isCompleted ? "Done" : "Cancel") {
+            Button(isCompleted ? "Done" : "Cancel", systemImage: isCompleted ? "checkmark" : "xmark") {
                 if isBusy { uploadManager.cancel() }
                 onDismiss()
             }
             .buttonStyle(LyreButtonStyle()).keyboardShortcut(.cancelAction)
+            .help(isBusy ? "Cancel this upload" : "Return to the recording")
             Spacer(minLength: 0)
             if case .completed(let id) = uploadManager.state {
-                Button("Open in Lyre", systemImage: "arrow.up.right") { openRecording(id) }
+                Button("Open", systemImage: "arrow.up.right") { openRecording(id) }
                     .buttonStyle(LyreButtonStyle(treatment: .accent)).keyboardShortcut(.defaultAction)
+                    .help("Open this recording in Lyre")
             } else if !isBusy {
-                Button(uploadTitle, systemImage: "arrow.up") {
+                Button(uploadAction.title, systemImage: uploadAction.symbol) {
                     if isPreview {
                         uploadManager.state = .uploading(progress: 0)
                     } else {
@@ -216,6 +222,7 @@ struct UploadView: View {
                     }
                 }
                 .buttonStyle(LyreButtonStyle(treatment: .accent)).keyboardShortcut(.defaultAction)
+                .help("Upload this recording to Lyre")
             }
         }
         .padding(.horizontal, 24).padding(.vertical, 18)
@@ -228,9 +235,9 @@ struct UploadView: View {
         return false
     }
 
-    private var uploadTitle: String {
-        if case .failed = uploadManager.state { return "Retry upload" }
-        return "Upload"
+    private var uploadAction: (title: String, symbol: String) {
+        if case .failed = uploadManager.state { return ("Retry", "arrow.clockwise") }
+        return ("Upload", "arrow.up.doc")
     }
 
     private func openRecording(_ id: String) {

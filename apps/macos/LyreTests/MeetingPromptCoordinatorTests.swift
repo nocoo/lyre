@@ -157,6 +157,28 @@ struct MeetingPromptCoordinatorTests {
         await context.coordinator.handle(active: true)
         #expect(context.alerts.choiceCount == 0)
     }
+
+    @Test func relaunchSuspensionInvalidatesChoicesAndCanResumeTheSameEventStream() async {
+        let context = PromptContext()
+        context.alerts.hold = true
+        context.alerts.ignoreDismissal = true
+        context.coordinator.start()
+        context.watcher.feed(true)
+        await waitUntil { context.alerts.isPending }
+        context.coordinator.setSuspended(true)
+        context.alerts.resolve(true)
+        await context.coordinator.handle(active: true)
+        #expect(context.action.startCount == 0)
+        #expect(context.settings.isEnabled)
+
+        context.coordinator.setSuspended(false)
+        context.alerts.hold = false
+        context.alerts.answer = true
+        context.watcher.feed(true)
+        await waitUntil { context.action.startCount == 1 }
+        #expect(context.alerts.choiceCount == 2)
+        context.coordinator.stop()
+    }
 }
 
 @MainActor private final class PromptContext {

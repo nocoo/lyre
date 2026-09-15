@@ -58,7 +58,8 @@ struct SettingsView: View {
                     }
                     .font(.system(size: 13))
                     Spacer()
-                    Label("Included", systemImage: "checkmark").font(.system(size: 12)).foregroundStyle(.secondary)
+                    LyreStatusLabel(title: "Included", symbol: "checkmark.circle.fill", color: LyreTheme.success)
+                        .font(.system(size: 12))
                 }
                 InputDeviceStatus(recorder: recorder)
                 Text("Automatic follows your macOS input, including during recording. "
@@ -77,15 +78,17 @@ struct SettingsView: View {
                             .lineLimit(2).truncationMode(.middle)
                     }
                     Spacer(minLength: 0)
-                    Button("Choose…", action: chooseOutputDirectory).buttonStyle(LyreButtonStyle())
+                    Button("Choose", systemImage: "folder.badge.plus", action: chooseOutputDirectory)
+                        .buttonStyle(LyreButtonStyle()).help("Choose where to save recordings")
                 }
                 Divider()
-                Button("Show in Finder", systemImage: "folder") {
+                Button("Reveal", systemImage: "folder") {
                     if !isPreview {
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: config.outputDirectory.path)
                     }
                 }
                 .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(LyreTheme.accent)
+                .help("Show the recordings folder in Finder")
             }
         }
         LyreSection(title: "Meeting reminders") {
@@ -106,7 +109,8 @@ struct SettingsView: View {
             Label("System audio and microphone permissions", systemImage: "checkmark.shield")
                 .font(.system(size: 12)).foregroundStyle(.secondary)
             Spacer()
-            Button("Review access", action: onOpenPermissions).buttonStyle(LyreButtonStyle())
+            Button("Permissions", systemImage: "checkmark.shield", action: onOpenPermissions)
+                .buttonStyle(LyreButtonStyle()).help("Review microphone and system audio access")
         }
     }
 
@@ -135,8 +139,14 @@ struct SettingsView: View {
                 Text("After you stop, recordings longer than this limit upload to Lyre. Originals stay on this Mac.")
                     .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(3)
                 if config.autoUploadEnabled && !config.isServerConfigured {
-                    Button("Set up your connection", systemImage: "arrow.right") { section = .connection }
-                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(LyreTheme.accent)
+                    HStack(spacing: 12) {
+                        LyreStatusLabel(title: "Connect to Lyre to enable uploads.",
+                                        symbol: "exclamationmark.triangle.fill", color: LyreTheme.warning)
+                            .font(.system(size: 12))
+                        Spacer(minLength: 0)
+                        Button("Connect", systemImage: "link") { section = .connection }
+                            .buttonStyle(LyreButtonStyle()).help("Configure the Lyre connection")
+                    }
                 }
             }
         }
@@ -181,15 +191,20 @@ struct SettingsView: View {
                         statusBadge
                     }
                     Spacer()
-                    Button("Test connection", action: testConnection)
+                    Button("Test", systemImage: "network", action: testConnection)
                         .buttonStyle(LyreButtonStyle()).disabled(!canTest)
+                        .help("Test whether the Lyre server is reachable")
                 }
                 Divider()
                 HStack {
                     Text("Device token").font(.system(size: 12))
                     Spacer()
-                    Text(config.authToken.isEmpty ? "Not configured" : "Not verified by this check")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                    LyreStatusLabel(
+                        title: config.authToken.isEmpty ? "Not configured" : "Not verified by this check",
+                        symbol: config.authToken.isEmpty ? "exclamationmark.triangle.fill" : "info.circle",
+                        color: config.authToken.isEmpty ? LyreTheme.warning : .secondary
+                    )
+                    .font(.system(size: 12))
                 }
             }
         }
@@ -222,18 +237,19 @@ struct SettingsView: View {
     @ViewBuilder private var statusBadge: some View {
         switch connectionStatus {
         case .untested:
-            Text("Not checked").font(.system(size: 12)).foregroundStyle(.secondary)
+            LyreStatusLabel(title: "Not checked", symbol: "minus.circle", color: .secondary)
+                .font(.system(size: 12))
         case .testing:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.mini)
                 Text("Checking server…").font(.system(size: 12)).foregroundStyle(.secondary)
             }
         case .success(let version):
-            Label("Reachable · v\(version)", systemImage: "checkmark.circle.fill")
-                .font(.system(size: 12)).foregroundStyle(.green)
+            LyreStatusLabel(title: "Reachable · v\(version)", symbol: "checkmark.circle.fill", color: LyreTheme.success)
+                .font(.system(size: 12))
         case .failed(let error):
-            Label(error, systemImage: "exclamationmark.triangle")
-                .font(.system(size: 12)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            LyreStatusLabel(title: error, symbol: "exclamationmark.octagon.fill", color: LyreTheme.error)
+                .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -304,24 +320,37 @@ struct InputDevicePicker: View {
 struct InputDeviceStatus: View {
     @Bindable var recorder: RecordingManager
 
-    private var status: String {
-        guard let capture = recorder.captureObservable else { return "Automatic follows the input selected in macOS." }
-        if let error = capture.inputRoutingError { return error }
+    private var status: LyreStatusLabel {
+        guard let capture = recorder.captureObservable else {
+            return LyreStatusLabel(title: "Automatic follows the input selected in macOS.",
+                                   symbol: "info.circle", color: .secondary)
+        }
+        if let error = capture.inputRoutingError {
+            return LyreStatusLabel(title: error, symbol: "exclamationmark.octagon.fill", color: LyreTheme.error)
+        }
         if recorder.state == .recording {
-            return capture.activeInputDevice.map { "Recording with \($0.name)" } ?? "Waiting for a microphone…"
+            guard let device = capture.activeInputDevice else {
+                return LyreStatusLabel(title: "Waiting for a microphone…",
+                                       symbol: "exclamationmark.triangle.fill", color: LyreTheme.warning)
+            }
+            return LyreStatusLabel(title: "Recording with \(device.name)",
+                                   symbol: "mic.fill", color: LyreTheme.recording)
         }
         let route = capture.resolvedInputDevice
         guard let device = capture.availableDevices.first(where: { $0.id == route.effectiveID }) else {
-            return "No microphone available. Connect one or check macOS Sound settings."
+            return LyreStatusLabel(title: "No microphone available. Connect one or check macOS Sound settings.",
+                                   symbol: "mic.slash.fill", color: LyreTheme.warning)
         }
         if route.selectedID != nil && route.source != .saved {
-            return "Using \(device.name) until your saved microphone reconnects."
+            return LyreStatusLabel(title: "Using \(device.name) until your saved microphone reconnects.",
+                                   symbol: "exclamationmark.triangle.fill", color: LyreTheme.warning)
         }
-        return "Input: \(device.name)"
+        return LyreStatusLabel(title: "Input: \(device.name)", symbol: "mic.fill", color: LyreTheme.success)
     }
 
     var body: some View {
-        Text(status).font(.system(size: 11)).foregroundStyle(.secondary)
+        status
+            .font(.system(size: 11))
             .fixedSize(horizontal: false, vertical: true).lineSpacing(3)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

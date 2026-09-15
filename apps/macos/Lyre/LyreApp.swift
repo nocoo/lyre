@@ -13,6 +13,8 @@ struct LyreApp: App {
     @State private var meetingCoordinator: MeetingPromptCoordinator
     @State private var library: RecordingLibraryState
     @State private var isRequestingRecording = false
+    @State private var isReopening = false
+    @State private var reopenError: String?
     @State private var selectedTab: MainWindowView.SidebarTab = .recordings
     @State private var settingsSection: SettingsView.SectionTab = .recording
     @Environment(\.openWindow) private var openWindow
@@ -74,6 +76,9 @@ struct LyreApp: App {
         _meetingWatcher = State(initialValue: watcher)
         _meetingCoordinator = State(initialValue: coordinator)
         _library = State(initialValue: library)
+        if CommandLine.arguments.contains("--permissions") {
+            _selectedTab = State(initialValue: .permissions)
+        }
     }
 
     var body: some Scene {
@@ -97,6 +102,7 @@ struct LyreApp: App {
                 onOpenSettings: { navigate(to: .settings) },
                 onOpenPermissions: { navigate(to: .permissions) }
             )
+            .disabled(isReopening)
         } label: {
             TrayLabel(isRecording: recorder.state == .recording)
         }
@@ -119,8 +125,12 @@ struct LyreApp: App {
                 selectedTab: $selectedTab,
                 settingsSection: $settingsSection,
                 isRequestingRecording: recordingBusy,
-                onToggleRecording: toggleRecording
+                onToggleRecording: toggleRecording,
+                canReopen: canReopenForPermissions,
+                reopenError: reopenError,
+                onReopen: reopenForPermissions
             )
+            .disabled(isReopening)
             .onChange(of: config.outputDirectory) { _, newDir in
                 recorder.outputDirectory = newDir
                 let newStore = RecordingsStore(directory: newDir)
@@ -150,25 +160,27 @@ struct LyreApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") { navigate(to: .settings) }.keyboardShortcut(",")
+                Button("Settings", systemImage: "gearshape") { navigate(to: .settings) }.keyboardShortcut(",")
             }
             CommandGroup(replacing: .appInfo) {
-                Button("About Lyre") { navigate(to: .about) }
+                Button("About", systemImage: "info.circle") { navigate(to: .about) }
             }
             CommandGroup(after: .textEditing) {
-                Button("Find Recordings") { searchRecordings?() }
+                Button("Find", systemImage: "magnifyingglass") { searchRecordings?() }
                     .keyboardShortcut("f")
                     .disabled(searchRecordings == nil)
             }
             CommandMenu("Recording") {
-                Button(actionController.state == .recording ? "Stop Recording" : "Start Recording") {
+                Button(actionController.state == .recording ? "Stop" : "Record",
+                       systemImage: actionController.state == .recording ? "stop.fill" : "record.circle") {
                     toggleRecording()
                 }
                 .keyboardShortcut("r")
-                .disabled(recordingBusy)
+                .disabled(recordingBusy || isReopening)
                 Divider()
-                Button("Show Recordings") { navigate(to: .recordings) }.keyboardShortcut("1")
-                Button("Recording Permissions") { navigate(to: .permissions) }.keyboardShortcut("2")
+                Button("Recordings", systemImage: "waveform") { navigate(to: .recordings) }.keyboardShortcut("1")
+                Button("Permissions", systemImage: "checkmark.shield") { navigate(to: .permissions) }
+                    .keyboardShortcut("2")
             }
         }
     }
@@ -180,24 +192,63 @@ struct LyreApp: App {
     }
 
     private func toggleRecording() {
-        guard !recordingBusy else { return }
+        guard !recordingBusy, !isReopening else { return }
         isRequestingRecording = true
         Task {
             defer { isRequestingRecording = false }
             if actionController.state == .recording {
                 await actionController.requestStop()
             } else {
-                await recorder.permissions.checkAll()
+                do {
+                    try await recorder.permissions.prepareForRecording()
+                } catch {
+                    navigate(to: .permissions)
+                    return
+                }
                 guard !recorder.permissions.needsSetup else {
                     navigate(to: .permissions)
                     return
                 }
                 await actionController.requestStart()
+                if recorder.permissions.needsSetup { navigate(to: .permissions) }
+            }
+        }
+    }
+
+    private func reopenForPermissions() {
+        guard canReopenForPermissions else { return }
+        isReopening = true
+        reopenError = nil
+        meetingCoordinator.setSuspended(true)
+        meetingWatcher.suspend()
+        Task { @MainActor in
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.createsNewApplicationInstance = true
+            configuration.arguments = ["--permissions"]
+            do {
+                let application = try await NSWorkspace.shared.openApplication(
+                    at: Bundle.main.bundleURL, configuration: configuration
+                )
+                guard application.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+                    throw CocoaError(.executableLoad)
+                }
+                NSApp.terminate(nil)
+            } catch {
+                reopenError = "Lyre could not reopen. Quit it from the menu bar, then open it again."
+                Self.logger.error("Permission relaunch failed: \(error.localizedDescription)")
+                isReopening = false
+                meetingCoordinator.setSuspended(false)
+                if meetingSettings.isEnabled { meetingWatcher.resume() }
             }
         }
     }
 
     private var recordingBusy: Bool { isRequestingRecording || actionController.isBusy }
+
+    private var canReopenForPermissions: Bool {
+        !isReopening && !recordingBusy && actionController.state != .recording
+            && recorder.state != .recording && !library.hasActiveUploads
+    }
 
     private var resolvedStore: RecordingsStore {
         recordingsStore

@@ -24,6 +24,10 @@ final class RecordingLibraryState {
 
     var isUploading: Bool { uploadManager.state.isInProgress }
 
+    var hasActiveUploads: Bool {
+        isUploading || automaticUploads.values.contains { $0.state.isInProgress }
+    }
+
     var isShowingAutomaticUpload: Bool {
         guard let recordingToUpload else { return false }
         return automaticUploads[recordingToUpload.url] === uploadManager

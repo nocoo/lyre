@@ -25,11 +25,13 @@ struct AboutView: View {
                             .multilineTextAlignment(.center).lineSpacing(5)
                         HStack(spacing: 12) {
                             Link(destination: URL(string: "https://github.com/nocoo/lyre")!) {
-                                Label("GitHub Repository", systemImage: "arrow.up.right.square")
+                                Label("GitHub", systemImage: "arrow.up.right.square")
                             }
+                            .help("View the Lyre source repository")
                             Link(destination: URL(string: "https://github.com/nocoo/lyre/issues")!) {
-                                Label("Report an Issue", systemImage: "bubble.left")
+                                Label("Feedback", systemImage: "bubble.left")
                             }
+                            .help("Report an issue on GitHub")
                         }
                         .buttonStyle(LyreButtonStyle()).padding(.top, 4)
                         Divider().padding(.vertical, 4)

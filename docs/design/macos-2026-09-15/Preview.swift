@@ -14,6 +14,7 @@ enum PreviewPage: String, CaseIterable, Identifiable {
     case autoUploadFailed = "auto-upload-failed"
     case inputFallback = "input-fallback", inputUnavailable = "input-unavailable"
     case permissionsDenied = "permissions-denied", meetingSettings = "meeting-settings"
+    case permissionsUnknown = "permissions-unknown", permissionsRecovery = "permissions-recovery"
     case meetingStart = "meeting-start", meetingEnd = "meeting-end"
     case deleteConfirmation = "delete-confirmation", recordingError = "recording-error"
     var isReminder: Bool { self == .meetingStart || self == .meetingEnd }
@@ -59,7 +60,10 @@ enum PreviewPage: String, CaseIterable, Identifiable {
         config.authToken = "demo-device-token"
         let directory = AppConfig.defaultOutputDirectory()
         config.outputDirectory = directory
-        let permissions = PermissionManager()
+        let permissions = PermissionManager(
+            screenAccess: { true }, microphoneStatus: { .authorized }, askForMicrophone: { true },
+            screenCaptureProbe: { .granted }, openSystemSettings: { _ in }
+        )
         permissions.screenRecording = .granted
         permissions.microphone = .granted
         let capture = AudioCaptureManager()
@@ -143,9 +147,11 @@ enum PreviewPage: String, CaseIterable, Identifiable {
             action.testingForceElapsedTick()
         }
         switch page {
-        case .permissions, .permissionsReady, .permissionsDenied:
+        case .permissions, .permissionsReady, .permissionsDenied, .permissionsUnknown, .permissionsRecovery:
             selectedTab = .permissions
             if page == .permissionsDenied { recorder.permissionsObservable?.microphone = .denied }
+            if page == .permissionsUnknown { recorder.permissionsObservable?.screenRecording = .unknown }
+            if page == .permissionsRecovery { recorder.permissionsObservable?.screenRecording = .denied }
         case .settings, .connection, .appearance, .compactSettings, .autoUploadSettings,
              .inputFallback, .inputUnavailable, .meetingSettings:
             selectedTab = .settings
@@ -211,8 +217,8 @@ enum PreviewPage: String, CaseIterable, Identifiable {
                 message: page == .meetingStart
                     ? "Teams is using call audio. Record this conversation when you’re ready."
                     : "Teams call activity has stopped. Your recording is still running.",
-                primary: page == .meetingStart ? "Start recording" : "Stop recording",
-                secondary: page == .meetingStart ? "Not now" : "Keep recording"
+                primary: page == .meetingStart ? "Record" : "Stop",
+                secondary: page == .meetingStart ? "Later" : "Continue"
             ) }
         } else if page == .recordingError {
             // Exercise the actual app-owned error sheet in this isolated host.
@@ -375,7 +381,8 @@ enum PreviewError: Error { case windowUnavailable, encodingFailed, reminderStole
                         meetingSettings: fixture.meeting, actionController: fixture.action, library: fixture.library,
                         selectedTab: $fixture.selectedTab, settingsSection: $fixture.settingsSection,
                         isRequestingRecording: fixture.page == .busy,
-                        onToggleRecording: fixture.toggleRecording
+                        onToggleRecording: fixture.toggleRecording,
+                        canReopen: true
                     )
                     .overlay {
                         if fixture.page == .deleteConfirmation {
@@ -386,7 +393,8 @@ enum PreviewError: Error { case windowUnavailable, encodingFailed, reminderStole
                                     + "This can’t be undone.",
                                 symbol: "trash", eyebrow: "YOUR LIBRARY", tone: .destructive,
                                 detail: "Recording 2026-09-15 at 09.41.00.m4a",
-                                primary: "Delete", secondary: "Cancel", onPrimary: {}, onSecondary: {}
+                                primary: "Delete", primarySymbol: "trash", secondary: "Cancel",
+                                onPrimary: {}, onSecondary: {}
                             ).shadow(color: .black.opacity(0.2), radius: 24, y: 8)
                         }
                     }

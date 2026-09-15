@@ -180,6 +180,7 @@ final class TeamsMeetingWatcher: MeetingEventProviding {
             }
         } catch {
             guard observationIsCurrent(expectedGeneration) else { return }
+            permissions.reportScreenCaptureFailure(error)
             Self.logger.debug("Meeting observation unavailable: \(error.localizedDescription)")
             handleObservationUnavailable()
         }
