@@ -8,6 +8,7 @@
 - fix(macos): protect permission recovery while recording or uploading
 - fix(macos): unify the sidebar background and distinguish ready, warning, and error states with color
 - fix(macos): use icon-and-word actions and restore Play / Pause menu icons
+- fix: finish the web build before starting API end-to-end release checks
 
 ## v2.0.0 (2026-09-15)
 

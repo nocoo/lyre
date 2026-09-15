@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
 
 /**
- * Run pre-push gates in parallel:
+ * Build web assets, then run pre-push gates in parallel:
  *   G2: gate:deps          (dependency vulnerability scan)
  *   G1: lint               (web + api lint)
  *   G1: typecheck          (web + worker + api)
  *   L1: test:coverage      (vitest unit + coverage)
- *       web:build          (production build)
  *   L2: test:e2e           (wrangler dev --env test, longest)  ← live
  *   macOS L1: xcodebuild test (LyreTests scheme)
  *   macOS G1: swiftlint    (--strict)
@@ -35,7 +34,6 @@ const STEPS: Step[] = [
 	{ name: "lint", cmd: ["bun", "run", "lint"] },
 	{ name: "typecheck", cmd: ["bun", "run", "typecheck"] },
 	{ name: "test:coverage", cmd: ["bun", "run", "test:coverage"] },
-	{ name: "web:build", cmd: ["bun", "run", "web:build"] },
 	{ name: "test:e2e", cmd: ["bun", "run", "test:e2e"], live: true },
 	{
 		name: "macos xcodebuild",
@@ -75,7 +73,9 @@ async function run(step: Step): Promise<Outcome> {
 	return { name: step.name, ok: code === 0, ms: performance.now() - start, output };
 }
 
-const results = await Promise.all(STEPS.map(run));
+// Vite clears the assets directory that the API E2E server serves.
+const build = await run({ name: "web:build", cmd: ["bun", "run", "web:build"] });
+const results = build.ok ? [build, ...(await Promise.all(STEPS.map(run)))] : [build];
 
 let failed = false;
 console.log("\n──────── pre-push summary ────────");
