@@ -1,252 +1,88 @@
-# Lyre - Project Guide
+# Lyre
 
-Audio recording management and transcription platform with word-level karaoke playback.
-Runs as a single Cloudflare Worker that serves the Vite SPA from its asset
-binding and exposes the Hono-based API on the same origin.
+Audio recording, transcription and word-level playback across a web app and native macOS recorder.
+Profile: ts-worker-web + native-tool (Swift).
+Direction: [README.md](README.md). Frameworks must preserve this handbook.
 
-## Monorepo Layout
+## Sources of Truth
 
-Bun-native workspaces. There is no Next.js / Railway / SQLite-on-disk story —
-production is Cloudflare Workers + D1 + R2-style Aliyun OSS, and the dev loop
-uses Wrangler + a Vite dev server.
+This file is the quality contract; hooks, CI and config are enforcement. Close implementation gaps without lowering the contract. Historical test results are not evidence of a current passing run.
 
-```
-lyre/
-├── apps/
-│   ├── web/        Vite SPA (@lyre/web) — bundled into the Worker as static assets
-│   ├── api/        Hono Worker (@lyre/api-worker) — entry, middleware, routes, cron
-│   └── macos/      Native Swift/SwiftUI menu bar app
-├── packages/
-│   └── api/        @lyre/api — handlers, services, repos, contracts (framework-agnostic)
-├── docs/
-├── .husky/         Git hooks (pre-commit, pre-push)
-├── package.json    Bun workspaces root
-├── README.md
-├── CLAUDE.md
-├── CHANGELOG.md
-└── LICENSE
-```
+| Fact | Where |
+|---|---|
+| Setup / architecture | [development](docs/08-development.md), [agent details](docs/12-agent-operations.md) |
+| Version | root `package.json`; workspaces and `apps/macos/project.yml` stay aligned |
+| API / test scope | `packages/api`, `vitest.config.ts`, `scripts/run-e2e.ts` |
+| Native / gates | `scripts/test-macos.ts`, `.husky`, `scripts/pre-push.ts`, CI |
+| Accidents | [Retrospective.md](Retrospective.md) |
+| Machine workflow | global `AGENTS.md` and Git rules |
 
-## Tech Stack
+## Project Invariants
 
-### Web (apps/web)
+- One Worker serves `/api/*` and the built Vite SPA. Keep `packages/api` framework-agnostic with request-scoped `RuntimeContext` and `makeRepos(db)`; no global DB/env singleton.
+- Verify Access JWT signature/issuer/audience and fail closed; bearer device tokens are a separate native path. Test auth bypass must remain unavailable in production.
+- Missing `DASHSCOPE_API_KEY` selects mock ASR. Cron polls jobs; the SPA polls `/api/jobs`. Real recordings, OSS, ASR and AI providers require explicit live-test scope.
+- Register mic and system streams separately, mix aligned samples before encoding, and retain single-source fallback/backpressure. Never concatenate streams into doubled recordings.
+- Preserve native permissions and signing identity. Only explicit live recording tests may request capture; default native tests disable live audio. Keep lucide-react as the only web icon library.
 
-- **Build**: Vite 7 (SSG-free SPA, output to `dist/`)
-- **UI**: React 19 + TypeScript 5 (strict)
-- **Styling**: Tailwind CSS v4 + shadcn/ui (Radix primitives)
-- **Icons**: `lucide-react` (the only icon library — do not introduce others)
-- **Routing**: React Router (with a small `router-compat` shim)
-- **State**: TanStack Query for server state
-- **Markdown**: `react-markdown` + `remark-gfm` (AI summary rendering)
-- **Theming**: dark/light mode via in-house `theme-utils` + `<ThemeToggle>`
-- **Path alias**: `@/*` → `apps/web/src/*`
+## Stack / Layout
 
-### API Worker (apps/api)
+| Component | Path / choice |
+|---|---|
+| Web / Worker | `apps/web` Vite/React; `apps/api` Hono/D1/ASSETS |
+| Core API | `packages/api`; Drizzle, Aliyun OSS/DashScope, AI SDK |
+| Native | `apps/macos`; Swift 6, SwiftUI/AppKit, ScreenCaptureKit, xcodegen |
 
-- **Runtime**: Cloudflare Workers
-- **Framework**: Hono 4
-- **Bindings**: `DB` (D1), `ASSETS` (Vite SPA), env vars and secrets via Wrangler
-- **Auth**: Cloudflare Access JWT for browser sessions; bearer device tokens for the macOS app
-- **Cron**: Cloudflare Cron Trigger drives `cronTickHandler` for ASR job polling
+## Commands
 
-### Shared API package (packages/api)
-
-- **Purpose**: Framework-agnostic handlers, services, repos, and contracts.
-  Imported by `apps/api` (production), and exercised directly in unit tests.
-- **DB**: Drizzle ORM. `LyreDb` is opaque — D1 in production, in-memory `bun:sqlite` in tests.
-- **Storage**: Aliyun OSS (zero SDK, custom V1 signature)
-- **ASR**: Aliyun DashScope (`qwen3-asr-flash-filetrans`)
-- **AI**: Vercel AI SDK (multi-provider: OpenAI, Anthropic, OpenAI-compatible)
-- **DI**: Every handler receives a `RuntimeContext { env, db, user, headers }` — no global singletons
-
-### macOS App (apps/macos)
-
-- **Framework**: SwiftUI (`MenuBarExtra`) + AppKit glue
-- **Language**: Swift 6 (strict concurrency)
-- **Minimum macOS**: 15.0 (full ScreenCaptureKit support)
-- **Audio**: ScreenCaptureKit (system + mic) → AudioMixer → AudioEncoder (AVAssetWriter M4A/AAC)
-- **Build**: xcodegen → Xcode project → `xcodebuild`
-- **Networking**: URLSession (async/await)
-- **Testing**: Swift Testing (`xcodebuild test`), SwiftLint (lint)
-- **Code Signing**: Release uses Developer ID Application + Manual signing (Team ID `93WWLTN9XU`). Set `LYRE_CODE_SIGN_IDENTITY` when building a DMG; `LYRE_ALLOW_ADHOC=1` explicitly opts into ad-hoc signing, which cannot preserve a stable TCC identity across updates.
-
-## Key Commands (run from repo root)
+Run from root with Bun, Node 22.12+, macOS 15+, full Xcode, xcodegen, SwiftLint, gitleaks and OSV. Use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` per command if Command Line Tools is selected. Use tracked env examples; local tests need no live provider secrets.
 
 ```bash
-# Dev
-bun run web:dev               # Vite SPA dev server
-bun run worker:dev            # Hono Worker via Wrangler (local D1)
-
-# Quality gates
-bun run lint                  # web + @lyre/api
-bun run typecheck             # web + worker + @lyre/api
-bun run test                  # unit tests (web + worker + @lyre/api)
-bun run test:coverage         # @lyre/api coverage gate
-
-# Deploy
-bun run deploy                # build SPA + publish Worker
-bun run macos:dmg             # build macOS DMG; requires LYRE_CODE_SIGN_IDENTITY
+bun install --frozen-lockfile
+bun run lint
+bun run typecheck
+bun run build
+bun run test:coverage
+bun run test:macos               # isolated, live audio disabled
+bun run test:e2e                 # local Worker API tests
+bun run test:e2e:bdd             # local browser tests
+bun run gate:routes
+bun run gate:pages
 ```
 
-### macOS app commands (run from `apps/macos/`)
+## Verification
 
-```bash
-xcodegen generate
-xcodebuild build -project Lyre.xcodeproj -scheme Lyre -configuration Debug -destination "platform=macOS"
-xcodebuild test  -project Lyre.xcodeproj -scheme LyreTests -configuration Debug -destination "platform=macOS"
-swiftlint lint Lyre/
-```
+6DQ = L1/L2/L3 + G1/G2 + D1 (test isolation). Status: `enforced`, `planned`, `manual`, or `N/A`; partial enforcement below does not certify the full required bar.
+L1 requires statements, branches, functions and lines each ≥95%, with no skipped/focused tests; preserve any stricter package threshold. Native tools must identify unmeasured metrics as gaps.
+G1 requires check-only strict analysis/formatting with zero errors/warnings. G2 requires dependency and secret scans, with missing required scanners failing.
 
-## Git Hooks (Husky)
+| Dimension | Status | Required proof and current evidence/gap |
+|---|---|---|
+| L1 TypeScript | planned | Coverage config has all four 95% thresholds and group gates, but narrow includes and business-logic exclusions leave full source coverage incomplete. |
+| L1 Swift | planned | Native Swift Testing runs through `test:macos`; no four-metric 95% coverage gate is wired. |
+| L2 API / native | planned | Local real-HTTP API tests run before push; require 100% routes including errors/auth. Native tests use test hosts; live capture/OS integration needs a separate fixture lane. |
+| L3 web / desktop | planned | CI runs Playwright BDD and page/route audit scripts exist; all-page and native interaction proof is incomplete. Permissions/UI-only cases remain manual with exact evidence. |
+| G1 TS / Swift | enforced | Hooks run Biome with errors on warnings, typecheck and strict SwiftLint; native compilation uses the full Xcode toolchain. |
+| G2 | enforced | Secret/dependency gates fail when gitleaks or OSV is absent; CI also scans. |
+| D1 | planned | Unit DBs are per suite and native runs get unique DerivedData; Worker API/BDD use default local state rather than unique persist directories with marker/cleanup guards. |
 
-- **pre-commit**: gitleaks (secret scan) → `bun run lint` → `bun run test` → `bun run typecheck`, then macOS UT + lint.
-- **pre-push**: osv-scanner (deps) → `bun run lint` → `bun run typecheck` → `bun run test:coverage` → `bun run web:build`, then macOS UT + lint.
+Pre-commit runs secret scan, lint, unit tests, types, native tests and SwiftLint. Pre-push builds the SPA, then runs dependency scan, lint/types, coverage, local API E2E, native tests and SwiftLint in parallel. Coverage is at pre-push; hooks use the working tree rather than index/pushed refs.
 
-## Architecture Notes
+Target hooks: pre-commit checks G1 + L1 against the index snapshot (`git checkout-index`) in <30s; pre-push checks L2 and G2 in parallel against every stdin push ref/commit in <3min, plus build where applicable. L3 runs in CI or an explicit manual lane.
+Never bypass commit/push hooks, force-push, or use autofix in checks. Documentation changes do not authorize deploying or implementing new gates.
 
-- **Single deployment unit**: `bun run deploy` builds the SPA into `apps/web/dist`, and Wrangler publishes the Worker with that directory bound as `ASSETS`. The browser hits one origin; static assets and `/api/*` are both served by the same Worker.
-- **Auth**: Cloudflare Access fronts the Worker. The `Cf-Access-Jwt-Assertion` header is verified in `apps/api/src/middleware/access-auth.ts` against the team's JWKS (`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`) with RS256, issuer, and audience checks via `jose`. The middleware is fail-closed: missing `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` or an invalid assertion leaves `runtime.user` null. The macOS app uses bearer device tokens via `apps/api/src/middleware/bearer-auth.ts`. E2E sets `E2E_SKIP_AUTH=true` (only honored when `NODE_ENV !== "production"`) to synthesize a stable test user.
-- **DB**: `RuntimeContext.db` carries the live D1 handle in production; tests use a per-suite in-memory `bun:sqlite` Drizzle handle (`packages/api/src/__tests__/_fixtures/test-db.ts`). Repositories are constructed per request via `makeRepos(db)` — never globally.
-- **Env**: `apps/api/src/lib/env.ts` maps `c.env` (Cloudflare Bindings) into the typed `LyreEnv`. `@lyre/api` reads env only via `ctx.env`.
-- **ASR mock**: When `DASHSCOPE_API_KEY` is unset/empty, `getAsrProvider(env)` returns the mock provider with realistic timing — used by unit tests and by local dev when no real key is supplied.
-- **Job polling**: ASR jobs are polled out-of-band by the Cloudflare Cron Trigger which calls `cronTickHandler` via `apps/api/src/lib/cron-ctx.ts`. The SPA hook `useJobEvents` polls `/api/jobs` for status updates (no SSE).
+## Resources / Isolation
 
-## Version Management
+API E2E uses loopback 7017; BDD uses 27016. `--env test` here names local bindings, not a provisioned remote environment; schema commands use `--local`. Current runners lack `--persist-to` and may share default state, so serialize them. Require future per-run local SQLite/storage, `NODE_ENV=test`, checked markers and guarded cleanup. Native run artifacts live under `test-results/macos/run-*`.
 
-Version is managed from the **root `package.json`** as the single source of truth, kept in sync across all workspaces.
+## Operations / Release
 
-| Location               | File                            | Field                |
-|------------------------|---------------------------------|----------------------|
-| Root (source of truth) | `package.json`                  | `version`            |
-| Web app                | `apps/web/package.json`         | `version`            |
-| Worker                 | `apps/api/package.json`         | `version`            |
-| Shared API             | `packages/api/package.json`     | `version`            |
-| macOS app              | `apps/macos/project.yml`        | `MARKETING_VERSION`  |
-
-- `packages/api/src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION` (Vite inlines it).
-- `/api/live` returns the version in its JSON response.
-- macOS About page reads `CFBundleShortVersionString` (set by `MARKETING_VERSION`).
-- `bun run release` walks all workspace `package.json` files (`scripts/release.ts`).
-
-### How to bump version
-
-1. Update `version` in all four `package.json` files and `MARKETING_VERSION` in `apps/macos/project.yml`.
-2. Run `xcodegen generate` from `apps/macos/` to sync `project.pbxproj`.
-3. Update `CHANGELOG.md` with changes since last version.
-4. Commit, push, then tag and release via `gh`.
-5. Build the macOS DMG and attach it to the GitHub release:
-   ```bash
-   LYRE_CODE_SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' bun run macos:dmg
-   # → build/Lyre-<version>.dmg; notarize separately before distribution
-   gh release upload v<version> build/Lyre-<version>.dmg
-   ```
-
-   If no Developer ID certificate is available, `LYRE_ALLOW_ADHOC=1 bun run macos:dmg`
-   builds an ad-hoc DMG. Any release using this option must identify its signing
-   and notarization limitations in the release notes; system permissions may need
-   granting again after an update.
-
-## Project Layout Detail
-
-### apps/web/src
-
-```
-App.tsx                    React Router root
-main.tsx                   Vite entry
-pages/                     Route components (dashboard, recordings, settings/*)
-components/                Feature components + layout/ + ui/ (shadcn)
-hooks/                     use-job-events, use-me, use-mobile
-lib/                       api client, view models, theme utils, version
-__tests__/                 Vitest/bun unit tests
-```
-
-### apps/api/src
-
-```
-index.ts                   Worker entry — Hono app + scheduled() handler
-bindings.ts                Cloudflare Bindings + Hono Variables types
-middleware/
-  runtime-context.ts       Builds RuntimeContext per request
-  access-auth.ts           Cloudflare Access JWT decode → user
-  bearer-auth.ts           Device token → user
-routes/
-  live, me, dashboard, recordings, jobs, folders, tags, search, upload, backy
-  settings/                ai, backy, backup, oss, tokens
-lib/
-  d1.ts                    `openD1(binding)` Drizzle wrapper
-  env.ts                   Bindings → LyreEnv mapping
-  cron-ctx.ts              RuntimeContext for scheduled() runs
-  to-response.ts           HandlerResponse → native Response
-__tests__/                 Worker integration tests (Hono test client)
-```
-
-### packages/api/src
-
-```
-contracts/                 Pure types shared with the SPA (jobs, recordings, ai)
-db/
-  schema.ts                Drizzle schema (users, recordings, folders, tags, …)
-  types.ts                 LyreDb type alias
-  drivers/result.ts        rowsAffected helper (D1/bun-sqlite agnostic)
-  repositories/            Per-table factories: makeUsersRepo(db), …, makeRepos(db)
-runtime/
-  env.ts                   LyreEnv type + emptyEnv() for tests
-  context.ts               RuntimeContext type
-handlers/                  Framework-agnostic: receive RuntimeContext + parsed input
-services/
-  ai.ts                    Vercel AI SDK wrapper, prompt builders
-  asr.ts                   DashScope client + result parsing
-  asr-provider.ts          Mock vs real provider selection
-  oss.ts                   Aliyun OSS V1 sign + presign + delete
-  backup.ts                Backup export/import
-  backy.ts                 Backy push/pull integration
-  job-processor.ts         pollJob() — single-job lifecycle on terminal states
-lib/
-  api-auth.ts              hashToken() — shared by bearer-auth + tokens handler
-  palette.ts, sidebar-nav.ts, types.ts, version.ts
-__tests__/                 vitest suites with in-memory SQLite
-  _fixtures/test-db.ts     Bootstraps the in-memory DB
-  _fixtures/runtime-context.ts  setupAuthedCtx(), testRepos(), …
-```
-
-### apps/macos
-
-```
-apps/macos/
-├── project.yml                     xcodegen project definition
-├── .swiftlint.yml
-├── Lyre.xcodeproj/                 generated
-├── Lyre/
-│   ├── LyreApp.swift               @main, MenuBarExtra, TrayMenu, MainWindowView
-│   ├── Audio/                      PermissionManager, AudioCaptureManager,
-│   │                               AudioMixer, AudioEncoder, RecordingManager
-│   ├── Recording/RecordingsStore.swift
-│   ├── Network/{APIClient, UploadManager}.swift
-│   ├── Config/AppConfig.swift
-│   ├── Views/                      Recordings, Upload, Settings, About, PermissionGuide
-│   └── Utilities/                  AudioPlayerManager, KeychainHelper
-└── LyreTests/                      Smoke, Permission, AudioMixer, Encoder, Capture,
-                                    RecordingManager, RecordingsStore, AppConfig,
-                                    Keychain, APIClient, UploadManager, RecordingE2E
-```
-
-### macOS App Architecture
-
-- **Tray-only app**: Menu bar icon with popup menu. Window UI via "Open Lyre..." menu item.
-- **Menu structure**: Start/Stop Recording → Input Device submenu → Open Lyre... → Quit
-- **Recording indicator**: Tray icon switches between template (idle) and red-dot (recording)
-- **Audio capture**: ScreenCaptureKit (macOS 15.0+) captures both system audio and microphone in a single `SCStream`. Requires "Screen & System Audio Recording" permission.
-- **Audio mixing**: Weighted mix (system 0.8× + mic 2.5×) with tanhf() soft clipping. Stereo→mono picks louder channel.
-- **Input device memory**: Selected microphone persisted in AppConfig, restored on launch with fallback.
-- **Upload flow**: Presign → OSS PUT → Create recording (3-step, with cancel support).
-- **E2E tests**: Skip gracefully when ScreenCaptureKit permission is not granted (CI-safe).
+Apply D1 migrations before an authorized Worker deployment. [Release details](docs/12-agent-operations.md) cover synchronized versions, xcodegen, changelog and DMG packaging. Releases use Developer ID; `LYRE_ALLOW_ADHOC=1` is explicit and cannot promise stable TCC or notarization. Test ad-hoc flags are not release signing.
 
 ## Retrospective
 
-- **SCStream requires registering each output type separately**: Apple's `SCStream.addStreamOutput(_:type:)` must be called for **each** `SCStreamOutputType` you want to receive. Setting `capturesMicrophone = true` in `SCStreamConfiguration` enables microphone capture at the system level, but the stream only delivers microphone buffers if you also register an output handler with type `.microphone`. Without this registration, mic samples are silently discarded — the handler registered for `.audio` never sees them.
-- **System audio + microphone are separate PCM streams that must be mixed**: ScreenCaptureKit delivers system audio and microphone as independent `CMSampleBuffer` streams. Simply concatenating both into the same encoder doubles the recording duration. The correct approach is an `AudioMixer` that buffers both sources independently and outputs their sample-by-sample average `(a + b) / 2`. The mixer also handles the single-source fallback (e.g. no mic permission) by draining the active buffer after a threshold (~100ms at 48kHz) to prevent unbounded accumulation.
-- **D1 schema must be migrated explicitly after a schema change**: `wrangler d1 migrations apply` does not run automatically on `wrangler deploy`. After any Drizzle schema change, generate the SQL and apply it to the D1 database before deploying the Worker that depends on the new columns.
-- **No global DB singleton**: Every repo is constructed via `makeRepos(db)` inside a handler with the request-scoped D1 handle. Adding a new singleton anywhere breaks D1 (no shared connection across requests) and breaks tests (no isolation between cases).
-- **`@MainActor` static constants read from `@Sendable` closures need `nonisolated`**: `NSWorkspace.notificationCenter.addObserver(forName:...)` calls its closure with `@Sendable` semantics. If that closure reads a `static let` on a `@MainActor` class, Swift 6 strict concurrency emits a "main actor-isolated static property can not be referenced from a Sendable closure" warning. The immutable value is trivially safe to read from any actor, so annotating the constant `nonisolated static let teamsBundleIDs: Set<String> = [...]` clears the warning without wrapping the callback in `Task { @MainActor in ... }` just to read a constant. (`Meeting/TeamsMeetingWatcher.swift`.)
-- **`NSAlert.runModal()` + `AsyncStream` gate the reentrance yourself**: When a coordinator consumes an `AsyncStream<Bool>` and calls `NSAlert.runModal()` inline, the consumer's `for await` blocks on the modal. Any event that arrives during the modal sits in `.bufferingNewest(1)` and is delivered right after the modal returns — by then the "prompt is up" flag has already been cleared, and the stale event slips through as a follow-up prompt (DQ-8 in `docs/07-teams-meeting-detector.md`). Fix: keep the stream consumer non-blocking (`dispatch(active:)` is sync, flips the gate, launches a `Task` for the modal); at the end of the modal task `await Task.yield()` **before** clearing the gate so a fast-returning path (a synchronous fake or a real recorder call that has no real suspension points) does not race the buffered event past the gate. Also, drop-by-gate must still update the "last observed" state, otherwise the next real `false → true` transition looks like the same meeting and the prompt gets wrongly suppressed forever. (`Meeting/MeetingPromptCoordinator.swift`.)
-- **`osascript` UI scripting needs Accessibility permission**: `System Events` returns `error -1719: not allowed assistive access` when driving a SwiftUI Toggle from a headless CLI session. Toggle-driven DQ scenarios that can only be exercised through the real Settings pane are unblockable without an interactive Xcode Run or granting the terminal Accessibility in System Settings. Fall back to `defaults write <bundle-id> <key> -bool ...` + relaunch to prove the init-path branch, and record the runtime `.onChange` verification as an open item with the exact `log stream --predicate 'subsystem == "ai.hexly.lyre"'` incantation the reviewer can run manually.
+Move accident narratives to [Retrospective.md](Retrospective.md); keep at most about ten concise recurring project rules here. Put architecture and operational detail in linked docs.
+
+- Swift 6 Sendable closures may need immutable `nonisolated` constants; do not suppress actor-safety warnings.
+- Keep modal prompt stream consumers non-blocking and gate buffered reentry.
+- Record accessibility/permission blockers as unverified manual scenarios, never as passed UI checks.
