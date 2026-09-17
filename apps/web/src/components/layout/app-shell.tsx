@@ -1,5 +1,3 @@
-import { HeaderTooltip, HexlyLink } from "./header-links";
-import { ThemeToggle } from "./theme-toggle";
 import { Button, ContentIsland, Sheet, SheetContent, SheetTitle } from "@nocoo/basalt";
 import { AppHeader } from "@nocoo/basalt/components/app-header";
 import {
@@ -14,8 +12,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocationPathname } from "@/lib/router-compat";
 import { BreadcrumbsProvider, useBreadcrumbs } from "./breadcrumbs-context";
 import { GitHubLink } from "./github-link";
+import { HeaderTooltip, HexlyLink } from "./header-links";
 import { ScrollToTop } from "./scroll-to-top";
 import { AppSidebar } from "./sidebar";
+import { ThemeToggle } from "./theme-toggle";
 
 interface AppShellProps {
 	children: React.ReactNode;
