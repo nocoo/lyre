@@ -1,4 +1,6 @@
-import { Button, ContentIsland, Sheet, SheetContent, SheetTitle, ThemeToggle } from "@nocoo/basalt";
+import { HeaderTooltip, HexlyLink } from "./header-links";
+import { ThemeToggle } from "./theme-toggle";
+import { Button, ContentIsland, Sheet, SheetContent, SheetTitle } from "@nocoo/basalt";
 import { AppHeader } from "@nocoo/basalt/components/app-header";
 import {
 	AppMain,
@@ -104,15 +106,17 @@ function AppShellInner({ children }: AppShellProps) {
 				<AppHeader
 					leading={
 						isMobile ? (
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8"
-								onClick={() => setMobileOpen(true)}
-								aria-label="Open navigation"
-							>
-								<Menu aria-hidden="true" />
-							</Button>
+							<HeaderTooltip label="Open navigation">
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									onClick={() => setMobileOpen(true)}
+									aria-label="Open navigation"
+								>
+									<Menu aria-hidden="true" />
+								</Button>
+							</HeaderTooltip>
 						) : null
 					}
 					breadcrumbs={trail.breadcrumbs}
@@ -120,6 +124,7 @@ function AppShellInner({ children }: AppShellProps) {
 					actions={
 						<>
 							<GitHubLink />
+							<HexlyLink />
 							<ThemeToggle aria-label={`Toggle theme (now ${theme})`} />
 						</>
 					}
