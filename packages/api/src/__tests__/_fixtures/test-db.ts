@@ -82,6 +82,12 @@ CREATE TABLE IF NOT EXISTS transcription_jobs (
   updated_at INTEGER NOT NULL
 );
 
+-- Keep active-job polling and recording lookups bounded to matching jobs.
+CREATE INDEX IF NOT EXISTS idx_jobs_status_created
+  ON transcription_jobs(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_recording_created
+  ON transcription_jobs(recording_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS transcriptions (
   id TEXT PRIMARY KEY,
   recording_id TEXT NOT NULL UNIQUE REFERENCES recordings(id),

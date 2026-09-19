@@ -39,6 +39,8 @@ jobs:
       build-command: "bun run web:build"
       wrangler-version: "4.126.0"
       wrangler-working-directory: "apps/api"
+      d1-migrations: true
+      d1-command: "d1 execute lyre-db --remote --file ../../packages/api/migrations/0002_transcription_job_indexes.sql"
       environment: production
       concurrency-group: deploy-worker-production
       timeout-minutes: 15

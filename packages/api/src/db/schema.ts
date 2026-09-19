@@ -6,7 +6,8 @@
  * Transcription sentences are stored as JSON text.
  */
 
-import { integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { desc } from "drizzle-orm";
+import { index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // ── Users ──
 
@@ -74,24 +75,31 @@ export type NewDbRecording = typeof recordings.$inferInsert;
 
 // ── Transcription Jobs ──
 
-export const transcriptionJobs = sqliteTable("transcription_jobs", {
-	id: text("id").primaryKey(),
-	recordingId: text("recording_id")
-		.notNull()
-		.references(() => recordings.id),
-	taskId: text("task_id").notNull(), // DashScope task ID
-	requestId: text("request_id"),
-	status: text("status", {
-		enum: ["PENDING", "RUNNING", "SUCCEEDED", "FAILED"],
-	}).notNull(),
-	submitTime: text("submit_time"),
-	endTime: text("end_time"),
-	usageSeconds: integer("usage_seconds"),
-	errorMessage: text("error_message"),
-	resultUrl: text("result_url"),
-	createdAt: integer("created_at").notNull(),
-	updatedAt: integer("updated_at").notNull(),
-});
+export const transcriptionJobs = sqliteTable(
+	"transcription_jobs",
+	{
+		id: text("id").primaryKey(),
+		recordingId: text("recording_id")
+			.notNull()
+			.references(() => recordings.id),
+		taskId: text("task_id").notNull(), // DashScope task ID
+		requestId: text("request_id"),
+		status: text("status", {
+			enum: ["PENDING", "RUNNING", "SUCCEEDED", "FAILED"],
+		}).notNull(),
+		submitTime: text("submit_time"),
+		endTime: text("end_time"),
+		usageSeconds: integer("usage_seconds"),
+		errorMessage: text("error_message"),
+		resultUrl: text("result_url"),
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [
+		index("idx_jobs_status_created").on(table.status, desc(table.createdAt)),
+		index("idx_jobs_recording_created").on(table.recordingId, desc(table.createdAt)),
+	],
+);
 
 export type DbTranscriptionJob = typeof transcriptionJobs.$inferSelect;
 export type NewDbTranscriptionJob = typeof transcriptionJobs.$inferInsert;

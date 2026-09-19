@@ -66,6 +66,9 @@ When you change the Drizzle schema, add a new numbered migration
 before deploying the Worker that depends on the new shape — there is no
 auto-migration on `wrangler deploy`.
 
+The release workflow applies the idempotent `0002_transcription_job_indexes.sql`
+before deployment; it does not replay the baseline or existing column migrations.
+
 See `packages/api/migrations/README.md` for the naming rules and
 SQLite ALTER TABLE limits.
 
