@@ -2,6 +2,9 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
+/** Full Xcode.app toolchain. Applied to xcodebuild only, never via xcode-select. */
+const DEFAULT_DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer";
+
 export function nativeTestEnvironment(
 	inherited: NodeJS.ProcessEnv,
 	live: boolean,
@@ -12,6 +15,7 @@ export function nativeTestEnvironment(
 	const recording = live ? "1" : "0";
 	return {
 		...inherited,
+		DEVELOPER_DIR: inherited.DEVELOPER_DIR ?? DEFAULT_DEVELOPER_DIR,
 		LYRE_TEST_HOST: "1",
 		LYRE_RUN_LIVE_RECORDING: recording,
 		TEST_RUNNER_LYRE_TEST_HOST: "1",

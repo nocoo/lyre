@@ -126,7 +126,7 @@ struct RecordingE2ETests {
         #expect(fileSize > 0, "M4A file should not be empty")
 
         // Verify it's a valid audio file
-        let asset = AVAsset(url: outputURL)
+        let asset = AVURLAsset(url: outputURL)
         let tracks = try await asset.loadTracks(withMediaType: .audio)
         #expect(!tracks.isEmpty, "M4A should contain at least one audio track")
 

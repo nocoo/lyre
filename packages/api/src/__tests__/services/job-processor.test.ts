@@ -283,10 +283,16 @@ describe("pollJob scheduling seam", () => {
 		});
 
 		const backgroundTasks: Promise<unknown>[] = [];
+		const summaries = { count: 0 };
+		const generation = Promise.withResolvers<{ text: string }>();
 		const t0 = performance.now();
 		const result = await pollJob(jobRow, makeSuccessProvider(), env, db, {
 			mode: "background",
 			waitUntil: (p) => backgroundTasks.push(p),
+			generate: stubGenerate(async () => {
+				summaries.count += 1;
+				return generation.promise;
+			}),
 		});
 		const elapsed = performance.now() - t0;
 
@@ -308,10 +314,12 @@ describe("pollJob scheduling seam", () => {
 		expect(midRec?.aiSummaryStatus).toBe("running");
 		expect(midRec?.aiSummary).toBeNull();
 
-		// Drain background work so the test doesn't leak an in-flight
-		// promise. We don't care whether the AI call succeeded or failed;
-		// runAutoSummary is fully guarded either way.
-		await Promise.allSettled(backgroundTasks);
+		generation.resolve({ text: "offline summary" });
+		await Promise.all(backgroundTasks);
+		expect(summaries.count).toBe(1);
+		const completed = await testRepos().recordings.findById("rec-1");
+		expect(completed?.aiSummaryStatus).toBe("succeeded");
+		expect(completed?.aiSummary).toBe("offline summary");
 	});
 
 	it("background mode with auto-summary disabled leaves aiSummaryStatus null and skips waitUntil", async () => {

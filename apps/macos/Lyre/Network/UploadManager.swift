@@ -31,15 +31,15 @@ final class UploadManager {
         }
     }
 
-    internal(set) var state: UploadState = .idle
+    var state: UploadState = .idle
 
     /// Folders and tags fetched from the server.
-    internal(set) var folders: [APIClient.Folder] = []
-    internal(set) var tags: [APIClient.Tag] = []
-    internal(set) var isFetchingMetadata: Bool = false
+    var folders: [APIClient.Folder] = []
+    var tags: [APIClient.Tag] = []
+    var isFetchingMetadata: Bool = false
 
     /// Error message from the last metadata fetch attempt (nil if succeeded or not attempted).
-    internal(set) var metadataError: String?
+    var metadataError: String?
 
     // MARK: - Upload parameters (set by UI)
 

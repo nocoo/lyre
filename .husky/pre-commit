@@ -1,19 +1,2 @@
-# pre-commit: secrets scan + lint + UT + typecheck (web, worker, @lyre/api, macOS)
-set -e
-
-# Secrets scanning (must run before any other check)
-bun run gate:secrets
-
-bun run lint
-bun run test
-bun run typecheck
-
-# macOS: unit tests + lint
-#
-# Ad-hoc signing (CODE_SIGN_IDENTITY="-" + CODE_SIGNING_{REQUIRED,ALLOWED}=NO)
-# lets the test bundle build on dev machines that do not carry the Apple
-# Developer cert matching the project's release team — running tests does
-# not need a real signature, but `release.ts` still uses the team cert
-# because it does not pass these overrides.
-bun run test:macos
-cd apps/macos && swiftlint lint --strict Lyre/ LyreTests/
+set -eu
+exec python3 -c 'import subprocess; exec(subprocess.check_output(["git", "show", ":scripts/pre-commit.py"]))'

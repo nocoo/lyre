@@ -23,9 +23,9 @@ final class AudioPlayerManager: NSObject, @unchecked Sendable {
         case paused(URL)
     }
 
-    internal(set) var state: PlaybackState = .stopped
-    internal(set) var currentTime: TimeInterval = 0
-    internal(set) var duration: TimeInterval = 0
+    var state: PlaybackState = .stopped
+    var currentTime: TimeInterval = 0
+    var duration: TimeInterval = 0
 
     private var player: AVPlayer?
     private var timeObserver: Any?

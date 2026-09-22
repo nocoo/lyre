@@ -56,8 +56,12 @@ export interface JobPollResult {
  *   handlers so `GET /api/jobs/:id` never blocks on a 60s AI call.
  */
 export type SummarizeScheduling =
-	| { mode: "await" }
-	| { mode: "background"; waitUntil: (promise: Promise<unknown>) => void };
+	| { mode: "await"; generate?: typeof generateText }
+	| {
+			mode: "background";
+			waitUntil: (promise: Promise<unknown>) => void;
+			generate?: typeof generateText;
+	  };
 
 // ── Core poll function ──
 
@@ -194,10 +198,16 @@ export async function pollJob(
 				db,
 			);
 			if (reservation.kind === "started") {
-				scheduling.waitUntil(runAutoSummary(reservation, db));
+				scheduling.waitUntil(runAutoSummary(reservation, db, scheduling.generate));
 			}
 		} else {
-			await autoSummarize(summarizeInput.userId, job.recordingId, summarizeInput.fullText, db);
+			await autoSummarize(
+				summarizeInput.userId,
+				job.recordingId,
+				summarizeInput.fullText,
+				db,
+				scheduling.generate,
+			);
 		}
 	}
 

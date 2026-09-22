@@ -39,9 +39,9 @@ final class RecordingManager: @unchecked Sendable {
 
     // MARK: - Observable state
 
-    internal(set) var state: State = .idle
-    internal(set) var currentFileURL: URL?
-    internal(set) var recordingStartTime: Date?
+    var state: State = .idle
+    var currentFileURL: URL?
+    var recordingStartTime: Date?
 
     /// Elapsed seconds since recording started. Updated externally by a timer or UI poll.
     var elapsedSeconds: TimeInterval {
@@ -50,7 +50,7 @@ final class RecordingManager: @unchecked Sendable {
     }
 
     /// Last error that occurred during recording.
-    internal(set) var lastError: Error?
+    var lastError: Error?
 
     /// Proxy to the underlying `AudioCapturing.lastCaptureDiagnostics`
     /// so `RecordingActionController` can decide on non-fatal warnings

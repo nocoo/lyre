@@ -43,13 +43,13 @@ final class RecordingsStore: @unchecked Sendable {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "RecordingsStore")
 
     /// Sorted list of recordings (newest first).
-    internal(set) var recordings: [RecordingFile] = []
+    var recordings: [RecordingFile] = []
 
     /// Whether a scan is in progress.
-    internal(set) var isScanning: Bool = false
+    var isScanning: Bool = false
 
     /// Whether at least one scan has completed.
-    internal(set) var hasLoaded: Bool = false
+    var hasLoaded: Bool = false
 
     /// The directory to scan.
     private let directory: URL
@@ -197,7 +197,7 @@ final class RecordingsStore: @unchecked Sendable {
 
     /// Load the audio duration from an M4A file using AVAsset.
     private func loadDuration(url: URL) async -> TimeInterval? {
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         do {
             let duration = try await asset.load(.duration)
             let seconds = CMTimeGetSeconds(duration)

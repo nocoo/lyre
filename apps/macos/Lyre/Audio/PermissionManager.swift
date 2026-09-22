@@ -19,9 +19,9 @@ final class PermissionManager: @unchecked Sendable {
         case denied
     }
 
-    // internal(set) so @testable import can mutate for testing
-    internal(set) var screenRecording: Status = .unknown
-    internal(set) var microphone: Status = .unknown
+    // Internal so @testable import can mutate these in tests.
+    var screenRecording: Status = .unknown
+    var microphone: Status = .unknown
     private(set) var isRequestingMicrophone = false
     private(set) var isRequestingScreenRecording = false
     private(set) var screenRecordingIssue: String?

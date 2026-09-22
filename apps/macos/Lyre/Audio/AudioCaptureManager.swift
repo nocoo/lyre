@@ -46,7 +46,7 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
     var onStreamError: ((Error) -> Void)?
 
     /// Available microphone input devices.
-    internal(set) var availableDevices: [AudioInputDevice] = []
+    var availableDevices: [AudioInputDevice] = []
 
     /// Currently selected microphone device ID. Nil = system default.
     var selectedDeviceID: String?
