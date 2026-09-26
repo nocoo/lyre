@@ -102,6 +102,74 @@ struct RecordingsStoreTests {
         #expect(store.recordings[1].filename == "older")
     }
 
+    @Test @MainActor
+    func watchingTracksCreatedAndDeletedRecordings() async throws {
+        let dir = makeTempDir()
+        defer { cleanup(dir) }
+        let store = RecordingsStore(directory: dir)
+        store.startWatching()
+        defer { store.stopWatching() }
+
+        let url = createDummyM4A(in: dir, name: "watched.m4a")
+        for _ in 0..<150 where !store.hasLoaded || store.isScanning || store.recordings.isEmpty {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(store.hasLoaded)
+        #expect(store.recordings.map { $0.url.standardizedFileURL } == [url.standardizedFileURL])
+
+        try FileManager.default.removeItem(at: url)
+        for _ in 0..<150 where store.isScanning || !store.recordings.isEmpty {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(store.recordings.isEmpty)
+        #expect(!store.isScanning)
+    }
+
+    @Test func refreshReplacesPartialMetadataWithoutDuplicatingRecording() async throws {
+        let dir = makeTempDir()
+        defer { cleanup(dir) }
+        let url = createDummyM4A(in: dir, name: "finalized.m4a")
+        let store = RecordingsStore(directory: dir)
+        await store.scan()
+        #expect(store.recordings.first?.fileSize == 1024)
+        let scannedURL = try #require(store.recordings.first?.url)
+
+        try Data(repeating: 0, count: 4096).write(to: url)
+        let updated = try #require(await store.refresh(url: scannedURL))
+        #expect(updated.url == scannedURL)
+        #expect(updated.fileSize == 4096)
+        #expect(store.recordings.count == 1)
+        #expect(store.recordings.first?.fileSize == 4096)
+    }
+
+    @Test func refreshInsertsNewRecordingInCreationOrder() async throws {
+        let dir = makeTempDir()
+        defer { cleanup(dir) }
+        let older = createDummyM4A(in: dir, name: "older.m4a")
+        try FileManager.default.setAttributes(
+            [.creationDate: Date().addingTimeInterval(-3600)], ofItemAtPath: older.path
+        )
+        let store = RecordingsStore(directory: dir)
+        await store.scan()
+
+        let newer = createDummyM4A(in: dir, name: "newer.m4a")
+        let updated = try #require(await store.refresh(url: newer))
+        #expect(updated.url == newer)
+        #expect(store.recordings.map { $0.url.standardizedFileURL } == [newer, older].map(\.standardizedFileURL))
+    }
+
+    @Test func refreshMissingFilePreservesExistingRecordings() async {
+        let dir = makeTempDir()
+        defer { cleanup(dir) }
+        let existing = createDummyM4A(in: dir, name: "existing.m4a")
+        let store = RecordingsStore(directory: dir)
+        await store.scan()
+
+        let updated = await store.refresh(url: dir.appendingPathComponent("missing.m4a"))
+        #expect(updated == nil)
+        #expect(store.recordings.map { $0.url.standardizedFileURL } == [existing.standardizedFileURL])
+    }
+
     // MARK: - RecordingFile properties
 
     @Test func recordingFileFormattedSize() {
