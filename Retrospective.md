@@ -20,3 +20,12 @@ URL assertions and exercising a different refresh path than intended. On Darwin,
 URLs for identity-based refresh tests and compare `standardizedFileURL` when
 asserting filesystem equivalence. Keep watcher assertions bounded and wait for
 scans to finish before reading results.
+
+## 2026-09-26: Serialize CI validation for the same ref
+
+During CI/CD verification, a manual CI run cancelled the in-progress push CI.
+The caller workflow did not declare concurrency, but its pinned reusable quality
+workflow grouped runs by `github.workflow` and `github.ref` with
+`cancel-in-progress: true`. Inspect concurrency in called workflows before
+scheduling validation. Finish push CI and its dependent release before starting
+manual CI on the same ref; a cancelled aggregate is not passing CI evidence.
