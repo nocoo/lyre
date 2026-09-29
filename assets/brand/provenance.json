@@ -1,0 +1,12 @@
+{
+	"source": "https://hexly.ai/icons/lyre/v1.0.0",
+	"adoptedAt": "2026-09-29",
+	"texture": "Forest fern folds v1.0.1",
+	"masters": {
+		"icon.png": "133aaf6330f8c0373025ab16fd034830851bc495e2752c13f332ae6e30a10462",
+		"icon-rounded.png": "a5d539497fd177856d6b8de9fcd3ddcaf820a1cc8ffe47116990e1baf1efc676"
+	},
+	"derivatives": "scripts/resize-logos.py",
+	"nativePlacement": "824px rounded tile centered on a 1024px transparent canvas",
+	"identity": "The original logo.png and independent menu bar templates retain their artwork."
+}

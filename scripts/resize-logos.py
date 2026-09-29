@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate web and macOS assets from the retained foreground and presentation masters.
+"""Generate web and macOS assets from the approved Hexly presentation masters.
 
 Run: uv run --with pillow python scripts/resize-logos.py
 Menu bar template and recording-state images remain independent, unchanged assets.
@@ -16,12 +16,11 @@ CATALOG = ROOT / "apps/macos/Lyre/Assets.xcassets/AppIcon.appiconset"
 
 
 def main():
-    foreground = Image.open(ROOT / "logo.png").convert("RGBA")
     square = Image.open(ROOT / "assets/brand/icon.png").convert("RGBA")
     rounded = Image.open(ROOT / "assets/brand/icon-rounded.png").convert("RGBA")
     for size, name in [(24, "logo-24.png"), (80, "logo-80.png"), (32, "favicon.png")]:
-        foreground.resize((size, size), Image.Resampling.LANCZOS).save(PUBLIC / name)
-    foreground.save(PUBLIC / "favicon.ico", format="ICO", sizes=[(16, 16), (32, 32)])
+        rounded.resize((size, size), Image.Resampling.LANCZOS).save(PUBLIC / name)
+    rounded.save(PUBLIC / "favicon.ico", format="ICO", sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     square.resize((180, 180), Image.Resampling.LANCZOS).convert("RGB").save(
         PUBLIC / "apple-touch-icon.png"
     )
@@ -37,7 +36,7 @@ def main():
     outputs = {entry["filename"]: int(entry["size"].split("x")[0]) * int(entry["scale"][0]) for entry in entries}
     for filename, size in outputs.items():
         native.resize((size, size), Image.Resampling.LANCZOS).save(CATALOG / filename)
-    print("Generated transparent web marks, touch/social presentations, and inset macOS icons.")
+    print("Generated textured web marks, touch/social presentations, and inset macOS icons.")
 
 
 if __name__ == "__main__":
