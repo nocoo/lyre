@@ -14,7 +14,7 @@
 - Preserve delayed tracks and trailing audio during mixing; reuse successful local results and recording IDs on upload retries.
 - Show local sentence playback with accurate millisecond offsets and no fabricated word timing.
 - Adopt the latest textured Hexly app icons and tighten the native sidebar brand spacing.
-- Add the Hexly project link and accessible web header controls; update Basalt and the vulnerable picomatch dependency.
+- Add the Hexly project link and accessible web header controls; update Basalt and vulnerable picomatch / undici dependencies.
 - Index transcription job lookups, isolate commit checks and browser/native test artifacts, and prevent manual CI runs from triggering release deployment.
 
 ## v2.0.1 (2026-09-15)
