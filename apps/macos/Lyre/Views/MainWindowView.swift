@@ -96,15 +96,15 @@ struct MainWindowView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 LyreBrandMark(size: 38)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Lyre").font(.system(size: 19, weight: .semibold))
                     Text("Keep the conversation").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 18).padding(.top, 22).padding(.bottom, 24)
+            .padding(.horizontal, 12).frame(height: 72)
 
             List(selection: sidebarSelection) {
                 Section {
