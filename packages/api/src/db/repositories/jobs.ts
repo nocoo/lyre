@@ -2,7 +2,7 @@
  * Transcription jobs repository factory.
  */
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { JobStatus } from "../../lib/types";
 import { rowsAffected } from "../drivers/result";
 import { type DbTranscriptionJob, transcriptionJobs } from "../schema";
@@ -27,7 +27,7 @@ export function makeJobsRepo(db: LyreDb) {
 				.select()
 				.from(transcriptionJobs)
 				.where(eq(transcriptionJobs.recordingId, recordingId))
-				.orderBy(desc(transcriptionJobs.createdAt))
+				.orderBy(desc(transcriptionJobs.createdAt), desc(sql`rowid`))
 				.get();
 		},
 
@@ -36,7 +36,7 @@ export function makeJobsRepo(db: LyreDb) {
 				.select()
 				.from(transcriptionJobs)
 				.where(eq(transcriptionJobs.recordingId, recordingId))
-				.orderBy(desc(transcriptionJobs.createdAt))
+				.orderBy(desc(transcriptionJobs.createdAt), desc(sql`rowid`))
 				.all();
 		},
 
@@ -93,7 +93,7 @@ export function makeJobsRepo(db: LyreDb) {
 				.select()
 				.from(transcriptionJobs)
 				.where(inArray(transcriptionJobs.status, ["PENDING", "RUNNING"]))
-				.orderBy(desc(transcriptionJobs.createdAt))
+				.orderBy(desc(transcriptionJobs.createdAt), desc(sql`rowid`))
 				.all();
 		},
 	};

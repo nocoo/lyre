@@ -1,142 +1,52 @@
 import AVFoundation
 import Foundation
-import os
 
-/// Downmix a multi-track M4A into a single-track M4A suitable for HTML5 <audio>.
-///
-/// Why this exists:
-/// - RecordingManager encodes with mode `.dualTrack`, writing system audio
-///   and mic on two separate `AVAssetWriterInput`s. That's ideal for
-///   server-side ASR that wants to distinguish speakers, but browsers only
-///   play the first audio track, so a dual-track M4A sounds silent in the
-///   dashboard even though the file is well-formed and locally playable.
-/// - Rather than change the encoding strategy, we downmix at upload time:
-///   read both PCM streams, average them per sample, re-encode as a single
-///   AAC track. Output stays audio/mp4 with faststart, so the dashboard
-///   player sees one audible track and just works.
 enum AudioDownmixer {
-    private static let logger = Logger(
-        subsystem: Constants.subsystem,
-        category: "AudioDownmixer"
-    )
-
     enum DownmixError: LocalizedError {
-        case cannotReadAsset(String)
         case noAudioTracks
-        case readerSetupFailed(String)
-        case writerSetupFailed(String)
         case encodeFailed(String)
 
         var errorDescription: String? {
             switch self {
-            case .cannotReadAsset(let d): return "Cannot read source asset: \(d)"
-            case .noAudioTracks:          return "Source has no audio tracks"
-            case .readerSetupFailed(let d): return "AVAssetReader setup failed: \(d)"
-            case .writerSetupFailed(let d): return "AVAssetWriter setup failed: \(d)"
-            case .encodeFailed(let d):    return "Downmix encode failed: \(d)"
+            case .noAudioTracks: "Source has no audio tracks"
+            case .encodeFailed(let message): "Audio conversion failed: \(message)"
             }
         }
     }
 
-    /// Downmix `source` into a single-track M4A at `destination`.
-    ///
-    /// If the source already has ≤ 1 audio track, copies it via
-    /// `FileManager.copyItem` unchanged (avoids a lossy re-encode).
-    /// Otherwise decodes every track to Float32 PCM at a common sample
-    /// rate, averages them, and re-encodes as one mono AAC track.
     static func downmix(source: URL, destination: URL) async throws {
         let asset = AVURLAsset(url: source)
-
-        let tracks: [AVAssetTrack]
-        do {
-            tracks = try await asset.loadTracks(withMediaType: .audio)
-        } catch {
-            throw DownmixError.cannotReadAsset(error.localizedDescription)
-        }
-
-        guard !tracks.isEmpty else {
-            throw DownmixError.noAudioTracks
-        }
-
-        // Single-track fast path: no re-encode.
-        if tracks.count == 1 {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: source, to: destination)
-            logger.info("Single-track source — copied without re-encode")
-            return
-        }
-
-        logger.info("Downmixing \(tracks.count) tracks: \(source.lastPathComponent)")
-
-        let sampleRate = Constants.Audio.sampleRate
-        try await runDownmix(
-            asset: asset,
-            tracks: tracks,
-            destination: destination,
-            sampleRate: sampleRate
-        )
-    }
-
-    // MARK: - Core
-
-    private static func runDownmix(
-        asset: AVAsset,
-        tracks: [AVAssetTrack],
-        destination: URL,
-        sampleRate: Double
-    ) async throws {
+        let tracks = try await asset.loadTracks(withMediaType: .audio)
+        guard !tracks.isEmpty else { throw DownmixError.noAudioTracks }
+        try Task.checkCancellation()
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
-
-        let (reader, outputs) = try makeReader(asset: asset, tracks: tracks, sampleRate: sampleRate)
-        let (writer, input) = try makeWriter(destination: destination, sampleRate: sampleRate)
-
-        guard reader.startReading() else {
-            throw DownmixError.readerSetupFailed(
-                reader.error?.localizedDescription ?? "unknown"
-            )
+        if tracks.count == 1 {
+            try FileManager.default.copyItem(at: source, to: destination)
+            return
         }
-        guard writer.startWriting() else {
-            throw DownmixError.writerSetupFailed(
-                writer.error?.localizedDescription ?? "unknown"
-            )
-        }
-        writer.startSession(atSourceTime: .zero)
-
-        try await pumpMixedSamples(
-            outputs: outputs,
-            input: input,
-            writer: writer,
-            sampleRate: sampleRate
-        )
-
-        input.markAsFinished()
-        await writer.finishWriting()
-
-        if writer.status != .completed {
-            let msg = writer.error?.localizedDescription ?? "status=\(writer.status.rawValue)"
-            throw DownmixError.encodeFailed(msg)
-        }
-        if reader.status == .failed {
-            let msg = reader.error?.localizedDescription ?? "reader failed"
-            throw DownmixError.encodeFailed(msg)
-        }
-
-        logger.info("Downmix complete → \(destination.lastPathComponent)")
+        try await convert(asset: asset, tracks: tracks, destination: destination, wav: false)
     }
 
-    /// Configure an AVAssetReader that emits Float32 mono PCM at the
-    /// target sample rate for every input track. The reader handles
-    /// resampling and channel down-conversion — the caller just averages.
-    private static func makeReader(
-        asset: AVAsset,
-        tracks: [AVAssetTrack],
-        sampleRate: Double
-    ) throws -> (AVAssetReader, [AVAssetReaderTrackOutput]) {
-        let pcmSettings: [String: Any] = [
+    static func makeWhisperWAV(source: URL, destination: URL) async throws {
+        let asset = AVURLAsset(url: source)
+        let tracks = try await asset.loadTracks(withMediaType: .audio)
+        guard !tracks.isEmpty else { throw DownmixError.noAudioTracks }
+        try Task.checkCancellation()
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try await convert(asset: asset, tracks: tracks, destination: destination, wav: true)
+    }
+
+    private static func convert(
+        asset: AVAsset, tracks: [AVAssetTrack], destination: URL, wav: Bool
+    ) async throws {
+        let sampleRate = wav ? 16_000.0 : Constants.Audio.sampleRate
+        let reader = try AVAssetReader(asset: asset)
+        reader.timeRange = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
+        let output = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: 1,
@@ -144,157 +54,73 @@ enum AudioDownmixer {
             AVLinearPCMIsFloatKey: true,
             AVLinearPCMIsBigEndianKey: false,
             AVLinearPCMIsNonInterleaved: false,
-        ]
-
-        let reader: AVAssetReader
-        do {
-            reader = try AVAssetReader(asset: asset)
-        } catch {
-            throw DownmixError.readerSetupFailed(error.localizedDescription)
+        ])
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = tracks.map { track in
+            let parameters = AVMutableAudioMixInputParameters(track: track)
+            parameters.setVolume(1 / Float(tracks.count), at: .zero)
+            return parameters
         }
-
-        var outputs: [AVAssetReaderTrackOutput] = []
-        for track in tracks {
-            let out = AVAssetReaderTrackOutput(track: track, outputSettings: pcmSettings)
-            out.alwaysCopiesSampleData = false
-            guard reader.canAdd(out) else {
-                throw DownmixError.readerSetupFailed("cannot add track output")
-            }
-            reader.add(out)
-            outputs.append(out)
+        output.audioMix = mix
+        guard reader.canAdd(output) else { throw DownmixError.encodeFailed("Cannot mix source tracks") }
+        reader.add(output)
+        let writer = try AVAssetWriter(outputURL: destination, fileType: wav ? .wav : .m4a)
+        writer.shouldOptimizeForNetworkUse = !wav
+        var settings: [String: Any] = [AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 1]
+        if wav {
+            settings.merge([
+                AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false,
+                AVLinearPCMIsNonInterleaved: false,
+            ]) { _, new in new }
+        } else {
+            settings[AVFormatIDKey] = kAudioFormatMPEG4AAC
+            settings[AVEncoderBitRateKey] = Constants.Audio.aacBitRate
         }
-        return (reader, outputs)
-    }
-
-    /// Configure an AVAssetWriter with a single AAC track (mono, target
-    /// sample rate) and faststart enabled so the resulting M4A is ready
-    /// for HTTP streaming to <audio>.
-    private static func makeWriter(
-        destination: URL,
-        sampleRate: Double
-    ) throws -> (AVAssetWriter, AVAssetWriterInput) {
-        let writer: AVAssetWriter
-        do {
-            writer = try AVAssetWriter(outputURL: destination, fileType: .m4a)
-        } catch {
-            throw DownmixError.writerSetupFailed(error.localizedDescription)
-        }
-        writer.shouldOptimizeForNetworkUse = true
-
-        let outputSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: sampleRate,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderBitRateKey: Constants.Audio.aacBitRate,
-        ]
-        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: outputSettings)
+        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: settings)
         input.expectsMediaDataInRealTime = false
-        guard writer.canAdd(input) else {
-            throw DownmixError.writerSetupFailed("cannot add AAC input")
-        }
+        guard writer.canAdd(input) else { throw DownmixError.encodeFailed("Cannot encode mixed audio") }
         writer.add(input)
-        return (writer, input)
+        do {
+            try await pump(reader: reader, output: output, writer: writer, input: input)
+        } catch {
+            reader.cancelReading()
+            writer.cancelWriting()
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
     }
 
-    // MARK: - Sample pump
-
-    /// Read one PCM buffer from every track output, average the samples
-    /// element-wise, and append the mixed buffer to the writer input.
-    ///
-    /// Blocks on `input.isReadyForMoreMediaData` between appends. Ends
-    /// when every reader output returns nil.
-    private static func pumpMixedSamples(
-        outputs: [AVAssetReaderTrackOutput],
-        input: AVAssetWriterInput,
-        writer: AVAssetWriter,
-        sampleRate: Double
+    private static func pump(
+        reader: AVAssetReader, output: AVAssetReaderAudioMixOutput,
+        writer: AVAssetWriter, input: AVAssetWriterInput
     ) async throws {
-        var done: [Bool] = Array(repeating: false, count: outputs.count)
-
-        while !done.allSatisfy({ $0 }) {
+        guard reader.startReading(), writer.startWriting() else {
+            throw DownmixError.encodeFailed(
+                reader.error?.localizedDescription ?? writer.error?.localizedDescription ?? "Cannot start conversion"
+            )
+        }
+        writer.startSession(atSourceTime: .zero)
+        while let buffer = output.copyNextSampleBuffer() {
+            try Task.checkCancellation()
             while !input.isReadyForMoreMediaData {
-                try await Task.sleep(nanoseconds: 5_000_000) // 5 ms
+                guard writer.status == .writing else {
+                    throw DownmixError.encodeFailed(writer.error?.localizedDescription ?? "Writer stopped")
+                }
+                try await Task.sleep(for: .milliseconds(5))
             }
-
-            let batch = readOneBatch(outputs: outputs, done: &done)
-            guard !batch.floats.isEmpty, batch.frameCount > 0 else { continue }
-
-            let mixed = averageBatch(floats: batch.floats, frameCount: batch.frameCount)
-
-            guard let outBuffer = makeSampleBuffer(
-                floats: mixed,
-                pts: batch.pts,
-                sampleRate: sampleRate
-            ) else {
-                throw DownmixError.encodeFailed("failed to build output sample buffer")
-            }
-
-            if !input.append(outBuffer) {
-                let msg = writer.error?.localizedDescription ?? "append rejected"
-                throw DownmixError.encodeFailed(msg)
+            guard input.append(buffer) else {
+                throw DownmixError.encodeFailed(writer.error?.localizedDescription ?? "Cannot write mixed audio")
             }
         }
-    }
-
-    private struct SampleBatch {
-        let floats: [[Float]]
-        let frameCount: Int
-        let pts: CMTime
-    }
-
-    /// One "round" of the pump: pull the next PCM buffer from every
-    /// still-active track output. Marks outputs as done when they return
-    /// nil so the main loop can terminate cleanly. Returns the earliest
-    /// PTS of the batch (for dual-track output from AudioEncoder these
-    /// are already time-aligned to `startSession(atSourceTime: .zero)`).
-    private static func readOneBatch(
-        outputs: [AVAssetReaderTrackOutput],
-        done: inout [Bool]
-    ) -> SampleBatch {
-        var perTrackFloats: [[Float]] = []
-        var perTrackPTS: [CMTime] = []
-        var frameCount = Int.max
-
-        for (idx, output) in outputs.enumerated() {
-            if done[idx] { continue }
-            guard let sb = output.copyNextSampleBuffer() else {
-                done[idx] = true
-                continue
-            }
-            guard let (floats, pts) = extractMonoFloats(from: sb) else { continue }
-            perTrackFloats.append(floats)
-            perTrackPTS.append(pts)
-            frameCount = min(frameCount, floats.count)
+        try Task.checkCancellation()
+        guard reader.status == .completed else {
+            throw DownmixError.encodeFailed(reader.error?.localizedDescription ?? "Cannot read source audio")
         }
-
-        let pts = perTrackPTS.min(by: { $0.value < $1.value }) ?? .zero
-        return SampleBatch(
-            floats: perTrackFloats,
-            frameCount: frameCount == Int.max ? 0 : frameCount,
-            pts: pts
-        )
-    }
-
-    /// Element-wise average of per-track PCM samples, truncated to the
-    /// shortest track's frame count.
-    private static func averageBatch(floats: [[Float]], frameCount: Int) -> [Float] {
-        var mixed = [Float](repeating: 0, count: frameCount)
-        let n = Float(floats.count)
-        for arr in floats {
-            for i in 0..<frameCount {
-                mixed[i] += arr[i]
-            }
+        input.markAsFinished()
+        await writer.finishWriting()
+        guard writer.status == .completed else {
+            throw DownmixError.encodeFailed(writer.error?.localizedDescription ?? "Cannot finish conversion")
         }
-        for i in 0..<frameCount {
-            mixed[i] /= n
-        }
-        return mixed
     }
-
-    // MARK: - CMSampleBuffer helpers
-
-    // Split out into AudioDownmixerHelpers.swift to keep the top-level
-    // downmix flow (setup → pump → finalize) inside a single readable
-    // type body — the CMSampleBuffer plumbing is unrelated to the pump
-    // logic and gets its own file.
 }

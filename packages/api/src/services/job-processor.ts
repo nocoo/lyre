@@ -289,6 +289,7 @@ export async function beginAutoSummarize(
 	recordingId: string,
 	fullText: string,
 	db: LyreDb,
+	once = false,
 ): Promise<AutoSummarizeReservation> {
 	const settings = makeSettingsRepo(db);
 	const recordings = makeRecordingsRepo(db);
@@ -329,11 +330,19 @@ export async function beginAutoSummarize(
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		console.warn(`[auto-summarize] Config invalid for recording ${recordingId}: ${message}`);
-		await recordings.update(recordingId, {
-			aiSummaryStatus: "failed",
-			aiSummaryError: `AI configuration invalid: ${message}`,
-			aiSummary: null,
-		});
+		if (once) {
+			await recordings.reserveAutoSummary(
+				recordingId,
+				"failed",
+				`AI configuration invalid: ${message}`,
+			);
+		} else {
+			await recordings.update(recordingId, {
+				aiSummaryStatus: "failed",
+				aiSummaryError: `AI configuration invalid: ${message}`,
+				aiSummary: null,
+			});
+		}
 		return { kind: "bad-config" };
 	}
 
@@ -341,11 +350,16 @@ export async function beginAutoSummarize(
 	// error, and drop the previous summary so the UI shows a fresh state.
 	// This write MUST land before the HTTP response returns in the
 	// background path — the SPA's post-SUCCEEDED reload keys on it.
-	await recordings.update(recordingId, {
-		aiSummaryStatus: "running",
-		aiSummaryError: null,
-		aiSummary: null,
-	});
+	if (once) {
+		if (!(await recordings.reserveAutoSummary(recordingId, "running", null)))
+			return { kind: "skipped" };
+	} else {
+		await recordings.update(recordingId, {
+			aiSummaryStatus: "running",
+			aiSummaryError: null,
+			aiSummary: null,
+		});
+	}
 
 	return {
 		kind: "started",

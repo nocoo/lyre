@@ -103,6 +103,7 @@ export function toSentenceVM(sentence: TranscriptionSentence): SentenceVM {
 }
 
 export interface TranscriptionVM {
+	local: boolean;
 	fullText: string;
 	sentences: SentenceVM[];
 	sentenceCount: number;
@@ -115,6 +116,7 @@ export function toTranscriptionVM(detail: RecordingDetail): TranscriptionVM | nu
 
 	const { fullText, sentences, language } = detail.transcription;
 	return {
+		local: detail.latestJob?.taskId.startsWith("local:") ?? false,
 		fullText,
 		sentences: sentences.map(toSentenceVM),
 		sentenceCount: sentences.length,
@@ -201,8 +203,10 @@ export function toJobStatusVM(job: TranscriptionJob | null): JobStatusVM | null 
 		processingDuration: computeProcessingDuration(job.submitTime, job.endTime),
 		usageSeconds: job.usageSeconds ? formatDuration(job.usageSeconds) : "—",
 		errorMessage: job.errorMessage ?? "",
-		model: ASR_MODEL,
-		estimatedCost: computeEstimatedCost(job.usageSeconds),
+		model: job.taskId.startsWith("local:") ? "Whisper · Local" : ASR_MODEL,
+		estimatedCost: job.taskId.startsWith("local:")
+			? "¥0.00"
+			: computeEstimatedCost(job.usageSeconds),
 	};
 }
 

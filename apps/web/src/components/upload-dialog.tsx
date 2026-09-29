@@ -1,4 +1,8 @@
 import {
+	MAX_LOCAL_TRANSCRIPTION_BYTES,
+	parseLocalTranscription,
+} from "@lyre/api/contracts/recordings";
+import {
 	Button,
 	Dialog,
 	DialogClose,
@@ -115,6 +119,7 @@ export function UploadDialog({
 }: UploadDialogProps) {
 	const [state, setState] = useState<UploadState>("idle");
 	const [file, setFile] = useState<File | null>(null);
+	const [transcriptFile, setTranscriptFile] = useState<File | null>(null);
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
 	const [progress, setProgress] = useState<UploadProgress>({
@@ -126,10 +131,14 @@ export function UploadDialog({
 	const [dragging, setDragging] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const abortRef = useRef<XMLHttpRequest | null>(null);
+	const recordingIdRef = useRef<string | null>(null);
+	const uploadingRef = useRef(false);
 
 	const reset = useCallback(() => {
 		setState("idle");
 		setFile(null);
+		setTranscriptFile(null);
+		recordingIdRef.current = null;
 		setTitle("");
 		setDescription("");
 		setProgress({ loaded: 0, total: 0, percentage: 0 });
@@ -141,6 +150,7 @@ export function UploadDialog({
 
 	const handleOpenChange = useCallback(
 		(open: boolean) => {
+			if (!open && uploadingRef.current) return;
 			if (!open) {
 				// Abort in-flight upload
 				if (abortRef.current) {
@@ -225,9 +235,24 @@ export function UploadDialog({
 	);
 
 	const handleUpload = useCallback(async () => {
-		if (!file) return;
+		if (!file || uploadingRef.current) return;
+		uploadingRef.current = true;
+		setState("uploading");
 
 		try {
+			const duration = await getAudioDuration(file);
+			let localTranscription: unknown;
+			if (transcriptFile) {
+				if (transcriptFile.size > MAX_LOCAL_TRANSCRIPTION_BYTES) {
+					throw new Error("Transcript JSON must be smaller than 5 MB.");
+				}
+				try {
+					localTranscription = JSON.parse(await transcriptFile.text());
+				} catch {
+					throw new Error("Could not read transcript JSON. Choose the whisper-cli JSON output.");
+				}
+				parseLocalTranscription(localTranscription, duration);
+			}
 			// Step 1: Get presigned URL
 			setState("uploading");
 			const presignRes = await fetch("/api/upload/presign", {
@@ -236,6 +261,7 @@ export function UploadDialog({
 				body: JSON.stringify({
 					fileName: file.name,
 					contentType: file.type,
+					recordingId: recordingIdRef.current ?? undefined,
 				}),
 			});
 
@@ -253,6 +279,7 @@ export function UploadDialog({
 				throw new Error("Invalid presign response from server");
 			}
 			const { uploadUrl, ossKey, recordingId } = presignData;
+			recordingIdRef.current = recordingId;
 
 			// Step 2: Upload to OSS via XMLHttpRequest (for progress tracking)
 			await new Promise<void>((resolve, reject) => {
@@ -294,7 +321,6 @@ export function UploadDialog({
 
 			// Step 3: Create recording in database
 			setState("creating");
-			const duration = await getAudioDuration(file);
 			const createRes = await fetch("/api/recordings", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -309,6 +335,8 @@ export function UploadDialog({
 					ossKey,
 					recordedAt: file.lastModified || null,
 					folderId: folderId ?? null,
+					localTranscription,
+					autoTranscribe: true,
 				}),
 			});
 
@@ -331,8 +359,19 @@ export function UploadDialog({
 			}
 			setErrorMessage(err instanceof Error ? err.message : "Upload failed");
 			setState("error");
+		} finally {
+			uploadingRef.current = false;
 		}
-	}, [file, title, description, folderId, onUploadComplete, handleOpenChange, reset]);
+	}, [
+		file,
+		transcriptFile,
+		title,
+		description,
+		folderId,
+		onUploadComplete,
+		handleOpenChange,
+		reset,
+	]);
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
@@ -388,9 +427,10 @@ export function UploadDialog({
 										{formatFileSize(file.size)}
 									</p>
 								</div>
-								{state === "selected" && (
+								{(state === "selected" || state === "error") && (
 									<button
 										type="button"
+										aria-label="Remove audio file"
 										onClick={reset}
 										className="text-basalt-muted-foreground hover:text-basalt-foreground shrink-0"
 									>
@@ -410,6 +450,24 @@ export function UploadDialog({
 					</div>
 
 					{/* Title */}
+					<div className="grid gap-2">
+						<Label htmlFor="transcript-file">
+							Local transcript <span className="text-basalt-muted-foreground">(optional)</span>
+						</Label>
+						<Input
+							id="transcript-file"
+							type="file"
+							accept=".json,application/json"
+							onChange={(event) => setTranscriptFile(event.target.files?.[0] ?? null)}
+							disabled={state === "uploading" || state === "creating" || state === "done"}
+						/>
+						<p className="text-xs text-basalt-muted-foreground">
+							Attach the Whisper JSON for this audio to keep sentence timestamps and skip cloud
+							transcription. Without a local transcript, Lyre transcribes in the cloud. Automatic
+							summaries follow your AI settings.
+						</p>
+					</div>
+
 					<div className="grid gap-2">
 						<Label htmlFor="recording-title">Title</Label>
 						<Input
@@ -487,11 +545,6 @@ export function UploadDialog({
 							Cancel
 						</Button>
 					</DialogClose>
-					{state === "error" && (
-						<Button variant="outline" onClick={reset}>
-							Try Again
-						</Button>
-					)}
 					<Button
 						onClick={handleUpload}
 						disabled={
@@ -511,7 +564,7 @@ export function UploadDialog({
 						) : (
 							<>
 								<Upload className="mr-2 h-4 w-4" />
-								Upload
+								{state === "error" ? "Retry upload" : "Upload"}
 							</>
 						)}
 					</Button>

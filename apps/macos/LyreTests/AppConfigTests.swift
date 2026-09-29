@@ -37,13 +37,30 @@ struct AppConfigTests {
         #expect(ctx.config.authToken == "")
         #expect(ctx.config.outputDirectory == AppConfig.defaultOutputDirectory())
         #expect(ctx.config.selectedInputDeviceID == nil)
-        #expect(!ctx.config.autoUploadEnabled)
+        #expect(ctx.config.autoUploadEnabled)
         #expect(ctx.config.autoUploadMinimumMinutes == 5)
         #expect(!ctx.config.isServerConfigured)
     }
 
     @Test func defaultServerURLIsHexly() {
         #expect(AppConfig.defaultServerURL == "https://lyre.hexly.ai")
+    }
+
+    @Test func localSTTSettingsRoundTripRespectsDisabledState() {
+        let ctx = makeContext()
+        defer { ctx.cleanup() }
+        #expect(ctx.config.localSTT.enabled)
+        #expect(ctx.config.localSTT.threads == 4)
+        #expect(ctx.config.localSTT.language == "auto")
+        #expect(ctx.config.localSTT.useGPU)
+        ctx.config.localSTT.enabled = false
+        ctx.config.localSTT.executablePath = "/custom/whisper-cli"
+        ctx.config.localSTT.modelPath = "/custom/model.bin"
+        ctx.config.localSTT.language = "zh"
+        ctx.config.localSTT.threads = 8
+        ctx.config.localSTT.useGPU = false
+        ctx.config.save()
+        #expect(AppConfig(configURL: ctx.configURL).localSTT == ctx.config.localSTT)
     }
 
     // MARK: - isServerConfigured
@@ -204,14 +221,15 @@ struct AppConfigTests {
         #expect(loaded.authToken == "")
     }
 
-    @Test func olderConfigKeepsAutomaticUploadsOff() throws {
+    @Test func olderConfigEnablesLocalSTTAndAutomaticUploads() throws {
         let ctx = makeContext()
         defer { ctx.cleanup() }
         let legacy = #"{"serverURL":"https://lyre.test","authToken":"legacy-token"}"#
         try Data(legacy.utf8).write(to: ctx.configURL)
 
         let loaded = AppConfig(configURL: ctx.configURL)
-        #expect(!loaded.autoUploadEnabled)
+        #expect(loaded.autoUploadEnabled)
+        #expect(loaded.localSTT.enabled)
         #expect(loaded.autoUploadMinimumMinutes == 5)
         #expect(loaded.authToken == "legacy-token")
     }

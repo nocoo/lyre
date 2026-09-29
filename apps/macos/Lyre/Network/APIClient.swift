@@ -52,6 +52,7 @@ actor APIClient {
     struct PresignRequest: Codable, Sendable {
         let fileName: String
         let contentType: String
+        var recordingId: String?
     }
 
     struct PresignResponse: Codable, Sendable {
@@ -72,6 +73,8 @@ actor APIClient {
         let tags: [String]?
         let folderId: String?
         let recordedAt: Int64?
+        var localTranscription: LocalTranscription?
+        var autoTranscribe: Bool = true
     }
 
     struct RecordingResponse: Codable, Sendable {
@@ -106,14 +109,16 @@ actor APIClient {
     }
 
     /// Get presigned upload URL.
-    func presign(fileName: String, contentType: String) async throws -> PresignResponse {
+    func presign(
+        fileName: String, contentType: String, recordingId: String? = nil
+    ) async throws -> PresignResponse {
         let url = try buildURL("/api/upload/presign")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         addAuth(&request)
 
-        let body = PresignRequest(fileName: fileName, contentType: contentType)
+        let body = PresignRequest(fileName: fileName, contentType: contentType, recordingId: recordingId)
         request.httpBody = try JSONEncoder().encode(body)
 
         return try await perform(request)

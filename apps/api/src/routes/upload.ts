@@ -7,5 +7,5 @@ export const upload = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 upload.post("/presign", async (c) => {
 	const body = await c.req.json().catch(() => ({}));
-	return toResponse(c, presignUploadHandler(c.get("runtime"), body));
+	return toResponse(c, await presignUploadHandler(c.get("runtime"), body));
 });

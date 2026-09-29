@@ -1,3 +1,4 @@
+import { MAX_LOCAL_TRANSCRIPTION_BYTES } from "@lyre/api/contracts/recordings";
 import { makeRepos } from "@lyre/api/db/repositories";
 import {
 	batchDeleteRecordingsHandler,
@@ -21,6 +22,7 @@ import {
 } from "@lyre/api/services/ai";
 import { streamText } from "ai";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import type { Bindings, Variables } from "../bindings";
 import { toResponse } from "../lib/to-response";
 
@@ -43,10 +45,17 @@ recordings.get("/", async (c) => {
 	return toResponse(c, await listRecordingsHandler(c.get("runtime"), input));
 });
 
-recordings.post("/", async (c) => {
-	const body = await c.req.json().catch(() => ({}));
-	return toResponse(c, await createRecordingHandler(c.get("runtime"), body));
-});
+recordings.post(
+	"/",
+	bodyLimit({
+		maxSize: MAX_LOCAL_TRANSCRIPTION_BYTES + 64 * 1024,
+		onError: (c) => c.json({ error: "Recording payload is too large" }, 413),
+	}),
+	async (c) => {
+		const body = await c.req.json().catch(() => ({}));
+		return toResponse(c, await createRecordingHandler(c.get("runtime"), body));
+	},
+);
 
 recordings.post("/batch-delete", async (c) => {
 	const body = await c.req.json().catch(() => ({}));
@@ -83,9 +92,10 @@ recordings.get("/:id/words", async (c) =>
 	toResponse(c, await wordsHandler(c.get("runtime"), c.req.param("id"))),
 );
 
-recordings.post("/:id/transcribe", async (c) =>
-	toResponse(c, await transcribeRecordingHandler(c.get("runtime"), c.req.param("id"))),
-);
+recordings.post("/:id/transcribe", async (c) => {
+	const body = await c.req.json().catch(() => ({}));
+	return toResponse(c, await transcribeRecordingHandler(c.get("runtime"), c.req.param("id"), body));
+});
 
 /**
  * Streaming AI summarize. Bypasses HandlerResponse because streamText

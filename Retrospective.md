@@ -29,3 +29,12 @@ workflow grouped runs by `github.workflow` and `github.ref` with
 `cancel-in-progress: true`. Inspect concurrency in called workflows before
 scheduling validation. Finish push CI and its dependent release before starting
 manual CI on the same ref; a cancelled aggregate is not passing CI evidence.
+
+## 2026-09-29: Separate browser and native test output
+
+Running Playwright alongside native verification deleted the native DerivedData
+and result bundle during compilation. Playwright cleans its output directory at
+startup; its default `test-results` directory also contained the native runner's
+`test-results/macos`. Set Playwright output to `test-results/bdd` and keep native
+verification serialized or independently isolated. The interrupted native run
+was not passing evidence; a complete rerun under a unique `/tmp` directory passed.

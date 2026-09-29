@@ -390,6 +390,10 @@ function RecordingDetailContent({ id }: { id: string }) {
 		try {
 			const res = await fetch(`/api/recordings/${id}/transcribe`, {
 				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					force: detail?.status === "completed" || detail?.status === "failed",
+				}),
 			});
 
 			if (!res.ok) {
@@ -400,6 +404,10 @@ function RecordingDetailContent({ id }: { id: string }) {
 			}
 
 			const job = (await res.json()) as TranscriptionJob;
+			if (job.status === "SUCCEEDED" || job.status === "FAILED") {
+				await loadDetail();
+				return;
+			}
 
 			// Update local state to show transcribing status immediately
 			setDetail((prev) => (prev ? { ...prev, status: "transcribing", latestJob: job } : prev));
@@ -410,7 +418,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 		} finally {
 			setTranscribing(false);
 		}
-	}, [id]);
+	}, [id, detail?.status, loadDetail]);
 
 	const handleSeek = useCallback((timeInSeconds: number) => {
 		playerRef.current?.seekTo(timeInSeconds);

@@ -11,10 +11,12 @@ describe("recordings endpoints", () => {
 	});
 
 	test("POST /api/recordings creates a recording (201)", async () => {
+		const id = crypto.randomUUID();
 		const res = await post("/api/recordings", {
+			id,
 			title: "e2e-test-recording",
 			fileName: "test.m4a",
-			ossKey: "uploads/e2e/test.m4a",
+			ossKey: `uploads/e2e-test-user/${id}/test.m4a`,
 		});
 		expect(res.status).toBe(201);
 		const body = await json<{ id: string }>(res);

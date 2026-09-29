@@ -42,8 +42,8 @@ final class AppConfig: @unchecked Sendable {
         didSet { scheduleSave() }
     }
 
-    /// Opt-in upload of newly finalized recordings; never scans existing files.
-    var autoUploadEnabled = false {
+    /// Upload newly finalized recordings; never scan existing files.
+    var autoUploadEnabled = true {
         didSet { scheduleSave() }
     }
 
@@ -57,6 +57,10 @@ final class AppConfig: @unchecked Sendable {
             if autoUploadMinimumMinutes != boundedMinutes { autoUploadMinimumMinutes = boundedMinutes }
             scheduleSave()
         }
+    }
+
+    var localSTT = LocalSTTSettings() {
+        didSet { scheduleSave() }
     }
 
     // MARK: - Derived
@@ -96,8 +100,9 @@ final class AppConfig: @unchecked Sendable {
                 outputDirectory = URL(fileURLWithPath: dirPath, isDirectory: true)
             }
             selectedInputDeviceID = stored.selectedInputDeviceID
-            autoUploadEnabled = stored.autoUploadEnabled ?? false
+            autoUploadEnabled = stored.autoUploadEnabled ?? true
             autoUploadMinimumMinutes = stored.autoUploadMinimumMinutes ?? Self.defaultAutoUploadMinimumMinutes
+            localSTT = stored.localSTT ?? LocalSTTSettings()
 
             Self.logger.info("Config loaded from \(self.configURL.lastPathComponent)")
         } catch {
@@ -113,7 +118,8 @@ final class AppConfig: @unchecked Sendable {
             outputDirectory: outputDirectory.path,
             selectedInputDeviceID: selectedInputDeviceID,
             autoUploadEnabled: autoUploadEnabled,
-            autoUploadMinimumMinutes: autoUploadMinimumMinutes
+            autoUploadMinimumMinutes: autoUploadMinimumMinutes,
+            localSTT: localSTT
         )
 
         do {
@@ -167,4 +173,5 @@ private struct StoredConfig: Codable {
     // swiftlint:disable:next discouraged_optional_boolean
     var autoUploadEnabled: Bool?
     var autoUploadMinimumMinutes: Int?
+    var localSTT: LocalSTTSettings?
 }

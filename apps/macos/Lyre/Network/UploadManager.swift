@@ -1,22 +1,15 @@
 import Foundation
 import os
 
-/// Manages the 3-step upload flow: presign → OSS upload → create recording.
-///
-/// Designed to be used as an `@Observable` state holder for the upload UI.
 @MainActor
 @Observable
 final class UploadManager {
     private static let logger = Logger(subsystem: Constants.subsystem, category: "UploadManager")
 
-    // MARK: - State
-
     enum UploadState: Equatable {
         case idle
-        /// Downmixing / any local preprocessing before we hit the network.
-        /// Emitted immediately when the user clicks Upload so the UI has
-        /// something to show for the first 0.5–2 s of AVAssetWriter work.
         case preparing
+        case transcribing
         case presigning
         case uploading(progress: Double)
         case creating
@@ -25,39 +18,148 @@ final class UploadManager {
 
         var isInProgress: Bool {
             switch self {
-            case .preparing, .presigning, .uploading, .creating: true
+            case .preparing, .transcribing, .presigning, .uploading, .creating: true
             case .idle, .completed, .failed: false
             }
         }
     }
 
     var state: UploadState = .idle
-
-    /// Folders and tags fetched from the server.
+    var localSTTWarning: String?
     var folders: [APIClient.Folder] = []
     var tags: [APIClient.Tag] = []
-    var isFetchingMetadata: Bool = false
-
-    /// Error message from the last metadata fetch attempt (nil if succeeded or not attempted).
+    var isFetchingMetadata = false
     var metadataError: String?
-
-    // MARK: - Upload parameters (set by UI)
-
     var selectedFolderID: String?
     var selectedTagIDs: Set<String> = []
-    var title: String = ""
-
-    // MARK: - Dependencies
+    var title = ""
 
     private let config: AppConfig
+    private let session: URLSession
+    private let transcribe: @Sendable (URL, Double?, LocalSTTSettings) async throws -> LocalTranscription
+    private let downmix: @Sendable (URL, URL) async throws -> Void
     private var currentTask: Task<Void, Never>?
 
-    init(config: AppConfig) {
+    init(
+        config: AppConfig, session: URLSession = .shared,
+        transcribe: @escaping @Sendable (URL, Double?, LocalSTTSettings) async throws -> LocalTranscription = {
+            try await LocalSTT.transcribe(source: $0, duration: $1, settings: $2)
+        },
+        downmix: @escaping @Sendable (URL, URL) async throws -> Void = {
+            try await AudioDownmixer.downmix(source: $0, destination: $1)
+        }
+    ) {
         self.config = config
+        self.session = session
+        self.transcribe = transcribe
+        self.downmix = downmix
     }
 
-    // MARK: - Metadata Fetching
+    func upload(file: RecordingFile) {
+        guard !state.isInProgress else { return }
+        guard config.isServerConfigured else {
+            state = .failed("Server not configured")
+            return
+        }
+        currentTask?.cancel()
+        localSTTWarning = nil
+        state = .preparing
+        currentTask = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            await self.performUpload(file: file)
+        }
+    }
 
+    func cancel() {
+        currentTask?.cancel()
+        currentTask = nil
+        state = .idle
+    }
+
+    func reset() {
+        cancel()
+        title = ""
+        selectedFolderID = nil
+        selectedTagIDs = []
+        metadataError = nil
+        localSTTWarning = nil
+    }
+
+    private func performUpload(file: RecordingFile) async {
+        let client = makeClient()
+        let settings = config.localSTT
+        let serverURL = config.serverURL
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent("lyre-upload-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: temp) }
+        do {
+            let transcript = try await prepareTranscription(file: file, settings: settings)
+            try Task.checkCancellation()
+            state = .preparing
+            try await downmix(file.url, temp)
+            try Task.checkCancellation()
+            let directory = try LocalSTT.artifactDirectory(source: file.url, serverURL: serverURL)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let identity = directory.appendingPathComponent("upload-id.txt")
+            let previousID = try? String(contentsOf: identity, encoding: .utf8)
+            state = .presigning
+            let presign = try await client.presign(fileName: file.url.lastPathComponent,
+                                                   contentType: Constants.Audio.mimeType, recordingId: previousID)
+            try presign.recordingId.write(to: identity, atomically: true, encoding: .utf8)
+            try Task.checkCancellation()
+            state = .uploading(progress: 0)
+            try await client.uploadToOSS(uploadURL: presign.uploadUrl, fileURL: temp,
+                                         contentType: Constants.Audio.mimeType)
+            try Task.checkCancellation()
+            state = .creating
+            let response = try await client.createRecording(makeRequest(file: file, upload: temp,
+                                                                         presign: presign, transcript: transcript))
+            try Task.checkCancellation()
+            state = .completed(recordingId: response.id)
+        } catch {
+            guard !Task.isCancelled else { return }
+            if error is CancellationError { state = .idle; return }
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    private func prepareTranscription(
+        file: RecordingFile, settings: LocalSTTSettings
+    ) async throws -> LocalTranscription? {
+        guard settings.enabled else { return nil }
+        state = .transcribing
+        do {
+            let result = try await transcribe(file.url, file.duration, settings)
+            try Task.checkCancellation()
+            return result
+        } catch {
+            try Task.checkCancellation()
+            if error is CancellationError { throw error }
+            localSTTWarning = "Local transcription failed. Lyre will transcribe on the server. "
+                + error.localizedDescription
+            Self.logger.warning("Local STT failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func makeRequest(
+        file: RecordingFile, upload: URL, presign: APIClient.PresignResponse, transcript: LocalTranscription?
+    ) -> APIClient.CreateRecordingRequest {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: upload.path)
+        return APIClient.CreateRecordingRequest(
+            id: presign.recordingId, title: title.isEmpty ? file.filename : title,
+            fileName: file.url.lastPathComponent, ossKey: presign.ossKey,
+            fileSize: attributes?[.size] as? Int64 ?? file.fileSize,
+            duration: file.duration, format: Constants.Audio.fileExtension,
+            sampleRate: Constants.Audio.sampleRateInt,
+            tags: selectedTagIDs.isEmpty ? nil : Array(selectedTagIDs), folderId: selectedFolderID,
+            recordedAt: Int64(file.createdAt.timeIntervalSince1970 * 1000),
+            localTranscription: transcript, autoTranscribe: true
+        )
+    }
+
+    private func makeClient() -> APIClient {
+        APIClient(baseURL: config.serverURL, authToken: config.authToken, session: session)
+    }
     /// Fetch folders and tags from the server in parallel.
     func fetchMetadata() async {
         guard config.isServerConfigured else { return }
@@ -94,198 +196,4 @@ final class UploadManager {
         }
     }
 
-    // MARK: - Upload
-
-    /// Upload a local recording file to the server.
-    ///
-    /// The 3-step flow:
-    /// 1. POST /api/upload/presign → get upload URL + ossKey
-    /// 2. PUT <uploadUrl> → upload raw file to OSS
-    /// 3. POST /api/recordings → create recording in database
-    func upload(file: RecordingFile) {
-        guard config.isServerConfigured else {
-            state = .failed("Server not configured")
-            return
-        }
-
-        // Cancel any in-progress upload
-        currentTask?.cancel()
-        // Claim the file synchronously so navigation/deletion cannot race the task's first turn.
-        state = .preparing
-
-        currentTask = Task { [weak self] in
-            guard let self, !Task.isCancelled else { return }
-            await self.performUpload(file: file)
-        }
-    }
-
-    /// Cancel the current upload.
-    func cancel() {
-        currentTask?.cancel()
-        currentTask = nil
-        state = .idle
-    }
-
-    /// Reset to idle state.
-    func reset() {
-        cancel()
-        title = ""
-        selectedFolderID = nil
-        selectedTagIDs = []
-        metadataError = nil
-    }
-
-    // MARK: - Private
-
-    private func performUpload(file: RecordingFile) async {
-        let client = makeClient()
-        let fileName = file.url.lastPathComponent
-        let contentType = Constants.Audio.mimeType
-
-        // Step 0: downmix any dual-track source into a single-track M4A
-        // suitable for HTML5 <audio>. Falls through to the original file
-        // if downmix fails — a dual-track upload is a "no audio in dashboard"
-        // bug, but it's still a valid file the user can download.
-        let (uploadURL, tempURL) = await prepareUploadFile(originalURL: file.url)
-        defer {
-            if let temp = tempURL {
-                try? FileManager.default.removeItem(at: temp)
-            }
-        }
-        guard !Task.isCancelled else { state = .idle; return }
-
-        // Recompute file size after downmix; re-encoded output has a
-        // different byte count than the source, and the server stores
-        // this in the recording metadata for display.
-        let uploadFileSize: Int64
-        if let attrs = try? FileManager.default.attributesOfItem(atPath: uploadURL.path),
-           let size = attrs[.size] as? Int64 {
-            uploadFileSize = size
-        } else {
-            uploadFileSize = file.fileSize
-        }
-
-        // Step 1: Presign
-        guard let presign = await stepPresign(
-            client: client, fileName: fileName, contentType: contentType
-        ) else { return }
-        guard !Task.isCancelled else { state = .idle; return }
-
-        // Step 2: Upload to OSS
-        let uploaded = await stepUploadToOSS(
-            client: client,
-            fileURL: uploadURL,
-            fileSize: uploadFileSize,
-            presignResponse: presign,
-            contentType: contentType
-        )
-        guard uploaded else { return }
-        guard !Task.isCancelled else { state = .idle; return }
-
-        // Step 3: Create recording
-        await stepCreateRecording(
-            client: client, file: file,
-            fileSize: uploadFileSize,
-            fileName: fileName, presignResponse: presign
-        )
-    }
-
-    /// Return the URL the upload step should read from. If the source has
-    /// multiple audio tracks, downmix into a temp file; otherwise return
-    /// the original URL untouched.
-    ///
-    /// The second element is the temp file URL when a downmix ran, so the
-    /// caller can clean it up in a `defer` — nil when we passed through.
-    private func prepareUploadFile(originalURL: URL) async -> (upload: URL, temp: URL?) {
-        let temp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("lyre-upload-\(UUID().uuidString).m4a")
-        do {
-            try await AudioDownmixer.downmix(source: originalURL, destination: temp)
-            // AudioDownmixer copies verbatim for single-track sources, so
-            // treat the returned temp file as the upload input either way.
-            return (temp, temp)
-        } catch {
-            Self.logger.error("Downmix failed, uploading original: \(error.localizedDescription)")
-            try? FileManager.default.removeItem(at: temp)
-            return (originalURL, nil)
-        }
-    }
-
-    private func stepPresign(
-        client: APIClient, fileName: String, contentType: String
-    ) async -> APIClient.PresignResponse? {
-        state = .presigning
-        Self.logger.info("Step 1/3: Presigning for \(fileName)")
-
-        do {
-            return try await client.presign(fileName: fileName, contentType: contentType)
-        } catch {
-            state = .failed("Presign failed: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    private func stepUploadToOSS(
-        client: APIClient,
-        fileURL: URL,
-        fileSize: Int64,
-        presignResponse: APIClient.PresignResponse,
-        contentType: String
-    ) async -> Bool {
-        state = .uploading(progress: 0)
-        Self.logger.info("Step 2/3: Uploading to OSS (\(fileSize) bytes)")
-
-        do {
-            state = .uploading(progress: 0.1)
-            try await client.uploadToOSS(
-                uploadURL: presignResponse.uploadUrl,
-                fileURL: fileURL,
-                contentType: contentType
-            )
-            state = .uploading(progress: 0.9)
-            return true
-        } catch {
-            state = .failed("Upload failed: \(error.localizedDescription)")
-            return false
-        }
-    }
-
-    private func stepCreateRecording(
-        client: APIClient,
-        file: RecordingFile,
-        fileSize: Int64,
-        fileName: String,
-        presignResponse: APIClient.PresignResponse
-    ) async {
-        state = .creating
-        Self.logger.info("Step 3/3: Creating recording")
-
-        let recordingTitle = title.isEmpty ? file.filename : title
-
-        do {
-            let response = try await client.createRecording(
-                APIClient.CreateRecordingRequest(
-                    id: presignResponse.recordingId,
-                    title: recordingTitle,
-                    fileName: fileName,
-                    ossKey: presignResponse.ossKey,
-                    fileSize: fileSize,
-                    duration: file.duration,
-                    format: Constants.Audio.fileExtension,
-                    sampleRate: Constants.Audio.sampleRateInt,
-                    tags: selectedTagIDs.isEmpty ? nil : Array(selectedTagIDs),
-                    folderId: selectedFolderID,
-                    recordedAt: Int64(file.createdAt.timeIntervalSince1970 * 1000)
-                )
-            )
-            state = .completed(recordingId: response.id)
-            Self.logger.info("Upload completed: \(response.id)")
-        } catch {
-            state = .failed("Create recording failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func makeClient() -> APIClient {
-        APIClient(baseURL: config.serverURL, authToken: config.authToken)
-    }
 }

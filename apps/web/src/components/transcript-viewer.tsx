@@ -53,6 +53,7 @@ export function TranscriptViewer({
 				<p className="flex items-center gap-1.5 text-xs font-medium text-basalt-muted-foreground">
 					<FileText className="h-3.5 w-3.5" strokeWidth={1.5} />
 					Transcript
+					{transcription.local && <span>· Local Whisper</span>}
 				</p>
 				<div className="flex flex-wrap items-center gap-3">
 					<TranscriptMeta
@@ -90,7 +91,9 @@ export function TranscriptViewer({
 
 			{viewMode === "sentences" ? (
 				<SentenceList
+					key={transcription.local ? "local" : "cloud"}
 					sentences={transcription.sentences}
+					local={transcription.local}
 					recordingId={recordingId}
 					activeIndex={activeIndex}
 					currentTime={currentTime}
@@ -158,12 +161,14 @@ function TranscriptMeta({
 
 function SentenceList({
 	sentences,
+	local,
 	recordingId,
 	activeIndex,
 	currentTime,
 	onSeek,
 }: {
 	sentences: SentenceVM[];
+	local: boolean;
 	recordingId: string;
 	activeIndex: number;
 	currentTime: number;
@@ -203,6 +208,7 @@ function SentenceList({
 		<div className="space-y-1">
 			{sentences.map((sentence, idx) => (
 				<SentenceRow
+					local={local}
 					key={sentence.id}
 					ref={idx === activeIndex ? activeRef : undefined}
 					sentence={sentence}
@@ -223,6 +229,7 @@ const SentenceRow = forwardRef<
 	HTMLDivElement,
 	{
 		sentence: SentenceVM;
+		local: boolean;
 		isActive: boolean;
 		isExpanded: boolean;
 		words: WordVM[] | null;
@@ -232,7 +239,7 @@ const SentenceRow = forwardRef<
 		onToggle: (sentenceId: number) => void;
 	}
 >(function SentenceRow(
-	{ sentence, isActive, isExpanded, words, wordsLoading, currentTime, onSeek, onToggle },
+	{ sentence, local, isActive, isExpanded, words, wordsLoading, currentTime, onSeek, onToggle },
 	ref,
 ) {
 	return (
@@ -253,21 +260,29 @@ const SentenceRow = forwardRef<
 				<button
 					type="button"
 					className="flex-1 text-left text-sm leading-relaxed text-basalt-foreground hover:text-basalt-foreground/80 transition-colors"
-					onClick={() => onToggle(sentence.id)}
-					aria-expanded={isExpanded}
-					aria-label={isExpanded ? "Collapse word details" : "Expand word details"}
+					onClick={() => (local ? onSeek?.(sentence.beginTimeMs / 1000) : onToggle(sentence.id))}
+					aria-expanded={local ? undefined : isExpanded}
+					aria-label={
+						local
+							? `Play sentence at ${sentence.startTime}`
+							: isExpanded
+								? "Collapse word details"
+								: "Expand word details"
+					}
 				>
 					{sentence.text}
 				</button>
 
 				{/* Expand indicator */}
-				<ChevronDown
-					className={cn(
-						"h-3.5 w-3.5 shrink-0 text-basalt-muted-foreground/50 transition-transform duration-200 translate-y-[3px]",
-						isExpanded && "rotate-180",
-					)}
-					strokeWidth={1.5}
-				/>
+				{!local && (
+					<ChevronDown
+						className={cn(
+							"h-3.5 w-3.5 shrink-0 text-basalt-muted-foreground/50 transition-transform duration-200 translate-y-[3px]",
+							isExpanded && "rotate-180",
+						)}
+						strokeWidth={1.5}
+					/>
+				)}
 			</div>
 
 			{/* Expanded word-level view */}

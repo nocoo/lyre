@@ -11,17 +11,20 @@
  */
 
 import { DEFAULT_ASR_MODEL, isValidAsrModel } from "../contracts/asr";
-import { SENTENCE_ID_CHANNEL_STRIDE } from "../contracts/recordings";
+import { parseLocalTranscription, SENTENCE_ID_CHANNEL_STRIDE } from "../contracts/recordings";
 import { makeRepos, type RecordingsRepo } from "../db/repositories";
+import type { NewDbRecording } from "../db/schema";
 import type { RecordingDetail, RecordingStatus, TranscriptionSentence } from "../lib/types";
 import type { RuntimeContext } from "../runtime/context";
 import type { AsrTranscriptionResult, AsrTranscriptionWord } from "../services/asr";
 import { getAsrProvider } from "../services/asr-provider";
+import { beginAutoSummarize, runAutoSummary } from "../services/job-processor";
 import {
 	deleteObject,
 	deleteObjects,
 	listObjects,
 	makeResultKey,
+	makeUploadKey,
 	presignGet,
 } from "../services/oss";
 import {
@@ -32,6 +35,7 @@ import {
 	serverError,
 	unauthorized,
 } from "./http";
+import { isRecordingId, isUploadFileName } from "./upload";
 
 const VALID_SORT_FIELDS = ["createdAt", "title", "duration", "fileSize"] as const;
 const VALID_SORT_DIRECTIONS = ["asc", "desc"] as const;
@@ -120,6 +124,8 @@ export interface CreateRecordingInput {
 	tagIds?: string[];
 	recordedAt?: number;
 	folderId?: string | null;
+	localTranscription?: unknown;
+	autoTranscribe?: boolean;
 }
 
 export async function createRecordingHandler(
@@ -127,37 +133,115 @@ export async function createRecordingHandler(
 	body: CreateRecordingInput,
 ): Promise<HandlerResponse> {
 	if (!ctx.user) return unauthorized();
-	if (!body.title || !body.fileName || !body.ossKey) {
+	if (
+		!body ||
+		typeof body.title !== "string" ||
+		!body.title.trim() ||
+		typeof body.fileName !== "string" ||
+		!body.fileName ||
+		typeof body.ossKey !== "string" ||
+		!body.ossKey
+	) {
 		return badRequest("Missing required fields: title, fileName, ossKey");
 	}
-	const id = body.id ?? crypto.randomUUID();
-	const repos = makeRepos(ctx.db);
+	const id = body.id ?? body.ossKey.split("/")[2] ?? crypto.randomUUID();
+	if (
+		!isRecordingId(id) ||
+		!isUploadFileName(body.fileName) ||
+		body.ossKey !== makeUploadKey(ctx.user.id, id, body.fileName)
+	) {
+		return badRequest("Upload key does not match the user, recording, and file name");
+	}
+	if (body.autoTranscribe !== undefined && typeof body.autoTranscribe !== "boolean") {
+		return badRequest("autoTranscribe must be a boolean");
+	}
+	let local: ReturnType<typeof parseLocalTranscription> | undefined;
 	try {
-		const recording = await repos.recordings.create({
-			id,
-			userId: ctx.user.id,
-			title: body.title,
-			description: body.description ?? null,
-			fileName: body.fileName,
-			fileSize: body.fileSize ?? null,
-			duration: body.duration ?? null,
-			format: body.format ?? null,
-			sampleRate: body.sampleRate ?? null,
-			ossKey: body.ossKey,
-			status: "uploaded",
-			recordedAt: body.recordedAt ?? null,
-			folderId: body.folderId ?? null,
-		});
-		const tagIds = body.tagIds ?? body.tags ?? [];
-		if (tagIds.length > 0) {
-			await repos.tags.setTagsForRecording(recording.id, tagIds);
+		if (body.localTranscription !== undefined)
+			local = parseLocalTranscription(body.localTranscription, body.duration);
+	} catch (error) {
+		return badRequest(error instanceof Error ? error.message : "Invalid local transcription");
+	}
+	const repos = makeRepos(ctx.db);
+	let recording = await repos.recordings.findById(id);
+	let created = false;
+	try {
+		if (!recording) {
+			const now = Date.now();
+			const data = {
+				id,
+				userId: ctx.user.id,
+				title: body.title,
+				description: body.description ?? null,
+				fileName: body.fileName,
+				fileSize: body.fileSize ?? null,
+				duration: body.duration ?? null,
+				format: body.format ?? null,
+				sampleRate: body.sampleRate ?? null,
+				ossKey: body.ossKey,
+				status: "uploaded",
+				recordedAt: body.recordedAt ?? null,
+				folderId: body.folderId ?? null,
+				createdAt: now,
+				updatedAt: now,
+			} satisfies NewDbRecording;
+			try {
+				if (local) await repos.recordings.createWithTranscription(data, local);
+				else await repos.recordings.create(data);
+				created = true;
+			} catch (error) {
+				if (!(await repos.recordings.findById(id))) throw error;
+			}
+			recording = await repos.recordings.findById(id);
+		}
+		if (
+			!recording ||
+			recording.userId !== ctx.user.id ||
+			recording.ossKey !== body.ossKey ||
+			recording.fileName !== body.fileName
+		) {
+			return json({ error: "Recording ID is already bound to another upload" }, 409);
+		}
+		if (created) {
+			const tagIds = body.tagIds ?? body.tags ?? [];
+			if (tagIds.length > 0) await repos.tags.setTagsForRecording(id, tagIds);
+		}
+		const job = await repos.jobs.findLatestByRecordingId(id);
+		if (job?.taskId.startsWith("local:")) {
+			const transcription = await repos.transcriptions.findByRecordingId(id);
+			if (transcription) {
+				if (
+					local &&
+					(transcription.fullText !== local.fullText ||
+						transcription.language !== local.language ||
+						transcription.sentences !== JSON.stringify(local.sentences))
+				) {
+					return json({ error: "Recording already contains a different local transcription" }, 409);
+				}
+				const reservation = await beginAutoSummarize(
+					ctx.user.id,
+					id,
+					transcription.fullText,
+					ctx.db,
+					true,
+				);
+				if (reservation.kind === "started") {
+					const summary = runAutoSummary(reservation, ctx.db);
+					if (ctx.waitUntil) ctx.waitUntil(summary);
+					else await summary;
+				}
+			}
+		} else if (local && !job) {
+			return json({ error: "Recording already exists without this local transcription" }, 409);
+		} else if (body.autoTranscribe && !job) {
+			await transcribeRecordingHandler(ctx, id);
 		}
 		return json(
 			{
-				...recording,
-				resolvedTags: await repos.tags.findTagsForRecording(recording.id),
+				...(await repos.recordings.findById(id)),
+				resolvedTags: await repos.tags.findTagsForRecording(id),
 			},
-			201,
+			created ? 201 : 200,
 		);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Unknown error";
@@ -378,6 +462,7 @@ export async function wordsHandler(ctx: RuntimeContext, id: string): Promise<Han
 	if (job?.status !== "SUCCEEDED") {
 		return notFound("No completed transcription found");
 	}
+	if (job.taskId.startsWith("local:")) return json({ sentences: [] });
 	const ossKey = makeResultKey(job.id, "transcription.json");
 	const ossUrl = presignGet(ossKey, 300, undefined, undefined, ctx.env);
 
@@ -458,6 +543,7 @@ export async function wordsHandler(ctx: RuntimeContext, id: string): Promise<Han
 export async function transcribeRecordingHandler(
 	ctx: RuntimeContext,
 	id: string,
+	body: { force?: boolean } = {},
 ): Promise<HandlerResponse> {
 	if (!ctx.user) return unauthorized();
 	const repos = makeRepos(ctx.db);
@@ -465,10 +551,23 @@ export async function transcribeRecordingHandler(
 	if (!recording || recording.userId !== ctx.user.id) {
 		return notFound("Recording not found");
 	}
-	if (recording.status === "transcribing") {
-		return json({ error: "Recording is already being transcribed" }, 409);
+	if (!body || (body.force !== undefined && typeof body.force !== "boolean"))
+		return badRequest("force must be a boolean");
+	const latestJob = await repos.jobs.findLatestByRecordingId(id);
+	if (
+		latestJob &&
+		(latestJob.status === "PENDING" ||
+			latestJob.status === "RUNNING" ||
+			(!body.force && recording.status !== "transcribing"))
+	)
+		return json(latestJob);
+	if (!(await repos.recordings.claimTranscription(id, recording.status))) {
+		const activeJob = await repos.jobs.findLatestByRecordingId(id);
+		return activeJob && (activeJob.status === "PENDING" || activeJob.status === "RUNNING")
+			? json(activeJob)
+			: json({ error: "Recording is already being transcribed" }, 409);
 	}
-
+	const jobId = crypto.randomUUID();
 	try {
 		const audioUrl = presignGet(recording.ossKey, 3600, undefined, undefined, ctx.env);
 		const provider = getAsrProvider(ctx.env);
@@ -477,18 +576,25 @@ export async function transcribeRecordingHandler(
 		const asrModel = isValidAsrModel(rawModel) ? rawModel : DEFAULT_ASR_MODEL;
 		const submitResult = await provider.submit(audioUrl, asrModel);
 		const job = await repos.jobs.create({
-			id: crypto.randomUUID(),
+			id: jobId,
 			recordingId: id,
 			taskId: submitResult.output.task_id,
 			requestId: submitResult.request_id,
 			status: submitResult.output.task_status,
 		});
-		await repos.recordings.update(id, { status: "transcribing" });
 		return json(job, 201);
 	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+		await repos.jobs.create({
+			id: jobId,
+			recordingId: id,
+			taskId: `submission:${jobId}`,
+			requestId: null,
+			status: "FAILED",
+		});
+		await repos.jobs.update(jobId, { errorMessage: message });
+		await repos.recordings.update(id, { status: "failed" });
 		console.error("Failed to submit ASR job:", error);
-		return serverError(
-			`Failed to submit transcription job: ${error instanceof Error ? error.message : "Unknown error"}`,
-		);
+		return serverError(`Failed to submit transcription job: ${message}`);
 	}
 }

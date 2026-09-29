@@ -223,3 +223,54 @@ describe("worker routes — auth gates", () => {
 		expect(res.status).toBe(401);
 	});
 });
+
+describe("worker local transcription routes", () => {
+	test("imports whisper JSON and preserves sentence times through the HTTP routes", async () => {
+		const { ctx, user } = await setupAuthedCtx();
+		const app = buildAppWithCtx(ctx);
+		const id = "local-http";
+		const res = await app.request("/api/recordings", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				id,
+				title: "Local",
+				fileName: "local.m4a",
+				ossKey: `uploads/${user.id}/${id}/local.m4a`,
+				duration: 3,
+				autoTranscribe: true,
+				localTranscription: {
+					result: { language: "en" },
+					transcription: [{ offsets: { from: 250, to: 1500 }, text: "Hello." }],
+				},
+			}),
+		});
+		expect(res.status).toBe(201);
+		const detail = await (await app.request(`/api/recordings/${id}`)).json();
+		expect(detail).toMatchObject({
+			status: "completed",
+			transcription: { sentences: [{ beginTime: 250, endTime: 1500, text: "Hello." }] },
+			latestJob: { status: "SUCCEEDED" },
+		});
+		const repeated = await app.request(`/api/recordings/${id}/transcribe`, { method: "POST" });
+		expect(repeated.status).toBe(200);
+		expect(await repeated.json()).toMatchObject({ status: "SUCCEEDED" });
+		const invalidForce = await app.request(`/api/recordings/${id}/transcribe`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ force: "yes" }),
+		});
+		expect(invalidForce.status).toBe(400);
+	});
+
+	test("rejects oversized recording requests before parsing", async () => {
+		const { ctx } = await setupAuthedCtx();
+		const app = buildAppWithCtx(ctx);
+		const res = await app.request("/api/recordings", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ padding: "x".repeat(6 * 1024 * 1024) }),
+		});
+		expect(res.status).toBe(413);
+	});
+});

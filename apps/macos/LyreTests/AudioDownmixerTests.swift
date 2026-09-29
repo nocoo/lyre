@@ -154,6 +154,70 @@ struct AudioDownmixerTests {
         #expect(tracks.count == 1, "stale destination must be overwritten with fresh output")
     }
 
+    @Test func wavMixPreservesDelayedTracksGapsAndUnequalTails() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("mix-timeline-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = try await Self.makeDelayedTracks(in: directory)
+        let wav = directory.appendingPathComponent("mixed.wav")
+        try await AudioDownmixer.makeWhisperWAV(source: source, destination: wav)
+        let audio = try AVAudioFile(forReading: wav)
+        #expect(audio.fileFormat.sampleRate == 16_000)
+        #expect(audio.fileFormat.channelCount == 1)
+        #expect(audio.fileFormat.streamDescription.pointee.mBitsPerChannel == 16)
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: audio.processingFormat,
+                                                  frameCapacity: AVAudioFrameCount(audio.length)))
+        try audio.read(into: buffer)
+        let samples = try #require(buffer.floatChannelData?[0])
+        #expect(abs(Double(buffer.frameLength) / 16_000 - 1.4) < 0.05)
+        func energy(_ start: Double, _ end: Double) -> Float {
+            let lower = Int(start * 16_000)
+            let upper = min(Int(end * 16_000), Int(buffer.frameLength))
+            guard lower < upper else { return 0 }
+            let bounds = lower..<upper
+            return bounds.reduce(Float.zero) { $0 + abs(samples[$1]) } / Float(bounds.count)
+        }
+        #expect(energy(0, 0.1) < 0.001)
+        #expect(energy(0.25, 0.35) > 0.05)
+        #expect(energy(0.65, 0.7) < 0.001)
+        #expect(energy(0.85, 0.95) > 0.05)
+        #expect(energy(1.2, 1.3) > 0.05)
+        let upload = directory.appendingPathComponent("upload.m4a")
+        try await AudioDownmixer.downmix(source: source, destination: upload)
+        let asset = AVURLAsset(url: upload)
+        #expect(abs(try await asset.load(.duration).seconds - 1.4) < 0.05)
+        #expect(try await asset.loadTracks(withMediaType: .audio).count == 1)
+    }
+
+    private static func makeDelayedTracks(in directory: URL) async throws -> URL {
+        let composition = AVMutableComposition()
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1))
+        for (index, spec) in [(0.2, 0.4), (0.8, 0.6)].enumerated() {
+            let url = directory.appendingPathComponent("tone-\(index).wav")
+            let frames = AVAudioFrameCount(spec.1 * 48_000)
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
+            buffer.frameLength = frames
+            let samples = try #require(buffer.floatChannelData?[0])
+            for frame in 0..<Int(frames) {
+                samples[frame] = Float(sin(Double(frame) / 48_000 * Double(index + 1) * 880 * .pi)) * 0.5
+            }
+            do {
+                let file = try AVAudioFile(forWriting: url, settings: format.settings)
+                try file.write(from: buffer)
+            }
+            let asset = AVURLAsset(url: url)
+            let source = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+            let track = try #require(composition.addMutableTrack(withMediaType: .audio,
+                                                                 preferredTrackID: kCMPersistentTrackID_Invalid))
+            let range = CMTimeRange(start: .zero, duration: CMTime(seconds: spec.1, preferredTimescale: 48_000))
+            try track.insertTimeRange(range, of: source, at: CMTime(seconds: spec.0, preferredTimescale: 48_000))
+        }
+        let source = directory.appendingPathComponent("delayed.mov")
+        let export = try #require(AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough))
+        try await export.export(to: source, as: .mov)
+        return source
+    }
+
     // MARK: - Helpers
 
     /// Locate the top-level moov and mdat offsets in an ISO-BMFF file

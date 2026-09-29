@@ -4,12 +4,14 @@
  * Tags are managed via the normalized tags + recording_tags tables.
  */
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import type { ParsedLocalTranscription } from "../../contracts/recordings";
 import type { RecordingStatus } from "../../lib/types";
 import { runBatch } from "../drivers/batch";
 import { rowsAffected } from "../drivers/result";
 import {
 	type DbRecording,
+	type NewDbRecording,
 	recordings,
 	recordingTags,
 	transcriptionJobs,
@@ -131,6 +133,69 @@ export function makeRecordingsRepo(db: LyreDb) {
 				})
 				.returning()
 				.get();
+		},
+
+		async createWithTranscription(
+			data: NewDbRecording,
+			result: ParsedLocalTranscription,
+		): Promise<void> {
+			const jobId = crypto.randomUUID();
+			await runBatch(db, (h) => [
+				h.insert(recordings).values({ ...data, status: "completed" }),
+				h.insert(transcriptionJobs).values({
+					id: jobId,
+					recordingId: data.id,
+					taskId: `local:whisper.cpp:${result.model}`,
+					status: "SUCCEEDED",
+					createdAt: data.createdAt,
+					updatedAt: data.updatedAt,
+				}),
+				h.insert(transcriptions).values({
+					id: crypto.randomUUID(),
+					recordingId: data.id,
+					jobId,
+					fullText: result.fullText,
+					sentences: JSON.stringify(result.sentences),
+					language: result.language,
+					createdAt: data.createdAt,
+					updatedAt: data.updatedAt,
+				}),
+			]);
+		},
+
+		async claimTranscription(id: string, expectedStatus: RecordingStatus): Promise<boolean> {
+			const row = await db
+				.update(recordings)
+				.set({ status: "transcribing", updatedAt: Date.now() })
+				.where(
+					and(
+						eq(recordings.id, id),
+						eq(recordings.status, expectedStatus),
+						ne(recordings.status, "transcribing"),
+					),
+				)
+				.returning()
+				.get();
+			return !!row;
+		},
+
+		async reserveAutoSummary(
+			id: string,
+			status: "running" | "failed",
+			error: string | null,
+		): Promise<boolean> {
+			const row = await db
+				.update(recordings)
+				.set({
+					aiSummaryStatus: status,
+					aiSummaryError: error,
+					aiSummary: null,
+					updatedAt: Date.now(),
+				})
+				.where(and(eq(recordings.id, id), isNull(recordings.aiSummaryStatus)))
+				.returning()
+				.get();
+			return !!row;
 		},
 
 		async update(

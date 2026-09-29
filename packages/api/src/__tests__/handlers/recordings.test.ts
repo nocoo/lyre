@@ -79,7 +79,7 @@ describe("createRecordingHandler", () => {
 		const res = await createRecordingHandler(ctx, {
 			title: "Hello",
 			fileName: "h.m4a",
-			ossKey: "uploads/x/y/h.m4a",
+			ossKey: "uploads/test-user-1/r/h.m4a",
 		});
 		expect(res.status).toBe(201);
 	});
@@ -96,7 +96,7 @@ describe("get/update/recording", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "A",
 			fileName: "a.m4a",
-			ossKey: "uploads/x/y/a.m4a",
+			ossKey: "uploads/test-user-1/r/a.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const id = (created.body as { id: string }).id;
@@ -143,7 +143,7 @@ describe("delete + batch", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const id = (created.body as { id: string }).id;
@@ -168,7 +168,7 @@ describe("playUrl/downloadUrl handlers", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const id = (created.body as { id: string }).id;
@@ -191,7 +191,7 @@ describe("wordsHandler", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const id = (created.body as { id: string }).id;
@@ -204,7 +204,7 @@ describe("wordsHandler", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const recId = (created.body as { id: string }).id;
@@ -252,7 +252,7 @@ describe("wordsHandler", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const recId = (created.body as { id: string }).id;
@@ -316,7 +316,7 @@ describe("wordsHandler", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const recId = (created.body as { id: string }).id;
@@ -339,7 +339,7 @@ describe("wordsHandler", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const recId = (created.body as { id: string }).id;
@@ -364,7 +364,7 @@ describe("wordsHandler", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const recId = (created.body as { id: string }).id;
@@ -394,7 +394,7 @@ describe("wordsHandler", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const recId = (created.body as { id: string }).id;
@@ -446,7 +446,7 @@ describe("wordsHandler", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const recId = (created.body as { id: string }).id;
@@ -476,7 +476,7 @@ describe("batch delete with owned recording", () => {
 		const created = await createRecordingHandler(ctx, {
 			title: "X",
 			fileName: "x.m4a",
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 		});
 		if (created.kind !== "json") throw new Error();
 		const recId = (created.body as { id: string }).id;
@@ -541,7 +541,7 @@ describe("transcribeRecordingHandler", () => {
 			duration: null,
 			format: null,
 			sampleRate: null,
-			ossKey: "uploads/u/r/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 			status: "transcribing",
 		});
 		const res = await transcribeRecordingHandler(ctxWithOss, rec.id);
@@ -577,7 +577,7 @@ describe("transcribeRecordingHandler", () => {
 				duration: null,
 				format: null,
 				sampleRate: null,
-				ossKey: "uploads/u/r/x.m4a",
+				ossKey: "uploads/test-user-1/r/x.m4a",
 				status: "uploaded",
 			});
 			const res = await transcribeRecordingHandler(ctx, rec.id);

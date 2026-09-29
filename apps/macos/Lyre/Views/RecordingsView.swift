@@ -319,7 +319,7 @@ struct RecordingRow: View {
 
     @ViewBuilder private var automaticUploadStatus: some View {
         switch automaticUploadState {
-        case .preparing, .presigning, .uploading, .creating:
+        case .preparing, .transcribing, .presigning, .uploading, .creating:
             ProgressView().controlSize(.mini).frame(width: 14, height: 14)
                 .help("Uploading automatically").accessibilityLabel("Uploading automatically")
         case .completed:

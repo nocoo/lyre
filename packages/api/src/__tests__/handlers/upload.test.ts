@@ -10,25 +10,29 @@ import { presignUploadHandler } from "../../handlers/upload";
 import { makeCtx, setupAnonCtx, setupAuthedCtx } from "../_fixtures/runtime-context";
 
 describe("presignUploadHandler", () => {
-	it("401 for anonymous", () => {
+	it("401 for anonymous", async () => {
 		expect(
-			presignUploadHandler(setupAnonCtx(), {
-				fileName: "x.m4a",
-				contentType: "audio/m4a",
-			}).status,
+			(
+				await presignUploadHandler(setupAnonCtx(), {
+					fileName: "x.m4a",
+					contentType: "audio/m4a",
+				})
+			).status,
 		).toBe(401);
 	});
 	it("400 when fields missing", async () => {
 		const { ctx } = await setupAuthedCtx();
-		expect(presignUploadHandler(ctx, {}).status).toBe(400);
+		expect((await presignUploadHandler(ctx, {})).status).toBe(400);
 	});
 	it("400 when contentType not audio", async () => {
 		const { ctx } = await setupAuthedCtx();
 		expect(
-			presignUploadHandler(ctx, {
-				fileName: "x.txt",
-				contentType: "text/plain",
-			}).status,
+			(
+				await presignUploadHandler(ctx, {
+					fileName: "x.txt",
+					contentType: "text/plain",
+				})
+			).status,
 		).toBe(400);
 	});
 	it("returns presigned URL when authed + audio", async () => {
@@ -42,7 +46,7 @@ describe("presignUploadHandler", () => {
 				OSS_ENDPOINT: "https://oss.example.com",
 			},
 		});
-		const res = presignUploadHandler(ctx, {
+		const res = await presignUploadHandler(ctx, {
 			fileName: "rec.m4a",
 			contentType: "audio/m4a",
 		});

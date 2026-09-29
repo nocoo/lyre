@@ -75,10 +75,15 @@ export function AsrSettingsSection() {
 				<div>
 					<h2 className="text-sm font-medium text-basalt-foreground">ASR Configuration</h2>
 					<p className="text-xs text-basalt-muted-foreground">
-						Select the speech recognition model for transcription.
+						Cloud model for uploads without a local transcript and explicit re-transcription.
 					</p>
 				</div>
 			</div>
+			<p className="mb-4 text-xs text-basalt-muted-foreground">
+				The macOS app uses local Whisper by default, then uploads its transcript. Configure paths,
+				language and CPU threads in the app’s Local STT settings. Cloud recognition runs only if
+				local recognition is disabled or fails.
+			</p>
 
 			<div>
 				<Label className="text-sm">Model</Label>

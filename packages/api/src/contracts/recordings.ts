@@ -1,7 +1,7 @@
 /**
  * Recording, folder, tag, transcription, and pagination contracts.
  *
- * Client-safe: pure types, no runtime imports.
+ * Client-safe contracts and validation, no runtime imports.
  * Cross-boundary shape between the API package and any UI consumer.
  */
 
@@ -132,3 +132,108 @@ export interface PaginatedResponse<T> {
 import type { TranscriptionJob } from "./jobs";
 
 export type { TranscriptionJob };
+
+export const MAX_LOCAL_TRANSCRIPTION_BYTES = 5 * 1024 * 1024;
+
+export interface LocalTranscription {
+	result: { language: string };
+	transcription: Array<{ offsets: { from: number; to: number }; text: string }>;
+	model?: { type?: string };
+}
+
+export interface ParsedLocalTranscription {
+	fullText: string;
+	sentences: TranscriptionSentence[];
+	language: string;
+	model: string;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parseLocalTranscription(
+	value: unknown,
+	duration?: number | null,
+): ParsedLocalTranscription {
+	if (
+		!isObject(value) ||
+		new TextEncoder().encode(JSON.stringify(value)).length > MAX_LOCAL_TRANSCRIPTION_BYTES
+	) {
+		throw new Error("Local transcription must be a JSON object of at most 5 MiB");
+	}
+	if (
+		!isObject(value.result) ||
+		typeof value.result.language !== "string" ||
+		!value.result.language.trim() ||
+		value.result.language.length > 32
+	) {
+		throw new Error("Local transcription requires result.language");
+	}
+	if (!Array.isArray(value.transcription) || value.transcription.length > 50_000) {
+		throw new Error("Local transcription requires at most 50000 segments");
+	}
+	if (duration != null && (!Number.isFinite(duration) || duration < 0)) {
+		throw new Error("Recording duration must be a finite non-negative number");
+	}
+	let model = "unknown";
+	if (value.model !== undefined) {
+		if (
+			!isObject(value.model) ||
+			(value.model.type !== undefined &&
+				(typeof value.model.type !== "string" || !/^[\w. -]{1,128}$/.test(value.model.type)))
+		) {
+			throw new Error("Invalid local transcription model");
+		}
+		if (typeof value.model.type === "string") model = value.model.type;
+	}
+	const language = value.result.language.trim();
+	const sentences: TranscriptionSentence[] = [];
+	let previousBegin = 0;
+	let previousEnd = 0;
+	for (const segment of value.transcription) {
+		if (
+			!isObject(segment) ||
+			!isObject(segment.offsets) ||
+			typeof segment.text !== "string" ||
+			segment.text.length > 100_000
+		) {
+			throw new Error("Invalid local transcription segment");
+		}
+		const begin = segment.offsets.from;
+		const end = segment.offsets.to;
+		if (
+			typeof begin !== "number" ||
+			typeof end !== "number" ||
+			!Number.isSafeInteger(begin) ||
+			!Number.isSafeInteger(end) ||
+			begin < previousBegin ||
+			end < previousEnd ||
+			end < begin ||
+			(duration != null && end > duration * 1000 + 1000)
+		) {
+			throw new Error(
+				"Local transcription timestamps must be monotonic milliseconds within the recording",
+			);
+		}
+		previousBegin = begin;
+		previousEnd = end;
+		const text = segment.text.trim();
+		if (!text) continue;
+		sentences.push({
+			sentenceId: sentences.length,
+			channelId: 0,
+			beginTime: begin,
+			endTime: end,
+			text,
+			language,
+			emotion: "",
+		});
+	}
+	return {
+		fullText: sentences.map((sentence) => sentence.text).join("\n"),
+		sentences,
+		language,
+		model,
+	};
+}

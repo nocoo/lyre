@@ -56,10 +56,11 @@ struct RecordingLibraryStateTests {
         #expect(library.recordingToUpload?.filename == "second")
     }
 
-    @Test func automaticUploadRequiresOptInAndStrictlyExceedsConfiguredDuration() {
+    @Test func automaticUploadRespectsDisabledSettingAndStrictlyExceedsConfiguredDuration() {
         let config = makeConfig()
         var uploaded: [RecordingFile] = []
         let library = RecordingLibraryState(config: config, startAutomaticUpload: { _, file in uploaded.append(file) })
+        config.autoUploadEnabled = false
         library.uploadAutomaticallyIfNeeded(recording("disabled", duration: 1000))
         #expect(uploaded.isEmpty)
 

@@ -119,6 +119,11 @@ LYRE_RUN_LIVE_RECORDING=1 bun run test:macos:live
 
 这个显式入口会真实录音，需要已有屏幕 / 系统音频录制与麦克风权限以及可用显示器。测试不会弹出权限申请；缺少前提时会失败。录音用例顺序执行，先等待停止，再清理各自的临时文件。普通测试在权限检查之前跳过这些用例。仅需要编译时使用上面的 `xcodebuild build`。
 
+## Local transcription
+
+See [Local transcription](13-local-transcription.md) for native settings, output
+files, the Whisper JSON upload contract, cloud fallback and offline verification.
+
 ## 部署
 
 main 推送触发 CI；成功后 Release 检出该提交，构建 Web 并部署 Worker，main 路径检查 `/api/live` 返回 200。tag 路径另核对版本。这个流程没有 D1 迁移步骤，也不自动附加 macOS DMG。

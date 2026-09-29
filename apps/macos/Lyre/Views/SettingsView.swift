@@ -12,7 +12,7 @@ struct SettingsView: View {
     @State private var connectionStatus = ConnectionStatus.untested
 
     enum SectionTab: String, CaseIterable {
-        case recording = "Recording", connection = "Connection", appearance = "Appearance"
+        case recording = "Recording", transcription = "Local STT", connection = "Connection", appearance = "Appearance"
     }
     enum ConnectionStatus {
         case untested, testing, success(String), failed(String)
@@ -29,6 +29,7 @@ struct SettingsView: View {
                 .fixedSize().frame(maxWidth: .infinity, alignment: .leading)
                 switch section {
                 case .recording: recordingSettings
+                case .transcription: LocalSTTSettingsView(config: config)
                 case .connection: connectionSettings
                 case .appearance: appearanceSettings
                 }
@@ -136,7 +137,8 @@ struct SettingsView: View {
                         .labelsHidden().fixedSize()
                 }
                 .disabled(!config.autoUploadEnabled)
-                Text("After you stop, recordings longer than this limit upload to Lyre. Originals stay on this Mac.")
+                Text("After you stop, longer recordings transcribe locally before uploading. "
+                     + "Originals stay on this Mac.")
                     .font(.system(size: 12)).foregroundStyle(.secondary).lineSpacing(3)
                 if config.autoUploadEnabled && !config.isServerConfigured {
                     HStack(spacing: 12) {

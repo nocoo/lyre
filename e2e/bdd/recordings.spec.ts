@@ -7,12 +7,14 @@ const BASE = "http://localhost:27016";
 const ORIGIN_HEADERS = { Origin: BASE } as const;
 
 async function createRecording(request: APIRequestContext): Promise<string> {
+	const id = crypto.randomUUID();
 	const res = await request.post(`${BASE}/api/recordings`, {
 		headers: ORIGIN_HEADERS,
 		data: {
+			id,
 			title: "E2E Test Recording",
 			fileName: "e2e-test.m4a",
-			ossKey: "test/e2e-test.m4a",
+			ossKey: `uploads/e2e-test-user/${id}/e2e-test.m4a`,
 		},
 	});
 	expect(res.ok()).toBeTruthy();

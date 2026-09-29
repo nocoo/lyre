@@ -199,6 +199,7 @@ struct RecordingDetailView: View {
 
     private var uploadHeading: String {
         switch automaticUploadState {
+        case .transcribing: "Transcribing on this Mac"
         case .preparing, .presigning, .uploading, .creating: "Uploading automatically"
         case .completed: "Uploaded to Lyre"
         case .failed: "Automatic upload failed"
@@ -208,8 +209,8 @@ struct RecordingDetailView: View {
 
     private var uploadDescription: String {
         switch automaticUploadState {
-        case .preparing, .presigning, .uploading, .creating: "Your original stays on this Mac."
-        case .completed: "Open Lyre to transcribe and organize on the web."
+        case .preparing, .transcribing, .presigning, .uploading, .creating: "Your original stays on this Mac."
+        case .completed: "Open Lyre to read the transcript and organize on the web."
         case .failed: "Your file is saved locally. View the upload to retry."
         case .idle, nil: "Upload to transcribe and organize on the web."
         }

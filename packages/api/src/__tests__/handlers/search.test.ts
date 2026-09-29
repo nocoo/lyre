@@ -34,7 +34,7 @@ describe("searchHandler", () => {
 		await createRecordingHandler(ctx, {
 			title: "Searchable Meeting",
 			fileName: "m.m4a",
-			ossKey: "uploads/u/r/m.m4a",
+			ossKey: "uploads/test-user-1/r/m.m4a",
 		});
 		const res = await searchHandler(ctx, "Searchable");
 		if (res.kind !== "json") throw new Error();
@@ -55,7 +55,7 @@ describe("searchHandler", () => {
 		await createRecordingHandler(ctx, {
 			title: "Foldered Meeting",
 			fileName: "x.m4a",
-			ossKey: "uploads/x.m4a",
+			ossKey: "uploads/test-user-1/r/x.m4a",
 			folderId: folder.id,
 		});
 		const res = await searchHandler(ctx, "Foldered");

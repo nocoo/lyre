@@ -15,9 +15,13 @@ struct UploadView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
+                if let warning = uploadManager.localSTTWarning {
+                    Text(warning).font(.system(size: 12)).foregroundStyle(LyreTheme.warning)
+                        .textSelection(.enabled)
+                }
                 switch uploadManager.state {
                 case .idle, .failed: uploadForm
-                case .preparing, .presigning, .uploading, .creating: progress
+                case .preparing, .transcribing, .presigning, .uploading, .creating: progress
                 case .completed: completed
                 }
             }
@@ -138,7 +142,7 @@ struct UploadView: View {
             }.padding(.vertical, 12)
             LyreCard {
                 VStack(alignment: .leading, spacing: 22) {
-                    progressStep("Prepare audio", index: 0)
+                    progressStep("Prepare audio and transcribe locally", index: 0)
                     progressStep("Upload file", index: 1)
                     progressStep("Save to your library", index: 2)
                 }
@@ -148,7 +152,7 @@ struct UploadView: View {
 
     private var stage: Int {
         switch uploadManager.state {
-        case .preparing, .presigning: 0
+        case .preparing, .transcribing, .presigning: 0
         case .uploading: 1
         default: 2
         }
@@ -156,6 +160,7 @@ struct UploadView: View {
 
     private var progressTitle: String {
         switch uploadManager.state {
+        case .transcribing: "Transcribing on this Mac…"
         case .preparing, .presigning: "Preparing your recording…"
         case .uploading: "Uploading audio…"
         default: "Saving to Lyre…"
@@ -177,7 +182,7 @@ struct UploadView: View {
             Image(systemName: "checkmark.circle.fill").font(.system(size: 42)).foregroundStyle(LyreTheme.success)
             VStack(spacing: 9) {
                 Text("Ready in Lyre.").font(.system(size: 22, weight: .semibold))
-                Text("Your recording is uploaded.\nOpen Lyre to start a transcription.")
+                Text("Your recording and transcript are being processed.\nOpen Lyre to read and summarize.")
                     .font(.system(size: 13)).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center).lineSpacing(4)
             }
