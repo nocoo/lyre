@@ -79,6 +79,8 @@ API E2E uses loopback 7017; BDD uses 27016. `--env test` here names local bindin
 
 Apply D1 migrations before an authorized Worker deployment. [Release details](docs/12-agent-operations.md) cover synchronized versions, xcodegen, changelog and DMG packaging. Releases use Developer ID; `LYRE_ALLOW_ADHOC=1` is explicit and cannot promise stable TCC or notarization. Test ad-hoc flags are not release signing.
 
+Every macOS release must attach its versioned DMG and `SHA256SUMS` to the matching GitHub Release. Build from the exact release commit in an isolated directory, verify the mounted app's version, signature integrity and architectures, and state the actual signing/notarization status. Include copyable, Lyre-scoped quarantine and signature recovery commands directly in the Release page, plus the permission reauthorization note; do not require users to find them in repository docs. Publish matching Web/Worker changes and verify exact-revision CI and the deployed `/api/live` version.
+
 ## Retrospective
 
 Move accident narratives to [Retrospective.md](Retrospective.md); keep at most about ten concise recurring project rules here. Put architecture and operational detail in linked docs.

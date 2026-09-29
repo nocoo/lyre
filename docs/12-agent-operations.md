@@ -92,7 +92,7 @@ Version is managed from the **root `package.json`** as the single source of trut
 
 - `packages/api/src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION` (Vite inlines it).
 - `/api/live` returns the version in its JSON response.
-- macOS About page reads `CFBundleShortVersionString` (set by `MARKETING_VERSION`).
+- macOS sidebar and About page read `CFBundleShortVersionString` (set by `MARKETING_VERSION`).
 - `bun run release` walks all workspace `package.json` files (`scripts/release.ts`).
 
 ### How to bump version
@@ -100,18 +100,47 @@ Version is managed from the **root `package.json`** as the single source of trut
 1. Update `version` in all four `package.json` files and `MARKETING_VERSION` in `apps/macos/project.yml`.
 2. Run `xcodegen generate` from `apps/macos/` to sync `project.pbxproj`.
 3. Update `CHANGELOG.md` with changes since last version.
-4. Commit, push, then tag and release via `gh`.
-5. Build the macOS DMG and attach it to the GitHub release:
+4. Commit and build the macOS DMG from that exact commit in an isolated checkout. The packaging script cleans its checkout's `build/` directory, which must not contain a running preview app.
    ```bash
    LYRE_CODE_SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' bun run macos:dmg
    # → build/Lyre-<version>.dmg; notarize separately before distribution
-   gh release upload v<version> build/Lyre-<version>.dmg
+   shasum -a 256 build/Lyre-<version>.dmg
    ```
 
    If no Developer ID certificate is available, `LYRE_ALLOW_ADHOC=1 bun run macos:dmg`
    builds an ad-hoc DMG. Any release using this option must identify its signing
    and notarization limitations in the release notes; system permissions may need
    granting again after an update.
+
+5. Mount the DMG read-only. Check the bundled `CFBundleShortVersionString`, verify its signature with `codesign --verify --deep --strict`, and verify Apple silicon / Intel slices with `lipo -archs`. Generate `SHA256SUMS` using the DMG basename.
+6. Push through the normal hooks, verify CI for the release commit, and verify the matching Worker deployment (including migrations before dependent code). Push the version tag and publish its GitHub Release with the versioned DMG and `SHA256SUMS` attached. The release helper alone does not package or attach native artifacts.
+7. Include the changelog, direct download/checksum links, actual signing/notarization status, and the following recovery guidance directly in the GitHub Release body. Verify the uploaded asset digest against the local DMG and `/api/live` against the released version.
+
+### Copyable macOS recovery guidance
+
+After downloading from this repository's Release page and checking `SHA256SUMS`,
+drag Lyre into Applications and quit it. For a trusted download blocked by
+Gatekeeper, first try **System Settings → Privacy & Security → Open Anyway**.
+If macOS reports the app is damaged or still blocks this unnotarized build,
+remove the quarantine attribute from this app only:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Lyre.app"
+open "/Applications/Lyre.app"
+```
+
+If a signature error persists, quit Lyre and apply a local ad-hoc signature:
+
+```bash
+codesign --force --deep --sign - "/Applications/Lyre.app"
+codesign --verify --deep --strict "/Applications/Lyre.app"
+open "/Applications/Lyre.app"
+```
+
+Local signing does not provide Apple notarization. Replacing or re-signing an
+ad-hoc app can require re-enabling **Microphone** and **Screen & System Audio
+Recording** in Privacy & Security, followed by reopening Lyre. Do not disable
+Gatekeeper globally or reset unrelated applications' permissions.
 
 ## Project Layout Detail
 

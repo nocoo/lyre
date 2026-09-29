@@ -17,7 +17,7 @@ struct AboutView: View {
                         LyreBrandMark(size: 110)
                         VStack(spacing: 9) {
                             Text("Lyre").font(.system(size: 32, weight: .semibold))
-                            Text("Version \(appVersion) (\(buildNumber))")
+                            Text("v\(appVersion) (\(buildNumber))")
                                 .font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         Text("Meeting recorder for macOS.\nCaptures system audio and microphone.")

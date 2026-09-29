@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.1.0 (2026-09-29)
+
+### Features
+
+- Enable local whisper.cpp transcription before manual and automatic macOS uploads, with configurable executable, model, language, CPU threads and Metal GPU.
+- Mix recording tracks into timeline-aligned 16 kHz mono WAV and preserve TXT, SRT, JSON and recognition logs beside the recording.
+- Import local sentence timestamps through the Worker and web upload dialog, skip duplicate cloud recognition, and start configured automatic AI summaries.
+- Enable automatic uploads after stopping recordings longer than five minutes, while respecting previously saved disabled settings.
+
+### Fixes and improvements
+
+- Preserve delayed tracks and trailing audio during mixing; reuse successful local results and recording IDs on upload retries.
+- Show local sentence playback with accurate millisecond offsets and no fabricated word timing.
+- Adopt the latest textured Hexly app icons and tighten the native sidebar brand spacing.
+- Add the Hexly project link and accessible web header controls; update Basalt and the vulnerable picomatch dependency.
+- Index transcription job lookups, isolate commit checks and browser/native test artifacts, and prevent manual CI runs from triggering release deployment.
+
 ## v2.0.1 (2026-09-15)
 
 ### 🐛 Bug Fixes

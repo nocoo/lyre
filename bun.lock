@@ -16,7 +16,7 @@
     },
     "apps/api": {
       "name": "@lyre/api-worker",
-      "version": "2.0.1",
+      "version": "2.1.0",
       "dependencies": {
         "@lyre/api": "workspace:*",
         "ai": "^7.0.83",
@@ -34,7 +34,7 @@
     },
     "apps/web": {
       "name": "@lyre/web",
-      "version": "2.0.1",
+      "version": "2.1.0",
       "dependencies": {
         "@lyre/api": "workspace:*",
         "@nocoo/basalt": "2.1.8",
@@ -66,7 +66,7 @@
     },
     "packages/api": {
       "name": "@lyre/api",
-      "version": "2.0.1",
+      "version": "2.1.0",
       "dependencies": {
         "@nocoo/next-ai": "^0.4.0",
         "ai": "^7.0.83",

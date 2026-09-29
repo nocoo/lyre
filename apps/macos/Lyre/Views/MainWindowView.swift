@@ -44,6 +44,10 @@ struct MainWindowView: View {
         Binding(get: { selectedTab }, set: { if let tab = $0 { selectedTab = tab } })
     }
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
@@ -99,7 +103,12 @@ struct MainWindowView: View {
             HStack(spacing: 8) {
                 LyreBrandMark(size: 38)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Lyre").font(.system(size: 19, weight: .semibold))
+                    HStack(spacing: 6) {
+                        Text("Lyre").font(.system(size: 19, weight: .semibold))
+                        Text("v\(appVersion)").font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary).padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(LyreTheme.control, in: Capsule())
+                    }
                     Text("Keep the conversation").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
