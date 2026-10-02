@@ -12,7 +12,7 @@
 		"@lyre/api": "workspace:*",
 		"ai": "^7.0.83",
 		"drizzle-orm": "^0.45.1",
-		"hono": "^4.13.5",
+		"hono": "4.13.7",
 		"jose": "^6.2.10"
 	},
 	"devDependencies": {

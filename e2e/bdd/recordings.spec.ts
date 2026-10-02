@@ -31,9 +31,11 @@ async function deleteRecording(request: APIRequestContext, id: string): Promise<
 test.describe("Recordings", () => {
 	let recordingId: string;
 
-	test("list page shows created recording", async ({ page, request }) => {
+	test.beforeEach(async ({ request }) => {
 		recordingId = await createRecording(request);
+	});
 
+	test("list page shows created recording", async ({ page }) => {
 		await page.goto("/recordings");
 		await expect(
 			page.locator("[data-basalt-surface-root]").getByRole("heading", {
@@ -47,16 +49,14 @@ test.describe("Recordings", () => {
 		});
 	});
 
-	test("detail page renders recording metadata", async ({ page, request }) => {
-		if (!recordingId) recordingId = await createRecording(request);
-
+	test("detail page renders recording metadata", async ({ page }) => {
 		await page.goto(`/recordings/${recordingId}`);
 		await expect(page.getByText("E2E Test Recording").first()).toBeVisible({
 			timeout: 10_000,
 		});
 	});
 
-	test.afterAll(async ({ request }) => {
+	test.afterEach(async ({ request }) => {
 		if (recordingId) await deleteRecording(request, recordingId);
 	});
 });

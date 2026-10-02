@@ -32,7 +32,9 @@ test.describe("Settings", () => {
 		await page.goto("/settings/tokens");
 
 		await expect(
-			page.locator("[data-basalt-surface-root]").getByRole("heading", { name: "Device Tokens" }),
+			page
+				.locator("[data-basalt-surface-root]")
+				.getByRole("heading", { name: "Device Tokens", level: 1 }),
 		).toBeVisible();
 	});
 });
