@@ -30,7 +30,7 @@
 	"dependencies": {
 		"@nocoo/next-ai": "^0.4.0",
 		"ai": "^7.0.138",
-		"drizzle-orm": "^0.45.1"
+		"drizzle-orm": "^0.45.4"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.4.3",
