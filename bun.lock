@@ -53,7 +53,7 @@
       "devDependencies": {
         "@tailwindcss/vite": "^4.3.3",
         "@types/bun": "^1.4.3",
-        "@types/react": "^19.2.18",
+        "@types/react": "^19.3.0",
         "@types/react-dom": "^19.2.5",
         "@vitejs/plugin-react": "^4.3.4",
         "@vitest/coverage-v8": "^4.1.11",
@@ -578,7 +578,7 @@
 
     "@types/node": ["@types/node@20.19.43", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha1-/Oz1gLpCoNtVz0BMNyyXlzw3bJc="],
 
-    "@types/react": ["@types/react@19.2.18", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha1-6wtqH7Y10alpLV+Eo0lb2K0VNwc="],
+    "@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
 
     "@types/react-dom": ["@types/react-dom@19.2.5", "", { "peerDependencies": { "@types/react": "^19.2.0" } }, "sha1-1Oz41wTKtZkB0/uwl1tvhVMGWV8="],
 
