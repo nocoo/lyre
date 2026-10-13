@@ -33,7 +33,7 @@
 		"drizzle-orm": "^0.45.1"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.4.0",
+		"@types/bun": "^1.4.3",
 		"typescript": "^7.0.2"
 	}
 }
