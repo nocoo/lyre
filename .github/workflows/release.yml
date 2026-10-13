@@ -38,7 +38,7 @@ jobs:
       runtime-version: "1.4.0"
       install-policy: "blocked"
       build-command: "bun run web:build"
-      wrangler-version: "4.126.0"
+      wrangler-version: "4.149.0"
       wrangler-working-directory: "apps/api"
       d1-migrations: true
       d1-command: "d1 execute lyre-db --remote --file ../../packages/api/migrations/0002_transcription_job_indexes.sql"
