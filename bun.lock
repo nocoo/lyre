@@ -22,7 +22,7 @@
         "ai": "^7.0.147",
         "drizzle-orm": "^0.45.4",
         "hono": "4.13.13",
-        "jose": "^6.2.12",
+        "jose": "6.2.13",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "^4.20260702.1",
@@ -853,7 +853,7 @@
 
     "jiti": ["jiti@2.7.0", "", { "bin": { "jiti": "./lib/jiti-cli.mjs" } }, "sha1-l0Io8vTKK8IYhaF5e0X+po6VDGQ="],
 
-    "jose": ["jose@6.2.12", "", {}, "sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw=="],
+    "jose": ["jose@6.2.13", "", {}, "sha512-7TIg10ZE1x82YediN+lcrPNvGMKge9yFHQD+Qho/b8y2adfugU3AsvvHfxV0fzyFllT6l9xCjf4RWY9g/Z9PJQ=="],
 
     "js-tokens": ["js-tokens@10.0.0", "", {}, "sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q=="],
 
