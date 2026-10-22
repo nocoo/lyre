@@ -30,14 +30,14 @@ cd ../..
 
 ### 外部服务配置
 
-| 配置 | 用途与来源 |
-| --- | --- |
-| `CF_ACCESS_TEAM_DOMAIN` | Access 团队子域，不含 `.cloudflareaccess.com` 后缀 |
-| `CF_ACCESS_AUD` | Access 应用 audience |
-| `OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` | OSS 访问凭据 |
-| `OSS_BUCKET`、`OSS_REGION`、`OSS_ENDPOINT` | OSS Bucket 与区域 / Endpoint 配置 |
-| `DASHSCOPE_API_KEY` | 真实语音转写 |
-| AI 设置中的供应商、模型、Key、可选 Base URL | 用户在网页保存的摘要服务配置，存入 D1 settings |
+| 配置                                         | 用途与来源                                         |
+| -------------------------------------------- | -------------------------------------------------- |
+| `CF_ACCESS_TEAM_DOMAIN`                      | Access 团队子域，不含 `.cloudflareaccess.com` 后缀 |
+| `CF_ACCESS_AUD`                              | Access 应用 audience                               |
+| `OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` | OSS 访问凭据                                       |
+| `OSS_BUCKET`、`OSS_REGION`、`OSS_ENDPOINT`   | OSS Bucket 与区域 / Endpoint 配置                  |
+| `DASHSCOPE_API_KEY`                          | 真实语音转写                                       |
+| AI 设置中的供应商、模型、Key、可选 Base URL  | 用户在网页保存的摘要服务配置，存入 D1 settings     |
 
 Worker 从绑定 / vars / secrets 读取这些值。OSS 浏览器直传需要允许站点来源和 PUT 的 CORS 配置。`test` 环境的 `OSS_BUCKET` 仍写为 `lyre`；提供真实 OSS 凭据前需显式改用自己的独立测试 Bucket，环境名不会替你隔离阿里云资源。
 
@@ -88,12 +88,12 @@ Backy Push 使用设置中的 webhook URL 与 API Key。`/api/backy/pull` 接受
 
 ## 测试入口
 
-| 命令 | 前置条件与范围 |
-| --- | --- |
-| `bun run test` | Vitest；Web / Worker / API 库与开发脚本单元测试 |
-| `bun run test:coverage` | 同一套测试与覆盖率报告 |
-| `bun run test:e2e` | 端口 7017；本地 Wrangler、DROP + CREATE 测试 schema、真实 HTTP；没有静态资源时自动构建 |
-| `bun run test:e2e:bdd` | Web 已构建、Chromium、端口 27016；本地 Worker 与同一个测试 D1 状态 |
+| 命令                    | 前置条件与范围                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `bun run test`          | Vitest；Web / Worker / API 库与开发脚本单元测试                                        |
+| `bun run test:coverage` | 同一套测试与覆盖率报告                                                                 |
+| `bun run test:e2e`      | 端口 7017；本地 Wrangler、DROP + CREATE 测试 schema、真实 HTTP；没有静态资源时自动构建 |
+| `bun run test:e2e:bdd`  | Web 已构建、Chromium、端口 27016；本地 Worker 与同一个测试 D1 状态                     |
 
 `bunx playwright install chromium` 安装浏览器。Playwright 非 CI 模式会复用已有服务，因此运行前需确认对应端口空闲，且 HTTP / 浏览器套件顺序运行。HTTP 帮助函数支持 `E2E_BASE_URL`，普通本地执行应保留默认本机地址。
 

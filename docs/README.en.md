@@ -31,7 +31,6 @@ A single Cloudflare Worker serves the web interface and API. D1 stores recording
 ### Web
 
 The [website](https://lyre.hexly.ai) requires an identity allowed by Cloudflare Access. The operator must configure OSS and DashScope first. Summaries also require a provider, model and credentials in AI settings.
-
 1. Upload audio and provide a title, description or folder. The web interface limits each file to 500 MiB.
 2. Open the recording and start transcription manually. Finishing an upload does not start transcription automatically.
 3. Once transcription completes, play the audio alongside its text, generate a summary, add notes or download the recording.
@@ -92,12 +91,12 @@ packages/api/      Shared contracts, handlers, repositories and services
 
 Run from the repository root:
 
-| Scope | Command |
-| --- | --- |
-| Web, Worker, shared API and development script unit tests | `bun run test` |
-| Unit tests with coverage reports | `bun run test:coverage` |
-| Local HTTP API integration | `bun run test:e2e` |
-| Browser tests | `bun run test:e2e:bdd` |
+| Scope                                                     | Command                 |
+| --------------------------------------------------------- | ----------------------- |
+| Web, Worker, shared API and development script unit tests | `bun run test`          |
+| Unit tests with coverage reports                          | `bun run test:coverage` |
+| Local HTTP API integration                                | `bun run test:e2e`      |
+| Browser tests                                             | `bun run test:e2e:bdd`  |
 
 HTTP integration uses port 7017 and browser tests use port 27016. Both apply `e2e/schema.sql`, recreating the same local test D1 state. Use a separate checkout, run them sequentially and free the ports first. Browser tests also need a web build and Chromium, installed with `bunx playwright install chromium`. Keep real service credentials out of ordinary local verification; [test setup](08-development.md#测试入口) explains the separate opt-in for live ASR tests.
 
@@ -117,15 +116,15 @@ The default command does not enable live recording. See [macOS test prerequisite
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare_Workers-F38020?logo=cloudflareworkers&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white)
 
-| Area | Implementation |
-| --- | --- |
-| Web | React, Vite, React Router, SWR, Tailwind CSS, Basalt, Recharts |
-| Services and data | Hono, Cloudflare Workers, D1, Drizzle ORM |
-| Audio storage and transcription | Aliyun OSS, DashScope asynchronous file transcription |
-| Summaries | Vercel AI SDK, @nocoo/next-ai, Markdown rendering |
-| Authentication | Cloudflare Access, jose, device Bearer tokens |
-| macOS | Swift, SwiftUI, ScreenCaptureKit, AVFoundation |
-| Verification | Vitest, Playwright, Swift Testing, Biome, SwiftLint |
+| Area                            | Implementation                                                 |
+| ------------------------------- | -------------------------------------------------------------- |
+| Web                             | React, Vite, React Router, SWR, Tailwind CSS, Basalt, Recharts |
+| Services and data               | Hono, Cloudflare Workers, D1, Drizzle ORM                      |
+| Audio storage and transcription | Aliyun OSS, DashScope asynchronous file transcription          |
+| Summaries                       | Vercel AI SDK, @nocoo/next-ai, Markdown rendering              |
+| Authentication                  | Cloudflare Access, jose, device Bearer tokens                  |
+| macOS                           | Swift, SwiftUI, ScreenCaptureKit, AVFoundation                 |
+| Verification                    | Vitest, Playwright, Swift Testing, Biome, SwiftLint            |
 
 ## Documentation
 

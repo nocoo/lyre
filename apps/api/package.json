@@ -1,6 +1,6 @@
 {
 	"name": "@lyre/api-worker",
-	"version": "2.1.2",
+	"version": "2.1.3",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -10,7 +10,7 @@
 	},
 	"dependencies": {
 		"@lyre/api": "workspace:*",
-		"ai": "^7.0.147",
+		"ai": "^7.0.148",
 		"drizzle-orm": "^0.45.4",
 		"hono": "4.13.13",
 		"jose": "6.2.13"

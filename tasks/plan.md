@@ -31,7 +31,6 @@ Color+Hex ───┘
 ## Slicing 策略
 
 **垂直切片**：每个任务都是**一个可运行、可验收的最小闭环**。
-
 - **Stage 1** 是一个"垂直切片包"：所有 Theme token 文件一次性齐全 +
   LyreApp 注入 + 单测，才有意义（少一个文件 palette 就断链）。作为
   **1 个原子提交**。
@@ -49,7 +48,6 @@ Color+Hex ───┘
 **范围**：一次性添加 Theme 层所有文件 + LyreApp 根注入，零视觉变化。
 
 **新增文件**：
-
 - `apps/macos/Lyre/Theme/Spacing.swift`
 - `apps/macos/Lyre/Theme/Radius.swift`
 - `apps/macos/Lyre/Theme/Color+Hex.swift`
@@ -61,14 +59,12 @@ Color+Hex ───┘
 - `apps/macos/LyreTests/BasaltTokenTests.swift`
 
 **修改文件**：
-
 - `apps/macos/Lyre/LyreApp.swift` — 在 `Window("Lyre", id: "main") { MainWindowView(…) }`
   的 `MainWindowView` 上注入 `.environment(\.palette, Palette.resolved(scheme))`
   （需要在 `LyreApp` 里加 `@Environment(\.colorScheme) private var scheme`）。
   `MenuBarExtra` 里的 `TrayMenu` 保持系统外观（不注入，menu bar 是 vibrancy 语义）
 
 **Acceptance**：
-
 1. `xcodebuild build -project Lyre.xcodeproj -scheme Lyre` 成功
 2. `xcodebuild test -scheme Lyre` 全绿（含新增 suite）
 3. `swiftlint --strict apps/macos/Lyre/ apps/macos/LyreTests/` 0 violations
@@ -103,10 +99,10 @@ grep -rn "Font\.system(size:" Lyre/Theme/  # must be empty
 - [ ] C1 合并后手工过一遍 4 个 tab，确认视觉零变化
 - [ ] 确认 `xcodegen generate` 已把新 Theme/ 目录扫入 project
 - [ ] 确认 `elapsedTimer` 审计结果：`stopElapsedTimer()` 只在 stopRecording
-      路径调用；tray menu 无 onDisappear。**审计结论**：录音中直接 Quit
-      会泄漏 timer，但进程即将退出所以无影响；**不修**。写在 C10 的
-      Swift 源码注释里作为技术债标记；**不进 CHANGELOG / Release notes**
-      （这是内部生命周期审计，不是用户可见变更）
+  路径调用；tray menu 无 onDisappear。**审计结论**：录音中直接 Quit
+  会泄漏 timer，但进程即将退出所以无影响；**不修**。写在 C10 的
+  Swift 源码注释里作为技术债标记；**不进 CHANGELOG / Release notes**
+  （这是内部生命周期审计，不是用户可见变更）
 
 Stage 1 pass 后再进 Stage 2。
 
@@ -119,13 +115,11 @@ Stage 1 pass 后再进 Stage 2。
 **范围**：三个 View extension modifier，配套 tests。
 
 **新增文件**：
-
 - `apps/macos/Lyre/Theme/Surfaces.swift` — `basaltCard(radius:)` /
   `basaltField(radius:)` / `basaltShadow()`
 - `apps/macos/LyreTests/BasaltSurfacesTests.swift`
 
 **Acceptance**：
-
 1. 三个 modifier 独立编译通过
 2. Tests：一个 `DemoStack` view 挂三个 modifier，body 求值不 crash（无 snapshot 库）
 3. **Lyre 项目对 B-6 阴影默认的克制覆盖**：`basaltShadow` 用 3 层 `.shadow`
@@ -156,7 +150,6 @@ swiftlint lint --strict Lyre/Theme/Surfaces.swift LyreTests/BasaltSurfacesTests.
 **范围**：RecordingsView 空态用的容器组件。
 
 **新增文件**：
-
 - `apps/macos/Lyre/Components/EmptyStateCard.swift`
 - `apps/macos/LyreTests/EmptyStateCardTests.swift`
 
@@ -173,7 +166,6 @@ public struct EmptyStateCard: View {
 ```
 
 **Acceptance**：
-
 1. 独立编译通过
 2. `accessibilityLabel` = `title`，`accessibilityValue` = `subtitle`（VoiceOver
    一次读全）
@@ -191,7 +183,6 @@ public struct EmptyStateCard: View {
 **范围**：UploadView 上传阶段的状态标签。
 
 **新增文件**：
-
 - `apps/macos/Lyre/Components/PhaseBadge.swift`
 - `apps/macos/LyreTests/PhaseBadgeTests.swift`
 
@@ -211,7 +202,6 @@ public struct PhaseBadge: View {
 ```
 
 **Acceptance**：
-
 1. 4 个 phase 独立编译 + body 求值不 crash
 2. 颜色映射：pending → `palette.muted`；running → `palette.accent`；
    succeeded → `palette.success`；failed → `palette.destructive`
@@ -232,7 +222,7 @@ public struct PhaseBadge: View {
 - [ ] C2 / C3 / C4 全 merge 后 `xcodebuild test` 全绿
 - [ ] 手工启 App：视觉仍**零变化**（无 view 消费）
 - [ ] `grep -rn "\.frame(height:" apps/macos/Lyre/Components/` 人工审查每处
-      是否会锁 Dynamic Type
+  是否会锁 Dynamic Type
 
 Stage 2 pass 后再进 Stage 3。
 
@@ -248,7 +238,6 @@ Stage 2 pass 后再进 Stage 3。
 **修改文件**：`apps/macos/Lyre/Views/RecordingsView.swift`
 
 **具体动作**（对齐 spec §RecordingsView）：
-
 1. `emptyState` 换 `EmptyStateCard(systemImage: "waveform.circle", title:
    "No Recordings", subtitle: "…")`
 2. `RecordingRow`（`:187`）视觉改造：
@@ -274,7 +263,6 @@ Stage 2 pass 后再进 Stage 3。
    **不变**
 
 **Acceptance**：
-
 1. `xcodebuild test` 全绿（含 RecordingE2E 需 pre-flight 授权，未授权 skip）
 2. `grep -n "\.orange\|\.red\|\.accentColor" apps/macos/Lyre/Views/RecordingsView.swift`
    返回空
@@ -308,7 +296,6 @@ grep -n "\.orange\|\.red\|\.blue\|\.green" Lyre/Views/RecordingsView.swift
 **修改文件**：`apps/macos/Lyre/Views/UploadView.swift`
 
 **具体动作**（对齐 spec §UploadView）：
-
 1. `TextField` / `Picker` / `SecureField` 保留原样（`palette.input 边界`
    规则）
 2. `TagChip`（`:228`，当前用 `Capsule()` 胶囊形状 — **保留**，只换填色）：
@@ -341,7 +328,6 @@ grep -n "\.orange\|\.red\|\.blue\|\.green" Lyre/Views/RecordingsView.swift
      行末），不用在这种大居中完成页
 
 **Acceptance**：
-
 1. `xcodebuild test` 全绿
 2. `grep -n "\.orange\|\.green" apps/macos/Lyre/Views/UploadView.swift` 返回空
 3. `TextField` / `Picker` 保持系统默认 `.roundedBorder`
@@ -373,7 +359,6 @@ binding）。
 **修改文件**：`apps/macos/Lyre/Views/SettingsView.swift`
 
 **具体动作**（对齐 spec §SettingsView）：
-
 1. `Form { … }.formStyle(.grouped)` 后加
    `.scrollContentBackground(.hidden)` + `.background(palette.bg)`
 2. `statusBadge`（`.foregroundStyle(.green / .red)`）→ palette 语义色：
@@ -388,7 +373,6 @@ binding）。
 6. Section header 保留系统默认（`.grouped` 会给 uppercase small-caps）
 
 **Acceptance**：
-
 1. `xcodebuild test` 全绿
 2. `grep -n "\.green\|\.red\|\.orange" apps/macos/Lyre/Views/SettingsView.swift` 返回空
 3. `TextField` focus ring 保留（Tab 到时可见）
@@ -407,7 +391,6 @@ binding）。
 **修改文件**：`apps/macos/Lyre/Views/PermissionGuideView.swift`
 
 **具体动作**（对齐 spec §PermissionGuideView）：
-
 1. Header icon `.foregroundStyle(.blue)` → `palette.accent`
 2. `PermissionRow`（`:92`）外层套 `basaltCard(radius: Radius.widget)`，
    内部结构不改
@@ -420,7 +403,6 @@ binding）。
 5. `pollTimer` 保持 —— `stopPolling()` 已在 `onDisappear`（spec §内存生命周期）
 
 **Acceptance**：
-
 1. `xcodebuild test` 全绿
 2. `grep -n "\.blue\|\.green\|\.red" apps/macos/Lyre/Views/PermissionGuideView.swift` 返回空
 3. 每行 `basaltCard` 结构：卡片背景 L2、`Radius.widget` 圆角、`basaltShadow`
@@ -438,7 +420,6 @@ binding）。
 **修改文件**：`apps/macos/Lyre/Views/AboutView.swift`
 
 **具体动作**（对齐 spec §AboutView）：
-
 1. `.font(.title).fontWeight(.bold)` → `BasaltFont.pageTitle`
 2. `.font(.caption)` 版本号 → `BasaltFont.caption` + `palette.muted`
 3. `.font(.body)` 描述 → `BasaltFont.body` + `palette.muted`
@@ -449,7 +430,6 @@ binding）。
 7. 外层 padding 从 `padding(30)` → `padding(Spacing.xl)`（24pt）
 
 **Acceptance**：
-
 1. `xcodebuild test` 全绿
 2. `grep -n "\.tertiary\|\.orange" apps/macos/Lyre/Views/AboutView.swift`
    命中项人工审查（`.tertiary` 应该没有留存；`.secondary` **可以保留**
@@ -470,7 +450,6 @@ binding）。
 **修改文件**：`apps/macos/Lyre/LyreApp.swift`
 
 **具体动作**（对齐 spec §LyreApp）：
-
 1. `MainWindowView.body` 里 `TabView(selection:)` 外层加
    `.background(palette.bg)`（`@Environment(\.palette) private var palette`
    在 MainWindowView 里添加）
@@ -481,7 +460,6 @@ binding）。
    退出所以无影响；正常 stopRecording 路径 `stopElapsedTimer()` 已 invalidate
 
 **Acceptance**：
-
 1. `xcodebuild test` 全绿
 2. **原生性审查 pass**：
    - Menu bar tray 图标不变（`TrayLabel` 无 palette）
@@ -505,13 +483,14 @@ binding）。
   - `bun run test` 229/229
   - pre-commit / pre-push hook 手工过一遍
 - [ ] 全局 grep 验收（`docs/07` Acceptance §命名规范）：
+
   ```bash
   grep -rn "Color(red:" apps/macos/Lyre/ | grep -v Theme/          # empty
   grep -rn "foregroundStyle(\.orange\|\.red\|\.blue\|\.green" apps/macos/Lyre/Views/  # empty
   grep -rn "Font\.system(size:" apps/macos/Lyre/                    # empty
   ```
 - [ ] 手工冒烟：录音 → 停止 → 上传 → 播放 → 删除 → 权限重开 → 设置改 →
-      切 dark/light 全路径无回归
+  切 dark/light 全路径无回归
 - [ ] Release notes 草稿准备：`feat(macos): Basalt visual identity`
 
 ---
@@ -541,7 +520,6 @@ bun run lint
 ```
 
 **Commit message 惯例**：
-
 - 全部 `feat(macos): …` 前缀（Stage 1 也是 feat，因为对外可见地"加了个视觉体系"）
 - Body 引用 `docs/07-macos-ui-basalt-upgrade.md` 章节号 + `nmem` id
 - **不 `git push`**（等到全部 rollout 完成 + 手工过一遍 acceptance 再统一发版）
@@ -556,7 +534,6 @@ bun run lint
 ## Non-Blocking Follow-ups
 
 以下**不进本次范围**，作为独立后续 task 记录：
-
 - `NavigationSplitView` sidebar 底色改造（需要 `NSVisualEffectView` 桥接）
 - `Form(.grouped)` section header 底色（需要 `NSTableView.appearance()`
   桥接，`docs/07` §Retrospective 已标）

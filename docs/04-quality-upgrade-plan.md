@@ -7,16 +7,16 @@
 
 ### 总览
 
-| 层级 | Dove | Lyre | 状态 |
-|------|------|------|------|
-| **L1 单元测试** | vitest + 95% coverage | bun test + 90% handler | ⚠️ |
-| **L2 API E2E** | e2e/api + route gate | route glue/smoke only | ⚠️ |
-| **L3 BDD E2E** | e2e/bdd + page gate | 无 | ❌ |
-| **G1 静态分析** | typecheck + lint | typecheck + lint | ✅ |
-| **G2a Secrets** | gitleaks | gitleaks | ✅ |
-| **G2b Deps** | osv-scanner | osv-scanner | ✅ |
-| **CI** | L1+L2+L3+G1+G2 | L1+G1+G2 | ⚠️ |
-| **CD** | release.yml | 无 | ❌ |
+| 层级            | Dove                  | Lyre                   | 状态 |
+| --------------- | --------------------- | ---------------------- | ---- |
+| **L1 单元测试** | vitest + 95% coverage | bun test + 90% handler | ⚠️   |
+| **L2 API E2E**  | e2e/api + route gate  | route glue/smoke only  | ⚠️   |
+| **L3 BDD E2E**  | e2e/bdd + page gate   | 无                     | ❌   |
+| **G1 静态分析** | typecheck + lint      | typecheck + lint       | ✅   |
+| **G2a Secrets** | gitleaks              | gitleaks               | ✅   |
+| **G2b Deps**    | osv-scanner           | osv-scanner            | ✅   |
+| **CI**          | L1+L2+L3+G1+G2        | L1+G1+G2               | ⚠️   |
+| **CD**          | release.yml           | 无                     | ❌   |
 
 ### Hooks 对比
 
@@ -42,19 +42,19 @@ gate:deps | lint | typecheck | test:coverage + web:build | test:e2e (live) | mac
 
 ### 缺失组件清单
 
-| # | 组件 | Dove 路径 | Lyre 状态 |
-|---|------|-----------|-----------|
-| 0 | vitest 迁移 (apps/web) | `vitest.config.ts` | ✅ apps/web 迁移完成 |
-| 1 | 真实 Worker E2E 测试 | `e2e/api/` | ✅ 38 tests, 49 routes |
-| 2 | BDD E2E 测试 | `e2e/bdd/` | ❌ 缺失 |
-| 3 | E2E 运行脚本 | `scripts/run-e2e.ts` | ✅ |
-| 4 | Route 覆盖门禁 | `scripts/check-route-coverage.ts` | ✅ |
-| 5 | Page 覆盖门禁 | `scripts/check-page-coverage.ts` | ❌ 缺失 |
-| 6 | 统一安全门禁 | `scripts/gate-secrets.ts` + `scripts/gate-deps.ts` | ✅ |
-| 7 | Playwright 配置 | `playwright.config.ts` | ❌ 缺失 |
-| 8 | CD Workflow | `.github/workflows/release.yml` | ❌ 缺失 |
-| 9 | 并行 Hooks | `.husky/pre-commit` | ⚠️ pre-push 已并行（`scripts/pre-push.ts`）；pre-commit 仍串行 |
-| 10 | 细粒度覆盖率 | vitest thresholds | ✅ apps/web vitest thresholds |
+| #   | 组件                   | Dove 路径                                          | Lyre 状态                                                      |
+| --- | ---------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| 0   | vitest 迁移 (apps/web) | `vitest.config.ts`                                 | ✅ apps/web 迁移完成                                           |
+| 1   | 真实 Worker E2E 测试   | `e2e/api/`                                         | ✅ 38 tests, 49 routes                                         |
+| 2   | BDD E2E 测试           | `e2e/bdd/`                                         | ❌ 缺失                                                        |
+| 3   | E2E 运行脚本           | `scripts/run-e2e.ts`                               | ✅                                                             |
+| 4   | Route 覆盖门禁         | `scripts/check-route-coverage.ts`                  | ✅                                                             |
+| 5   | Page 覆盖门禁          | `scripts/check-page-coverage.ts`                   | ❌ 缺失                                                        |
+| 6   | 统一安全门禁           | `scripts/gate-secrets.ts` + `scripts/gate-deps.ts` | ✅                                                             |
+| 7   | Playwright 配置        | `playwright.config.ts`                             | ❌ 缺失                                                        |
+| 8   | CD Workflow            | `.github/workflows/release.yml`                    | ❌ 缺失                                                        |
+| 9   | 并行 Hooks             | `.husky/pre-commit`                                | ⚠️ pre-push 已并行（`scripts/pre-push.ts`）；pre-commit 仍串行 |
+| 10  | 细粒度覆盖率           | vitest thresholds                                  | ✅ apps/web vitest thresholds                                  |
 
 ---
 
@@ -85,10 +85,10 @@ vitest 的 v8 coverage provider 原生支持 JSON output + per-file thresholds�
 packages/api 测试 fixture 依赖 `drizzle-orm/bun-sqlite` 和 `bun:sqlite`，
 vitest 默认 Node runtime 下无法运行。两种方案：
 
-| 方案 | 优点 | 缺点 |
-|------|------|------|
-| A: 改用 better-sqlite3 | vitest 原生支持，不依赖 Bun | 需改 test-db.ts，drizzle driver 不同 |
-| B: 保留 packages/api handler tests 用 Bun | 零改动 | 覆盖率工具链不统一 |
+| 方案                                      | 优点                        | 缺点                                 |
+| ----------------------------------------- | --------------------------- | ------------------------------------ |
+| A: 改用 better-sqlite3                    | vitest 原生支持，不依赖 Bun | 需改 test-db.ts，drizzle driver 不同 |
+| B: 保留 packages/api handler tests 用 Bun | 零改动                      | 覆盖率工具链不统一                   |
 
 **推荐方案 B**: packages/api 的 handler tests 继续用 `bun test` (Bun runtime + bun:sqlite)。
 apps/api 的 Worker glue tests 依赖 `packages/api/src/__tests__/_fixtures/test-db.ts` (bun:sqlite)，

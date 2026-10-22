@@ -1,6 +1,6 @@
 {
 	"name": "@lyre/api",
-	"version": "2.1.2",
+	"version": "2.1.3",
 	"private": true,
 	"type": "module",
 	"exports": {
@@ -29,7 +29,7 @@
 	},
 	"dependencies": {
 		"@nocoo/next-ai": "^0.4.0",
-		"ai": "^7.0.147",
+		"ai": "^7.0.148",
 		"drizzle-orm": "^0.45.4"
 	},
 	"devDependencies": {

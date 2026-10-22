@@ -10,19 +10,18 @@ v2.0.0 的权限界面与录音入口均依赖 `CGPreflightScreenCaptureAccess()
 
 开源项目中有直接对应的记录。AltTab 明确指出该 API 的返回值在应用运行期间可能不更新，改用 `SCShareableContent` 检查可访问内容。Lyre 的现有逻辑确有这一缺口；本轮没有在用户正在运行的安装包里执行真实权限请求，因此不能断言本机症状只有这一种原因。
 
-| 参考 | 实现与结论 | 本次采用 |
-| --- | --- | --- |
-| [AltTab · SystemPermissions.swift](https://github.com/lwouis/alt-tab-macos/blob/850a72351ac03b6509442b7a56f9bd9fad8fb24b/src/macos/SystemPermissions.swift#L161) | 说明 CG 预检的进程内旧值；通过 `SCShareableContent.getExcludingDesktopWindows` 验证，超时上限 6 秒；注明查询可能弹出系统授权框 | 实际框架查询、有界等待，以及后台检查与显式授权的区分 |
-| [QuickRecorder · SCContext.swift](https://github.com/lihaoyun6/QuickRecorder/blob/e82051787f013ec2e811fcceab2d7de80e9d4dbe/QuickRecorder/SCContext.swift#L68) | 使用 ScreenCaptureKit 的结果，单独处理 `SCStreamError.userDeclined`；其他查询错误保留错误语义 | 区分拒绝授权与服务故障；不采用阻塞信号量、自动重复申请或强制退出 |
-| [OBS · platform-osx.mm](https://github.com/obsproject/obs-studio/blob/caaa0223401f2195128f9998265a0f66d84c9a02/frontend/utility/platform-osx.mm) / [Cap · permission.rs](https://github.com/CapSoftware/Cap/blob/edb0747ac9bfc9ecdef5978838d01d714301a4a7/crates/scap-screencapturekit/src/permission.rs) | 相关权限辅助代码仍直接包装 CG 的预检 / 请求接口 | 单独引入这些包装不能修复 Lyre 的旧值问题 |
-| [AudioCap · AudioRecordingPermission.swift](https://github.com/insidegui/AudioCap/blob/main/AudioCap/ProcessTap/AudioRecordingPermission.swift) | CoreAudio Process Tap 的独立音频权限示例，查询使用私有 TCC SPI | 不引入私有权限接口，也不为修复状态判断而重写录音管线 |
+| 参考                                                                                                                                                                                                                                                                                                      | 实现与结论                                                                                                                     | 本次采用                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| [AltTab · SystemPermissions.swift](https://github.com/lwouis/alt-tab-macos/blob/850a72351ac03b6509442b7a56f9bd9fad8fb24b/src/macos/SystemPermissions.swift#L161)                                                                                                                                          | 说明 CG 预检的进程内旧值；通过 `SCShareableContent.getExcludingDesktopWindows` 验证，超时上限 6 秒；注明查询可能弹出系统授权框 | 实际框架查询、有界等待，以及后台检查与显式授权的区分             |
+| [QuickRecorder · SCContext.swift](https://github.com/lihaoyun6/QuickRecorder/blob/e82051787f013ec2e811fcceab2d7de80e9d4dbe/QuickRecorder/SCContext.swift#L68)                                                                                                                                             | 使用 ScreenCaptureKit 的结果，单独处理 `SCStreamError.userDeclined`；其他查询错误保留错误语义                                  | 区分拒绝授权与服务故障；不采用阻塞信号量、自动重复申请或强制退出 |
+| [OBS · platform-osx.mm](https://github.com/obsproject/obs-studio/blob/caaa0223401f2195128f9998265a0f66d84c9a02/frontend/utility/platform-osx.mm) / [Cap · permission.rs](https://github.com/CapSoftware/Cap/blob/edb0747ac9bfc9ecdef5978838d01d714301a4a7/crates/scap-screencapturekit/src/permission.rs) | 相关权限辅助代码仍直接包装 CG 的预检 / 请求接口                                                                                | 单独引入这些包装不能修复 Lyre 的旧值问题                         |
+| [AudioCap · AudioRecordingPermission.swift](https://github.com/insidegui/AudioCap/blob/main/AudioCap/ProcessTap/AudioRecordingPermission.swift)                                                                                                                                                           | CoreAudio Process Tap 的独立音频权限示例，查询使用私有 TCC SPI                                                                 | 不引入私有权限接口，也不为修复状态判断而重写录音管线             |
 
 [Glimpse #15](https://github.com/rtemoni/Glimpse/issues/15) 也记录了设置已开启但引导页无法通过的类似现象。[Apple 的 ScreenCaptureKit 示例](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos) 说明首次授权后可能需要重新启动应用才能开始捕获。
 
 ## Lyre 的处理
 
 `ScreenCapturePermissionProbe` 通过公开的 ScreenCaptureKit 内容查询核验访问能力。没有开始音频捕获，没有查询 TCC 数据库，也没有新增第三方依赖。
-
 - **被动检查**：启动、权限页的定时刷新和普通应用激活继续使用非交互式预检，不主动申请权限。
 - **显式检查**：Check、Refresh，以及权限尚未确认时的录音准备，使用实际内容查询。通过 Lyre 的 Settings 按钮打开系统设置，返回后也检查一次。
 - **实际结果优先**：查询成功后，旧的 false 预检不能把界面改回未授权；实际拒绝后，旧的 true 也不能把界面改成已允许。该结果只保存在当前进程内。

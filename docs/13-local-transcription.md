@@ -11,13 +11,13 @@ setting stays disabled.
 Open **Settings → Local STT** to configure the executable, model, language, CPU
 threads and Metal GPU. Defaults are:
 
-| Setting | Default |
-| --- | --- |
-| Executable | `~/workspace/references/whisper.cpp/build/bin/whisper-cli` |
-| Model | `~/workspace/references/whisper.cpp/models/ggml-large-v3.bin` |
-| Language | `auto` |
-| CPU threads | `4` |
-| Metal GPU | Enabled |
+| Setting     | Default                                                       |
+| ----------- | ------------------------------------------------------------- |
+| Executable  | `~/workspace/references/whisper.cpp/build/bin/whisper-cli`    |
+| Model       | `~/workspace/references/whisper.cpp/models/ggml-large-v3.bin` |
+| Language    | `auto`                                                        |
+| CPU threads | `4`                                                           |
+| Metal GPU   | Enabled                                                       |
 
 AVFoundation mixes every audio track on its original timeline and converts it to
 16 kHz mono PCM WAV. The recognizer receives separate process arguments:
@@ -47,12 +47,12 @@ no local result is supplied.
 
 ```json
 {
-  "result": { "language": "zh" },
-  "model": { "type": "large" },
-  "transcription": [
-    { "offsets": { "from": 900, "to": 4400 }, "text": "First sentence." },
-    { "offsets": { "from": 7900, "to": 9100 }, "text": "Second sentence." }
-  ]
+	"result": { "language": "zh" },
+	"model": { "type": "large" },
+	"transcription": [
+		{ "offsets": { "from": 900, "to": 4400 }, "text": "First sentence." },
+		{ "offsets": { "from": 7900, "to": 9100 }, "text": "Second sentence." }
+	]
 }
 ```
 
