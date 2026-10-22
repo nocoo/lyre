@@ -8,27 +8,27 @@ them with environment tagging, versioning, and history retrieval.
 
 The integration is **bidirectional**:
 
-| Direction | Flow | Description |
-|---|---|---|
-| **Push** | Lyre → Backy | User-initiated backup upload |
-| **Pull** | Backy → Lyre → Backy | Backy triggers a backup via webhook, Lyre auto-pushes |
+| Direction | Flow                 | Description                                           |
+| --------- | -------------------- | ----------------------------------------------------- |
+| **Push**  | Lyre → Backy         | User-initiated backup upload                          |
+| **Pull**  | Backy → Lyre → Backy | Backy triggers a backup via webhook, Lyre auto-pushes |
 
 ### Push Operations
 
-| Operation | HTTP Method | Description |
-|---|---|---|
-| **Push backup** | `POST` webhook URL | Upload a full JSON backup |
-| **Test connection** | `HEAD` webhook URL | Verify webhook reachability |
-| **Fetch history** | `GET` webhook URL | Retrieve backup count and recent entries |
+| Operation           | HTTP Method        | Description                              |
+| ------------------- | ------------------ | ---------------------------------------- |
+| **Push backup**     | `POST` webhook URL | Upload a full JSON backup                |
+| **Test connection** | `HEAD` webhook URL | Verify webhook reachability              |
+| **Fetch history**   | `GET` webhook URL  | Retrieve backup count and recent entries |
 
 All Push requests are authenticated with a Bearer token in the `Authorization` header.
 
 ### Pull Operation
 
-| Operation | HTTP Method | Description |
-|---|---|---|
-| **Pull webhook** | `POST /api/backy/pull` | Backy calls Lyre to trigger an auto-push |
-| **Pull health check** | `HEAD /api/backy/pull` | Verify pull key validity |
+| Operation             | HTTP Method            | Description                              |
+| --------------------- | ---------------------- | ---------------------------------------- |
+| **Pull webhook**      | `POST /api/backy/pull` | Backy calls Lyre to trigger an auto-push |
+| **Pull health check** | `HEAD /api/backy/pull` | Verify pull key validity                 |
 
 Pull requests authenticate via the `X-Webhook-Key` header and bypass
 Cloudflare Access (the Worker treats `/api/backy/pull` as a public webhook
@@ -55,7 +55,6 @@ endpoint).
 
 The Pull direction allows Backy to trigger automatic backups by calling
 Lyre's webhook endpoint.
-
 1. Navigate to **Settings → General**
 2. Scroll to the **Pull Webhook** section
 3. Click **Generate Key** to create a pull key
@@ -90,13 +89,13 @@ Fields:
 
 ```json
 {
-  "id": "Tg_jn9aYOt4e_QaaN4iKv",
-  "project_name": "lyre",
-  "tag": "v1.5.2-2026-02-23-10rec-5tr-3fld-2tag",
-  "environment": "prod",
-  "file_size": 974787,
-  "is_single_json": 1,
-  "created_at": "2026-02-23T07:08:10.708Z"
+	"id": "Tg_jn9aYOt4e_QaaN4iKv",
+	"project_name": "lyre",
+	"tag": "v1.5.2-2026-02-23-10rec-5tr-3fld-2tag",
+	"environment": "prod",
+	"file_size": 974787,
+	"is_single_json": 1,
+	"created_at": "2026-02-23T07:08:10.708Z"
 }
 ```
 
@@ -124,19 +123,19 @@ Authorization: Bearer {apiKey}
 
 ```json
 {
-  "project_name": "lyre",
-  "environment": null,
-  "total_backups": 3,
-  "recent_backups": [
-    {
-      "id": "Tg_jn9aYOt4e_QaaN4iKv",
-      "tag": "v1.5.1-2026-02-23-10rec-10tr-1fld-5tag",
-      "environment": "prod",
-      "file_size": 974787,
-      "is_single_json": 1,
-      "created_at": "2026-02-23T07:08:10.708Z"
-    }
-  ]
+	"project_name": "lyre",
+	"environment": null,
+	"total_backups": 3,
+	"recent_backups": [
+		{
+			"id": "Tg_jn9aYOt4e_QaaN4iKv",
+			"tag": "v1.5.1-2026-02-23-10rec-10tr-1fld-5tag",
+			"environment": "prod",
+			"file_size": 974787,
+			"is_single_json": 1,
+			"created_at": "2026-02-23T07:08:10.708Z"
+		}
+	]
 }
 ```
 
@@ -176,22 +175,22 @@ X-Webhook-Key: {pullKey}
 
 ```json
 {
-  "ok": true,
-  "message": "Backup pushed successfully (1234ms)",
-  "durationMs": 1234,
-  "tag": "v1.5.2-2026-02-23-10rec-5tr-3fld-2tag",
-  "fileName": "backup.json",
-  "stats": { "recordings": 10, "transcriptions": 5, "folders": 3, "tags": 2 }
+	"ok": true,
+	"message": "Backup pushed successfully (1234ms)",
+	"durationMs": 1234,
+	"tag": "v1.5.2-2026-02-23-10rec-5tr-3fld-2tag",
+	"fileName": "backup.json",
+	"stats": { "recordings": 10, "transcriptions": 5, "folders": 3, "tags": 2 }
 }
 ```
 
 **Error responses:**
 
-| Status | Condition |
-|---|---|
-| `401` | Missing or invalid `X-Webhook-Key` |
-| `422` | Push config not set (webhook URL or API key missing) |
-| `502` | Backup push to Backy failed |
+| Status | Condition                                            |
+| ------ | ---------------------------------------------------- |
+| `401`  | Missing or invalid `X-Webhook-Key`                   |
+| `422`  | Push config not set (webhook URL or API key missing) |
+| `502`  | Backup push to Backy failed                          |
 
 **curl example:**
 
@@ -206,17 +205,17 @@ The Hono Worker exposes these routes for the Settings UI. All
 session-authenticated endpoints sit behind Cloudflare Access; the pull
 webhook is exempt.
 
-| Endpoint | Method | Auth | Description |
-|---|---|---|---|
-| `/api/settings/backy` | `GET` | Access | Read Backy config (URL, masked key, environment, pull key info) |
-| `/api/settings/backy` | `PUT` | Access | Save Backy config (URL and/or API key) |
-| `/api/settings/backy/test` | `POST` | Access | Test connection to Backy webhook |
-| `/api/settings/backy/history` | `GET` | Access | Fetch remote backup history |
-| `/api/settings/backy/pull-key` | `POST` | Access | Generate (or regenerate) a pull key |
-| `/api/settings/backy/pull-key` | `DELETE` | Access | Revoke the pull key |
-| `/api/settings/backup/push` | `POST` | Access | Export data and push to Backy |
-| `/api/backy/pull` | `HEAD` | Webhook Key | Verify pull key validity |
-| `/api/backy/pull` | `POST` | Webhook Key | Trigger a full backup push |
+| Endpoint                       | Method   | Auth        | Description                                                     |
+| ------------------------------ | -------- | ----------- | --------------------------------------------------------------- |
+| `/api/settings/backy`          | `GET`    | Access      | Read Backy config (URL, masked key, environment, pull key info) |
+| `/api/settings/backy`          | `PUT`    | Access      | Save Backy config (URL and/or API key)                          |
+| `/api/settings/backy/test`     | `POST`   | Access      | Test connection to Backy webhook                                |
+| `/api/settings/backy/history`  | `GET`    | Access      | Fetch remote backup history                                     |
+| `/api/settings/backy/pull-key` | `POST`   | Access      | Generate (or regenerate) a pull key                             |
+| `/api/settings/backy/pull-key` | `DELETE` | Access      | Revoke the pull key                                             |
+| `/api/settings/backup/push`    | `POST`   | Access      | Export data and push to Backy                                   |
+| `/api/backy/pull`              | `HEAD`   | Webhook Key | Verify pull key validity                                        |
+| `/api/backy/pull`              | `POST`   | Webhook Key | Trigger a full backup push                                      |
 
 Access-authenticated endpoints return `401` when the
 `Cf-Access-Jwt-Assertion` header is missing or invalid. Webhook Key
@@ -258,35 +257,33 @@ Pull Key Lifecycle:
 
 ### Key Files
 
-| File | Purpose |
-|---|---|
-| `packages/api/src/services/backy.ts` | Service layer: `readBackySettings`, `maskApiKey`, `getEnvironment`, `fetchBackyHistory`, pull key CRUD (`generatePullKey`, `readPullKey`, `savePullKey`, `deletePullKey`, `findUserIdByPullKey`) |
-| `packages/api/src/services/backup.ts` | Backup export/import/push: `exportBackup`, `importBackup`, `pushBackupToBacky` |
-| `apps/api/src/routes/settings/backy.ts` | GET/PUT config, test, history, pull-key generate/revoke |
-| `apps/api/src/routes/settings/backup.ts` | POST push backup |
-| `apps/api/src/routes/backy.ts` | HEAD health check / POST trigger pull-initiated backup |
+| File                                     | Purpose                                                                                                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/api/src/services/backy.ts`     | Service layer: `readBackySettings`, `maskApiKey`, `getEnvironment`, `fetchBackyHistory`, pull key CRUD (`generatePullKey`, `readPullKey`, `savePullKey`, `deletePullKey`, `findUserIdByPullKey`) |
+| `packages/api/src/services/backup.ts`    | Backup export/import/push: `exportBackup`, `importBackup`, `pushBackupToBacky`                                                                                                                   |
+| `apps/api/src/routes/settings/backy.ts`  | GET/PUT config, test, history, pull-key generate/revoke                                                                                                                                          |
+| `apps/api/src/routes/settings/backup.ts` | POST push backup                                                                                                                                                                                 |
+| `apps/api/src/routes/backy.ts`           | HEAD health check / POST trigger pull-initiated backup                                                                                                                                           |
 
 ### Configuration Storage
 
 Backy settings are stored in the D1 `settings` table (key-value store):
 
-| Key | Value |
-|---|---|
-| `backy.webhookUrl` | Webhook URL |
-| `backy.apiKey` | API key (stored in plain text, masked in API responses) |
-| `backy.pullKey` | Pull webhook key (64-char hex string, used for `X-Webhook-Key` auth) |
+| Key                | Value                                                                |
+| ------------------ | -------------------------------------------------------------------- |
+| `backy.webhookUrl` | Webhook URL                                                          |
+| `backy.apiKey`     | API key (stored in plain text, masked in API responses)              |
+| `backy.pullKey`    | Pull webhook key (64-char hex string, used for `X-Webhook-Key` auth) |
 
 ### Environment Detection
 
 The `environment` field sent with each backup is derived from `NODE_ENV`:
-
 - `production` → `"prod"`
 - Anything else → `"dev"`
 
 ### Backup Contents
 
 Each backup includes all user data (metadata only, no audio files):
-
 - Folders and tags
 - Recordings (metadata + OSS keys)
 - Transcription jobs and transcriptions
@@ -297,7 +294,6 @@ Each backup includes all user data (metadata only, no audio files):
 ## Integrating Backy in Other Projects
 
 To integrate Backy in a new project, you need:
-
 1. **A webhook URL and API key** from the Backy dashboard
 2. **A push endpoint** that:
    - Exports your data as JSON
@@ -316,9 +312,9 @@ form.append("environment", "prod");
 form.append("tag", "v1.0.0-2026-02-23");
 
 const res = await fetch(webhookUrl, {
-  method: "POST",
-  headers: { Authorization: `Bearer ${apiKey}` },
-  body: form,
+	method: "POST",
+	headers: { Authorization: `Bearer ${apiKey}` },
+	body: form,
 });
 ```
 

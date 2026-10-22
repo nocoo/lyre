@@ -10,25 +10,26 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
 
 ## Providers
 
-| Provider | Base URL | Default Model |
-| -------- | -------- | ------------- |
-| Anthropic | `https://api.anthropic.com/v1` | `claude-sonnet-4-20250514` |
-| GLM (Zhipu) | `https://open.bigmodel.cn/api/anthropic/v1` | `glm-4` |
-| MiniMax | `https://api.minimaxi.com/anthropic/v1` | `MiniMax-M1` |
-| AIHubMix | `https://aihubmix.com/v1` | `claude-sonnet-4-20250514` |
+| Provider    | Base URL                                    | Default Model              |
+| ----------- | ------------------------------------------- | -------------------------- |
+| Anthropic   | `https://api.anthropic.com/v1`              | `claude-sonnet-4-20250514` |
+| GLM (Zhipu) | `https://open.bigmodel.cn/api/anthropic/v1` | `glm-4`                    |
+| MiniMax     | `https://api.minimaxi.com/anthropic/v1`     | `MiniMax-M1`               |
+| AIHubMix    | `https://aihubmix.com/v1`                   | `claude-sonnet-4-20250514` |
 
 ## Settings Keys (per-user, stored in `settings` table)
 
-| Key | Type | Default | Description |
-| --- | ---- | ------- | ----------- |
-| `ai.provider` | `string` | `""` (unconfigured) | Provider ID |
-| `ai.apiKey` | `string` | `""` | API key |
-| `ai.model` | `string` | `""` | Model name (falls back to provider default) |
-| `ai.autoSummarize` | `"true" \| "false"` | `"false"` | Auto-generate summary after transcription |
+| Key                | Type                | Default             | Description                                 |
+| ------------------ | ------------------- | ------------------- | ------------------------------------------- |
+| `ai.provider`      | `string`            | `""` (unconfigured) | Provider ID                                 |
+| `ai.apiKey`        | `string`            | `""`                | API key                                     |
+| `ai.model`         | `string`            | `""`                | Model name (falls back to provider default) |
+| `ai.autoSummarize` | `"true" \| "false"` | `"false"`           | Auto-generate summary after transcription   |
 
 ## Implementation Phases
 
 ### Phase 1: AI Service Module (`src/services/ai.ts`) ✅
+
 - `AiProvider` type (union of provider IDs)
 - `AiConfig` interface (provider, baseURL, apiKey, model)
 - `getProviderConfig(providerId)` → returns base URL + default model
@@ -37,11 +38,13 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
 - Mock provider for testing (returns canned summary)
 
 ### Phase 2: AI Settings Storage (API) ✅
+
 - `GET /api/settings/ai` → read AI config for current user
 - `PUT /api/settings/ai` → save AI config (upsert multiple keys)
 - `POST /api/settings/ai/test` → test connection (send a short prompt)
 
 ### Phase 3: Summarize API ✅
+
 - `POST /api/recordings/[id]/summarize` → generate + store summary
   - Reads transcription full text
   - Loads user's AI config from settings
@@ -49,6 +52,7 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
   - Returns `{ summary }`
 
 ### Phase 4: Settings UI — AI Configuration Section ✅
+
 - New section in Settings page with:
   - Provider selector (dropdown)
   - API Key input (password field)
@@ -57,6 +61,7 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
   - Save button + Test Connection button
 
 ### Phase 5: Recording Detail — AI Summary Display ✅
+
 - New card between job info and transcription
 - Shows summary text (or empty state with "Generate Summary" button)
 - "Regenerate" button when summary exists
@@ -64,11 +69,13 @@ base URL, API key, and model. Configuration is stored per-user in the settings t
 - Error state with message
 
 ### Phase 6: Auto-summarize on Transcription Complete ✅
+
 - In job polling endpoint, after transcription succeeds:
   - Check user's `ai.autoSummarize` setting
   - If enabled and AI is configured, trigger summary generation (fire-and-forget)
 
 ### Phase 7: E2E Tests ✅
+
 - AI settings CRUD (read defaults, save, partial update, clear, invalid provider)
 - Summarize error paths (404 unknown recording, 400 no AI config, 400 no transcription)
 

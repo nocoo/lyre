@@ -82,14 +82,13 @@ lyre/
 
 Version is managed from the **root `package.json`** as the single source of truth, kept in sync across all workspaces.
 
-| Location               | File                            | Field                |
-|------------------------|---------------------------------|----------------------|
-| Root (source of truth) | `package.json`                  | `version`            |
-| Web app                | `apps/web/package.json`         | `version`            |
-| Worker                 | `apps/api/package.json`         | `version`            |
-| Shared API             | `packages/api/package.json`     | `version`            |
-| macOS app              | `apps/macos/project.yml`        | `MARKETING_VERSION`  |
-
+| Location               | File                        | Field               |
+| ---------------------- | --------------------------- | ------------------- |
+| Root (source of truth) | `package.json`              | `version`           |
+| Web app                | `apps/web/package.json`     | `version`           |
+| Worker                 | `apps/api/package.json`     | `version`           |
+| Shared API             | `packages/api/package.json` | `version`           |
+| macOS app              | `apps/macos/project.yml`    | `MARKETING_VERSION` |
 - `packages/api/src/lib/version.ts` imports `package.json` at build time and exports `APP_VERSION` (Vite inlines it).
 - `/api/live` returns the version in its JSON response.
 - macOS sidebar and About page read `CFBundleShortVersionString` (set by `MARKETING_VERSION`).
@@ -101,6 +100,7 @@ Version is managed from the **root `package.json`** as the single source of trut
 2. Run `xcodegen generate` from `apps/macos/` to sync `project.pbxproj`.
 3. Update `CHANGELOG.md` with changes since last version.
 4. Commit and build the macOS DMG from that exact commit in an isolated checkout. The packaging script cleans its checkout's `build/` directory, which must not contain a running preview app.
+
    ```bash
    LYRE_CODE_SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' bun run macos:dmg
    # → build/Lyre-<version>.dmg; notarize separately before distribution

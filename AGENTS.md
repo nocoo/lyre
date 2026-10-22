@@ -8,14 +8,14 @@ Direction: [README.md](README.md). Frameworks must preserve this handbook.
 
 This file is the quality contract; hooks, CI and config are enforcement. Close implementation gaps without lowering the contract. Historical test results are not evidence of a current passing run.
 
-| Fact | Where |
-|---|---|
+| Fact                 | Where                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------- |
 | Setup / architecture | [development](docs/08-development.md), [agent details](docs/12-agent-operations.md) |
-| Version | root `package.json`; workspaces and `apps/macos/project.yml` stay aligned |
-| API / test scope | `packages/api`, `vitest.config.ts`, `scripts/run-e2e.ts` |
-| Native / gates | `scripts/test-macos.ts`, `.husky`, `scripts/pre-push.ts`, CI |
-| Accidents | [Retrospective.md](Retrospective.md) |
-| Machine workflow | global `AGENTS.md` and Git rules |
+| Version              | root `package.json`; workspaces and `apps/macos/project.yml` stay aligned           |
+| API / test scope     | `packages/api`, `vitest.config.ts`, `scripts/run-e2e.ts`                            |
+| Native / gates       | `scripts/test-macos.ts`, `.husky`, `scripts/pre-push.ts`, CI                        |
+| Accidents            | [Retrospective.md](Retrospective.md)                                                |
+| Machine workflow     | global `AGENTS.md` and Git rules                                                    |
 
 ## Project Invariants
 
@@ -27,11 +27,11 @@ This file is the quality contract; hooks, CI and config are enforcement. Close i
 
 ## Stack / Layout
 
-| Component | Path / choice |
-|---|---|
-| Web / Worker | `apps/web` Vite/React; `apps/api` Hono/D1/ASSETS |
-| Core API | `packages/api`; Drizzle, Aliyun OSS/DashScope, AI SDK |
-| Native | `apps/macos`; Swift 6, SwiftUI/AppKit, ScreenCaptureKit, xcodegen |
+| Component    | Path / choice                                                     |
+| ------------ | ----------------------------------------------------------------- |
+| Web / Worker | `apps/web` Vite/React; `apps/api` Hono/D1/ASSETS                  |
+| Core API     | `packages/api`; Drizzle, Aliyun OSS/DashScope, AI SDK             |
+| Native       | `apps/macos`; Swift 6, SwiftUI/AppKit, ScreenCaptureKit, xcodegen |
 
 ## Commands
 
@@ -56,15 +56,15 @@ bun run gate:pages
 L1 requires statements, branches, functions and lines each ≥95%, with no skipped/focused tests; preserve any stricter package threshold. Native tools must identify unmeasured metrics as gaps.
 L1 static analysis requires check-only strict analysis/formatting with zero errors/warnings. G2 requires dependency and secret scans, with missing required scanners failing.
 
-| Dimension | Status | Required proof and current evidence/gap |
-|---|---|---|
-| L1 TypeScript | planned | Index-snapshot gate enables all four 95% thresholds and existing group gates. Configured exclusions are by design and do not reduce the grade. |
-| L1 Swift | planned | Index-snapshot Swift Testing compiles with warnings as errors. Xccov measures all application files; interim regression floors are lines 33% and functions 39%, below the unchanged 95% target. Swift statements/branches are unsupported and remain a certification gap. Three live-recording tests are explicitly outside the default offline run. |
-| L2 API / native | planned | Local real-HTTP API tests run before push; require 100% routes including errors/auth. Native tests use test hosts; live capture/OS integration needs a separate fixture lane. |
-| L3 web / desktop | planned | CI runs Playwright BDD and page/route audit scripts exist; all-page and native interaction proof is incomplete. Permissions/UI-only cases remain manual with exact evidence. |
-| L1 static TS / Swift | enforced | Hooks run Biome with errors on warnings, typecheck and strict SwiftLint; native compilation uses the full Xcode toolchain. |
-| G2 | enforced | Secret/dependency gates fail when gitleaks or OSV is absent; CI also scans. |
-| D1 | planned | Unit DBs are per suite and native runs get unique DerivedData; Worker API/BDD use default local state rather than unique persist directories with marker/cleanup guards. |
+| Dimension            | Status   | Required proof and current evidence/gap                                                                                                                                                                                                                                                                                                              |
+| -------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L1 TypeScript        | planned  | Index-snapshot gate enables all four 95% thresholds and existing group gates. Configured exclusions are by design and do not reduce the grade.                                                                                                                                                                                                       |
+| L1 Swift             | planned  | Index-snapshot Swift Testing compiles with warnings as errors. Xccov measures all application files; interim regression floors are lines 33% and functions 39%, below the unchanged 95% target. Swift statements/branches are unsupported and remain a certification gap. Three live-recording tests are explicitly outside the default offline run. |
+| L2 API / native      | planned  | Local real-HTTP API tests run before push; require 100% routes including errors/auth. Native tests use test hosts; live capture/OS integration needs a separate fixture lane.                                                                                                                                                                        |
+| L3 web / desktop     | planned  | CI runs Playwright BDD and page/route audit scripts exist; all-page and native interaction proof is incomplete. Permissions/UI-only cases remain manual with exact evidence.                                                                                                                                                                         |
+| L1 static TS / Swift | enforced | Hooks run Biome with errors on warnings, typecheck and strict SwiftLint; native compilation uses the full Xcode toolchain.                                                                                                                                                                                                                           |
+| G2                   | enforced | Secret/dependency gates fail when gitleaks or OSV is absent; CI also scans.                                                                                                                                                                                                                                                                          |
+| D1                   | planned  | Unit DBs are per suite and native runs get unique DerivedData; Worker API/BDD use default local state rather than unique persist directories with marker/cleanup guards.                                                                                                                                                                             |
 
 Pre-commit executes the staged `scripts/pre-commit.py`, exports the index, links installed JS packages read-only with snapshot-local workspace links and caches, and runs check-only secrets, lint, types, coverage and native tests. Required tools/reports, empty or skipped required tests, failed checks, signals and an eight-minute bound reject. All outputs are temporary; secrets inspect the real index. Pre-push builds the SPA, then runs dependency scan, lint/types, coverage, local API E2E, native tests and SwiftLint in parallel.
 
@@ -84,7 +84,6 @@ Every macOS release must attach its versioned DMG and `SHA256SUMS` to the matchi
 ## Retrospective
 
 Move accident narratives to [Retrospective.md](Retrospective.md); keep at most about ten concise recurring project rules here. Put architecture and operational detail in linked docs.
-
 - Swift 6 Sendable closures may need immutable `nonisolated` constants; do not suppress actor-safety warnings.
 - Keep modal prompt stream consumers non-blocking and gate buffered reentry.
 - Record accessibility/permission blockers as unverified manual scenarios, never as passed UI checks.

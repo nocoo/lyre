@@ -23,7 +23,6 @@ Cloudflare Access  →  Worker `lyre`
 
 The Worker decodes the `Cf-Access-Jwt-Assertion` header set by Cloudflare
 Access. Configure an Access application in the Cloudflare dashboard:
-
 1. **Zero Trust → Access → Applications → Add an application → Self-hosted**
 2. Hostname: the Worker's custom domain (e.g. `lyre.example.com`)
 3. Add an Access policy with the email allowlist you want to grant access to.
@@ -97,17 +96,14 @@ requests are signed with a custom V1 signature implementation in
 
 ```json
 {
-  "Version": "1",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "oss:*",
-      "Resource": [
-        "acs:oss:*:*:lyre",
-        "acs:oss:*:*:lyre/*"
-      ]
-    }
-  ]
+	"Version": "1",
+	"Statement": [
+		{
+			"Effect": "Allow",
+			"Action": "oss:*",
+			"Resource": ["acs:oss:*:*:lyre", "acs:oss:*:*:lyre/*"]
+		}
+	]
 }
 ```
 
@@ -115,18 +111,17 @@ requests are signed with a custom V1 signature implementation in
 
 In the OSS Console, **bucket → Access Control → Cross-Origin Resource Sharing**:
 
-| Field            | Value                                                       |
-|------------------|-------------------------------------------------------------|
-| Allowed Origins  | The Worker's custom domain (e.g. `https://lyre.example.com`) |
-| Allowed Methods  | `GET, PUT, HEAD`                                            |
-| Allowed Headers  | `*`                                                         |
-| Expose Headers   | `ETag`                                                      |
+| Field           | Value                                                        |
+| --------------- | ------------------------------------------------------------ |
+| Allowed Origins | The Worker's custom domain (e.g. `https://lyre.example.com`) |
+| Allowed Methods | `GET, PUT, HEAD`                                             |
+| Allowed Headers | `*`                                                          |
+| Expose Headers  | `ETag`                                                       |
 
 ## 4. Aliyun DashScope ASR
 
 Lyre uses [DashScope](https://dashscope.aliyuncs.com/) for transcription
 (`qwen3-asr-flash-filetrans`).
-
 1. Open the [DashScope console](https://dashscope.console.aliyun.com/) and
    activate DashScope (free to activate, pay-per-use).
 2. **API-KEY Management → Create API Key**.
@@ -184,16 +179,16 @@ These are the bindings expected on the Worker side
 (`apps/api/src/bindings.ts`). Non-secret values live in `wrangler.toml`;
 secrets must be pushed via `wrangler secret put`.
 
-| Variable                | Source            | Required | Description                                                  |
-|-------------------------|-------------------|----------|--------------------------------------------------------------|
-| `DB`                    | D1 binding        | Yes      | The D1 database binding                                       |
-| `ASSETS`                | Asset binding     | Yes      | The Vite SPA static asset binding                             |
-| `NODE_ENV`              | `[vars]`          | Yes      | `production` in deployed worker                               |
-| `OSS_BUCKET`            | `[vars]`          | No       | Override bucket name; defaults to `lyre`                      |
-| `OSS_ACCESS_KEY_ID`     | secret            | Yes      | Aliyun RAM AccessKey ID                                       |
-| `OSS_ACCESS_KEY_SECRET` | secret            | Yes      | Aliyun RAM AccessKey Secret                                   |
-| `OSS_REGION`            | secret or `[vars]` | Yes     | OSS region, e.g. `oss-cn-beijing`                             |
-| `OSS_ENDPOINT`          | secret or `[vars]` | Yes     | OSS endpoint URL                                              |
-| `DASHSCOPE_API_KEY`     | secret            | No       | DashScope API key; omit/empty for mock ASR                    |
-| `SKIP_OSS_ARCHIVE`      | `[vars]`          | No       | `"1"` skips raw ASR JSON archival (used by tests)             |
-| `E2E_SKIP_AUTH`         | `[vars]`          | No       | `"true"` enables a synthetic test user (local E2E only)       |
+| Variable                | Source             | Required | Description                                             |
+| ----------------------- | ------------------ | -------- | ------------------------------------------------------- |
+| `DB`                    | D1 binding         | Yes      | The D1 database binding                                 |
+| `ASSETS`                | Asset binding      | Yes      | The Vite SPA static asset binding                       |
+| `NODE_ENV`              | `[vars]`           | Yes      | `production` in deployed worker                         |
+| `OSS_BUCKET`            | `[vars]`           | No       | Override bucket name; defaults to `lyre`                |
+| `OSS_ACCESS_KEY_ID`     | secret             | Yes      | Aliyun RAM AccessKey ID                                 |
+| `OSS_ACCESS_KEY_SECRET` | secret             | Yes      | Aliyun RAM AccessKey Secret                             |
+| `OSS_REGION`            | secret or `[vars]` | Yes      | OSS region, e.g. `oss-cn-beijing`                       |
+| `OSS_ENDPOINT`          | secret or `[vars]` | Yes      | OSS endpoint URL                                        |
+| `DASHSCOPE_API_KEY`     | secret             | No       | DashScope API key; omit/empty for mock ASR              |
+| `SKIP_OSS_ARCHIVE`      | `[vars]`           | No       | `"1"` skips raw ASR JSON archival (used by tests)       |
+| `E2E_SKIP_AUTH`         | `[vars]`           | No       | `"true"` enables a synthetic test user (local E2E only) |

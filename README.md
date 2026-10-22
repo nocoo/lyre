@@ -31,7 +31,6 @@ Lyre 是录音管理与语音转写平台。可以上传音频，在网页中发
 ### Web
 
 [站点](https://lyre.hexly.ai) 通过 Cloudflare Access 登录，需要获准的身份。部署者需先配置 OSS 与 DashScope；摘要功能还需要在 AI 设置中填写供应商、模型及凭据。
-
 1. 上传音频并填写标题、说明或文件夹。网页单文件上限为 500 MiB。
 2. 打开录音详情，手动发起转写。上传完成本身不会自动开始转写。
 3. 转写完成后回听并查看文字；可生成摘要、补充笔记或下载音频。
@@ -92,12 +91,12 @@ packages/api/      共享契约、处理函数、数据访问与服务
 
 从仓库根目录运行：
 
-| 范围 | 命令 |
-| --- | --- |
-| Web、Worker、共享 API 与开发脚本单元测试 | `bun run test` |
-| 单元测试与覆盖率报告 | `bun run test:coverage` |
-| 本地 HTTP API 集成 | `bun run test:e2e` |
-| 浏览器测试 | `bun run test:e2e:bdd` |
+| 范围                                     | 命令                    |
+| ---------------------------------------- | ----------------------- |
+| Web、Worker、共享 API 与开发脚本单元测试 | `bun run test`          |
+| 单元测试与覆盖率报告                     | `bun run test:coverage` |
+| 本地 HTTP API 集成                       | `bun run test:e2e`      |
+| 浏览器测试                               | `bun run test:e2e:bdd`  |
 
 HTTP 集成使用端口 7017，浏览器使用端口 27016；两者都应用 `e2e/schema.sql`，会重建同一个本地测试 D1 状态。使用独立副本、顺序运行，并先释放端口。浏览器测试还需要 Web 构建和 Chromium，可用 `bunx playwright install chromium` 安装。不要为普通本地验证提供真实服务凭据；真实 ASR 测试的单独启用条件见[测试入口](docs/08-development.md#测试入口)。
 
@@ -117,15 +116,15 @@ bun run test:macos
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare_Workers-F38020?logo=cloudflareworkers&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white)
 
-| 部分 | 实现 |
-| --- | --- |
-| Web | React、Vite、React Router、SWR、Tailwind CSS、Basalt、Recharts |
-| 服务与数据 | Hono、Cloudflare Workers、D1、Drizzle ORM |
-| 音频存储与转写 | 阿里云 OSS、DashScope 异步文件转写 |
-| 摘要 | Vercel AI SDK、@nocoo/next-ai、Markdown 渲染 |
-| 认证 | Cloudflare Access、jose、设备 Bearer Token |
-| macOS | Swift、SwiftUI、ScreenCaptureKit、AVFoundation |
-| 验证 | Vitest、Playwright、Swift Testing、Biome、SwiftLint |
+| 部分           | 实现                                                           |
+| -------------- | -------------------------------------------------------------- |
+| Web            | React、Vite、React Router、SWR、Tailwind CSS、Basalt、Recharts |
+| 服务与数据     | Hono、Cloudflare Workers、D1、Drizzle ORM                      |
+| 音频存储与转写 | 阿里云 OSS、DashScope 异步文件转写                             |
+| 摘要           | Vercel AI SDK、@nocoo/next-ai、Markdown 渲染                   |
+| 认证           | Cloudflare Access、jose、设备 Bearer Token                     |
+| macOS          | Swift、SwiftUI、ScreenCaptureKit、AVFoundation                 |
+| 验证           | Vitest、Playwright、Swift Testing、Biome、SwiftLint            |
 
 ## 文档
 

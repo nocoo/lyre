@@ -6,7 +6,7 @@
 
 - [ ] **C1** `feat(macos): add Basalt token layer + LyreApp palette injection`
   - [ ] `Theme/Spacing.swift` `Radius.swift` `Color+Hex.swift` `Palette.swift`
-        `PaletteEnvironment.swift` `BasaltFont.swift` `BasaltMotion.swift` 新增
+    `PaletteEnvironment.swift` `BasaltFont.swift` `BasaltMotion.swift` 新增
   - [ ] `LyreApp.swift` root 注入 `.environment(\.palette, .resolved(scheme))`
   - [ ] `BasaltTokenTests.swift`：L0<L1<L2 亮度 + Dynamic Type 三档渲染
   - [ ] `xcodebuild test` 全绿
@@ -19,7 +19,7 @@
 - [ ] 视觉零变化确认
 - [ ] `xcodegen generate` 已把 Theme/ 扫入 project
 - [ ] `elapsedTimer` 审计结论作为 Swift 源码注释记录（技术债标记，
-      **不进 CHANGELOG / Release notes**）
+  **不进 CHANGELOG / Release notes**）
 
 ---
 
@@ -56,7 +56,7 @@
 - [ ] **C5** `feat(macos): apply Basalt palette to RecordingsView`
   - [ ] 空态换 `EmptyStateCard`
   - [ ] `RecordingRow` 播放按钮 palette 化（保守方案：保留 28pt SF Symbol
-        只改颜色到 `palette.accent`；44pt 圆容器 = 后续可选升级）
+    只改颜色到 `palette.accent`；44pt 圆容器 = 后续可选升级）
   - [ ] 时间/大小/日期字体 palette 化
   - [ ] `List` 底色 `.scrollContentBackground(.hidden)` + `palette.bg`
   - [ ] batch delete 移除 `.red`，用 `role: .destructive`
@@ -69,7 +69,7 @@
   - [ ] `progressView` 三态（presigning / uploading / creating）用 `PhaseBadge`
   - [ ] `.failed` 用 `PhaseBadge(.failed(...))`
   - [ ] `completedView` 保留 40pt `checkmark.circle.fill` +
-        `palette.success`（不套 PhaseBadge，避免视觉重复）
+    `palette.success`（不套 PhaseBadge，避免视觉重复）
   - [ ] `grep "\.orange\|\.green" UploadView.swift` 空
   - [ ] 原生性审查：Tab 遍历 / Space 触发 chip / VoiceOver
   - [ ] 视觉验收矩阵 8 截图（4 上传态 × dark/light）
@@ -103,7 +103,7 @@
 
 - [ ] **C10** `feat(macos): apply Basalt bg to MainWindowView detail area`
   - [ ] `MainWindowView` 加 `@Environment(\.palette)` +
-        `.background(palette.bg)`
+    `.background(palette.bg)`
   - [ ] `TrayMenu` / `TrayLabel` / `InputDeviceMenu` **不动**
   - [ ] `elapsedTimer` 审计注释追加
   - [ ] 原生性审查：Menu bar 原生外观 / Cmd+, 打开
@@ -123,9 +123,9 @@
 
 ## Progress Snapshot
 
-| Stage | 完成 | 总计 |
-|-------|-----:|-----:|
-| Stage 1 | 0 | 1 |
-| Stage 2 | 0 | 3 |
-| Stage 3 | 0 | 6 |
+| Stage    |  完成 |   总计 |
+| -------- | ----: | -----: |
+| Stage 1  |     0 |      1 |
+| Stage 2  |     0 |      3 |
+| Stage 3  |     0 |      6 |
 | **总计** | **0** | **10** |

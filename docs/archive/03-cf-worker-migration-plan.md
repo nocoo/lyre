@@ -11,7 +11,7 @@
 > - `../backy/docs/07-vite-web-migration-plan.md` —— Vite + Worker + CF Access 端到端落地（运行时上下文抽象、Access JWT 校验、`[assets]` SPA 托管、流式上传重写）
 > - `../surety/apps/worker` —— Hono + `accessAuth` + `apiKeyAuth` 双轨鉴权范式（Web 端走 Access、CLI/macOS 端走 Bearer）
 > - `../bat` —— 同栈 SPA + Worker 项目结构
->
+
 > 本计划**不保留 Next.js 兼容层**，不做平滑切换。`web_legacy` 仅作为只读参照与
 > 紧急回滚物料；新栈跑稳后整体删除。
 
@@ -115,13 +115,13 @@ packages/
 backy 的迁移可以直接照搬绝大部分动作，但 **lyre 有四处显著不同**，决定了
 本计划必须额外加章节处理：
 
-| 维度 | backy 现状 | lyre 现状 | 影响 |
-|---|---|---|---|
-| **持久化** | D1（Worker binding） | **better-sqlite3 本地文件** + Drizzle ORM | Worker 跑不了 better-sqlite3，**必须换 DB**。详见「决策点 1」 |
-| **后台任务** | 仅 `scheduled()` 触发 webhook 拉取 | `JobManager` **进程内常驻轮询单例**（每 N 秒轮询所有 RUNNING 的 ASR 任务） | Worker 无常驻进程；必须改架构。详见「决策点 2」 |
-| **实时推送** | 无 | `/api/jobs/events` 是 **SSE**（job-event-hub fan-out） | Workers 支持 streaming response，但需要 KV/DO 做 fan-out（多实例）。详见「决策点 3」 |
-| **客户端鉴权** | 仅 Web | Web + **macOS 原生客户端（已用 device-token Bearer）** | 双轨鉴权一开始就要双跑：Access for Web, Bearer for macOS。沿用 surety `accessAuth` + `apiKeyAuth` 模式 |
-| **大文件上传** | webhook FormData → R2 | 已是**预签名直传 OSS**（不经 server body） | ✅ 与 Worker 天然兼容，无需 backy Wave B' 那种流式重写 |
+| 维度           | backy 现状                         | lyre 现状                                                                  | 影响                                                                                                   |
+| -------------- | ---------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **持久化**     | D1（Worker binding）               | **better-sqlite3 本地文件** + Drizzle ORM                                  | Worker 跑不了 better-sqlite3，**必须换 DB**。详见「决策点 1」                                          |
+| **后台任务**   | 仅 `scheduled()` 触发 webhook 拉取 | `JobManager` **进程内常驻轮询单例**（每 N 秒轮询所有 RUNNING 的 ASR 任务） | Worker 无常驻进程；必须改架构。详见「决策点 2」                                                        |
+| **实时推送**   | 无                                 | `/api/jobs/events` 是 **SSE**（job-event-hub fan-out）                     | Workers 支持 streaming response，但需要 KV/DO 做 fan-out（多实例）。详见「决策点 3」                   |
+| **客户端鉴权** | 仅 Web                             | Web + **macOS 原生客户端（已用 device-token Bearer）**                     | 双轨鉴权一开始就要双跑：Access for Web, Bearer for macOS。沿用 surety `accessAuth` + `apiKeyAuth` 模式 |
+| **大文件上传** | webhook FormData → R2              | 已是**预签名直传 OSS**（不经 server body）                                 | ✅ 与 Worker 天然兼容，无需 backy Wave B' 那种流式重写                                                 |
 
 后两条是好消息（鉴权模式现成、上传不踩坑），前三条是这份文档要重点拆解的。
 
@@ -131,18 +131,18 @@ backy 的迁移可以直接照搬绝大部分动作，但 **lyre 有四处显著
 
 > 哥已 review 并拍板，全部按各项「推荐」执行，功能保持与 web_legacy 一致。
 
-| 决策 | 选择 | 备注 |
-|---|---|---|
-| 1. 持久化 | **A — Cloudflare D1** | `lyre-db`（prod）+ `lyre-db-test`（e2e）已建好 |
-| 2. JobManager 架构 | **A + C 混合** | Cron Trigger 1 分钟批量轮询 + 前端 SWR `refreshInterval` |
-| 3. `/api/jobs/events` SSE | **B — 删除** | 删 `JobEventHub` / `use-job-events` / `/api/jobs/events`，改 SWR 轮询 |
-| 4. macOS 客户端 | **双轨保留** | worker 同挂 `accessAuth` + `bearerAuth`，macOS 端无改动；端点清单见第四节鉴权矩阵 |
-| 5. 第三方 SDK | OSS Web Crypto 重写一处签名；DashScope/AI SDK 直接可用；`@nocoo/next-ai` Wave B 评估替换 |
-| 6. `/api/me` 契约 | **`{ email, name, avatarUrl }`** | 不能仅返回 email — 现 sidebar 依赖 `session.user.{name,image}` 渲染头像/昵称/首字母；CF Access JWT payload 含 `email`、`name`，头像取 DB `users.avatar_url`（Drizzle 字段名 `avatarUrl`，NextAuth 时代沉淀的 Google 头像），无则返回 `null`，前端用 `name[0]` 首字母兜底，不引入 Gravatar。详见决策点 6 章节 |
-| 7. AI 配置 client-safe 契约 | **`@lyre/api/contracts`** 子路径 | UI 组件不能直接 import `services/ai`（内含 `@nocoo/next-ai/server`）；Wave B 必须先抽 client-safe types + provider metadata 暴露在 `@lyre/api/contracts`，server-only 代码留在 `@lyre/api/services` |
-| 8. SSE 删除时序 | **legacy 期间保留 SSE，Wave D 切换后删** | 删除时机调整：legacy 仍消费 `use-job-events`；Wave B 仅做物理迁移（services 进 packages/api，但 `JobManager` + `JobEventHub` 仍可在 Next.js 进程内常驻）；新 worker 一开始就**不实现** `/api/jobs/events`，新 SPA 一开始就用 SWR 轮询；DNS 切到 worker 后 legacy 自然失效，删除 SSE 代码留到 Wave E 清理。详见决策点 8 章节 |
-| Access Team | `nocoo` | `nocoo.cloudflareaccess.com` |
-| Access AUD | `0f089ac6583cf2b12ee6cf4f358291365fbe9fe400580d094b44626632fcfa25` | lyre 单独的 Access application |
+| 决策                        | 选择                                                                                     | 备注                                                                                                                                                                                                                                                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. 持久化                   | **A — Cloudflare D1**                                                                    | `lyre-db`（prod）+ `lyre-db-test`（e2e）已建好                                                                                                                                                                                                                                                                              |
+| 2. JobManager 架构          | **A + C 混合**                                                                           | Cron Trigger 1 分钟批量轮询 + 前端 SWR `refreshInterval`                                                                                                                                                                                                                                                                    |
+| 3. `/api/jobs/events` SSE   | **B — 删除**                                                                             | 删 `JobEventHub` / `use-job-events` / `/api/jobs/events`，改 SWR 轮询                                                                                                                                                                                                                                                       |
+| 4. macOS 客户端             | **双轨保留**                                                                             | worker 同挂 `accessAuth` + `bearerAuth`，macOS 端无改动；端点清单见第四节鉴权矩阵                                                                                                                                                                                                                                           |
+| 5. 第三方 SDK               | OSS Web Crypto 重写一处签名；DashScope/AI SDK 直接可用；`@nocoo/next-ai` Wave B 评估替换 |
+| 6. `/api/me` 契约           | **`{ email, name, avatarUrl }`**                                                         | 不能仅返回 email — 现 sidebar 依赖 `session.user.{name,image}` 渲染头像/昵称/首字母；CF Access JWT payload 含 `email`、`name`，头像取 DB `users.avatar_url`（Drizzle 字段名 `avatarUrl`，NextAuth 时代沉淀的 Google 头像），无则返回 `null`，前端用 `name[0]` 首字母兜底，不引入 Gravatar。详见决策点 6 章节                |
+| 7. AI 配置 client-safe 契约 | **`@lyre/api/contracts`** 子路径                                                         | UI 组件不能直接 import `services/ai`（内含 `@nocoo/next-ai/server`）；Wave B 必须先抽 client-safe types + provider metadata 暴露在 `@lyre/api/contracts`，server-only 代码留在 `@lyre/api/services`                                                                                                                         |
+| 8. SSE 删除时序             | **legacy 期间保留 SSE，Wave D 切换后删**                                                 | 删除时机调整：legacy 仍消费 `use-job-events`；Wave B 仅做物理迁移（services 进 packages/api，但 `JobManager` + `JobEventHub` 仍可在 Next.js 进程内常驻）；新 worker 一开始就**不实现** `/api/jobs/events`，新 SPA 一开始就用 SWR 轮询；DNS 切到 worker 后 legacy 自然失效，删除 SSE 代码留到 Wave E 清理。详见决策点 8 章节 |
+| Access Team                 | `nocoo`                                                                                  | `nocoo.cloudflareaccess.com`                                                                                                                                                                                                                                                                                                |
+| Access AUD                  | `0f089ac6583cf2b12ee6cf4f358291365fbe9fe400580d094b44626632fcfa25`                       | lyre 单独的 Access application                                                                                                                                                                                                                                                                                              |
 
 ### 决策点 6 — `/api/me` 契约
 
@@ -151,11 +151,11 @@ backy 的迁移可以直接照搬绝大部分动作，但 **lyre 有四处显著
 ```ts
 // GET /api/me 200
 type MeResponse = {
-  email: string;        // Access JWT email 或 device-token 关联用户邮箱
-  name: string;         // CF Access JWT payload.name；fallback 用 email 前缀
-  avatarUrl: string | null;
-                        // 来源：DB users.avatar_url（Drizzle 字段名 users.avatarUrl，NextAuth 时代沉淀的 Google 头像）
-                        // 无则 null；前端用 name[0] 首字母兜底（不引入 Gravatar 等外部依赖）
+	email: string; // Access JWT email 或 device-token 关联用户邮箱
+	name: string; // CF Access JWT payload.name；fallback 用 email 前缀
+	avatarUrl: string | null;
+	// 来源：DB users.avatar_url（Drizzle 字段名 users.avatarUrl，NextAuth 时代沉淀的 Google 头像）
+	// 无则 null；前端用 name[0] 首字母兜底（不引入 Gravatar 等外部依赖）
 };
 ```
 
@@ -176,16 +176,16 @@ server-only 代码（含 secrets、Node 内置模块）打进浏览器 bundle。
 ```jsonc
 // packages/api/package.json
 {
-  "exports": {
-    ".":            "./src/index.ts",                 // 仅 server 用
-    "./contracts":  "./src/contracts/index.ts",        // ★ client-safe：types、enums、provider metadata
-    "./contracts/ai": "./src/contracts/ai.ts",
-    "./contracts/recordings": "./src/contracts/recordings.ts",
-    // ...
-    "./services/ai":  "./src/services/ai.ts",         // server only（带 @nocoo/next-ai/server）
-    "./handlers/*":   "./src/handlers/*.ts",
-    "./runtime":      "./src/runtime.ts"
-  }
+	"exports": {
+		".": "./src/index.ts", // 仅 server 用
+		"./contracts": "./src/contracts/index.ts", // ★ client-safe：types、enums、provider metadata
+		"./contracts/ai": "./src/contracts/ai.ts",
+		"./contracts/recordings": "./src/contracts/recordings.ts",
+		// ...
+		"./services/ai": "./src/services/ai.ts", // server only（带 @nocoo/next-ai/server）
+		"./handlers/*": "./src/handlers/*.ts",
+		"./runtime": "./src/runtime.ts"
+	}
 }
 ```
 
@@ -205,14 +205,14 @@ server-only 代码（含 secrets、Node 内置模块）打进浏览器 bundle。
 
 目标"功能保持"与"删 SSE"看似冲突，实际是**时序问题**：
 
-| 阶段 | legacy SSE | 新 worker | 新 SPA |
-|---|---|---|---|
-| Wave A | ✅ 保留运行 | — | — |
-| Wave B | ✅ 保留运行（job-manager / job-event-hub / use-job-events 物理移到 packages/api，legacy `apps/web_legacy` 仍可调，next 进程内常驻 JobManager） | — | — |
-| Wave C | ✅ 保留运行 | ❌ **不实现** `/api/jobs/events`；不挂 JobManager 单例；改用 Cron Trigger | — |
-| Wave D | ✅ 保留运行 | ✅ Cron 轮询 + GET `/api/jobs/:id` | ❌ **不消费** SSE；用 SWR `refreshInterval: 5s` 轮询 `/api/jobs/:id`，状态终态后停 |
-| Wave E（DNS 切流后） | 🟥 自然失效（legacy 已下线） | — | — |
-| Wave E 清理 | 🗑️ 随 `apps/web_legacy/` 整目录删除一并消失；不需要单独 commit | — | — |
+| 阶段                 | legacy SSE                                                                                                                                     | 新 worker                                                                 | 新 SPA                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Wave A               | ✅ 保留运行                                                                                                                                    | —                                                                         | —                                                                                  |
+| Wave B               | ✅ 保留运行（job-manager / job-event-hub / use-job-events 物理移到 packages/api，legacy `apps/web_legacy` 仍可调，next 进程内常驻 JobManager） | —                                                                         | —                                                                                  |
+| Wave C               | ✅ 保留运行                                                                                                                                    | ❌ **不实现** `/api/jobs/events`；不挂 JobManager 单例；改用 Cron Trigger | —                                                                                  |
+| Wave D               | ✅ 保留运行                                                                                                                                    | ✅ Cron 轮询 + GET `/api/jobs/:id`                                        | ❌ **不消费** SSE；用 SWR `refreshInterval: 5s` 轮询 `/api/jobs/:id`，状态终态后停 |
+| Wave E（DNS 切流后） | 🟥 自然失效（legacy 已下线）                                                                                                                   | —                                                                         | —                                                                                  |
+| Wave E 清理          | 🗑️ 随 `apps/web_legacy/` 整目录删除一并消失；不需要单独 commit                                                                                 | —                                                                         | —                                                                                  |
 
 修正：
 - ❌ ~~"Wave B 删除 services/job-manager*.ts、services/job-event-hub.ts"~~ ← 错误，不能删，legacy 还在用
@@ -230,11 +230,11 @@ server-only 代码（含 secrets、Node 内置模块）打进浏览器 bundle。
 
 现状 `better-sqlite3` + 本地文件，Worker 不可用。三个候选：
 
-| 选项 | 说明 | 工作量 | 风险 |
-|---|---|---|---|
-| **A. Cloudflare D1** | 把 Drizzle dialect 从 `better-sqlite3` 换成 `drizzle-orm/d1` + 走 Worker binding；本地用 `wrangler dev --local`（miniflare 内置 SQLite 模拟）；legacy 期间不切 dialect，仅 worker 一侧实施 | **中**（D1 dialect 切换 + 全量回归 schema/查询语法差异；legacy 不切，省掉双 dialect 兼容层） | 复杂查询语法兼容性、文件大小限制（10GB/db）、写吞吐 |
-| **B. Cloudflare Hyperdrive + 外部 Postgres** | 接 Neon/Supabase；Drizzle 换 `drizzle-orm/postgres-js` | 高（schema 重写 + 数据迁移） | 跨 region 延迟、外部依赖、成本 |
-| **C. 保留 Railway 上的 SQLite，仅 Worker 跑无状态业务，DB 操作通过内网 RPC 回到 Railway 服务** | 不真正"Worker 化"，只把 Web/UI 切 Vite | 低 | 没解决"Worker 部署"的目标，且增加跨服务调用 |
+| 选项                                                                                           | 说明                                                                                                                                                                                       | 工作量                                                                                       | 风险                                                |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **A. Cloudflare D1**                                                                           | 把 Drizzle dialect 从 `better-sqlite3` 换成 `drizzle-orm/d1` + 走 Worker binding；本地用 `wrangler dev --local`（miniflare 内置 SQLite 模拟）；legacy 期间不切 dialect，仅 worker 一侧实施 | **中**（D1 dialect 切换 + 全量回归 schema/查询语法差异；legacy 不切，省掉双 dialect 兼容层） | 复杂查询语法兼容性、文件大小限制（10GB/db）、写吞吐 |
+| **B. Cloudflare Hyperdrive + 外部 Postgres**                                                   | 接 Neon/Supabase；Drizzle 换 `drizzle-orm/postgres-js`                                                                                                                                     | 高（schema 重写 + 数据迁移）                                                                 | 跨 region 延迟、外部依赖、成本                      |
+| **C. 保留 Railway 上的 SQLite，仅 Worker 跑无状态业务，DB 操作通过内网 RPC 回到 Railway 服务** | 不真正"Worker 化"，只把 Web/UI 切 Vite                                                                                                                                                     | 低                                                                                           | 没解决"Worker 部署"的目标，且增加跨服务调用         |
 
 **推荐：A（D1）**。理由：① 与 backy 一致，drizzle 切 `drizzle-orm/d1` + Worker binding 路径成熟；
 ② 数据规模（音频元数据 + 转写句子）远低于 D1 上限；③ 大对象（录音文件、ASR
@@ -251,12 +251,12 @@ result JSON）本来就不在 SQLite 里，存 OSS。
 
 Worker 无常驻进程，必须重新设计：
 
-| 选项 | 说明 | 适配成本 |
-|---|---|---|
-| **A. Cloudflare Cron Trigger 周期触发** | `[triggers].crons = ["* * * * *"]`，每分钟扫一次 RUNNING 任务批量轮询 DashScope；事件通过 KV/DO 推送 | 中（最低分辨率 1 分钟，前端体验略降级） |
-| **B. Durable Object 当作"轻量长连接"** | 每个 active job 起一个 DO，DO 内部用 alarm() 自我唤醒轮询；终态后销毁 | 高（DO 是付费功能、状态管理复杂） |
-| **C. 客户端轮询（前端 SWR refreshInterval）** | 完全去后端轮询，前端在录音详情页打开时主动 GET `/api/jobs/:id` | 低（最简单，但用户离开页面后 job 状态不会前进） |
-| **D. 提交 ASR 时同步等待短任务、长任务交 Cron** | 短录音（< 30s 转写）走同步；长任务才进 Cron | 中 |
+| 选项                                            | 说明                                                                                                 | 适配成本                                        |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **A. Cloudflare Cron Trigger 周期触发**         | `[triggers].crons = ["* * * * *"]`，每分钟扫一次 RUNNING 任务批量轮询 DashScope；事件通过 KV/DO 推送 | 中（最低分辨率 1 分钟，前端体验略降级）         |
+| **B. Durable Object 当作"轻量长连接"**          | 每个 active job 起一个 DO，DO 内部用 alarm() 自我唤醒轮询；终态后销毁                                | 高（DO 是付费功能、状态管理复杂）               |
+| **C. 客户端轮询（前端 SWR refreshInterval）**   | 完全去后端轮询，前端在录音详情页打开时主动 GET `/api/jobs/:id`                                       | 低（最简单，但用户离开页面后 job 状态不会前进） |
+| **D. 提交 ASR 时同步等待短任务、长任务交 Cron** | 短录音（< 30s 转写）走同步；长任务才进 Cron                                                          | 中                                              |
 
 **推荐：A + C 混合**。理由：Cron 1 分钟分辨率对"几分钟到十几分钟才完成的转写"
 完全够用；前端打开详情页时 SWR `refreshInterval: 5s` 顶替 SSE 实时性。SSE 在
@@ -267,11 +267,11 @@ Worker 上能跑（见决策 3），但仅在用户停留详情页时生效，�
 Workers 支持流式 `Response`（`ReadableStream`），SSE 协议本身可行。但
 **多实例 fan-out** 需要外部协调：
 
-| 选项 | 说明 |
-|---|---|
+| 选项                         | 说明                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------- |
 | **A. Durable Object 做 hub** | 单 DO 维护订阅集合，Cron Trigger（决策 2A）触发后通过 DO websocket/RPC 推送 |
-| **B. 退化为前端轮询** | 如果决策 2 选了 C（客户端轮询），SSE 直接删除，前端用 SWR `refreshInterval` |
-| **C. KV pub/sub 替代** | KV 不支持订阅；只能轮询 KV 标记 → 等于退化轮询 |
+| **B. 退化为前端轮询**        | 如果决策 2 选了 C（客户端轮询），SSE 直接删除，前端用 SWR `refreshInterval` |
+| **C. KV pub/sub 替代**       | KV 不支持订阅；只能轮询 KV 标记 → 等于退化轮询                              |
 
 **推荐：B**。即决策 2 选 A+C 混合 → SSE 不必保留。删除 `JobEventHub` /
 `use-job-events` / `/api/jobs/events`，前端详情页用 SWR `refreshInterval: 5s`
@@ -289,13 +289,13 @@ worker 同时挂 `accessAuth`（Web）+ `bearerAuth`（device token）即可保�
 
 ### 决策点 5 — Aliyun OSS / DashScope / AI SDK 在 Worker 上的可用性
 
-| 模块 | 现实现 | Worker 兼容 |
-|---|---|---|
-| OSS | zero-SDK 自定义 V1 签名（`crypto`） | ✅ Web Crypto 替换 Node `crypto`（一处签名实现） |
-| DashScope | `fetch` + Bearer | ✅ 直接可用 |
-| Vercel AI SDK + `@ai-sdk/openai` / `@ai-sdk/anthropic` | 标准 fetch 流式 | ✅ 已知在 Workers 兼容 |
-| `next-ai`（@nocoo/next-ai） | Next.js 专用 | ❌ 需替换为 AI SDK 直调或自实现 |
-| Drizzle ORM | sqlite/d1/pg | 取决于决策 1 |
+| 模块                                                   | 现实现                              | Worker 兼容                                      |
+| ------------------------------------------------------ | ----------------------------------- | ------------------------------------------------ |
+| OSS                                                    | zero-SDK 自定义 V1 签名（`crypto`） | ✅ Web Crypto 替换 Node `crypto`（一处签名实现） |
+| DashScope                                              | `fetch` + Bearer                    | ✅ 直接可用                                      |
+| Vercel AI SDK + `@ai-sdk/openai` / `@ai-sdk/anthropic` | 标准 fetch 流式                     | ✅ 已知在 Workers 兼容                           |
+| `next-ai`（@nocoo/next-ai）                            | Next.js 专用                        | ❌ 需替换为 AI SDK 直调或自实现                  |
+| Drizzle ORM                                            | sqlite/d1/pg                        | 取决于决策 1                                     |
 
 → Wave B 处理 OSS 签名的 Web Crypto 替换；`@nocoo/next-ai` 需评估替换成本（如果
 仅是简单封装，直接换 `ai` SDK 调用）。
@@ -304,10 +304,10 @@ worker 同时挂 `accessAuth`（Web）+ `bearerAuth`（device token）即可保�
 
 ## 四、CF Access 配置
 
-| 项 | 值 |
-|---|---|
-| Team | `nocoo` (`nocoo.cloudflareaccess.com`) |
-| AUD | `0f089ac6583cf2b12ee6cf4f358291365fbe9fe400580d094b44626632fcfa25` |
+| 项   | 值                                                                 |
+| ---- | ------------------------------------------------------------------ |
+| Team | `nocoo` (`nocoo.cloudflareaccess.com`)                             |
+| AUD  | `0f089ac6583cf2b12ee6cf4f358291365fbe9fe400580d094b44626632fcfa25` |
 
 ### 鉴权矩阵（基于现有调用面盘点）
 
@@ -316,12 +316,12 @@ worker 同时挂 `accessAuth`（Web）+ `bearerAuth`（device token）即可保�
 
 现有调用面（盘点自代码）：
 
-| 调用方 | 端点 | 现状鉴权 | 新方案 |
-|---|---|---|---|
-| Web SPA | 所有 `/api/*` 业务接口 | NextAuth session cookie | CF Access JWT（自动注入） |
-| macOS 客户端 | `POST /api/upload/presign`、`POST /api/recordings`、**`GET /api/folders`**、**`GET /api/tags`** | `Authorization: Bearer <device-token>` | 同（双轨保留） |
-| Backy（外部 webhook） | **`HEAD /api/backy/pull`**、**`POST /api/backy/pull`** | **`X-Webhook-Key` header**（不是 Bearer） | 同（独立 webhook-key 认证） |
-| 健康检查 | `GET /api/live` | 公开 | 公开 |
+| 调用方                | 端点                                                                                            | 现状鉴权                                  | 新方案                      |
+| --------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------- |
+| Web SPA               | 所有 `/api/*` 业务接口                                                                          | NextAuth session cookie                   | CF Access JWT（自动注入）   |
+| macOS 客户端          | `POST /api/upload/presign`、`POST /api/recordings`、**`GET /api/folders`**、**`GET /api/tags`** | `Authorization: Bearer <device-token>`    | 同（双轨保留）              |
+| Backy（外部 webhook） | **`HEAD /api/backy/pull`**、**`POST /api/backy/pull`**                                          | **`X-Webhook-Key` header**（不是 Bearer） | 同（独立 webhook-key 认证） |
+| 健康检查              | `GET /api/live`                                                                                 | 公开                                      | 公开                        |
 
 ### 中间件流（按顺序，每一步可短路放行）
 
@@ -343,11 +343,11 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 
 ### 路由分组
 
-| 类别 | 路由 | 鉴权要求 |
-|---|---|---|
-| `PUBLIC_ROUTES` | `GET /api/live` | 无 |
-| `WEBHOOK_ROUTES`（`X-Webhook-Key`） | `HEAD /api/backy/pull`、`POST /api/backy/pull` | webhook-key 必需；**不**接受 Access JWT 或 Bearer（隔离 webhook 攻击面） |
-| Web + macOS 共享（Access **或** Bearer） | `POST /api/upload/presign`<br>`POST /api/recordings`<br>`GET /api/folders`、`GET /api/tags`<br>**所有其余 `/api/*` 业务接口** | 任一方式通过即可 |
+| 类别                                     | 路由                                                                                                                          | 鉴权要求                                                                 |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `PUBLIC_ROUTES`                          | `GET /api/live`                                                                                                               | 无                                                                       |
+| `WEBHOOK_ROUTES`（`X-Webhook-Key`）      | `HEAD /api/backy/pull`、`POST /api/backy/pull`                                                                                | webhook-key 必需；**不**接受 Access JWT 或 Bearer（隔离 webhook 攻击面） |
+| Web + macOS 共享（Access **或** Bearer） | `POST /api/upload/presign`<br>`POST /api/recordings`<br>`GET /api/folders`、`GET /api/tags`<br>**所有其余 `/api/*` 业务接口** | 任一方式通过即可                                                         |
 
 > ⚠️ 这里相比前一版**改了两处**：
 > ① `GET /api/folders` / `GET /api/tags` 必须接受 Bearer（macOS 也用），原文档遗漏；
@@ -388,13 +388,13 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 
 抽样验证以下高风险代码路径在 D1 dialect 下能跑通：
 
-| 验证项 | 现位置 / 触发面 | 验收标准 |
-|---|---|---|
-| **多语句事务 + rollback** | `services/backup.ts` 的 import 路径多张表批量写入；`db.transaction(...)` 散见 repos | 跑通同等语义的 D1 事务（D1 单连接 batch / `.batch()` API），失败时全 rollback |
-| **`.returning()`** | `recordings`、`jobs`、`device-tokens` repo INSERT 后取整行 | D1 `drizzle-orm/d1` 支持；若发现不支持，**fallback 是"按调用方已知的 TEXT id 再 SELECT 一次"**（schema 全表主键是应用层生成的 nanoid TEXT，不是自增整数，因此 `last_insert_rowid()` 不适用） |
-| **复合查询（join + where + order + limit）** | `recordings-repo`、`search` | 跑通 SQL，比对结果与 better-sqlite3 一致 |
-| **DateTime / 时间戳** | schema 中 `integer({mode:"timestamp"})` 等 | D1 默认 SQLite，行为一致；spike 写一条 case 验证 |
-| **Drizzle migration 文件兼容** | 现 `drizzle-kit` 生成的 `.sql`（如有） | 在 wrangler `d1 execute --file` 下可直接 apply |
+| 验证项                                       | 现位置 / 触发面                                                                     | 验收标准                                                                                                                                                                                     |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **多语句事务 + rollback**                    | `services/backup.ts` 的 import 路径多张表批量写入；`db.transaction(...)` 散见 repos | 跑通同等语义的 D1 事务（D1 单连接 batch / `.batch()` API），失败时全 rollback                                                                                                                |
+| **`.returning()`**                           | `recordings`、`jobs`、`device-tokens` repo INSERT 后取整行                          | D1 `drizzle-orm/d1` 支持；若发现不支持，**fallback 是"按调用方已知的 TEXT id 再 SELECT 一次"**（schema 全表主键是应用层生成的 nanoid TEXT，不是自增整数，因此 `last_insert_rowid()` 不适用） |
+| **复合查询（join + where + order + limit）** | `recordings-repo`、`search`                                                         | 跑通 SQL，比对结果与 better-sqlite3 一致                                                                                                                                                     |
+| **DateTime / 时间戳**                        | schema 中 `integer({mode:"timestamp"})` 等                                          | D1 默认 SQLite，行为一致；spike 写一条 case 验证                                                                                                                                             |
+| **Drizzle migration 文件兼容**               | 现 `drizzle-kit` 生成的 `.sql`（如有）                                              | 在 wrangler `d1 execute --file` 下可直接 apply                                                                                                                                               |
 
 操作步骤：
 1. 在 `packages/api/scripts/d1-spike/` 起一个独立 mini-app（不进 monorepo 主流程）
@@ -407,21 +407,20 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 
 实施位置：`packages/api/scripts/d1-spike/spike.test.ts`（10 个用例全绿，2026-04-26）。
 
-| # | 问题 | 现实现 | D1 行为 | 解法 |
-|---|---|---|---|---|
-| 1 | `.returning()` on INSERT/UPDATE | repos/*：直接 `.insert(...).returning().get()` | ✅ drizzle-orm/d1 原生支持，行为同 better-sqlite3（含 `.returning({ id, name })` 子集）；spike 中 3 个 case 全绿 | **无需 fallback**。沿用现有 `.returning()` 调用 |
-| 2 | `db.transaction(callback)` 多语句事务 | repos/recordings.ts (×2)、repos/tags.ts、services/backup.ts | ❌ **D1 拒绝 BEGIN**，错误 `Failed query: begin` —— D1 HTTP 绑定无 interactive transaction 原语 | **改写为 `db.batch([stmt1, stmt2, ...])`**：原子性由 D1 内部保证，任一 statement 失败整批 rollback。但 batch 不允许"读中间结果再分支"——好在 lyre 4 处用法都是"无条件 delete + insert"或"循环 delete"，全部可声明式重写。**B.2 实施时**逐个改写：<br>• `recordings.deleteCascade` → batch([del transcriptions, del jobs, del tags, del recordings])<br>• `recordings.deleteBatch` → 外层 for-loop 收集 statement 数组再一次 batch<br>• `tags.setTagsForRecording` → batch([del recordingTags, ...inserts])<br>• `services/backup.ts.import` → 把整个 import 流程拆成"先收集 statements，再 batch"，对存在性判断改为 INSERT OR REPLACE / UPDATE WHERE 二选一（spike 已验证非 mixed 状态）|
-| 3 | join + where + order + limit | repos/recordings.ts、search route | ✅ 标准 drizzle builder dialect 透明；spike 跑通 leftJoin + where + orderBy + limit，结果与 better-sqlite3 一致 | 无需调整 |
-| 4 | `integer({mode:"timestamp"})` / `integer` ms 时间戳 | schema 全表 `created_at` / `recorded_at` 等 | ✅ D1 = SQLite，integer 列存读 `1_700_000_000_123` 完全一致 | 无需调整 |
-| 5 | drizzle-kit generate 出的 init SQL apply | `packages/api/scripts/d1-spike/migrations/0000_grey_silver_surfer.sql` | ✅ Miniflare D1 `db.exec()` 按 `--> statement-breakpoint` 切分后逐条执行通过 | Wave E 数据迁移用相同切分方式 + `wrangler d1 execute --file=` |
-| 6 | FK 约束默认状态 | spike 中 batch rollback 测试观察到 `[0, 2]` 两种合法终态 | D1 默认 `PRAGMA foreign_keys` 关闭，FK 不会阻断写入 | Wave E 初始化时显式 `PRAGMA foreign_keys=ON`（在 init.sql 头部），保持与 better-sqlite3 一致行为；B.2 实施前在文档化处补 `--> statement-breakpoint`-aware 的初始化脚本 |
+| #   | 问题                                                | 现实现                                                                 | D1 行为                                                                                                          | 解法                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --- | --------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `.returning()` on INSERT/UPDATE                     | repos/*：直接 `.insert(...).returning().get()`                         | ✅ drizzle-orm/d1 原生支持，行为同 better-sqlite3（含 `.returning({ id, name })` 子集）；spike 中 3 个 case 全绿 | **无需 fallback**。沿用现有 `.returning()` 调用                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 2   | `db.transaction(callback)` 多语句事务               | repos/recordings.ts (×2)、repos/tags.ts、services/backup.ts            | ❌ **D1 拒绝 BEGIN**，错误 `Failed query: begin` —— D1 HTTP 绑定无 interactive transaction 原语                  | **改写为 `db.batch([stmt1, stmt2, ...])`**：原子性由 D1 内部保证，任一 statement 失败整批 rollback。但 batch 不允许"读中间结果再分支"——好在 lyre 4 处用法都是"无条件 delete + insert"或"循环 delete"，全部可声明式重写。**B.2 实施时**逐个改写：<br>• `recordings.deleteCascade` → batch([del transcriptions, del jobs, del tags, del recordings])<br>• `recordings.deleteBatch` → 外层 for-loop 收集 statement 数组再一次 batch<br>• `tags.setTagsForRecording` → batch([del recordingTags, ...inserts])<br>• `services/backup.ts.import` → 把整个 import 流程拆成"先收集 statements，再 batch"，对存在性判断改为 INSERT OR REPLACE / UPDATE WHERE 二选一（spike 已验证非 mixed 状态） |
+| 3   | join + where + order + limit                        | repos/recordings.ts、search route                                      | ✅ 标准 drizzle builder dialect 透明；spike 跑通 leftJoin + where + orderBy + limit，结果与 better-sqlite3 一致  | 无需调整                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 4   | `integer({mode:"timestamp"})` / `integer` ms 时间戳 | schema 全表 `created_at` / `recorded_at` 等                            | ✅ D1 = SQLite，integer 列存读 `1_700_000_000_123` 完全一致                                                      | 无需调整                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 5   | drizzle-kit generate 出的 init SQL apply            | `packages/api/scripts/d1-spike/migrations/0000_grey_silver_surfer.sql` | ✅ Miniflare D1 `db.exec()` 按 `--> statement-breakpoint` 切分后逐条执行通过                                     | Wave E 数据迁移用相同切分方式 + `wrangler d1 execute --file=`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 6   | FK 约束默认状态                                     | spike 中 batch rollback 测试观察到 `[0, 2]` 两种合法终态               | D1 默认 `PRAGMA foreign_keys` 关闭，FK 不会阻断写入                                                              | Wave E 初始化时显式 `PRAGMA foreign_keys=ON`（在 init.sql 头部），保持与 better-sqlite3 一致行为；B.2 实施前在文档化处补 `--> statement-breakpoint`-aware 的初始化脚本                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 **Gate 状态**：✅ 全部有解法 → 进入 B.1。
 
 #### B.1 — Contracts 抽离（client-safe types 先行，仅前置 1 个文件即可解锁 UI）  ✅ 2026-04-26
 
 把所有 UI 直接 import 的 server-side 模块拆成 contracts 层：
-
 1. 新建 `packages/api/src/contracts/` 目录与 `package.json` `./contracts/*` exports（见决策点 7）
 2. 第一批必须先做的 contracts（被 UI 直接消费的）：
    - `contracts/ai.ts` — provider id/displayName/model 列表/zod schema（从 `services/ai.ts` 抽）
@@ -469,14 +468,14 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 **RuntimeContext** 抽象（参考 backy Wave B）：
 ```ts
 export interface RuntimeContext {
-  db: DbAdapter;          // Drizzle 实例：worker = drizzle(c.env.DB) 走 D1 binding；legacy = drizzle(better-sqlite3)
-  oss: OssAdapter;        // V1 签名 + presign
-  asr: AsrProvider;       // dashscope / mock 工厂
-  ai: AiProvider;
-  env: LyreEnv;           // 强类型 env（DASHSCOPE_API_KEY、AI_*、OSS_*、BACKY_*、CF_ACCESS_*…）
-  info: RuntimeInfo;      // uptime/memory，Worker 退化为 null
-  clock: Clock;           // Date.now()，可注入
-  user: AuthUser | null;  // accessEmail or device-token user
+	db: DbAdapter; // Drizzle 实例：worker = drizzle(c.env.DB) 走 D1 binding；legacy = drizzle(better-sqlite3)
+	oss: OssAdapter; // V1 签名 + presign
+	asr: AsrProvider; // dashscope / mock 工厂
+	ai: AiProvider;
+	env: LyreEnv; // 强类型 env（DASHSCOPE_API_KEY、AI_*、OSS_*、BACKY_*、CF_ACCESS_*…）
+	info: RuntimeInfo; // uptime/memory，Worker 退化为 null
+	clock: Clock; // Date.now()，可注入
+	user: AuthUser | null; // accessEmail or device-token user
 }
 ```
 
@@ -521,13 +520,14 @@ import `next/*`。
 
 **B.6.b.4 spike-findings 表**（实施位置：`packages/api/scripts/d1-spike/repo-async.test.ts`，10 个用例全绿）
 
-| 行为类 | 数量 | 表现 | Wave C 处置 |
-|---|---|---|---|
-| `promise` | 33 | `.get()` / `.all()` / `.returning().get()` 链返回 Promise，sync 调用方拿不到值 | 方法签名改 `async`，链尾加 `await` |
-| `silent-wrong` | 5 | `.run() as { changes: number }` → `.changes` 在 Promise 上是 `undefined`，`undefined > 0 === false`，**沉默地永远报告 "什么都没删除"**；命中 `users.delete`/`folders.delete`/`recordings.delete`/`settings.delete`/`deviceTokens.deleteByIdAndUser`/`transcriptions.deleteByRecordingId` | 方法改 async，`const result = await ...; return result.meta.changes > 0`（D1 `.run()` 返回结构是 `{ success, meta: { changes } }`，与 better-sqlite3 不同） |
-| `throw` | 2 | `.all().map(...)`/`.then(rows => ...)` 链：因为 `.all()` 是 Promise，立刻在它上面调 `.map` 抛 `is not a function`；命中 `tags.findTagIdsForRecording`/`tags.findTagsForRecording` | 同上 async 化；`.run() as { changes: number }` 同样需要适配 D1 返回结构 |
+| 行为类         | 数量 | 表现                                                                                                                                                                                                                                                                                     | Wave C 处置                                                                                                                                                 |
+| -------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `promise`      | 33   | `.get()` / `.all()` / `.returning().get()` 链返回 Promise，sync 调用方拿不到值                                                                                                                                                                                                           | 方法签名改 `async`，链尾加 `await`                                                                                                                          |
+| `silent-wrong` | 5    | `.run() as { changes: number }` → `.changes` 在 Promise 上是 `undefined`，`undefined > 0 === false`，**沉默地永远报告 "什么都没删除"**；命中 `users.delete`/`folders.delete`/`recordings.delete`/`settings.delete`/`deviceTokens.deleteByIdAndUser`/`transcriptions.deleteByRecordingId` | 方法改 async，`const result = await ...; return result.meta.changes > 0`（D1 `.run()` 返回结构是 `{ success, meta: { changes } }`，与 better-sqlite3 不同） |
+| `throw`        | 2    | `.all().map(...)`/`.then(rows => ...)` 链：因为 `.all()` 是 Promise，立刻在它上面调 `.map` 抛 `is not a function`；命中 `tags.findTagIdsForRecording`/`tags.findTagsForRecording`                                                                                                        | 同上 async 化；`.run() as { changes: number }` 同样需要适配 D1 返回结构                                                                                     |
 
 #### Wave B 验收（全部完成）：
+
 - B.0 spike-findings 全部有解法
 - 三个 workspace `typecheck`/`lint`/`test:coverage` 全绿，覆盖率 ≥ 90%
 - `bun run legacy:test:e2e` 全绿（legacy 已切到 `@lyre/api`，行为不变；SSE 仍工作）
@@ -539,7 +539,6 @@ import `next/*`。
 #### Wave C.0 — Repo / service 层 async 化（前置 gate）  ✅
 
 来自 B.6.b.4 实测：当前 8 个 repo 共 40 个方法在 D1 dialect 下全部不能跑（细节见上方 spike-findings 表）。Wave C 装配 worker 前，先把 repo + 受影响的 service / handler 改 async：
-
 1. **8 个 repo 全部 async 化**：每个方法改 `async`，链尾 `await`，写入方法读 `result.meta.changes`（D1）—— 但 better-sqlite3 没 `meta` 字段；解法是引入 `LyreDb` 上的统一 `runResult` helper，由 driver 适配（sqlite driver 走 `result.changes`，d1 driver 走 `result.meta.changes`），repo 调 `helper.changes(result)`。
 2. **handlers**（11 个文件）→ 所有 `repos.xxx.findById(...)` 等 41 个 sync 调用点加 `await`，handler 函数已经是 async 没问题。
 3. **services**（`backup.ts`、`backy.ts`、`job-processor.ts`、`job-manager.ts`）→ 同步调用 repo 的地方加 `await`；`backup.importBackup` 的 `db.transaction` 改 `db.batch([...])`（B.0 spike finding #2）。
@@ -628,17 +627,17 @@ import `next/*`。
 
 ## 六、已知风险 / 注意事项
 
-| 风险 | 缓解 |
-|---|---|
-| **DB dialect 切换工作量被低估** | Wave B.0 spike 强制前置；legacy 期间**继续用 better-sqlite3 不切 dialect**，D1 dialect 仅在新 worker 一侧实施（无需写"REST D1Adapter 给 legacy 用"）；query 兼容性差异在 spike-findings 表逐条记录解法，进入 B.2 前必须清零 |
-| **数据迁移风险** | Wave E 之前先做一次 dry-run（test D1）；保留 Railway DB 至少 30 天 |
-| **`@nocoo/next-ai` 替换** | 评估后选 ① fork 砍 next 依赖 ② 直接用 `ai` SDK 重写 —— 决策放在 Wave B 开始时 |
-| **`next-themes` 替换** | 自写 ThemeContext（< 50 行），surety/bat 已有参考 |
-| **JobManager 删除带来的体验降级** | Cron 1 分钟分辨率对 ASR 任务可接受；前端打开详情页时 SWR `refreshInterval: 5s` 顶替；用户离开页面后状态不实时但下次打开会拉到最新 |
-| **macOS 客户端 server URL 切换** | 文档化迁移指南，包含旧 token 在新域名继续可用的验证步骤 |
-| **OSS 签名在 Web Crypto 下的实现** | Wave B 单独写一个测试 case 跑 `crypto.subtle.sign('HMAC', ...)`，与 Node `crypto.createHmac` 输出对比 |
-| **Worker CPU/内存上限** | lyre 没有 backy 那种"FormData buffer 大文件"路径（OSS 直传），主要风险是 ASR result JSON（可能几 MB） + AI summarize streaming —— 都是流式，无内存问题 |
-| **better-sqlite3 在 web_legacy 还要继续跑** | 通过 dialect 抽象层让 legacy 保留 better-sqlite3 dialect，新 worker 用 D1 dialect；schema 单一来源（packages/api） |
+| 风险                                        | 缓解                                                                                                                                                                                                                        |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **DB dialect 切换工作量被低估**             | Wave B.0 spike 强制前置；legacy 期间**继续用 better-sqlite3 不切 dialect**，D1 dialect 仅在新 worker 一侧实施（无需写"REST D1Adapter 给 legacy 用"）；query 兼容性差异在 spike-findings 表逐条记录解法，进入 B.2 前必须清零 |
+| **数据迁移风险**                            | Wave E 之前先做一次 dry-run（test D1）；保留 Railway DB 至少 30 天                                                                                                                                                          |
+| **`@nocoo/next-ai` 替换**                   | 评估后选 ① fork 砍 next 依赖 ② 直接用 `ai` SDK 重写 —— 决策放在 Wave B 开始时                                                                                                                                               |
+| **`next-themes` 替换**                      | 自写 ThemeContext（< 50 行），surety/bat 已有参考                                                                                                                                                                           |
+| **JobManager 删除带来的体验降级**           | Cron 1 分钟分辨率对 ASR 任务可接受；前端打开详情页时 SWR `refreshInterval: 5s` 顶替；用户离开页面后状态不实时但下次打开会拉到最新                                                                                           |
+| **macOS 客户端 server URL 切换**            | 文档化迁移指南，包含旧 token 在新域名继续可用的验证步骤                                                                                                                                                                     |
+| **OSS 签名在 Web Crypto 下的实现**          | Wave B 单独写一个测试 case 跑 `crypto.subtle.sign('HMAC', ...)`，与 Node `crypto.createHmac` 输出对比                                                                                                                       |
+| **Worker CPU/内存上限**                     | lyre 没有 backy 那种"FormData buffer 大文件"路径（OSS 直传），主要风险是 ASR result JSON（可能几 MB） + AI summarize streaming —— 都是流式，无内存问题                                                                      |
+| **better-sqlite3 在 web_legacy 还要继续跑** | 通过 dialect 抽象层让 legacy 保留 better-sqlite3 dialect，新 worker 用 D1 dialect；schema 单一来源（packages/api）                                                                                                          |
 
 ---
 
@@ -656,12 +655,12 @@ import `next/*`。
 
 ## 八、参考文件清单（实施时直接对照）
 
-| 用途 | 文件 |
-|---|---|
-| Wave 划分 + HandlerResponse 协议 | `../backy/docs/06-api-extraction-plan.md` |
-| Vite + Worker + Access 端到端 | `../backy/docs/07-vite-web-migration-plan.md` |
-| `accessAuth` middleware 实现 | `../surety/apps/worker/src/middleware/access-auth.ts` |
+| 用途                             | 文件                                                   |
+| -------------------------------- | ------------------------------------------------------ |
+| Wave 划分 + HandlerResponse 协议 | `../backy/docs/06-api-extraction-plan.md`              |
+| Vite + Worker + Access 端到端    | `../backy/docs/07-vite-web-migration-plan.md`          |
+| `accessAuth` middleware 实现     | `../surety/apps/worker/src/middleware/access-auth.ts`  |
 | `apiKeyAuth`（→ bearerAuth）模板 | `../surety/apps/worker/src/middleware/api-key-auth.ts` |
-| Hono app 装配 | `../surety/apps/worker/src/index.ts` |
-| Vite SPA 主题/路由/api 客户端 | `../surety/apps/web/src/{api.ts,App.tsx,main.tsx}` |
-| Bun monorepo workspace 范式 | `../bat`、`../backy`（均已落地） |
+| Hono app 装配                    | `../surety/apps/worker/src/index.ts`                   |
+| Vite SPA 主题/路由/api 客户端    | `../surety/apps/web/src/{api.ts,App.tsx,main.tsx}`     |
+| Bun monorepo workspace 范式      | `../bat`、`../backy`（均已落地）                       |

@@ -9,7 +9,6 @@
 ### Current symptom
 
 最近一次会议录音：
-
 1. 系统音（对方声音）正常。
 2. 麦克风采集的本地声音听起来**变速变调**（更快，音高约升一个半音）。
 
@@ -26,7 +25,6 @@
 `SCStreamConfiguration.sampleRate = 48000` **只控制 `.audio`（系统音）路径的输出 ASBD**；
 `.microphone` 的输出 ASBD 由所选设备决定，蓝牙 / USB / AirPods / 一些外接 mic
 默认就是 **44.1 kHz**。当前编码器把 44.1k 的 mic 样本按 48k 重打 PTS + 重打 format：
-
 - 时间压缩比：`44100 / 48000 = 0.91875` → 同一段音频被播得快约 **8.8%**
 - 频率比：`48000 / 44100 ≈ 1.0884` → 音高升约 **+1.47 半音**
 
@@ -44,7 +42,6 @@ totalSamplesWritten += Int64(frameCount)
 ```
 
 后果链：
-
 - 系统音 callback 平稳，每秒约 48000 样本到达
 - 麦克风（蓝牙 / USB / 外接设备）callback 抖动：偶尔丢一个 ~100ms 数据包
 - 这 100ms 在现实时间里发生了，但 `micBuffer` 里没有这部分样本
@@ -56,7 +53,6 @@ totalSamplesWritten += Int64(frameCount)
 
 新方案"透传 SCK 原始 `CMSampleBuffer` + 两个 `AVAssetWriterInput`，AAC encoder 在底层自动重采样
 到 48k"**同时修复**两条。在 Phase 0 验证前，要从现场拿到证据缩窄根因：
-
 1. 跑一次现有录音，捕获 `AudioCaptureManager.logBufferFormat()` 在 `Microphone` 首帧打的
    `rate=… ch=… bits=…` 日志（已存在）。如果 mic 的 `rate < 48000`（典型 44100），Cause A 成立。
 2. 同一段录音用 `ffprobe -show_streams Recording_xxx.m4a` 看输出文件的 sample_rate，
@@ -70,14 +66,12 @@ totalSamplesWritten += Int64(frameCount)
 ### AVAssetWriter PTS 行为前置验证（**阻塞 Phase 1，先做**）
 
 本设计的两个关键假设依赖于一个**未经本项目证实**的 AVAssetWriter 行为：
-
 - **假设 A**：`startSession(atSourceTime: t0)` 后，某 track 第一帧 PTS = `t1 > t0` 时，
   AVAssetWriter 会在该 track 头部留出 `t1 - t0` 的空白时间轴（而不是把第一帧规整到 track time 0）。
 - **假设 B**：同一 track 连续 append 的两个 buffer 之间出现 PTS gap（比如 600ms 没有数据），
   AVAssetWriter 会在容器层保留这段静默（而不是把后续 buffer 紧贴前一个 buffer 写成连续音频）。
 
 **已知反证**：本地用 Swift 写 `.m4a` / AAC 输出的小型探针实验显示：
-
 - 延迟到达的第一帧被 normalize 到 track time 0（假设 A 不成立）。
 - 同 track 0.6 秒的 PTS gap 被压缩成连续音频（假设 B 不成立）。
 
@@ -85,7 +79,6 @@ totalSamplesWritten += Int64(frameCount)
 那么 **Cause B 不会被本方案自动修复** —— 需要在 encoder 内显式补静默或转入离线渲染。
 
 **Phase 0 必跑探针测试**（`LyreTests/AVAssetWriterPTSProbeTests.swift`）：
-
 1. **延迟首帧探针**：`startSession(atSourceTime: .zero)`，然后给一个 AAC `AVAssetWriterInput` append PTS 起点为 0.5s 的 1 秒 440Hz 正弦波 buffer 序列；`finishWriting` 后用 `AVAssetReader` 读出该 track 的第一个 sample PTS。
    - 若 ≈ 0.5s → 假设 A 成立，可走文档主路径。
    - 若 ≈ 0 → 假设 A 不成立。**Phase 1A 实测：这是当前 macOS / AVFoundation 路径上的实际观察值，且 Mitigation A 已被证伪不可行（见下文）。** 后续修复需走 capture-layer warmup / 离线 composition 路径（task #5 / #6 评估）。
@@ -121,7 +114,6 @@ PCM 输入由 AAC encoder 自动压缩 —— **不**预先编 AAC。**这是录
 任何"`stopRecording()` 用 `AVAssetReader` 按 host-clock PTS 重渲染"的方案都救不回来 ——
 读出来的 sample PTS 已是被压缩后的轨内时间，而不是 host clock。兜底必须**在录制期**保留时间信息，
 选其一：
-
 - **B1 — 边录边补静默到 PCM 中间文件**：两路各开一个 `AVAssetWriter` 输出 **未压缩 PCM 中间文件**
   (`kAudioFormatLinearPCM`)，PCM domain 不存在 encoder 合并 gap 的问题；append 前在应用层按 host-clock PTS
   补满静默样本。`stopRecording()` 用 `AVAssetReader` 把两路 PCM 按精确时间轴 downmix 成单轨 AAC m4a，删 PCM 中间文件。
@@ -138,13 +130,13 @@ PCM 输入由 AAC encoder 自动压缩 —— **不**预先编 AAC。**这是录
 
 **决策树（Phase 1A 后已更新）**：
 
-| 假设 A | 假设 B | 行动 |
-|---|---|---|
-| ✅ | ✅ | 走文档主路径，无修改 |
-| ❌ | ✅ | ⚠️ Mitigation A **不可用**（Phase 1A 实测，见上文）→ 留作 limitation，由 task #7 6DQ 判断影响；如不可接受走 task #8 单轨 downmix 或 capture-layer warmup |
-| ✅ | ❌ | 启用 Mitigation B（gap silent fill） |
-| ❌ | ❌ | 启用 Mitigation B；A 同上格 — 留作 limitation |
-| Mitigation B 二次探针**仍失败** | — | 走 **B1 中间 PCM 兜底**（**不能**用读已写 m4a 的离线渲染，时间信息已丢失） |
+| 假设 A                          | 假设 B | 行动                                                                                                                                                     |
+| ------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ✅                              | ✅     | 走文档主路径，无修改                                                                                                                                     |
+| ❌                              | ✅     | ⚠️ Mitigation A **不可用**（Phase 1A 实测，见上文）→ 留作 limitation，由 task #7 6DQ 判断影响；如不可接受走 task #8 单轨 downmix 或 capture-layer warmup |
+| ✅                              | ❌     | 启用 Mitigation B（gap silent fill）                                                                                                                     |
+| ❌                              | ❌     | 启用 Mitigation B；A 同上格 — 留作 limitation                                                                                                            |
+| Mitigation B 二次探针**仍失败** | —      | 走 **B1 中间 PCM 兜底**（**不能**用读已写 m4a 的离线渲染，时间信息已丢失）                                                                               |
 
 **禁止跳过**：不允许"先按主路径写代码，等手工验收再说"。Phase 0 探针的两个结论必须落在 PR 描述里。
 
@@ -152,16 +144,15 @@ PCM 输入由 AAC encoder 自动压缩 —— **不**预先编 AAC。**这是录
 
 调研 5 个主流 macOS Swift 录音项目，**无一例**采用"应用层 sample-by-sample 实时混音"：
 
-| 项目 | Stars | Approach |
-|---|---|---|
-| [lihaoyun6/QuickRecorder](https://github.com/lihaoyun6/QuickRecorder) | 8.4k | 两个 `AVAssetWriterInput` 多轨，append 原始 `CMSampleBuffer` |
-| [jsattler/BetterCapture](https://github.com/jsattler/BetterCapture) | 1.4k | 多轨 `AVAssetWriter` |
-| [Mnpn/Azayaka](https://github.com/Mnpn/Azayaka) | 745 | `initClassicRecorder` 走 `AVAssetWriter` 多轨；视频走 `SCRecordingOutput` |
-| [insidegui/AudioCap](https://github.com/insidegui/AudioCap) | 504 | CoreAudio Process Tap，只录系统音 |
-| [tobi/recorder](https://github.com/tobi/recorder) | 26 | 录两个文件 → 停止后按 host time 离线混音 |
+| 项目                                                                  | Stars | Approach                                                                  |
+| --------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------- |
+| [lihaoyun6/QuickRecorder](https://github.com/lihaoyun6/QuickRecorder) | 8.4k  | 两个 `AVAssetWriterInput` 多轨，append 原始 `CMSampleBuffer`              |
+| [jsattler/BetterCapture](https://github.com/jsattler/BetterCapture)   | 1.4k  | 多轨 `AVAssetWriter`                                                      |
+| [Mnpn/Azayaka](https://github.com/Mnpn/Azayaka)                       | 745   | `initClassicRecorder` 走 `AVAssetWriter` 多轨；视频走 `SCRecordingOutput` |
+| [insidegui/AudioCap](https://github.com/insidegui/AudioCap)           | 504   | CoreAudio Process Tap，只录系统音                                         |
+| [tobi/recorder](https://github.com/tobi/recorder)                     | 26    | 录两个文件 → 停止后按 host time 离线混音                                  |
 
 **`SCRecordingOutput`（macOS 15+ Apple 原生录制 API）评估结论**：
-
 - 不支持 `.m4a`，仅 `.mov` / `.mp4`
 - 系统音 + 麦克风被 Apple **强制 mix 成单条 audio track**，无法分轨
 - 音频参数（bitrate / channels / sample rate）应用完全无控制权
@@ -177,7 +168,6 @@ PCM 输入由 AAC encoder 自动压缩 —— **不**预先编 AAC。**这是录
 > 若 Mitigation B 仍失败 → B1 兜底会写 **PCM 中间文件**（违反原则 6 的"容器层对齐"，改成应用层按
 > host-clock 对齐 PCM 再编 AAC）。**Mitigation A 在 Phase 1A 已被证明不可行**（见上文 Mitigation A 段落），
 > 留作 limitation；不再作为本节涉及的修复路径。这些是 mitigation 的代价，已在决策树里量化。
-
 1. **不在应用层混音**：让 ASR / 播放器 / 编辑器在解码层混。
 2. **不重打 PTS**：直接 `append` SCK 给的 `CMSampleBuffer`，PTS 由 `CMClockGetHostTimeClock` 提供。
 3. **不解包 PCM**：不做 Float 提取、不做声道折叠、不做 tanh、不做 gain。
@@ -207,7 +197,6 @@ AVAssetWriter 会将空 input 从输出文件中剔除（Phase 0 探针证实）
 下游消费方（ASR / 播放器 / downmix）**不应依赖 track 序号识别来源**。
 
 **Track 身份标记（合法路径）**：
-
 - ❌ **不能用** `extendedLanguageTag = "system" / "mic"`：本地验证显示该 setter 会校验 BCP 47 语言标签，
   `"system"` / `"mic"` 不是合法语言标签，会抛 `NSInvalidArgumentException` 直接崩溃。
 - ⚠️ **`AVAssetWriterInput.metadata` 不可作为主路径**：本地探针验证：用 raw identifier
@@ -228,11 +217,11 @@ AVAssetWriter 会将空 input 从输出文件中剔除（Phase 0 探针证实）
   - 用 `(systemDidAppend, micDidAppend, audioTracks.count)` 三元组判断来源：
     `(true, false, 1)` → 唯一 track = system；`(false, true, 1)` → mic；
     `(true, true, 2)` → tracks[0] = system, tracks[1] = mic；其他组合 → 跳过 sidecar 不写。
-  结果写入 `Recording_xxx.tracks.json` sidecar（与 m4a 同目录、同 basename，内容
-  `{ "system": <trackID>, "mic": <trackID> }`，缺席的一路省略）。
-  下游（player / downmix / ASR pre-processing）读 sidecar 拿 trackID。**sidecar 缺失时下游必须按
+    结果写入 `Recording_xxx.tracks.json` sidecar（与 m4a 同目录、同 basename，内容
+    `{ "system": <trackID>, "mic": <trackID> }`，缺席的一路省略）。
+    下游（player / downmix / ASR pre-processing）读 sidecar 拿 trackID。**sidecar 缺失时下游必须按
   "无法识别来源"处理**（不渲染来源标签、不做按源分离），**不能**默认"第一条 track = system" ——
-  允许只有 mic 有帧、system 路无权限或无信号的合法场景。
+    允许只有 mic 有帧、system 路无权限或无信号的合法场景。
 
 - 🔍 **条件方案 — 探针通过后才启用容器内 metadata**：如果未来某个 macOS / AVFoundation 版本
   让 `AVAssetWriterInput.metadata` 在 `.m4a` 上变得可读回，可落地为 sidecar 的冗余备份；
@@ -336,7 +325,6 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
 ```
 
 **关键约束（并发模型）**：
-
 - 两个 output 必须共用**同一个 serial dispatch queue**，不能用 `.global(qos:)` 并发队列。
 - 这保证 encoder 的 `appendSystem` / `appendMic` 在 Swift 层就是串行调用，无需在 encoder 内再加锁去防"两路同时进入"。
 - encoder 内部 `queue.sync { ... }` 是第二道保险（防 finalize 与 append 竞争），不是为了 audio vs mic 并发。
@@ -348,7 +336,6 @@ final class AudioCaptureManager: NSObject, @unchecked Sendable {
 职责：AVAssetWriter 单文件输出，两个 input，append 原始 buffer。
 
 **关键设计点**：
-
 1. **Session start 时机**：不能"第一帧到达就 startSession"。Mic 第一帧可能比 system 第一帧的
    **callback 到达时间**早，但 mic 的 PTS（host clock）反而**晚于** system 第一帧的 PTS。
    如果先按 mic 的 PTS 启动 session，随后到来的 system buffer 会因 `pts < sessionStart` 被截断或丢弃。
@@ -615,14 +602,14 @@ final class AudioEncoder: @unchecked Sendable {
 
 **关键变化**：
 
-| Before | After |
-|---|---|
-| `encodeSamples([Float])` | `appendSystem/appendMic(CMSampleBuffer)` |
-| `totalSamplesWritten` 自增 PTS | 用 buffer 自带 PTS |
-| 单 input | 双 input |
-| 创建 CMBlockBuffer + CMSampleBuffer | 删除（透传 SCK buffer） |
-| `inputFormat: AVAudioFormat` | 删除 |
-| `createSampleBuffer(from:)` 接口 | 删除 |
+| Before                              | After                                    |
+| ----------------------------------- | ---------------------------------------- |
+| `encodeSamples([Float])`            | `appendSystem/appendMic(CMSampleBuffer)` |
+| `totalSamplesWritten` 自增 PTS      | 用 buffer 自带 PTS                       |
+| 单 input                            | 双 input                                 |
+| 创建 CMBlockBuffer + CMSampleBuffer | 删除（透传 SCK buffer）                  |
+| `inputFormat: AVAudioFormat`        | 删除                                     |
+| `createSampleBuffer(from:)` 接口    | 删除                                     |
 
 ### RecordingManager（after）
 
@@ -668,7 +655,6 @@ func stopRecording() async throws -> URL {
 > PCM 中间文件 + 离线对齐（仍非应用层 sample-by-sample 混音）。Mitigation A 已被证伪
 > （见上文 not viable 段落），不在路径里。所有路径都比旧的实时 `min(sysCount, micCount)`
 > 混音简单。
-
 1. **No app-level sample mixing** → 没有 `min(sysCount, micCount)` 这类对齐 bug。
 2. **No app-level PTS generation** → 完全消除"时间被自增计数器拍平"的可能性。
 3. **No Float intermediate** → 不解包 PCM，CPU 占用降低，零拷贝直转发（Mitigation B 路径仅对 same-track gap 合成零填 PCM；Mitigation A 已证伪，不在路径里；主路径仍是零拷贝）。
@@ -701,24 +687,23 @@ PTS 序列，作为真值断言（而不是依赖 encoder 内部状态 / `startS
 > **重要**：下表中用例 1 / 2 的"期望行为"分两种形态，按 Phase 0 探针结果选择 —— 探针**未跑前不要落地这两条**。
 > 用例 3 / 4 / 5 不依赖假设 A/B，可独立落地。
 
-| 测试 | 操作 |
-|---|---|
-| `LyreTests/AudioMixerTests.swift` | **删除** |
-| `LyreTests/AudioEncoderTests.swift` 用例 1 — 双轨基本写入（**Phase 1A 已落地，假设 A 已证伪**） | 合成两路 `CMSampleBuffer`（system PTS 起点 = 1000ms，mic PTS 起点 = 1200ms），各写 1 秒，session 启动于 PTS = 1000ms。<br>**Main path（假设 A 通过 — 当前 macOS 未观察到）**：用 `AVAssetReader` 断言 ① `tracks(withMediaType: .audio).count == 2`；② mic track 第一个 sample PTS ≈ **1200ms**；③ 两 track 总时长 ≈ 1s。<br>**Limitation pin（假设 A 失败 — 当前实测路径，Mitigation A 不可行）**：① count == 2；② mic track 第一个有效音频 sample PTS ≈ **0**（晚到的 200ms 被 AAC trim，无 silent prefix 能挽回，见 `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter`）；③ mic track 总时长 ≈ **1.0s**（不含已 trim 的 200ms 前缀）；④ sidecar 仍正确记录 mic 角色，role↔trackID 映射不丢失；⑤ 真正修复需在 capture-layer warmup 或 offline composition 评估（task #5 / #6 输入）。 |
-| `LyreTests/AudioEncoderTests.swift` 用例 2 — PTS gap 处理（Cause B 回归，**期望随假设 B 切换**） | 合成 mic 轨：第 0–500ms append 5 个 100ms buffer（PTS 连续），跳过 500–600ms，再 append 6 个 100ms buffer（PTS 从 600ms 起，不回填）。<br>**Main path（假设 B 通过）**：用 `AVAssetReader` 断言第 6 个 sample 的 presentationTime ≈ **600ms**（gap 在容器层保留）。<br>**Mitigation B path（假设 B 失败 → silent PCM fill）**：encoder 在 600ms append 前应已合成 500–600ms 的 silent PCM `CMSampleBuffer` 并 append（由 AAC encoder 自动压缩成静默 AAC frame）；断言第 6 个**真实**音频 sample 在 600ms，500–600ms 区间解码后能量 ≈ 0。<br>**B 二次失败兜底（B1 PCM 中间文件）**：测试改为读 PCM 中间文件 + 重渲染后的单轨 m4a，断言 600ms 处仍是静默而非压贴。 |
-| `LyreTests/AudioEncoderTests.swift` 用例 3 — **Sample-rate mismatch 重采样**（Cause A 回归，新增） | 合成 mic `CMSampleBuffer`，ASBD 中 `mSampleRate = 44100`，写 5 秒 440Hz 正弦波。append 给 encoder。用 `AVAssetReader` 读输出 mic track：① 输出 ASBD `mSampleRate == 48000`（AAC encoder 已重采样）；② track duration ≈ **5 秒**（不是 44100/48000 × 5s = 4.59s）；③ （可选）解码前 100ms PCM 做 FFT，峰值频率仍 ≈ 440Hz（不是 ×48000/44100 后的 ≈ 479Hz）。这条用例失败 = Cause A 没被修。 |
-| `LyreTests/AudioEncoderTests.swift` 用例 4 — 单轨缺席启动 | 只喂 system，不喂 mic，等 500ms timer 触发后断言 ① 文件能 finalize；② **`tracks(withMediaType: .audio).count == 1`**（探针确认：AVAssetWriter 会把从未 append 数据的空 `AVAssetWriterInput` 从最终 `.m4a` 中剔除，不会保留为"空 track"）；③ **读 `Recording_xxx.tracks.json` sidecar**，断言 `{"system": <唯一 audio track 的 trackID>}` 存在，且 `"mic"` 不在 map 里（**不**依赖 `AVAssetTrack.metadata` —— 探针已证实 `AVAssetWriterInput.metadata` 在 `.m4a` 不可读回）；④ system track 在 timeout 前的所有 buffer 都被写入（验证 #1 修复：pre-session 不只缓存首帧）。**注意**：用例 1 的 track 0 / track 1 顺序约定只在"两路都有数据"时成立；下游若需可靠识别 track 来源，不能依赖 track 序号，应读 sidecar。 |
-| `LyreTests/AudioEncoderTests.swift` 用例 5 — PTS 单调性 | 给 system 喂 PTS 递增 buffer 后突然喂一个 PTS 回退的 buffer，断言被丢弃、不抛异常、后续递增 buffer 仍能正常写入。验证：`AVAssetReader` 读出的 sample 数 = 递增 buffer 数（逆序 buffer 不在文件里）。 |
-| `LyreTests/AudioCaptureManagerTests.swift` | 断言 `onSystemSampleBuffer` / `onMicSampleBuffer` 被分别触发（通过 inject 假 SCStream 或直接调用 `stream(_:didOutputSampleBuffer:of:)`）；不再断言 mixed PCM 内容。 |
-| `LyreTests/RecordingManagerTests.swift` | start → stop 流程；断言两路 callback 都接到 encoder 的对应入口。 |
-| `LyreTests/RecordingE2ETests.swift` | 不变：依赖 ScreenCaptureKit 权限，CI 跳过；本地跑录 3 秒会议确认时间轴正确。 |
+| 测试                                                                                               | 操作                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LyreTests/AudioMixerTests.swift`                                                                  | **删除**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `LyreTests/AudioEncoderTests.swift` 用例 1 — 双轨基本写入（**Phase 1A 已落地，假设 A 已证伪**）    | 合成两路 `CMSampleBuffer`（system PTS 起点 = 1000ms，mic PTS 起点 = 1200ms），各写 1 秒，session 启动于 PTS = 1000ms。<br>**Main path（假设 A 通过 — 当前 macOS 未观察到）**：用 `AVAssetReader` 断言 ① `tracks(withMediaType: .audio).count == 2`；② mic track 第一个 sample PTS ≈ **1200ms**；③ 两 track 总时长 ≈ 1s。<br>**Limitation pin（假设 A 失败 — 当前实测路径，Mitigation A 不可行）**：① count == 2；② mic track 第一个有效音频 sample PTS ≈ **0**（晚到的 200ms 被 AAC trim，无 silent prefix 能挽回，见 `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter`）；③ mic track 总时长 ≈ **1.0s**（不含已 trim 的 200ms 前缀）；④ sidecar 仍正确记录 mic 角色，role↔trackID 映射不丢失；⑤ 真正修复需在 capture-layer warmup 或 offline composition 评估（task #5 / #6 输入）。 |
+| `LyreTests/AudioEncoderTests.swift` 用例 2 — PTS gap 处理（Cause B 回归，**期望随假设 B 切换**）   | 合成 mic 轨：第 0–500ms append 5 个 100ms buffer（PTS 连续），跳过 500–600ms，再 append 6 个 100ms buffer（PTS 从 600ms 起，不回填）。<br>**Main path（假设 B 通过）**：用 `AVAssetReader` 断言第 6 个 sample 的 presentationTime ≈ **600ms**（gap 在容器层保留）。<br>**Mitigation B path（假设 B 失败 → silent PCM fill）**：encoder 在 600ms append 前应已合成 500–600ms 的 silent PCM `CMSampleBuffer` 并 append（由 AAC encoder 自动压缩成静默 AAC frame）；断言第 6 个**真实**音频 sample 在 600ms，500–600ms 区间解码后能量 ≈ 0。<br>**B 二次失败兜底（B1 PCM 中间文件）**：测试改为读 PCM 中间文件 + 重渲染后的单轨 m4a，断言 600ms 处仍是静默而非压贴。                                                                                                                        |
+| `LyreTests/AudioEncoderTests.swift` 用例 3 — **Sample-rate mismatch 重采样**（Cause A 回归，新增） | 合成 mic `CMSampleBuffer`，ASBD 中 `mSampleRate = 44100`，写 5 秒 440Hz 正弦波。append 给 encoder。用 `AVAssetReader` 读输出 mic track：① 输出 ASBD `mSampleRate == 48000`（AAC encoder 已重采样）；② track duration ≈ **5 秒**（不是 44100/48000 × 5s = 4.59s）；③ （可选）解码前 100ms PCM 做 FFT，峰值频率仍 ≈ 440Hz（不是 ×48000/44100 后的 ≈ 479Hz）。这条用例失败 = Cause A 没被修。                                                                                                                                                                                                                                                                                                                                                                                              |
+| `LyreTests/AudioEncoderTests.swift` 用例 4 — 单轨缺席启动                                          | 只喂 system，不喂 mic，等 500ms timer 触发后断言 ① 文件能 finalize；② **`tracks(withMediaType: .audio).count == 1`**（探针确认：AVAssetWriter 会把从未 append 数据的空 `AVAssetWriterInput` 从最终 `.m4a` 中剔除，不会保留为"空 track"）；③ **读 `Recording_xxx.tracks.json` sidecar**，断言 `{"system": <唯一 audio track 的 trackID>}` 存在，且 `"mic"` 不在 map 里（**不**依赖 `AVAssetTrack.metadata` —— 探针已证实 `AVAssetWriterInput.metadata` 在 `.m4a` 不可读回）；④ system track 在 timeout 前的所有 buffer 都被写入（验证 #1 修复：pre-session 不只缓存首帧）。**注意**：用例 1 的 track 0 / track 1 顺序约定只在"两路都有数据"时成立；下游若需可靠识别 track 来源，不能依赖 track 序号，应读 sidecar。                                                                      |
+| `LyreTests/AudioEncoderTests.swift` 用例 5 — PTS 单调性                                            | 给 system 喂 PTS 递增 buffer 后突然喂一个 PTS 回退的 buffer，断言被丢弃、不抛异常、后续递增 buffer 仍能正常写入。验证：`AVAssetReader` 读出的 sample 数 = 递增 buffer 数（逆序 buffer 不在文件里）。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `LyreTests/AudioCaptureManagerTests.swift`                                                         | 断言 `onSystemSampleBuffer` / `onMicSampleBuffer` 被分别触发（通过 inject 假 SCStream 或直接调用 `stream(_:didOutputSampleBuffer:of:)`）；不再断言 mixed PCM 内容。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `LyreTests/RecordingManagerTests.swift`                                                            | start → stop 流程；断言两路 callback 都接到 encoder 的对应入口。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `LyreTests/RecordingE2ETests.swift`                                                                | 不变：依赖 ScreenCaptureKit 权限，CI 跳过；本地跑录 3 秒会议确认时间轴正确。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### ASR multi-track end-to-end gate（**新增、阻塞合并**）
 
 DashScope `qwen3-asr-flash-filetrans` 的接口只接受一个 `file_url`，没有 track 选择参数
 （参见 `packages/api/src/services/asr.ts:452`）。多轨支持是**未经服务端确认的外部假设**，
 必须在合并前用真实样本端到端验证：
-
 1. 准备固定双轨样本 `e2e/fixtures/dual-track-asr.m4a`：
    - Track 0（system）：朗读一组系统侧关键词，例如 "云计算 / 分布式 / 存储 / 索引"。
    - Track 1（mic）：朗读一组麦克风侧关键词，例如 "机器学习 / 神经网络 / 深度学习"。
@@ -731,12 +716,12 @@ DashScope `qwen3-asr-flash-filetrans` 的接口只接受一个 `file_url`，没�
 
 ## Risk & Fallback
 
-| 风险 | 触发条件 | 降级方案 |
-|---|---|---|
-| DashScope 只读 track 0 | ASR 多轨 E2E 测试只命中 track 0 关键词 | 进入下面的"离线 downmix 方案"，最终上传 / 入库的是**单 audio track** m4a |
-| `AVAudioPlayer` 不混合多轨 | 手工验收时本机播放只听到一边 | 短期把 `AudioPlayerManager` 切到 `AVPlayer`；如果连 `AVPlayer` 也不能可靠混（少见），同样走"离线 downmix 方案" |
-| 双路首帧 PTS 差距 > timeout | 比如外接 USB 麦克风冷启动慢 >500ms | 500ms timer 用已到一路 PTS 启动 session，对侧首帧 PTS > sessionStart。**Phase 1A 实测**：AAC `AVAssetWriterInput` 会把晚到 track 的 leading section trim 掉（zero / padded / dither prefix 均无效），即 Mitigation A 不可用。当前 dualTrack path 不补偿该 trim；行为由 `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter` pin 住。后续修复在 capture-layer warmup / 离线 composition 评估（task #5 / #6 输入）；如 6DQ 判断不可接受则走 task #8 single-track downmix 兜底。 |
-| SCK callback 并发进入 encoder | 注册 output 时误用 `.global(qos:)` 并发队列 | 单元测试无法捕获；以 code review + AudioCaptureManager 头部注释 + lint rule（禁用 `.global` 出现在 `addStreamOutput` 调用） 防回归。 |
+| 风险                          | 触发条件                                    | 降级方案                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DashScope 只读 track 0        | ASR 多轨 E2E 测试只命中 track 0 关键词      | 进入下面的"离线 downmix 方案"，最终上传 / 入库的是**单 audio track** m4a                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `AVAudioPlayer` 不混合多轨    | 手工验收时本机播放只听到一边                | 短期把 `AudioPlayerManager` 切到 `AVPlayer`；如果连 `AVPlayer` 也不能可靠混（少见），同样走"离线 downmix 方案"                                                                                                                                                                                                                                                                                                                                                               |
+| 双路首帧 PTS 差距 > timeout   | 比如外接 USB 麦克风冷启动慢 >500ms          | 500ms timer 用已到一路 PTS 启动 session，对侧首帧 PTS > sessionStart。**Phase 1A 实测**：AAC `AVAssetWriterInput` 会把晚到 track 的 leading section trim 掉（zero / padded / dither prefix 均无效），即 Mitigation A 不可用。当前 dualTrack path 不补偿该 trim；行为由 `lateSourceFirstFrameRemainsTrimmedByAVAssetWriter` pin 住。后续修复在 capture-layer warmup / 离线 composition 评估（task #5 / #6 输入）；如 6DQ 判断不可接受则走 task #8 single-track downmix 兜底。 |
+| SCK callback 并发进入 encoder | 注册 output 时误用 `.global(qos:)` 并发队列 | 单元测试无法捕获；以 code review + AudioCaptureManager 头部注释 + lint rule（禁用 `.global` 出现在 `addStreamOutput` 调用） 防回归。                                                                                                                                                                                                                                                                                                                                         |
 
 ### 离线 downmix 方案（明确化）
 
@@ -794,7 +779,6 @@ func downmixToSingleTrack(input: URL, output: URL) async throws {
 ```
 
 **为什么不用 `AVMutableComposition + AVAssetExportSession`**：
-
 - `AVMutableComposition.insertTimeRange(_:of:at:)` 把 N 条源 audio track 合并为 N 条 composition track，
   **不会自动 downmix 成单条 track**。导出后的 m4a 仍可能是多轨。
 - `AVAssetExportSession` 的 `audioMix` 只能调权重 / 音量包络，不改 track 数量。
@@ -805,7 +789,6 @@ func downmixToSingleTrack(input: URL, output: URL) async throws {
 落在 `LyreTests/AudioEncoderDownmixTests.swift`（仅当 fallback 触发时启用）。
 
 **手工验收**（最重要，因为单元测试无法重现"变速变调"）：
-
 1. 录一段 30 秒包含本机说话 + 系统播放音乐 / 视频会议的样本
 2. 在 QuickTime Player 中播放，听本机声音是否自然
 3. 用 `ffprobe Recording_xxx.m4a` 验证：
@@ -882,21 +865,20 @@ they are ready).
 
 **Phase mapping → commits**:
 
-| Phase | Tasks | Commits |
-|---|---|---|
-| Pre-req: signing hook fix | infra | `ff40885` |
-| Phase 0A: AVAssetWriter probes | #2 | `c2732df` |
-| Phase 0B: live ASR scaffold | #3 | `91b7ce2` |
-| Phase 0C: downstream readiness | #10 | `ca519e7` |
-| Phase 1A: dual-track encoder + sidecar | #4 | `210db62`, `38c9db8`, `bfad750` |
-| Phase 1B: capture + recording rewiring | #5 | `3ed2932`, `49934b8` |
-| Phase 2: test rewrites + gates | #6 | `2c608a2`, `39c7f28` |
-| Phase 2 manual 6DQ | #7 | `d202f49` (docs only — manual evidence deferred) |
-| Phase 3 conditional downmix | #8 | none (not triggered) |
-| Closeout: retrospective + final gates | #9 | this commit |
+| Phase                                  | Tasks | Commits                                          |
+| -------------------------------------- | ----- | ------------------------------------------------ |
+| Pre-req: signing hook fix              | infra | `ff40885`                                        |
+| Phase 0A: AVAssetWriter probes         | #2    | `c2732df`                                        |
+| Phase 0B: live ASR scaffold            | #3    | `91b7ce2`                                        |
+| Phase 0C: downstream readiness         | #10   | `ca519e7`                                        |
+| Phase 1A: dual-track encoder + sidecar | #4    | `210db62`, `38c9db8`, `bfad750`                  |
+| Phase 1B: capture + recording rewiring | #5    | `3ed2932`, `49934b8`                             |
+| Phase 2: test rewrites + gates         | #6    | `2c608a2`, `39c7f28`                             |
+| Phase 2 manual 6DQ                     | #7    | `d202f49` (docs only — manual evidence deferred) |
+| Phase 3 conditional downmix            | #8    | none (not triggered)                             |
+| Closeout: retrospective + final gates  | #9    | this commit                                      |
 
 **Final gates pin (2026-06-25)**:
-
 - `swiftlint --strict Lyre/ LyreTests/` → 0 violations across 36 Swift files.
 - `xcodebuild -project Lyre.xcodeproj -scheme Lyre test` on macOS →
   155 tests in 15 suites passed, 3 known issues (all three are
@@ -908,7 +890,6 @@ they are ready).
   `swiftlint --strict` — all green at HEAD.
 
 **Residual risks not closed by this rollout**:
-
 1. **Task #7 manual 6DQ deferred.** No live 30-second recording,
    QuickTime listening, in-app `AVPlayer` listening, or production
    DashScope multi-track transcript was provided in
@@ -936,14 +917,13 @@ they are ready).
    out of scope for the current rollout.
 
 **Operator hand-off checklist**:
-
 - [ ] Run the manual 6DQ (DQ-1 through DQ-6) — script lives in
-      `#lyre-macos-rebuild:f3202873`.
+  `#lyre-macos-rebuild:f3202873`.
 - [ ] If any DQ fails per the trigger list in `Task #7 6DQ status`,
-      re-open task #8 and design a fallback.
+  re-open task #8 and design a fallback.
 - [ ] If 6DQ passes, push the twelve rollout commits plus this
-      closeout commit (thirteen total) to `origin/main` (or split
-      into PR(s) per local convention) at the operator's discretion.
+  closeout commit (thirteen total) to `origin/main` (or split
+  into PR(s) per local convention) at the operator's discretion.
 
 ## Non-goals
 
@@ -957,7 +937,6 @@ they are ready).
 按以下顺序执行，前一步是后一步的前置门禁（详见会话 task list）：
 
 **Phase 0 — 外部假设验证（阻塞，先做）**
-
 1. 用现有工具（Audacity / ffmpeg / 临时 Swift 脚本）构造一个固定双轨样本 `e2e/fixtures/dual-track-asr.m4a`（track 0 = 短语 A，track 1 = 短语 B）。
 2. 跑 `e2e/api/asr-multitrack.test.ts` 上传到生产 DashScope，断言转写同时包含 A、B 的关键词。
 3. 如果失败 → 切换到 Risk & Fallback 的"停止时离线 mix"路径，并对本计划做相应裁剪。
@@ -972,26 +951,24 @@ they are ready).
    - 结论写进 PR 描述。失败 → "add() 顺序 → tracks 顺序"假设不成立，sidecar 退化为"仅 single-source 可写"，双源场景的 source 识别需另设方案（落到本计划之外的后续 issue）。
 
 **Phase 1 — 代码改造（Phase 0 通过后）**
-
 5. 删除 `AudioMixer.swift` 和 `AudioMixerTests.swift`。
 6. 改造 `AudioEncoder.swift`（双 input + 首帧缓冲 + `min(PTS)` start session + per-track PTS 单调性 + raw buffer append）。
 7. 改造 `AudioCaptureManager.swift`（透传 + 删 drain timer + 两个 output 注册到**专用 serial queue**）。
 8. 修改 `RecordingManager.swift` 接线（两路 callback → encoder 两个入口）。
 
 **Phase 2 — 测试与验收**
-
 9. 写完 **5 个** `AudioEncoderTests` 用例（**全部必跑**，缺一不可）：
-   - 用例 1：双轨基本写入（PTS 起点对齐）
-   - 用例 2：PTS gap 保留（Cause B 回归 —— 此用例必须在 Phase 0 假设 B 验证后落地；若假设 B 不成立则改测 Mitigation B 的 silent fill 行为）
-   - **用例 3：Sample-rate mismatch 重采样**（Cause A 回归，**最可能的根因，绝不能省**）
-   - 用例 4：单轨缺席启动（只喂 system，断言输出为单 track，sidecar 标识 system 来源）
-   - 用例 5：PTS 单调性（逆序 buffer 被丢弃）
+- 用例 1：双轨基本写入（PTS 起点对齐）
+- 用例 2：PTS gap 保留（Cause B 回归 —— 此用例必须在 Phase 0 假设 B 验证后落地；若假设 B 不成立则改测 Mitigation B 的 silent fill 行为）
+- **用例 3：Sample-rate mismatch 重采样**（Cause A 回归，**最可能的根因，绝不能省**）
+- 用例 4：单轨缺席启动（只喂 system，断言输出为单 track，sidecar 标识 system 来源）
+- 用例 5：PTS 单调性（逆序 buffer 被丢弃）
+
 10. `xcodegen generate` + `xcodebuild build` + `xcodebuild test` + `swiftlint Lyre/`，全绿。
 11. 手工验收：录 30 秒"本机说话 + 系统播放视频" → QuickTime / ffprobe 检查 → 上传到生产 DashScope 跑一次确认转写包含本机内容。
 12. 更新 `CLAUDE.md` 的 Retrospective 部分。
 
 **Phase 3（条件触发）**
-
 13. 如果 Phase 2 第 11 步发现 ASR 没识别本机 → 落地 Risk & Fallback 的离线 mix 方案，文件结构变回单轨。
 
 ## References

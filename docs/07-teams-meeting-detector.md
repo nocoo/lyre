@@ -8,7 +8,7 @@
 > **产品指标（哥定）**：
 > 1. 极致轻量、稳定，性能消耗小
 > 2. 提示直接了当，但用户可以极易关掉，且不影响其他任何事情
->
+
 > **架构约束**：**只提示不动作**（录音的启停统一走 `RecordingActionController` 层，
 > tray 与 detector 走同一入口），**不引入新权限**（复用已有的 Screen Recording 授权，
 > 未授权时静默 inactive）。
@@ -32,14 +32,14 @@
 
 ### 为什么这个信号更硬
 
-| 维度 | v1.3 窗口判据 | v2.0 process-tap |
-|---|---|---|
-| Space 切换 | ❌ isOnScreen 翻 false | ✅ 与 UI 无关 |
-| 窗口最小化 | ❌ 同上 | ✅ 同上 |
-| 用户切走视觉焦点 | ⚠️ 依赖 compact view 存在 | ✅ 同上 |
-| Teams 改窗口标题 | ⚠️ 判据需跟改 | ✅ 完全绕开 title |
-| 权限成本 | Screen Recording（已有） | **零**（读进程属性无需授权） |
-| 事件驱动 | ❌ 5s 轮询 | 未来可挂 property listener，本次仍 poll 保架构一致 |
+| 维度             | v1.3 窗口判据             | v2.0 process-tap                                   |
+| ---------------- | ------------------------- | -------------------------------------------------- |
+| Space 切换       | ❌ isOnScreen 翻 false    | ✅ 与 UI 无关                                      |
+| 窗口最小化       | ❌ 同上                   | ✅ 同上                                            |
+| 用户切走视觉焦点 | ⚠️ 依赖 compact view 存在 | ✅ 同上                                            |
+| Teams 改窗口标题 | ⚠️ 判据需跟改             | ✅ 完全绕开 title                                  |
+| 权限成本         | Screen Recording（已有）  | **零**（读进程属性无需授权）                       |
+| 事件驱动         | ❌ 5s 轮询                | 未来可挂 property listener，本次仍 poll 保架构一致 |
 
 **参考实现**（社区已收敛到这一模式）：`moona3k/macparakeet`、`BasedHardware/omi`、`Muesli-HQ/muesli`、`island-io/mila`、`huopolinen/MemorAI`。5 个真在跑的项目全用同一个信号。
 
@@ -81,7 +81,6 @@ if audioActivity.isBundleUsingInput(anyOf: teamsBundleIDs) == true {
 ### Symptom & Product goal
 
 用户使用 Lyre 录 Teams 会议时的两类事故：
-
 1. 会议开始了，人还没反应过来点录音 → 前 5–10 分钟没录到。
 2. 会议结束了，忘了停 → 磁盘 / OSS 上传 / ASR 都在录会后闲聊或屏幕背景音。
 
@@ -111,13 +110,13 @@ detector 会跟着常驻。如果检测机制在 Teams 未运行时也持续消�
 
 ### Signal ranking（按权限成本 & 精度）
 
-| 信号 | 权限 | 用途 |
-|---|---|---|
-| `NSWorkspace.runningApplications` + `didLaunch / didTerminate` 通知 | **无** | 判断 Teams 进程是否存活；控制轮询档位切换 |
-| `SCShareableContent.current` 枚举窗口 | **已有的 Screen Recording**（录音就要） | Teams 会议窗口检测 —— **主判据** |
-| `AXUIElement` / Accessibility API | ⚠️ 用户需在系统设置里手动授权 | **不使用**（`SCShareableContent` 已够用） |
-| CoreAudio HAL `kAudioDevicePropertyDeviceIsRunningSomewhere` | 无 | **不使用**（不是 Teams 特有信号，Slack 通话、系统提示音都会触发） |
-| EventKit calendar | 需要 Calendar 权限 | **不使用**（用户还没允许把日历给 Lyre） |
+| 信号                                                                | 权限                                    | 用途                                                              |
+| ------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------- |
+| `NSWorkspace.runningApplications` + `didLaunch / didTerminate` 通知 | **无**                                  | 判断 Teams 进程是否存活；控制轮询档位切换                         |
+| `SCShareableContent.current` 枚举窗口                               | **已有的 Screen Recording**（录音就要） | Teams 会议窗口检测 —— **主判据**                                  |
+| `AXUIElement` / Accessibility API                                   | ⚠️ 用户需在系统设置里手动授权           | **不使用**（`SCShareableContent` 已够用）                         |
+| CoreAudio HAL `kAudioDevicePropertyDeviceIsRunningSomewhere`        | 无                                      | **不使用**（不是 Teams 特有信号，Slack 通话、系统提示音都会触发） |
+| EventKit calendar                                                   | 需要 Calendar 权限                      | **不使用**（用户还没允许把日历给 Lyre）                           |
 
 **结论**：`NSWorkspace`（控制轮询档位） + `SCShareableContent`（做 Teams 窗口识别）。
 
@@ -145,7 +144,6 @@ extension PermissionManager {
 ```
 
 Detector 在启动 / 每次 warm tick 前读该字段：
-
 - **未授权**：watcher 保持 warm/cold 档位不变，**跳过** `SCShareableContent.current` 调用，
   走 `handleObservationUnavailable()`：**保留 `confirmedActive` 不变**、**不 yield**（避免把
   临时授权缺口误当成 meeting-ended 事件而弹 Stop 提示），**不重复打日志**（每次会话最多一条 info），
@@ -171,14 +169,13 @@ Detector 在启动 / 每次 warm tick 前读该字段：
 
 ### Polling ladder（三档）
 
-| 档位 | 触发条件 | 轮询周期 | 检测动作 |
-|---|---|---|---|
-| **cold** | Teams 进程不在 `runningApplications` 中 | **30 s** | 仅 `NSWorkspace.runningApplications` 扫一次 |
-| **warm** | Teams 运行，但当前判定"无会议" | **5 s** | `SCShareableContent.current` → 匹配 Teams 窗口 → 判会议 |
-| **hot** | 当前判定"会议中" | **5 s** | 同 warm；等 meeting 结束的信号 |
+| 档位     | 触发条件                                | 轮询周期 | 检测动作                                                |
+| -------- | --------------------------------------- | -------- | ------------------------------------------------------- |
+| **cold** | Teams 进程不在 `runningApplications` 中 | **30 s** | 仅 `NSWorkspace.runningApplications` 扫一次             |
+| **warm** | Teams 运行，但当前判定"无会议"          | **5 s**  | `SCShareableContent.current` → 匹配 Teams 窗口 → 判会议 |
+| **hot**  | 当前判定"会议中"                        | **5 s**  | 同 warm；等 meeting 结束的信号                          |
 
 档位切换：
-
 - `cold → warm`：`NSWorkspace.didLaunchApplication` 通知里，`bundleIdentifier ∈ TEAMS_BUNDLE_IDS`
   → 立即切档，无需等下一个 30s tick。
 - `warm → cold`：`NSWorkspace.didTerminateApplication` 通知里，Teams 进程消失 → 立即切档。
@@ -214,7 +211,6 @@ onScreenCandidates =
 #### 判据（v1.3 收紧）
 
 只对 `onScreenCandidates` 应用规则；**任一命中即 active**（保留双判据的耐磨性，但每一条都收紧）：
-
 1. **数量判据（收紧）**：`onScreenCandidates.count >= 2`。要求两个 candidate 都已经过 on-screen + 尺寸达标过滤。Teams 平常 idle 只会有 1 个 on-screen 主窗；开会时会额外弹一个独立的、on-screen、大尺寸的会议窗口，仍能命中。
 2. **标题槽位判据（收紧）**：不再对整个 title 做 `contains("meeting")` 或简单后缀命中。改为**槽位化匹配**：
    - 用 " | "（U+0020 竖线 U+0020）分割 title，取第一段（即 Teams 用来放"会议主题"或"频道名"的槽位），记为 `head`。
@@ -250,7 +246,6 @@ onScreenCandidates =
 或者 tick 恰好落在窗口 close 的中间）。**必须去抖**，否则会出现"弹了又收又弹"的骚扰。
 
 规则（watcher 内部）：
-
 - 维护 `lastRawJudgement: Bool?`，代表"上一 tick 的原始判定"。
 - 维护 `confirmedActive: Bool?`，代表"已确认的会议状态"。
 - **只有连续 2 个 tick 的 raw 判定一致，才把 `confirmedActive` 切换到该值**。切换成功后，
@@ -275,7 +270,6 @@ change from baseline that is active"的特殊 event，coordinator 增加一条 g
 ### Per-meeting suppression
 
 一场会议内**最多弹一次**每种提示：
-
 - 一次 `false→true` 切换 → 弹一次"开始录音"提示，无论用户按什么，本次会议不再弹（防连续骚扰）。
 - 一次 `true→false` 切换 → 弹一次"停止录音"提示，同样只弹一次。
 - 下一场会议（重新经历 `false→true`）→ 抑制标记复位，重新有资格弹。
@@ -288,7 +282,6 @@ change from baseline that is active"的特殊 event，coordinator 增加一条 g
 必须**丢弃**而非排队，否则用户会看到"关一个还有一个"的骚扰。
 
 规则：
-
 - Coordinator 维护 `isPromptPresented: Bool`。
 - 收到 event 时，先检查 `isPromptPresented` 与 per-meeting suppression；任一命中就丢弃。
 - 弹 alert 前置 `isPromptPresented = true`；`runModal()` 返回后（defer）复位。
@@ -299,12 +292,42 @@ change from baseline that is active"的特殊 event，coordinator 增加一条 g
 
 不是每次 meeting 状态跨越都要弹：
 
-| meeting 变化 | `recorder.state` | 是否弹 | 弹什么 |
-|---|---|---|---|
-| `false → true`（开始） | `.idle` | ✅ | "Teams 会议已开始，是否开始录音？" [Start recording] [Not now] |
-| `false → true`（开始） | `.recording` | ❌ | 用户已经在录，不打扰 |
-| `true → false`（结束） | `.recording` | ✅ | "Teams 会议已结束，是否停止录音？" [Stop recording] [Keep recording] |
-| `true → false`（结束） | `.idle` | ❌ | 用户根本没录，不打扰 |
+<table>
+<thead>
+<tr>
+<th>meeting 变化</th>
+<th><code>recorder.state</code></th>
+<th>是否弹</th>
+<th>弹什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>false → true</code>（开始）</td>
+<td><code>.idle</code></td>
+<td>✅</td>
+<td>"Teams 会议已开始，是否开始录音？" [Start recording] [Not now]</td>
+</tr>
+<tr>
+<td><code>false → true</code>（开始）</td>
+<td><code>.recording</code></td>
+<td>❌</td>
+<td>用户已经在录，不打扰</td>
+</tr>
+<tr>
+<td><code>true → false</code>（结束）</td>
+<td><code>.recording</code></td>
+<td>✅</td>
+<td>"Teams 会议已结束，是否停止录音？" [Stop recording] [Keep recording]</td>
+</tr>
+<tr>
+<td><code>true → false</code>（结束）</td>
+<td><code>.idle</code></td>
+<td>❌</td>
+<td>用户根本没录，不打扰</td>
+</tr>
+</tbody>
+</table>
 
 **读取时机**：只在收到 event 时读取一次 `recorder.state`，不做长期观察（避免因
 `RecordingManager` 无 MainActor 隔离带来的读写竞争，见 [并发说明](#并发说明v1-新增来自我的补充点-b-d)）。
@@ -1074,29 +1097,29 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 
 ### Unit tests
 
-| 测试 | 操作 |
-|---|---|
-| `TeamsMeetingWatcherTests.judgeMeeting_count_only_onscreen_and_sized` | 两个窗都 on-screen + 尺寸达标 + 非 excluded → true；其中一个 offscreen → false；其中一个 100×100 → false。**回归 F1 + F3** |
-| `TeamsMeetingWatcherTests.judgeMeeting_title_slot_positive` | 单窗（on-screen + 达标），title 分别为 `"Meeting in Sprint \| Microsoft Teams"` / `"Alice's Meeting \| Microsoft Teams"` / `"会议 \| Microsoft Teams"` → 全 true |
+| 测试                                                                    | 操作                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TeamsMeetingWatcherTests.judgeMeeting_count_only_onscreen_and_sized`   | 两个窗都 on-screen + 尺寸达标 + 非 excluded → true；其中一个 offscreen → false；其中一个 100×100 → false。**回归 F1 + F3**                                                                                                                                                                     |
+| `TeamsMeetingWatcherTests.judgeMeeting_title_slot_positive`             | 单窗（on-screen + 达标），title 分别为 `"Meeting in Sprint \| Microsoft Teams"` / `"Alice's Meeting \| Microsoft Teams"` / `"会议 \| Microsoft Teams"` → 全 true                                                                                                                               |
 | `TeamsMeetingWatcherTests.judgeMeeting_title_slot_negative_regressions` | **F2 回归**：单窗（on-screen + 达标），title 分别为 `"Chat \| Calling/Meeting/Devices \| General \| Microsoft Teams"` / `"讨论 \| Microsoft Teams"` / `"Random Chat"` / `"Foo Meeting Bar \| Microsoft Teams"`（head 是 "foo meeting bar"，不以 meeting 开头也不以 's meeting 结尾）→ 全 false |
-| `TeamsMeetingWatcherTests.judgeMeeting_excluded_titles_v13` | 两个 on-screen + 达标 candidates，一个是 `"Teams NRC"`（1×1 也算，但被白名单排除）、一个是 `"Select a certificate for authentication"` → 排除后 candidates=0 → false。**F3 回归** |
-| `TeamsMeetingWatcherTests.judgeMeeting_offscreen_helpers_ignored` | 15 个 ShareableWindow：14 个 offscreen renderer/helper（frame=3360×30 空 title、45×19、84×77、1×1 Teams NRC）+ 1 个 on-screen 达标的 `"Chat \| ... \| Microsoft Teams"` → false（还原 Phase 0 idle 场景） |
-| `TeamsMeetingWatcherTests.judgeMeeting_meeting_plus_chat_yields_true` | on-screen 达标：主窗 `"Chat \| ... \| Microsoft Teams"`（不命中标题槽位）+ 单独会议窗 `"<subject> \| Microsoft Teams"`（也不命中标题槽位，但数量 = 2）→ true（正样本，会议中）|
-| `TeamsMeetingWatcherTests.baseline_does_not_yield` | Fake providers 让首次 tick 判 true → `meetingEvents` 30ms 内**无** yield，`confirmedActive == true`（读取内部 seam 或通过后续状态验证） |
-| `TeamsMeetingWatcherTests.debounce_switch` | 序列 `[true, false, true, true]` → yield 序列应为 `[]`（前 3 tick 都在两两不一致中，第 4 tick `lastRaw==true && confirmed(baseline=true)!=true` 也不动） → 更换测试案例：baseline=false，然后 `[true, true]` → yield `[true]`；再 `[false, false]` → yield `[false]` |
-| `TeamsMeetingWatcherTests.sck_unauthorized_silent` | Fake permissions `screenCaptureGranted = false` → tick 不调 SCK provider，`sckUnauthorizedLogged` 只置位一次，`confirmedActive == false` |
-| `TeamsMeetingWatcherTests.teams_terminate_forces_false` | baseline=true → NSWorkspace 触发 didTerminate → 立即 yield `false` |
-| `MeetingPromptCoordinatorTests.start_prompt_gating_idle` | action.state=.idle → 塞一个 true event → `presenter.presentChoice` 被调一次，参数为 start prompt 文案；返回 true → `action.requestStart` 被调 |
-| `MeetingPromptCoordinatorTests.no_start_when_recording` | action.state=.recording → 塞 true event → 不调 presenter |
-| `MeetingPromptCoordinatorTests.no_stop_when_idle` | action.state=.idle → 塞 false event → 不调 presenter |
-| `MeetingPromptCoordinatorTests.one_prompt_per_meeting` | idle → 塞 true → 弹一次；再塞 true → 不弹（同一场会议内被抑制） |
-| `MeetingPromptCoordinatorTests.single_alert_gate` | 让 presenter 的 `presentChoice` 阻塞 → 期间塞第二个 event → 不弹第二次；presenter 返回后再塞事件走正常流程 |
-| `MeetingPromptCoordinatorTests.settings_disabled_silent` | settings.isEnabled=false → 塞事件 → 不弹（coordinator 内 handle 首行 guard 直接吞掉；watcher lifecycle 由 LyreApp 负责，coordinator 只做静默） |
-| `RecordingActionControllerTests.start_updates_elapsed` | requestStart 成功 → elapsedTimer 启动、elapsedDisplay 更新序列可观察 |
-| `RecordingActionControllerTests.stop_refreshes_store` | requestStop 成功 → recordingsStore.refresh 被调，参数是 recorder 返回的 URL |
-| `RecordingActionControllerTests.start_alerts_on_error` | mock recorder 抛错 → alertPresenter.presentError 被调 |
-| `RecordingActionControllerTests.double_start_is_noop` | recorder.state=.recording → requestStart 直接 return，不调 recorder.startRecording |
-| `AlertPresenterTests`（optional） | 保持 NSAlertPresenter 只是薄封装；如引入正式测试，用 UI test 或跳过 |
+| `TeamsMeetingWatcherTests.judgeMeeting_excluded_titles_v13`             | 两个 on-screen + 达标 candidates，一个是 `"Teams NRC"`（1×1 也算，但被白名单排除）、一个是 `"Select a certificate for authentication"` → 排除后 candidates=0 → false。**F3 回归**                                                                                                              |
+| `TeamsMeetingWatcherTests.judgeMeeting_offscreen_helpers_ignored`       | 15 个 ShareableWindow：14 个 offscreen renderer/helper（frame=3360×30 空 title、45×19、84×77、1×1 Teams NRC）+ 1 个 on-screen 达标的 `"Chat \| ... \| Microsoft Teams"` → false（还原 Phase 0 idle 场景）                                                                                      |
+| `TeamsMeetingWatcherTests.judgeMeeting_meeting_plus_chat_yields_true`   | on-screen 达标：主窗 `"Chat \| ... \| Microsoft Teams"`（不命中标题槽位）+ 单独会议窗 `"<subject> \| Microsoft Teams"`（也不命中标题槽位，但数量 = 2）→ true（正样本，会议中）                                                                                                                 |
+| `TeamsMeetingWatcherTests.baseline_does_not_yield`                      | Fake providers 让首次 tick 判 true → `meetingEvents` 30ms 内**无** yield，`confirmedActive == true`（读取内部 seam 或通过后续状态验证）                                                                                                                                                        |
+| `TeamsMeetingWatcherTests.debounce_switch`                              | 序列 `[true, false, true, true]` → yield 序列应为 `[]`（前 3 tick 都在两两不一致中，第 4 tick `lastRaw==true && confirmed(baseline=true)!=true` 也不动） → 更换测试案例：baseline=false，然后 `[true, true]` → yield `[true]`；再 `[false, false]` → yield `[false]`                           |
+| `TeamsMeetingWatcherTests.sck_unauthorized_silent`                      | Fake permissions `screenCaptureGranted = false` → tick 不调 SCK provider，`sckUnauthorizedLogged` 只置位一次，`confirmedActive == false`                                                                                                                                                       |
+| `TeamsMeetingWatcherTests.teams_terminate_forces_false`                 | baseline=true → NSWorkspace 触发 didTerminate → 立即 yield `false`                                                                                                                                                                                                                             |
+| `MeetingPromptCoordinatorTests.start_prompt_gating_idle`                | action.state=.idle → 塞一个 true event → `presenter.presentChoice` 被调一次，参数为 start prompt 文案；返回 true → `action.requestStart` 被调                                                                                                                                                  |
+| `MeetingPromptCoordinatorTests.no_start_when_recording`                 | action.state=.recording → 塞 true event → 不调 presenter                                                                                                                                                                                                                                       |
+| `MeetingPromptCoordinatorTests.no_stop_when_idle`                       | action.state=.idle → 塞 false event → 不调 presenter                                                                                                                                                                                                                                           |
+| `MeetingPromptCoordinatorTests.one_prompt_per_meeting`                  | idle → 塞 true → 弹一次；再塞 true → 不弹（同一场会议内被抑制）                                                                                                                                                                                                                                |
+| `MeetingPromptCoordinatorTests.single_alert_gate`                       | 让 presenter 的 `presentChoice` 阻塞 → 期间塞第二个 event → 不弹第二次；presenter 返回后再塞事件走正常流程                                                                                                                                                                                     |
+| `MeetingPromptCoordinatorTests.settings_disabled_silent`                | settings.isEnabled=false → 塞事件 → 不弹（coordinator 内 handle 首行 guard 直接吞掉；watcher lifecycle 由 LyreApp 负责，coordinator 只做静默）                                                                                                                                                 |
+| `RecordingActionControllerTests.start_updates_elapsed`                  | requestStart 成功 → elapsedTimer 启动、elapsedDisplay 更新序列可观察                                                                                                                                                                                                                           |
+| `RecordingActionControllerTests.stop_refreshes_store`                   | requestStop 成功 → recordingsStore.refresh 被调，参数是 recorder 返回的 URL                                                                                                                                                                                                                    |
+| `RecordingActionControllerTests.start_alerts_on_error`                  | mock recorder 抛错 → alertPresenter.presentError 被调                                                                                                                                                                                                                                          |
+| `RecordingActionControllerTests.double_start_is_noop`                   | recorder.state=.recording → requestStart 直接 return，不调 recorder.startRecording                                                                                                                                                                                                             |
+| `AlertPresenterTests`（optional）                                       | 保持 NSAlertPresenter 只是薄封装；如引入正式测试，用 UI test 或跳过                                                                                                                                                                                                                            |
 
 **注入策略**（v1.1 修订，Reviewer 二轮 #2）：
 - `TeamsMeetingWatcher`：`RunningAppsProviding` / `ShareableContentProviding` /
@@ -1141,14 +1164,14 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 
 ## Risk & Fallback
 
-| 风险 | 触发条件 | 降级 |
-|---|---|---|
-| 窗口标题格式再次变化 | Microsoft 改 New Teams 会议窗口标题 | 数量判据仍生效；DQ-4 定期回归 |
-| SCK 权限被撤销 | 用户在系统设置撤销 Screen Recording | 一次性告警 + 静默 inactive；录音本身仍走现有引导 |
-| Alert 被埋（Teams 全屏 + 另一 Space） | 见 [AlertPresenter](#alertpresenter) | `NSApp.activate(ignoringOtherApps: true)` 前置；产品选择"直接了当" |
-| 假阳性太多 | DQ-4 观察到边缘 case | v1.3 已消除 **Phase 0 实测确认**的 3 类 false positive：idle 主窗标题被 `Meeting` 关键词/后缀打穿（F2）、offscreen renderer/helper 打穿 `count>=2`（F1）、`Teams NRC` / certificate 弹窗打穿（F3）。**尚未消除**：用户打开 Teams Chat / Calendar 独立窗口时，main + popout 形成两个 on-screen + 大尺寸 candidates → v1.3 数量判据仍会命中。这是**待验证风险**，由 DQ-4 手工验证；如频繁误报走 C10 收紧 |
-| Teams 崩溃 → 进程还在但无窗口 | 极少见 | warm tick 检测不到窗口 → 平滑降 inactive → 若正在录音会弹 Stop prompt，用户按 Keep recording 即可 |
-| 抖动导致 miss stop prompt | Start prompt 弹开阻塞时会议结束 | 由 `.bufferingNewest(1)` 决定：只丢一次；用户可从 tray 手动 stop（DQ-9 已确保入口一致） |
+| 风险                                  | 触发条件                             | 降级                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 窗口标题格式再次变化                  | Microsoft 改 New Teams 会议窗口标题  | 数量判据仍生效；DQ-4 定期回归                                                                                                                                                                                                                                                                                                                                                                          |
+| SCK 权限被撤销                        | 用户在系统设置撤销 Screen Recording  | 一次性告警 + 静默 inactive；录音本身仍走现有引导                                                                                                                                                                                                                                                                                                                                                       |
+| Alert 被埋（Teams 全屏 + 另一 Space） | 见 [AlertPresenter](#alertpresenter) | `NSApp.activate(ignoringOtherApps: true)` 前置；产品选择"直接了当"                                                                                                                                                                                                                                                                                                                                     |
+| 假阳性太多                            | DQ-4 观察到边缘 case                 | v1.3 已消除 **Phase 0 实测确认**的 3 类 false positive：idle 主窗标题被 `Meeting` 关键词/后缀打穿（F2）、offscreen renderer/helper 打穿 `count>=2`（F1）、`Teams NRC` / certificate 弹窗打穿（F3）。**尚未消除**：用户打开 Teams Chat / Calendar 独立窗口时，main + popout 形成两个 on-screen + 大尺寸 candidates → v1.3 数量判据仍会命中。这是**待验证风险**，由 DQ-4 手工验证；如频繁误报走 C10 收紧 |
+| Teams 崩溃 → 进程还在但无窗口         | 极少见                               | warm tick 检测不到窗口 → 平滑降 inactive → 若正在录音会弹 Stop prompt，用户按 Keep recording 即可                                                                                                                                                                                                                                                                                                      |
+| 抖动导致 miss stop prompt             | Start prompt 弹开阻塞时会议结束      | 由 `.bufferingNewest(1)` 决定：只丢一次；用户可从 tray 手动 stop（DQ-9 已确保入口一致）                                                                                                                                                                                                                                                                                                                |
 
 ## Non-goals
 
@@ -1168,19 +1191,19 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 `xcodebuild -scheme Lyre -destination 'platform=macOS' test` +
 `swiftlint lint apps/macos/Lyre/`。
 
-| # | Commit | 内容 | 验证 |
-|---|--------|------|------|
-| C1 | `docs(macos): draft teams meeting detector spec` | 现有 `docs/07-teams-meeting-detector.md` v0（已提交 `3d600f9`） | 文档评审 |
-| C2 | `docs(macos): refine teams detector spec after joint review` | 本文档 v1 | 文档评审 |
-| C3 | `chore(macos): capture teams window shape probe results` | Phase 0 探针脚本 + 附录（Teams 主/会议/Chat/Settings/Calendar 窗口 title 观察值），落到 docs/07 附录 | 文档 review |
-| C4 | `refactor(macos): extract RecordingActionController and recording seams for tray + detector` | v1.1 修订：扩展 `RecordingPermissions` 增加 `screenCaptureGranted`（`PermissionManager` extension 实现）；新增 `RecordingLifecycleManaging` / `RecordingsRefreshing` 两个窄协议（`RecordingManager` / `RecordingsStore` 通过 extension conform）；新增 `Recording/RecordingActionController.swift` + `Meeting/AlertPresenter.swift`；把 tray 现有 elapsed timer / store refresh / error alert 迁进 controller；TrayMenu 依赖 `@Bindable var actionController: RecordingActionController`（concrete，让 SwiftUI 观察生效）；`LyreApp` 在 init 里构造 controller 并传入 tray。同时补 `RecordingActionControllerTests`（走新协议 fake）。 | `xcodebuild build & test` — 新单测全绿 + 现有 tray/manager 测试仍绿；本机手动录一段验证 tray 显示、Recordings 刷新 |
-| C5 | `feat(macos): add meeting detection settings + settings ui toggle` | `Meeting/MeetingDetectionSettings.swift` + `SettingsView.swift` 追加 Section + `LyreApp` 持有 `MeetingDetectionSettings` 并传入 `SettingsView` | `xcodebuild build`；打开 Settings 看到开关 |
-| C6 | `feat(macos): add teams meeting watcher with provider seams` | `Meeting/TeamsMeetingWatcher.swift` + `Meeting/ShareableWindow.swift`（v1.3 携带 `isOnScreen` + `frame`）+ 两个 provider concrete impl；watcher 用 `start()` / `suspend()` / `resume()` / `stopAndFinish()` 生命周期，`meetingEvents: AsyncStream<Bool>` 只 yield 已确认的状态变化；SCK 未授权时读 `permissions.screenCaptureGranted` 静默；`judgeMeeting` 按 v1.3 收紧契约实现（on-screen + 尺寸达标前置过滤 + 标题槽位判据 + v1.3 excludedTitles）。新增 `TeamsMeetingWatcherTests` 全部用例（v1.3 6 条 judge regression + debounce + baseline 不 yield + SCK 未授权静默 + didTerminate 强制 false + suspend 后 resume 能继续消费） | `xcodebuild test` — 新测试全绿；F1/F2/F3 三条 Phase 0 regression 全部通过 |
-| C7 | `feat(macos): add prompt coordinator with alert presenter tests` | `Meeting/MeetingPromptCoordinator.swift` + 复用 `AlertPresenter.swift`；`MeetingPromptCoordinatorTests` 全部用例；测试用 fake watcher + fake presenter + fake action | `xcodebuild test` — 新测试全绿 |
-| C8 | `feat(macos): wire meeting detector into LyreApp with off-switch handling` | `LyreApp.swift` 构造 watcher/coordinator（coordinator init 后始终 start），`onChange(of: meetingSettings.isEnabled)` 驱动 **watcher suspend/resume**；DQ-1/DQ-6 打点 log | `xcodebuild build & test`；DQ-1/DQ-6 手动 |
-| C9 | `docs(macos): record DQ manual acceptance results` | DQ-1 到 DQ-9 手工验收记录写入 docs/07 附录；若发现假阳性率高，跟随一个 tightening commit | 文档 review |
-| C10（条件） | `feat(macos): tighten meeting judgement heuristic` | 仅在 C9 DQ 观察到 v1.3 未覆盖的假阳性时触发。**v1.3 已消除的**：Phase 0 F1/F2/F3（offscreen helper / idle chat 频道标题 / cert 弹窗）；**v1.3 未消除的**：Teams Chat / Calendar 独立弹窗形成的 count>=2、以及未来 Teams 新版本改标题/新弹窗形态。C10 处理这些边缘 case（例如：数量判据加"其中一个必须 head 命中标题槽位"、追加 `excludedTitles`、按窗口 z-order 或 activation 时间进一步过滤） | 相应新单测 + `xcodebuild test` |
-| C11 | `chore: update CLAUDE.md retrospective (if any macOS API learnings)` | 若 C6/C7/C8 学到 `SCShareableContent` / `AsyncStream` / `NSAlert` 的坑，写到 retrospective | — |
+| #           | Commit                                                                                       | 内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 验证                                                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| C1          | `docs(macos): draft teams meeting detector spec`                                             | 现有 `docs/07-teams-meeting-detector.md` v0（已提交 `3d600f9`）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 文档评审                                                                                                           |
+| C2          | `docs(macos): refine teams detector spec after joint review`                                 | 本文档 v1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 文档评审                                                                                                           |
+| C3          | `chore(macos): capture teams window shape probe results`                                     | Phase 0 探针脚本 + 附录（Teams 主/会议/Chat/Settings/Calendar 窗口 title 观察值），落到 docs/07 附录                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 文档 review                                                                                                        |
+| C4          | `refactor(macos): extract RecordingActionController and recording seams for tray + detector` | v1.1 修订：扩展 `RecordingPermissions` 增加 `screenCaptureGranted`（`PermissionManager` extension 实现）；新增 `RecordingLifecycleManaging` / `RecordingsRefreshing` 两个窄协议（`RecordingManager` / `RecordingsStore` 通过 extension conform）；新增 `Recording/RecordingActionController.swift` + `Meeting/AlertPresenter.swift`；把 tray 现有 elapsed timer / store refresh / error alert 迁进 controller；TrayMenu 依赖 `@Bindable var actionController: RecordingActionController`（concrete，让 SwiftUI 观察生效）；`LyreApp` 在 init 里构造 controller 并传入 tray。同时补 `RecordingActionControllerTests`（走新协议 fake）。 | `xcodebuild build & test` — 新单测全绿 + 现有 tray/manager 测试仍绿；本机手动录一段验证 tray 显示、Recordings 刷新 |
+| C5          | `feat(macos): add meeting detection settings + settings ui toggle`                           | `Meeting/MeetingDetectionSettings.swift` + `SettingsView.swift` 追加 Section + `LyreApp` 持有 `MeetingDetectionSettings` 并传入 `SettingsView`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `xcodebuild build`；打开 Settings 看到开关                                                                         |
+| C6          | `feat(macos): add teams meeting watcher with provider seams`                                 | `Meeting/TeamsMeetingWatcher.swift` + `Meeting/ShareableWindow.swift`（v1.3 携带 `isOnScreen` + `frame`）+ 两个 provider concrete impl；watcher 用 `start()` / `suspend()` / `resume()` / `stopAndFinish()` 生命周期，`meetingEvents: AsyncStream<Bool>` 只 yield 已确认的状态变化；SCK 未授权时读 `permissions.screenCaptureGranted` 静默；`judgeMeeting` 按 v1.3 收紧契约实现（on-screen + 尺寸达标前置过滤 + 标题槽位判据 + v1.3 excludedTitles）。新增 `TeamsMeetingWatcherTests` 全部用例（v1.3 6 条 judge regression + debounce + baseline 不 yield + SCK 未授权静默 + didTerminate 强制 false + suspend 后 resume 能继续消费）  | `xcodebuild test` — 新测试全绿；F1/F2/F3 三条 Phase 0 regression 全部通过                                          |
+| C7          | `feat(macos): add prompt coordinator with alert presenter tests`                             | `Meeting/MeetingPromptCoordinator.swift` + 复用 `AlertPresenter.swift`；`MeetingPromptCoordinatorTests` 全部用例；测试用 fake watcher + fake presenter + fake action                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `xcodebuild test` — 新测试全绿                                                                                     |
+| C8          | `feat(macos): wire meeting detector into LyreApp with off-switch handling`                   | `LyreApp.swift` 构造 watcher/coordinator（coordinator init 后始终 start），`onChange(of: meetingSettings.isEnabled)` 驱动 **watcher suspend/resume**；DQ-1/DQ-6 打点 log                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `xcodebuild build & test`；DQ-1/DQ-6 手动                                                                          |
+| C9          | `docs(macos): record DQ manual acceptance results`                                           | DQ-1 到 DQ-9 手工验收记录写入 docs/07 附录；若发现假阳性率高，跟随一个 tightening commit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 文档 review                                                                                                        |
+| C10（条件） | `feat(macos): tighten meeting judgement heuristic`                                           | 仅在 C9 DQ 观察到 v1.3 未覆盖的假阳性时触发。**v1.3 已消除的**：Phase 0 F1/F2/F3（offscreen helper / idle chat 频道标题 / cert 弹窗）；**v1.3 未消除的**：Teams Chat / Calendar 独立弹窗形成的 count>=2、以及未来 Teams 新版本改标题/新弹窗形态。C10 处理这些边缘 case（例如：数量判据加"其中一个必须 head 命中标题槽位"、追加 `excludedTitles`、按窗口 z-order 或 activation 时间进一步过滤）                                                                                                                                                                                                                                         | 相应新单测 + `xcodebuild test`                                                                                     |
+| C11         | `chore: update CLAUDE.md retrospective (if any macOS API learnings)`                         | 若 C6/C7/C8 学到 `SCShareableContent` / `AsyncStream` / `NSAlert` 的坑，写到 retrospective                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —                                                                                                                  |
 
 **约束**：
 - 每个 commit 都必须能过 pre-commit hook（`xcodebuild` + `swiftlint`）；C4 之后每步都
@@ -1249,7 +1272,6 @@ Phase 0 就是为暴露这类问题而存在。以下发现直接影响 C6 / C10
 ### 建议的判据修正（写进 C6 或 C10 决策依据）
 
 Phase 0 探针的输出直接推翻了"任一命中即算 active，宁误弹"的定案；实际观测到的 idle false positive 意味着若 C6 按当前文档实现，用户会在**打开 Teams 时立即被打扰**。给两条候选路径供 Reviewer / 哥 决策：
-
 - **路径 A（保守推荐）**：把 F1 + F2 + F3 的修正合并进 **C6**，避免 C6 上线即成已知 broken。具体：
   1. `judgeMeeting` 前置过滤：**只保留 `isOnScreen == true` 且 `frame.width >= 200 && frame.height >= 200` 的窗口作为 candidates**。这一步就消除了 F1 + F3。
   2. 收紧关键词判据：不再单独用 `contains("meeting")` / 后缀判据；改为**必须同时**满足"`title` 命中 `meetingTitleSuffix` **且** `title` 前缀（split by `|` 的第一段）命中 `meetingTitleKeywords` 或形如 `<subject>` / `<name>'s Meeting`"。用 " | " 拆分标题的第一段作为会议主题槽位，从而排除 Chat 频道名里出现的 "meeting" 字样。
@@ -1261,15 +1283,15 @@ Phase 0 探针的输出直接推翻了"任一命中即算 active，宁误弹"的
 
 ### 待补充的观察项（授权后重跑时填写）
 
-| 场景 | Teams 主窗数量 | 会议窗标题样例 | count 判据命中 | 关键词判据命中 | 备注 |
-|------|---------------|----------------|----------------|----------------|------|
-| **空闲（idle，主窗展示 Chat 频道）** | 15（14 excluded/offscreen + 1 on-screen 主窗） | `Chat \| Calling/Meeting/Devices \| General \| Microsoft Teams` | ✅（当前，误报） | ✅（关键词 + 后缀双中，误报） | **F1 + F2 + F3 已确认** |
-| 打开 Chat 独立弹窗 | 待测 | | | | |
-| 打开 Calendar 独立弹窗 | 待测 | | | | |
-| 打开 Settings 独立弹窗 | 待测 | | | | |
-| 正在开会 | 待测 | | | | |
-| 会议 + Chat 弹窗 | 待测 | | | | |
-| 签退/证书选择弹窗中 | 会出现 2 个 `Select a certificate for authentication` | — | ✅（当前，误报） | ❌ | F3 已确认 |
+| 场景                                 | Teams 主窗数量                                        | 会议窗标题样例                                                  | count 判据命中   | 关键词判据命中                | 备注                    |
+| ------------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------- | ---------------- | ----------------------------- | ----------------------- |
+| **空闲（idle，主窗展示 Chat 频道）** | 15（14 excluded/offscreen + 1 on-screen 主窗）        | `Chat \| Calling/Meeting/Devices \| General \| Microsoft Teams` | ✅（当前，误报） | ✅（关键词 + 后缀双中，误报） | **F1 + F2 + F3 已确认** |
+| 打开 Chat 独立弹窗                   | 待测                                                  |                                                                 |                  |                               |                         |
+| 打开 Calendar 独立弹窗               | 待测                                                  |                                                                 |                  |                               |                         |
+| 打开 Settings 独立弹窗               | 待测                                                  |                                                                 |                  |                               |                         |
+| 正在开会                             | 待测                                                  |                                                                 |                  |                               |                         |
+| 会议 + Chat 弹窗                     | 待测                                                  |                                                                 |                  |                               |                         |
+| 签退/证书选择弹窗中                  | 会出现 2 个 `Select a certificate for authentication` | —                                                               | ✅（当前，误报） | ❌                            | F3 已确认               |
 
 ### 判据校准记录
 
@@ -1441,7 +1463,6 @@ log 差异清楚验证了：
 ### v1.2 → v1.3 修订项（Phase 0 触发，Reviewer 定案 C3.5）
 
 Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次运行发现 idle 状态即被判 active（详见 [Appendix A](#appendix-a--phase-0-sckteams-window-probe-c3)）。Reviewer 定案：**判据契约变更必须在 C6 实现前用一个 doc-only 原子提交锁住，不能埋进 C6 implementation commit**。C3.5 (task #13) 落地本 v1.3：
-
 1. **前置过滤强制 `isOnScreen == true` + `frame >= 200×200`** — 消除 F1（offscreen renderer 打穿 count>=2）+ F3 里 1×1 / 小 helper 打穿的情况。
 2. **`ShareableWindow` 契约扩展**：新增 `isOnScreen: Bool` + `frame: CGRect` 字段；provider 必须携带，C6 概念代码同步更新。
 3. **标题槽位判据（收紧）**：不再对 title 做简单 `contains("meeting")` / 单独后缀命中；改为**同时**要求 title 命中 suffix + `head`（用 " | " 拆的第一段）是"会议主题"形态（`meeting…` 开头 / `'s meeting` 结尾 / 完全等于 `meeting`/`会议`/`會議`/`会议中`）。消除 F2（`Chat | ... | Microsoft Teams` 打穿）。
@@ -1453,8 +1474,8 @@ Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次
 ### v1.1 → v1.2 修订项
 
 来自 @MBP-Reviewer-A 2026-07-06 三轮审查（本 lyre-teams 线程 msg=586708d0），已合并：
-
 1. **Coordinator 依赖窄协议 `MeetingEventProviding`**（Reviewer 三轮 #1）：v1.1 里 coordinator init 参数是 concrete `TeamsMeetingWatcher`（final class），与"测试用 fake watcher + `feedEvent(_:)`" 冲突。新增：
+
    ```swift
    @MainActor
    protocol MeetingEventProviding: AnyObject {
@@ -1462,13 +1483,13 @@ Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次
    }
    extension TeamsMeetingWatcher: MeetingEventProviding {}
    ```
+
    Coordinator 内部持 `MeetingEventProviding` 类型。C7 测试的 fake watcher 只实现该 protocol 并暴露 `feedEvent(_:)`。
 2. **Settings lifecycle 文案统一**（Reviewer 三轮 #2）：撤掉"LyreApp 调 coordinator.start/stop"残留矛盾。定案统一为：**Coordinator 一次 start 就 App 生命周期内不停**；LyreApp 的 `.onChange` **只驱动 watcher suspend/resume**。C8 提交描述同步更新。
 
 ### v1 → v1.1 修订项
 
 来自 @MBP-Reviewer-A 2026-07-06 二轮审查（本 lyre-teams 线程 msg=3b0d5c04），全部合并：
-
 1. **`RecordingActionHandling` 少 `elapsedDisplay` + TrayMenu 不应只拿 protocol**（Reviewer 二轮 #1）：
    - TrayMenu 依赖类型改为 concrete `@Bindable var actionController: RecordingActionController`，让 SwiftUI 对 `elapsedDisplay` / `state` 的 `@Observable` 观察生效。
    - `RecordingActionHandling` protocol 保留窄面（`state / requestStart / requestStop`），只给 coordinator 用。
@@ -1495,15 +1516,14 @@ Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次
 
 来自 @MBP-Reviewer-A 2026-07-06 首轮审查（本 lyre-teams 线程 msg=6e6d64d4）+ 我的独立扫码
 补充 A-D + 联合 Q1/Q2 定案，全部合并：
-
 1. **抽 `RecordingActionController`（Q1 定案）** — 解决 detector 绕过 tray 现有副作用
    （elapsed timer、`recordingsStore.refresh`）导致 UI 不同步的 bug。TrayMenu 和
    Coordinator 都走 `RecordingActionHandling` protocol；controller 由 LyreApp 拥有。
 2. **Settings 路径与接线** — 撤销不存在的 `Views/Settings/GeneralSettingsView.swift`；
    改到现有 `Views/SettingsView.swift` 追加 Section；LyreApp 明确列出所有新增 `@State`。
 3. **测试 seam** — Provider protocol（`RunningAppsProviding` / `ShareableContentProviding`）
-   + `AlertPresenting` + `RecordingActionHandling`；watcher 判据抽 static
-   `judgeMeeting(from:)`。
+   - `AlertPresenting` + `RecordingActionHandling`；watcher 判据抽 static
+     `judgeMeeting(from:)`。
 4. **SCK 未授权路径** — 静默 inactive、一次性告警、不主动拉引导、不弹会议提示。
 5. **启动语义统一** — Baseline 只 seed 内部状态，不 yield；启动时会议中不弹。相关表述
    全部改成 baseline-first。

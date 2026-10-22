@@ -16,15 +16,15 @@ via speaker output). The recording is saved locally as M4A/AAC.
 
 ## Technical Decisions
 
-| Decision            | Choice                                 |
-|---------------------|----------------------------------------|
-| UI framework        | SwiftUI (`MenuBarExtra`) + AppKit glue |
-| Minimum macOS       | 15.0 (full ScreenCaptureKit support)   |
-| Audio encoding      | AVFoundation (AAC/M4A, zero deps)      |
-| Build system        | Xcode project (`xcodebuild` CLI)       |
-| Networking          | URLSession (async/await)               |
-| Project location    | Replace `apps/macos/`                  |
-| Migration strategy  | Core-first, incremental phases         |
+| Decision           | Choice                                 |
+| ------------------ | -------------------------------------- |
+| UI framework       | SwiftUI (`MenuBarExtra`) + AppKit glue |
+| Minimum macOS      | 15.0 (full ScreenCaptureKit support)   |
+| Audio encoding     | AVFoundation (AAC/M4A, zero deps)      |
+| Build system       | Xcode project (`xcodebuild` CLI)       |
+| Networking         | URLSession (async/await)               |
+| Project location   | Replace `apps/macos/`                  |
+| Migration strategy | Core-first, incremental phases         |
 
 ## Architecture
 
@@ -57,10 +57,10 @@ SCStream (macOS 15+)
 Two permissions are required. Both Dev and Release builds must present the same
 permission flow to ensure consistent behavior.
 
-| Permission                     | Trigger                           | User Action                      |
-|-------------------------------|-----------------------------------|----------------------------------|
-| Screen & System Audio Recording | `SCShareableContent.current`     | System alert → System Settings   |
-| Microphone                     | `SCStream` + `captureMicrophone` | System alert → Allow / Deny      |
+| Permission                      | Trigger                          | User Action                    |
+| ------------------------------- | -------------------------------- | ------------------------------ |
+| Screen & System Audio Recording | `SCShareableContent.current`     | System alert → System Settings |
+| Microphone                      | `SCStream` + `captureMicrophone` | System alert → Allow / Deny    |
 
 **Permission guide**: On first launch (or when permissions are missing), the app
 shows a step-by-step guide window explaining each permission, its purpose, and
@@ -120,56 +120,56 @@ apps/macos/
 
 Goal: Menu bar icon → start/stop recording → M4A output with mic + system audio.
 
-| Step | Component                | Description                              |
-|------|--------------------------|------------------------------------------|
-| 1.1  | Xcode project skeleton   | Target, entitlements, Info.plist, signing |
-| 1.2  | PermissionManager        | Check + request screen recording & mic   |
-| 1.3  | AudioCaptureManager      | ScreenCaptureKit stream setup            |
-| 1.4  | AudioMixer               | Dual-stream mixing                       |
-| 1.5  | RecordingManager         | State machine + AVAssetWriter encoding   |
-| 1.6  | MenuBarExtra tray        | Start/Stop, device selection, quit       |
-| 1.7  | Unit tests               | All Phase 1 components                   |
-| 1.8  | E2E test                 | Full recording lifecycle                 |
+| Step | Component              | Description                               |
+| ---- | ---------------------- | ----------------------------------------- |
+| 1.1  | Xcode project skeleton | Target, entitlements, Info.plist, signing |
+| 1.2  | PermissionManager      | Check + request screen recording & mic    |
+| 1.3  | AudioCaptureManager    | ScreenCaptureKit stream setup             |
+| 1.4  | AudioMixer             | Dual-stream mixing                        |
+| 1.5  | RecordingManager       | State machine + AVAssetWriter encoding    |
+| 1.6  | MenuBarExtra tray      | Start/Stop, device selection, quit        |
+| 1.7  | Unit tests             | All Phase 1 components                    |
+| 1.8  | E2E test               | Full recording lifecycle                  |
 
 ### Phase 2 — Window UI
 
 SwiftUI views replacing the Next.js static frontend.
 
-| Step | Component            | Description                           |
-|------|----------------------|---------------------------------------|
-| 2.1  | RecordingsView       | List, playback (AVAudioPlayer), delete |
-| 2.2  | SettingsView         | Server URL, token, output dir          |
-| 2.3  | PermissionGuideView  | Step-by-step permission onboarding     |
-| 2.4  | AboutView            | Version, GitHub link                   |
+| Step | Component           | Description                            |
+| ---- | ------------------- | -------------------------------------- |
+| 2.1  | RecordingsView      | List, playback (AVAudioPlayer), delete |
+| 2.2  | SettingsView        | Server URL, token, output dir          |
+| 2.3  | PermissionGuideView | Step-by-step permission onboarding     |
+| 2.4  | AboutView           | Version, GitHub link                   |
 
 ### Phase 3 — Upload & Sync
 
-| Step | Component       | Description                              |
-|------|-----------------|------------------------------------------|
-| 3.1  | APIClient       | URLSession, auth, connection test        |
-| 3.2  | UploadManager   | 3-step upload (presign → OSS → create)   |
-| 3.3  | UploadView      | Upload form, folder/tag, progress, cancel |
+| Step | Component     | Description                               |
+| ---- | ------------- | ----------------------------------------- |
+| 3.1  | APIClient     | URLSession, auth, connection test         |
+| 3.2  | UploadManager | 3-step upload (presign → OSS → create)    |
+| 3.3  | UploadView    | Upload form, folder/tag, progress, cancel |
 
 ### Phase 4 — Cleanup & Polish
 
-| Step | Component       | Description                              |
-|------|-----------------|------------------------------------------|
-| 4.1  | Constants.swift | Extract shared constants (subsystem, audio params) |
-| 4.2  | Logging         | Replace all print() with os.Logger       |
-| 4.3  | Error surfacing | NSAlert for recording errors, alert for delete errors |
-| 4.4  | Dead code       | Remove unused fields, fix force-unwraps  |
-| 4.5  | SwiftLint       | Config + 0 production violations         |
-| 4.6  | Batch delete    | Multi-select in RecordingsView           |
+| Step | Component       | Description                                               |
+| ---- | --------------- | --------------------------------------------------------- |
+| 4.1  | Constants.swift | Extract shared constants (subsystem, audio params)        |
+| 4.2  | Logging         | Replace all print() with os.Logger                        |
+| 4.3  | Error surfacing | NSAlert for recording errors, alert for delete errors     |
+| 4.4  | Dead code       | Remove unused fields, fix force-unwraps                   |
+| 4.5  | SwiftLint       | Config + 0 production violations                          |
+| 4.6  | Batch delete    | Multi-select in RecordingsView                            |
 | 4.7  | Code signing    | Apple Development + Automatic signing for TCC persistence |
-| 4.8  | Full test suite | 84 tests, 0 lint violations              |
+| 4.8  | Full test suite | 84 tests, 0 lint violations                               |
 
 ## Testing Strategy (3-Layer)
 
-| Layer | Scope                      | Tooling             | Trigger      |
-|-------|----------------------------|---------------------|--------------|
-| UT    | Pure logic (mixer, config) | XCTest              | Pre-commit   |
-| Lint  | Code quality               | SwiftLint           | Pre-commit   |
-| E2E   | Recording pipeline         | XCTest (UI/Integration) | Pre-push |
+| Layer | Scope                      | Tooling                 | Trigger    |
+| ----- | -------------------------- | ----------------------- | ---------- |
+| UT    | Pure logic (mixer, config) | XCTest                  | Pre-commit |
+| Lint  | Code quality               | SwiftLint               | Pre-commit |
+| E2E   | Recording pipeline         | XCTest (UI/Integration) | Pre-push   |
 
 ## Progress Log
 
