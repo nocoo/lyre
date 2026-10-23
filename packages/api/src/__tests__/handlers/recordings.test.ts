@@ -2,7 +2,7 @@
  * Tests for `handlers/recordings.ts`.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	batchDeleteRecordingsHandler,
 	createRecordingHandler,
@@ -137,7 +137,7 @@ describe("delete + batch", () => {
 		const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`);
 		expect((await batchDeleteRecordingsHandler(ctx, { ids })).status).toBe(400);
 	});
-	it("delete owned recording (no oss key path)", async () => {
+	it("deletes an owned recording with mocked OSS cleanup", async () => {
 		const { user } = await setupAuthedCtx();
 		const ctx = makeCtx(user, { env: ossEnv });
 		const created = await createRecordingHandler(ctx, {
@@ -147,8 +147,14 @@ describe("delete + batch", () => {
 		});
 		if (created.kind !== "json") throw new Error();
 		const id = (created.body as { id: string }).id;
-		const res = await deleteRecordingHandler(ctx, id);
+		const cleanup = vi.fn(async () => new Response(null, { status: 204 }));
+		const res = await withMockedFetch(cleanup, () => deleteRecordingHandler(ctx, id));
 		expect(res.status).toBe(200);
+		expect(cleanup).toHaveBeenCalledWith(
+			expect.stringContaining("uploads/test-user-1/r/x.m4a"),
+			expect.objectContaining({ method: "DELETE" }),
+		);
+		expect(await testRepos().recordings.findById(id)).toBeUndefined();
 	});
 });
 
@@ -487,10 +493,19 @@ describe("batch delete with owned recording", () => {
 			requestId: null,
 			status: "SUCCEEDED",
 		});
-		const res = await batchDeleteRecordingsHandler(ctx, { ids: [recId] });
+		const cleanup = vi.fn(async () => new Response("<ListBucketResult/>"));
+		const res = await withMockedFetch(cleanup, () =>
+			batchDeleteRecordingsHandler(ctx, { ids: [recId] }),
+		);
 		expect(res.status).toBe(200);
 		if (res.kind !== "json") throw new Error();
 		expect((res.body as { deleted: number }).deleted).toBe(1);
+		expect(cleanup).toHaveBeenCalledTimes(2);
+		expect(cleanup).toHaveBeenCalledWith(
+			expect.stringContaining("prefix=results%2Fjob-bd-1%2F"),
+			expect.objectContaining({ method: "GET" }),
+		);
+		expect(await testRepos().recordings.findById(recId)).toBeUndefined();
 	});
 });
 

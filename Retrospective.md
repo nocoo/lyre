@@ -37,3 +37,13 @@ startup; its default `test-results` directory also contained the native runner's
 `test-results/macos`. Set Playwright output to `test-results/bdd` and keep native
 verification serialized or independently isolated. The interrupted native run
 was not passing evidence; a complete rerun under a unique `/tmp` directory passed.
+
+## 2026-10-23: Mock detached storage cleanup in unit tests
+
+Vitest 5 exposed a teardown race after all assertions passed: two recording
+deletion tests supplied fake OSS credentials but left the real fetch active.
+Detached cleanup requests could fail after their test finished, leaving a
+console RPC pending during worker shutdown. Stub both object deletion and result
+listing at the network boundary, and assert the cleanup requests and database
+deletion. Fake credentials are not network isolation. Do not suppress teardown
+errors or retry a flaky gate without investigating the outstanding work.
