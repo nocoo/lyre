@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.1.5 (2026-10-23)
+
+### Fixes
+
+- Restore Basalt 3 sidebar selection and independent hover styling, and use the Tangerine accent through the shared theme provider.
+- Return keyboard focus to the mobile navigation button when its sidebar closes.
+- Isolate detached recording cleanup requests in tests and prevent the local test Worker from inheriting production routes.
+
+### Maintenance
+
+- Upgrade AI SDK and Wrangler, followed by Vite 8, Vitest 5, React Router 8, Basalt 3.2.1 and Lucide 1.
+- Upgrade SQLite test dependencies, happy-dom, Node types and Workers types without lowering coverage thresholds.
+- Add browser regression coverage for light/dark sidebar states, collapse behavior and mobile navigation.
+
+This release publishes Web/Worker changes only. macOS version metadata stays aligned, but no new macOS installer or DMG is included.
+
 ## v2.1.4 (2026-10-23)
 
 ### Fixes
