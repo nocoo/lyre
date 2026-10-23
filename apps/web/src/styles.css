@@ -4,27 +4,6 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/*
- * Lyre brand primary: Burnt Sienna (#883620).
- * Override only the accent tokens; the rest of the stack stays on Basalt.
- */
-:root,
-.light,
-[data-mode="light"] {
-	--basalt-primary: 13 62% 33%;
-	--basalt-primary-foreground: 0 0% 100%;
-	--basalt-ring: 13 62% 33%;
-	--basalt-chart-1: 13 62% 33%;
-}
-
-.dark,
-[data-mode="dark"] {
-	--basalt-primary: 13 50% 38%;
-	--basalt-primary-foreground: 13 55% 92%;
-	--basalt-ring: 13 50% 38%;
-	--basalt-chart-1: 13 50% 38%;
-}
-
 @layer base {
 	html,
 	body,

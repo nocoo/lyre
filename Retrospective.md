@@ -47,3 +47,13 @@ console RPC pending during worker shutdown. Stub both object deletion and result
 listing at the network boundary, and assert the cleanup requests and database
 deletion. Fake credentials are not network isolation. Do not suppress teardown
 errors or retry a flaky gate without investigating the outstanding work.
+
+## 2026-10-23: Restart the dev optimizer after UI dependency upgrades
+
+The local acceptance server kept serving optimized Basalt 2.2.0 modules after
+the manifest and installed package moved to 3.2.1. Builds and browser tests
+against the built Worker passed, but did not verify the long-running Vite
+server. Its old sidebar used accent backgrounds instead of the new neutral
+selection and independent hover layer. Restart Vite with `--force` after a
+dependency migration and check optimizer source paths before handing off the
+local URL. Keep theme accents in `AccentProvider`, not competing CSS overrides.

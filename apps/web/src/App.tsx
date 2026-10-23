@@ -1,4 +1,5 @@
 import { LinkProvider, ThemeProvider, Toaster, TooltipProvider } from "@nocoo/basalt";
+import { AccentProvider } from "@nocoo/basalt/providers/accent";
 import { Route, Routes } from "react-router";
 import { AppShell } from "@/components/layout";
 import { RequireAuth } from "@/components/require-auth";
@@ -14,24 +15,26 @@ import SettingsTokensPage from "@/pages/settings-tokens";
 export function App() {
 	return (
 		<ThemeProvider>
-			<LinkProvider render={AppLink}>
-				<TooltipProvider>
-					<RequireAuth>
-						<AppShell>
-							<Routes>
-								<Route path="/" element={<DashboardPage />} />
-								<Route path="/recordings" element={<RecordingsListPage />} />
-								<Route path="/recordings/:id" element={<RecordingDetailPage />} />
-								<Route path="/settings" element={<SettingsPage />} />
-								<Route path="/settings/ai" element={<SettingsAiPage />} />
-								<Route path="/settings/storage" element={<SettingsStoragePage />} />
-								<Route path="/settings/tokens" element={<SettingsTokensPage />} />
-							</Routes>
-						</AppShell>
-					</RequireAuth>
-					<Toaster />
-				</TooltipProvider>
-			</LinkProvider>
+			<AccentProvider defaultAccent="orange" persist={false}>
+				<LinkProvider render={AppLink}>
+					<TooltipProvider>
+						<RequireAuth>
+							<AppShell>
+								<Routes>
+									<Route path="/" element={<DashboardPage />} />
+									<Route path="/recordings" element={<RecordingsListPage />} />
+									<Route path="/recordings/:id" element={<RecordingDetailPage />} />
+									<Route path="/settings" element={<SettingsPage />} />
+									<Route path="/settings/ai" element={<SettingsAiPage />} />
+									<Route path="/settings/storage" element={<SettingsStoragePage />} />
+									<Route path="/settings/tokens" element={<SettingsTokensPage />} />
+								</Routes>
+							</AppShell>
+						</RequireAuth>
+						<Toaster />
+					</TooltipProvider>
+				</LinkProvider>
+			</AccentProvider>
 		</ThemeProvider>
 	);
 }

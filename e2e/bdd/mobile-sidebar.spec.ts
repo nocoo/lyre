@@ -19,6 +19,7 @@ test("mobile sidebar preserves selection and closes after navigation", async ({
 	await expect(
 		navigation.getByRole("button", { name: "All Recordings", exact: true }),
 	).toHaveAttribute("data-hover-selected", "true");
+	await expect.poll(async () => (await navigation.boundingBox())?.x).toBe(0);
 	await page.screenshot({ path: testInfo.outputPath("sidebar-mobile.png") });
 	await page.keyboard.press("Escape");
 	await expect(navigation).not.toBeVisible();
