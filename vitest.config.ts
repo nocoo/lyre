@@ -13,7 +13,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			// Mirror apps/web's vite alias so `@/lib/foo` resolves in tests too.
-			"@": resolve(__dirname, "apps/web/src"),
+			"@": resolve(import.meta.dirname, "apps/web/src"),
 		},
 	},
 	test: {
@@ -35,10 +35,6 @@ export default defineConfig({
 		],
 		coverage: {
 			provider: "v8",
-			// experimentalAstAwareRemapping reduces variance and slightly improves
-			// wall-clock by avoiding the legacy source-map-based remap path.
-			// Vitest 4 has this on by default; keep the flag explicit for clarity.
-			experimentalAstAwareRemapping: true,
 			reporter: ["text", "html"],
 			// Only include modules that are unit-testable from Node + vitest
 			// and that have meaningful test coverage already. Wiring code (Worker
