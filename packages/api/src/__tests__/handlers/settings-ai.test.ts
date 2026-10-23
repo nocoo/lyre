@@ -1,8 +1,3 @@
-/**
- * Tests for `handlers/settings-ai.ts` (sync handlers only; testAi makes real
- * network calls and is covered by E2E with credentials).
- */
-
 import { describe, expect, it } from "vitest";
 import {
 	getAiSettingsHandler,
@@ -80,6 +75,41 @@ describe("settings-ai sync handlers", () => {
 	it("test 400 when not configured", async () => {
 		const { ctx } = await setupAuthedCtx();
 		expect((await testAiSettingsHandler(ctx)).status).toBe(400);
+	});
+	it("tests custom Responses providers with a valid output token budget", async () => {
+		const { ctx } = await setupAuthedCtx();
+		await updateAiSettingsHandler(ctx, {
+			provider: "custom",
+			apiKey: "sk-test",
+			model: "auto",
+			baseURL: "https://ai.example.test/v1",
+			sdkType: "openai",
+		});
+		let requestBody: unknown;
+		const res = await withMockedFetch(
+			async (url, init) => {
+				expect(url).toBe("https://ai.example.test/v1/responses");
+				requestBody = JSON.parse(String(init?.body));
+				return Response.json({
+					id: "resp-test",
+					model: "auto",
+					output: [
+						{
+							id: "msg-test",
+							type: "message",
+							role: "assistant",
+							content: [{ type: "output_text", text: "OK", annotations: [] }],
+						},
+					],
+				});
+			},
+			() => testAiSettingsHandler(ctx),
+		);
+		expect(requestBody).toMatchObject({ model: "auto", max_output_tokens: 64 });
+		expect(res).toMatchObject({
+			status: 200,
+			body: { success: true, response: "OK", model: "auto", provider: "custom" },
+		});
 	});
 	it("update accepts all valid fields", async () => {
 		const { ctx } = await setupAuthedCtx();

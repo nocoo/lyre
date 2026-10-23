@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.1.4 (2026-10-23)
+
+### Fixes
+
+- Increase the AI connection test output budget to 64 tokens so OpenAI Responses-compatible providers no longer reject the request below their 16-token minimum.
+- Add a regression test covering the custom provider request and successful connection response.
+
+### Maintenance since v2.1.0
+
+- Update application, AI SDK, build and test dependencies, including security fixes.
+- Update the shared CI workflows and synchronize all version metadata.
+
+This release deploys the Web/Worker fix; it does not publish a new macOS installer.
+
 ## v2.1.0 (2026-09-29)
 
 ### Features

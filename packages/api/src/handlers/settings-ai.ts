@@ -137,7 +137,7 @@ export async function testAiSettingsHandler(ctx: RuntimeContext): Promise<Handle
 		const { text } = await generateText({
 			model: client,
 			prompt: "Reply with exactly: OK",
-			maxOutputTokens: 10,
+			maxOutputTokens: 64,
 		});
 		return json({
 			success: true,
