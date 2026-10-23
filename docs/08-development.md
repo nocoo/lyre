@@ -14,7 +14,7 @@ DashScope 使用异步文件转写模型，默认 `qwen3-asr-flash-filetrans`。
 
 ## 本地环境
 
-安装 Bun 与 Node.js 22+。冻结安装后运行 `bun run build`，静态资源会写入 `apps/api/static`。`web:dev` 监听 7016，固定代理 `http://localhost:7017`；`worker:dev` 运行 `wrangler dev --env test`，监听 7017。
+安装 Bun，以及 Node.js 22.22+（22.x）、24.x 或 26+。冻结安装后运行 `bun run build`，静态资源会写入 `apps/api/static`。`web:dev` 监听 7016，固定代理 `http://localhost:7017`；`worker:dev` 运行 `wrangler dev --env test`，监听 7017。
 
 本地环境使用 `lyre-db-test`，默认运行在本机 Wrangler 状态目录。`e2e/schema.sql` 明确执行 DROP + CREATE；在新副本或可丢弃的开发数据库中初始化：
 

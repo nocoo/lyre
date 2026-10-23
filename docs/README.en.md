@@ -49,7 +49,7 @@ Settings exports JSON containing recording metadata, transcripts, settings and d
 
 ## Development
 
-Web and Worker development require Bun and Node.js 22+, the minimum declared by the locked Wrangler package. Install dependencies and build assets in a separate development checkout:
+Web and Worker development require Bun and Node.js 22.22+ (22.x), 24.x or 26+, matching the router and test tool requirements in root `package.json`. Install dependencies and build assets in a separate development checkout:
 
 ```bash
 git clone https://github.com/nocoo/lyre.git

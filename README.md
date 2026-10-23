@@ -49,7 +49,7 @@ Settings 中的 JSON 备份包含录音资料、转写文字、设置与设备 T
 
 ## 开发
 
-Web / Worker 开发需要 Bun 和 Node.js 22+，后者是当前锁定 Wrangler 的要求。先在独立开发副本中安装依赖并构建静态资源：
+Web / Worker 开发需要 Bun，以及 Node.js 22.22+（22.x）、24.x 或 26+，对应根 `package.json` 中路由和测试工具的运行要求。先在独立开发副本中安装依赖并构建静态资源：
 
 ```bash
 git clone https://github.com/nocoo/lyre.git

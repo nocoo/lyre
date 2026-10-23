@@ -35,7 +35,7 @@ This file is the quality contract; hooks, CI and config are enforcement. Close i
 
 ## Commands
 
-Run from root with Bun, Node 22.12+, macOS 15+, full Xcode, Python 3, xcodegen, SwiftLint, gitleaks and OSV. Use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` per command if Command Line Tools is selected. Use tracked env examples; local tests need no live provider secrets.
+Run from root with Bun, Node 22.22+ (22.x), 24.x or 26+, macOS 15+, full Xcode, Python 3, xcodegen, SwiftLint, gitleaks and OSV. Use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` per command if Command Line Tools is selected. Use tracked env examples; local tests need no live provider secrets.
 
 ```bash
 bun install --frozen-lockfile
