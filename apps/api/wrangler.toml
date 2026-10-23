@@ -36,6 +36,7 @@ not_found_handling = "single-page-application"
 # ─────────────────────────────────────────────────────────────────────────────
 
 [env.test]
+routes = []
 
 [env.test.vars]
 NODE_ENV = "development"
