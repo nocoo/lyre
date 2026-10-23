@@ -7,7 +7,7 @@ import {
 } from "@nocoo/basalt/components/app-shell";
 import { useTheme } from "@nocoo/basalt/providers/theme";
 import { Menu } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocationPathname } from "@/lib/router-compat";
 import { BreadcrumbsProvider, useBreadcrumbs } from "./breadcrumbs-context";
@@ -56,6 +56,7 @@ function AppShellInner({ children }: AppShellProps) {
 	const isMobile = useIsMobile();
 	const [collapsed, setCollapsed] = useState(false);
 	const [mobileOpen, setMobileOpen] = useState(false);
+	const navigationTrigger = useRef<HTMLButtonElement>(null);
 	const { items: breadcrumbItems } = useBreadcrumbs();
 	const pathname = useLocationPathname();
 	const { theme } = useTheme();
@@ -96,6 +97,10 @@ function AppShellInner({ children }: AppShellProps) {
 					<SheetContent
 						side="left"
 						className="w-[260px] max-w-[260px] border-0 bg-basalt-background p-0"
+						onCloseAutoFocus={(event) => {
+							event.preventDefault();
+							navigationTrigger.current?.focus();
+						}}
 					>
 						<SheetTitle className="sr-only">Navigation</SheetTitle>
 						<AppSidebar collapsed={false} onToggle={() => setMobileOpen(false)} />
@@ -108,6 +113,7 @@ function AppShellInner({ children }: AppShellProps) {
 						isMobile ? (
 							<HeaderTooltip label="Open navigation">
 								<Button
+									ref={navigationTrigger}
 									variant="ghost"
 									size="icon"
 									className="h-8 w-8"
