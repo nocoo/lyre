@@ -57,3 +57,12 @@ server. Its old sidebar used accent backgrounds instead of the new neutral
 selection and independent hover layer. Restart Vite with `--force` after a
 dependency migration and check optimizer source paths before handing off the
 local URL. Keep theme accents in `AccentProvider`, not competing CSS overrides.
+
+## 2026-10-23: Pass the Xcode toolchain to push hooks
+
+The first v2.1.5 push failed because standalone SwiftLint inherited Command Line
+Tools and could not load SourceKit. Commit checks and native tests passed because
+their runners already supplied the full Xcode path. Check `xcode-select -p` before
+pushing and set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` on the
+push command when needed. Re-run the normal hooks; do not change global toolchain
+selection or bypass the failed check.
