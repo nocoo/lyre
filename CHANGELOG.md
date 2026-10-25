@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.6 (2026-10-25)
+
+### Maintenance
+
+- Bump `@types/bun`, `ai`, Biome, Cloudflare Workers types and security overrides for `zod` and `undici`.
+
+This release publishes Web/Worker changes only. macOS version metadata stays aligned, but no new macOS installer or DMG is included.
+
 ## v2.1.5 (2026-10-23)
 
 ### Fixes

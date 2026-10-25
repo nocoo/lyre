@@ -1,6 +1,6 @@
 {
 	"name": "@lyre/api-worker",
-	"version": "2.1.5",
+	"version": "2.1.6",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -10,14 +10,14 @@
 	},
 	"dependencies": {
 		"@lyre/api": "workspace:*",
-		"ai": "7.0.150",
+		"ai": "7.0.153",
 		"drizzle-orm": "^0.45.4",
 		"hono": "4.13.13",
 		"jose": "6.2.13"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "5.20261023.1",
-		"@types/bun": "^1.4.3",
+		"@cloudflare/workers-types": "5.20261024.1",
+		"@types/bun": "^1.4.4",
 		"@types/node": "26.6.5",
 		"typescript": "^7.0.2",
 		"wrangler": "4.152.0"
