@@ -22,17 +22,27 @@ def interrupted(signum, _frame):
 
 
 def run(args, cwd, capture=False):
-    print("pre-commit: " + " ".join(map(str, args)), flush=True)
+    if not capture and not os.environ.get("LYRE_L1_QUIET"):
+        print("pre-commit: " + " ".join(map(str, args)), flush=True)
     environment = dict(ENV)
     if args[0] in ("git", "gitleaks"):
         environment.update({k: v for k, v in os.environ.items() if k.startswith("GIT_")})
-    child = subprocess.Popen(args, cwd=cwd, env=environment, start_new_session=True,
-                             stdout=subprocess.PIPE if capture else None, text=True)
+    streams = (subprocess.PIPE, subprocess.PIPE) if capture else (None, None)
+    child = subprocess.Popen(
+        args,
+        cwd=cwd,
+        env=environment,
+        start_new_session=True,
+        stdout=streams[0],
+        stderr=streams[1],
+        text=True,
+    )
     try:
-        output, _ = child.communicate(timeout=max(0.01, DEADLINE - time.monotonic()))
+        output, err = child.communicate(timeout=max(0.01, DEADLINE - time.monotonic()))
         if child.returncode:
-            raise subprocess.CalledProcessError(child.returncode, args)
-        return output
+            message = (output or "") + (err or "")
+            raise subprocess.CalledProcessError(child.returncode, args, message or None)
+        return (output or "") + (err or "")
     finally:
         # Descendants can outlive the command, including after cancellation.
         try:
@@ -130,9 +140,10 @@ def main():
 TOOLS = ("git", "bun", "node", "gitleaks", "swiftlint", "xcodebuild", "xcrun")
 PREFIX = "lyre-l1-"
 DEPENDENCIES = ("node_modules", "apps/api/node_modules", "apps/web/node_modules", "packages/api/node_modules")
+WEB_TOOLS = ("git", "bun", "node", "gitleaks")
 
 
-def checks(root, snapshot, output):
+def checks_web(root, snapshot, output):
     run(["gitleaks", "protect", "--staged", "--no-banner",
          "--config", str(snapshot / ".gitleaks.toml")], root)
     run(["bun", "run", "lint"], snapshot)
@@ -141,6 +152,9 @@ def checks(root, snapshot, output):
     run(["bun", "run", "test:coverage", "--allowOnly=false", "--reporter=default",
          "--reporter=json", f"--outputFile={report}"], snapshot)
     check_tests(report)
+
+
+def checks_native(snapshot, output):
     native = snapshot / "apps/macos"
     run(["swiftlint", "lint", "--strict", "--cache-path", str(output / "swiftlint"),
          "Lyre/", "LyreTests/"], native)
@@ -156,6 +170,11 @@ def checks(root, snapshot, output):
     check_native_tests(result, native, {"RecordingE2ETests/recordAndProduceM4AFile()", "RecordingE2ETests/cannotStartTwice()", "RecordingE2ETests/outputFileHasExpectedName()"})
     coverage = run(["xcrun", "xccov", "view", "--report", "--json", str(result)], native, True)
     check_native(coverage, "Lyre.app", 33, 39)
+
+
+def checks(root, snapshot, output):
+    checks_web(root, snapshot, output)
+    checks_native(snapshot, output)
 
 
 if __name__ == "__main__":
