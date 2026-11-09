@@ -33,6 +33,7 @@
 		"test:e2e:bdd": "npx playwright test",
 		"gate:routes": "bun run scripts/check-route-coverage.ts",
 		"gate:pages": "bun run scripts/check-page-coverage.ts",
+		"gate:l1-selftest": "python3 -B scripts/gate_l1_selftest.py",
 		"gate:secrets": "bun run scripts/gate-secrets.ts",
 		"gate:deps": "bun run scripts/gate-deps.ts",
 		"pre-push": "bun run scripts/pre-push.ts",

@@ -32,13 +32,14 @@ class GateTests(unittest.TestCase):
             self.assertFalse((snapshot / "node_modules/.vite-temp").exists())
 
     def test_failed_command_and_timeout_reject(self):
-        with self.assertRaises(subprocess.CalledProcessError):
-            gate.run([sys.executable, "-c", "raise SystemExit(7)"], Path.cwd())
+        with self.assertRaises(subprocess.CalledProcessError) as failure:
+            gate.run([sys.executable, "-c", "raise SystemExit(7)"], Path.cwd(), True)
+        self.assertEqual(failure.exception.returncode, 7)
         old = gate.DEADLINE
         try:
             gate.DEADLINE = time.monotonic() + 0.05
             with self.assertRaises(subprocess.TimeoutExpired):
-                gate.run([sys.executable, "-c", "import time; time.sleep(60)"], Path.cwd())
+                gate.run([sys.executable, "-c", "import time; time.sleep(60)"], Path.cwd(), True)
         finally:
             gate.DEADLINE = old
 

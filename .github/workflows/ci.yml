@@ -8,6 +8,34 @@ on:
   workflow_dispatch:
 
 jobs:
+  l1-hook-selftest:
+    name: "L1: hook self-test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup JS and dependencies
+        uses: nocoo/base-ci/.github/actions/setup-js@2231caf82cf16f103f48cab467b3464b106d6604
+        with:
+          package-manager: bun
+          runtime-version: "1.4.0"
+          install-policy: trusted
+
+      - name: Install gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=8.24.2
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+
+      - name: Run L1 hook self-test
+        run: bun run gate:l1-selftest
+
   quality:
     uses: nocoo/base-ci/.github/workflows/quality.yml@ac635753a869cb85fad1f52aae4ccbd6119f3cae # main 2026-10-22
     with:
