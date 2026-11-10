@@ -485,13 +485,12 @@ export function FolderSidebarCollapsed() {
 	};
 
 	return (
-		<div className="mt-2 flex flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-basalt-border pt-2">
+		<>
 			<Tooltip delayDuration={0}>
 				<TooltipTrigger asChild>
 					<SidebarIconItem
 						active={isRecordingsPage && folderParam === null}
 						aria-label="All Recordings"
-						className="self-center"
 						onClick={() => handleFolderSelect(null)}
 					>
 						<Mic className="h-4 w-4" strokeWidth={1.5} />
@@ -507,7 +506,6 @@ export function FolderSidebarCollapsed() {
 					<SidebarIconItem
 						active={folderParam === "unfiled"}
 						aria-label="Unfiled"
-						className="self-center"
 						onClick={() => handleFolderSelect("unfiled")}
 					>
 						<Inbox className="h-4 w-4" strokeWidth={1.5} />
@@ -524,7 +522,6 @@ export function FolderSidebarCollapsed() {
 						<SidebarIconItem
 							active={folderParam === folder.id}
 							aria-label={folder.name}
-							className="self-center"
 							onClick={() => handleFolderSelect(folder.id)}
 						>
 							{renderFolderIcon(folderParam === folder.id ? "folder-open" : folder.icon, "h-4 w-4")}
@@ -535,6 +532,6 @@ export function FolderSidebarCollapsed() {
 					</TooltipContent>
 				</Tooltip>
 			))}
-		</div>
+		</>
 	);
 }

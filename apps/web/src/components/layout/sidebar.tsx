@@ -118,22 +118,12 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
 			</SidebarHeader>
 			{collapsed ? (
 				<>
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={onToggle}
-						aria-label="Expand sidebar"
-						className="mb-basalt-space-sm self-center"
-					>
+					<Button variant="ghost" size="icon" onClick={onToggle} aria-label="Expand sidebar">
 						<PanelLeft aria-hidden="true" />
 					</Button>
 					<Tooltip delayDuration={0}>
 						<TooltipTrigger asChild>
-							<SidebarIconItem
-								className="mb-2 self-center"
-								onClick={openSearch}
-								aria-label="Search (⌘K)"
-							>
+							<SidebarIconItem onClick={openSearch} aria-label="Search (⌘K)">
 								<Search className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
 							</SidebarIconItem>
 						</TooltipTrigger>
@@ -141,13 +131,12 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
 							Search (⌘K)
 						</TooltipContent>
 					</Tooltip>
-					<SidebarNav className="w-full items-center gap-1 pt-1">
+					<SidebarNav>
 						<Tooltip delayDuration={0}>
 							<TooltipTrigger asChild>
 								<SidebarIconItem
 									active={pathname === "/"}
 									aria-label="Dashboard"
-									className="self-center"
 									onClick={() => navigate("/")}
 								>
 									<LayoutDashboard className="h-4 w-4" strokeWidth={1.5} />
@@ -162,7 +151,6 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
 								<SidebarIconItem
 									active={isRecordingsPage}
 									aria-label="Recordings"
-									className="self-center"
 									onClick={() => navigate("/recordings")}
 								>
 									<Mic className="h-4 w-4" strokeWidth={1.5} />
@@ -181,7 +169,6 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
 										<SidebarIconItem
 											active={isActive}
 											aria-label={item.label}
-											className="self-center"
 											onClick={() => navigate(item.href)}
 										>
 											<item.icon className="h-4 w-4" strokeWidth={1.5} />
@@ -217,7 +204,7 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
 					<div className="px-basalt-nav-inset">
 						<SidebarSearch onClick={openSearch}>Search</SidebarSearch>
 					</div>
-					<SidebarNav className="pt-1">
+					<SidebarNav>
 						<SidebarGroup label="General">
 							<SidebarItem active={pathname === "/"} onClick={() => navigate("/")}>
 								<LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.5} />
