@@ -154,7 +154,6 @@ function AppSidebarNav() {
 
 function AppSidebarFooter() {
 	const { data: session } = useSession();
-	const { collapsed } = useSidebar();
 	const userName = session?.user?.name ?? "User";
 	const userImage = session?.user?.image;
 	const userInitial = userName[0] ?? "?";
@@ -167,21 +166,6 @@ function AppSidebarFooter() {
 			</AvatarFallback>
 		</Avatar>
 	);
-
-	if (collapsed) {
-		return (
-			<Tooltip delayDuration={0}>
-				<TooltipTrigger asChild>
-					<button type="button" onClick={signOut} className="cursor-pointer" aria-label="Sign out">
-						{avatar}
-					</button>
-				</TooltipTrigger>
-				<TooltipContent side="right" sideOffset={8}>
-					{userName} — Sign out
-				</TooltipContent>
-			</Tooltip>
-		);
-	}
 
 	return (
 		<SidebarUser
