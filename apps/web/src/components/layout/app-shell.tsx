@@ -13,6 +13,7 @@ import { useLocationPathname } from "@/lib/router-compat";
 import { BreadcrumbsProvider, useBreadcrumbs } from "./breadcrumbs-context";
 import { GitHubLink } from "./github-link";
 import { HeaderTooltip, HexlyLink } from "./header-links";
+import { MobileNavCloseProvider } from "./mobile-nav-close";
 import { ScrollToTop } from "./scroll-to-top";
 import { AppSidebar } from "./sidebar";
 import { ThemeToggle } from "./theme-toggle";
@@ -85,7 +86,7 @@ function AppShellInner({ children }: AppShellProps) {
 		document.getElementById("island-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
 	}, []);
 
-	const sidebar = <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />;
+	const sidebar = <AppSidebar collapsed={collapsed} onCollapsedChange={setCollapsed} />;
 
 	return (
 		<BasaltAppShell>
@@ -97,13 +98,20 @@ function AppShellInner({ children }: AppShellProps) {
 					<SheetContent
 						side="left"
 						className="w-[260px] max-w-[260px] border-0 bg-basalt-background p-0"
+						onEscapeKeyDown={() => setMobileOpen(false)}
 						onCloseAutoFocus={(event) => {
 							event.preventDefault();
 							navigationTrigger.current?.focus();
 						}}
 					>
 						<SheetTitle className="sr-only">Navigation</SheetTitle>
-						<AppSidebar collapsed={false} onToggle={() => setMobileOpen(false)} />
+						<MobileNavCloseProvider value={() => setMobileOpen(false)}>
+							<AppSidebar
+								collapsed={false}
+								onCollapsedChange={() => {}}
+								dismissDrawer={() => setMobileOpen(false)}
+							/>
+						</MobileNavCloseProvider>
 					</SheetContent>
 				</Sheet>
 			)}

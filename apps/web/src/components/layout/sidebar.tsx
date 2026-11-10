@@ -6,18 +6,22 @@ import {
 	Button,
 	Link,
 	Sidebar,
+	SidebarBrand,
 	SidebarFooter,
 	SidebarGroup,
 	SidebarHeader,
 	SidebarIconItem,
 	SidebarItem,
 	SidebarNav,
+	SidebarProvider,
 	SidebarSearch,
+	SidebarToggle,
 	SidebarUser,
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 } from "@nocoo/basalt";
+import { useSidebar } from "@nocoo/basalt/components/sidebar";
 import {
 	Bot,
 	HardDrive,
@@ -26,9 +30,9 @@ import {
 	LogOut,
 	Mic,
 	PanelLeft,
-	Search,
 	Settings,
 } from "lucide-react";
+import { useCallback } from "react";
 import { useNavigate } from "react-router";
 import { GlobalSearch } from "@/components/global-search";
 import { useSession } from "@/hooks/use-me";
@@ -37,8 +41,7 @@ import { useLocationPathname } from "@/lib/router-compat";
 import { cn, getAvatarColor } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/version";
 import { FolderSidebar, FolderSidebarCollapsed } from "./folder-sidebar";
-
-const SIDEBAR_MARK_SLOT_CLASS = "flex w-full items-center";
+import { useMobileNavClose } from "./mobile-nav-close";
 
 const settingsItems = [
 	{ href: "/settings", label: "General", icon: Settings, exact: true },
@@ -61,14 +64,120 @@ function signOut() {
 	window.location.href = ACCESS_LOGOUT_URL;
 }
 
-export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+function SidebarToggleAction({ dismissDrawer }: { dismissDrawer?: () => void }) {
+	if (dismissDrawer) {
+		return (
+			<Button variant="ghost" size="icon-sm" aria-label="Close navigation" onClick={dismissDrawer}>
+				<PanelLeft aria-hidden="true" />
+			</Button>
+		);
+	}
+	return <SidebarToggle />;
+}
+
+function AppSidebarNav() {
 	const pathname = useLocationPathname();
 	const navigate = useNavigate();
+	const closeMobileNav = useMobileNavClose();
+	const { collapsed } = useSidebar();
+	const isRecordingsPage = isRecordingsPath(pathname);
+
+	const go = useCallback(
+		(to: string) => {
+			closeMobileNav?.();
+			navigate(to);
+		},
+		[closeMobileNav, navigate],
+	);
+
+	if (collapsed) {
+		return (
+			<>
+				<Tooltip delayDuration={0}>
+					<TooltipTrigger asChild>
+						<SidebarIconItem
+							active={pathname === "/"}
+							aria-label="Dashboard"
+							onClick={() => go("/")}
+						>
+							<LayoutDashboard className="h-4 w-4" strokeWidth={1.5} />
+						</SidebarIconItem>
+					</TooltipTrigger>
+					<TooltipContent side="right" sideOffset={8}>
+						Dashboard
+					</TooltipContent>
+				</Tooltip>
+				<Tooltip delayDuration={0}>
+					<TooltipTrigger asChild>
+						<SidebarIconItem
+							active={isRecordingsPage}
+							aria-label="Recordings"
+							onClick={() => go("/recordings")}
+						>
+							<Mic className="h-4 w-4" strokeWidth={1.5} />
+						</SidebarIconItem>
+					</TooltipTrigger>
+					<TooltipContent side="right" sideOffset={8}>
+						Recordings
+					</TooltipContent>
+				</Tooltip>
+				{isRecordingsPage && <FolderSidebarCollapsed />}
+				{settingsItems.map((item) => {
+					const isActive = isNavItemActive(item, pathname);
+					return (
+						<Tooltip key={item.href} delayDuration={0}>
+							<TooltipTrigger asChild>
+								<SidebarIconItem
+									active={isActive}
+									aria-label={item.label}
+									onClick={() => go(item.href)}
+								>
+									<item.icon className="h-4 w-4" strokeWidth={1.5} />
+								</SidebarIconItem>
+							</TooltipTrigger>
+							<TooltipContent side="right" sideOffset={8}>
+								{item.label}
+							</TooltipContent>
+						</Tooltip>
+					);
+				})}
+			</>
+		);
+	}
+
+	return (
+		<>
+			<SidebarGroup label="General">
+				<SidebarItem active={pathname === "/"} onClick={() => go("/")}>
+					<LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+					<span className="flex-1 truncate text-left">Dashboard</span>
+				</SidebarItem>
+			</SidebarGroup>
+			<SidebarGroup label="Recordings">
+				<FolderSidebar />
+			</SidebarGroup>
+			<SidebarGroup label="Settings">
+				{settingsItems.map((item) => (
+					<SidebarItem
+						key={item.href}
+						active={isNavItemActive(item, pathname)}
+						onClick={() => go(item.href)}
+					>
+						<item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
+						<span className="flex-1 truncate text-left">{item.label}</span>
+					</SidebarItem>
+				))}
+			</SidebarGroup>
+		</>
+	);
+}
+
+function AppSidebarFooter() {
 	const { data: session } = useSession();
+	const { collapsed } = useSidebar();
 	const userName = session?.user?.name ?? "User";
 	const userImage = session?.user?.image;
 	const userInitial = userName[0] ?? "?";
-	const isRecordingsPage = isRecordingsPath(pathname);
 
 	const avatar = (
 		<Avatar className="h-9 w-9 shrink-0">
@@ -79,174 +188,95 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
 		</Avatar>
 	);
 
+	if (collapsed) {
+		return (
+			<Tooltip delayDuration={0}>
+				<TooltipTrigger asChild>
+					<button type="button" onClick={signOut} className="cursor-pointer" aria-label="Sign out">
+						{avatar}
+					</button>
+				</TooltipTrigger>
+				<TooltipContent side="right" sideOffset={8}>
+					{userName} — Sign out
+				</TooltipContent>
+			</Tooltip>
+		);
+	}
+
 	return (
-		<Sidebar collapsed={collapsed}>
-			<SidebarHeader>
-				<div
-					className={cn(
-						SIDEBAR_MARK_SLOT_CLASS,
-						collapsed ? "justify-center" : "justify-between pl-basalt-layout-sm",
-					)}
-				>
-					<Link
-						href="/"
-						aria-label="Home"
-						className="flex items-center gap-basalt-space-lg text-basalt-foreground no-underline hover:no-underline"
-					>
-						<img
-							src="/logo-24.png"
-							alt=""
-							width={24}
-							height={24}
-							className="h-7 w-7 shrink-0 object-contain"
-						/>
-						{collapsed ? null : (
-							<>
-								<span className="text-basalt-xl font-semibold text-basalt-foreground">lyre</span>
-								<span className="rounded-basalt-md bg-basalt-secondary px-basalt-space-md py-basalt-space-xs text-basalt-sm leading-basalt-tight font-medium text-basalt-muted-foreground">
-									v{APP_VERSION}
-								</span>
-							</>
-						)}
-					</Link>
-					{collapsed ? null : (
-						<Button variant="ghost" size="icon" onClick={onToggle} aria-label="Collapse sidebar">
-							<PanelLeft aria-hidden="true" />
+		<SidebarUser
+			name={userName}
+			email={session?.user?.email ?? ""}
+			avatar={avatar}
+			action={
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
+							<LogOut className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
 						</Button>
-					)}
-				</div>
+					</TooltipTrigger>
+					<TooltipContent side="top">Sign out</TooltipContent>
+				</Tooltip>
+			}
+		/>
+	);
+}
+
+function AppSidebarChrome({ dismissDrawer }: { dismissDrawer?: () => void }) {
+	const closeMobileNav = useMobileNavClose();
+
+	return (
+		<Sidebar resizable={!dismissDrawer}>
+			<SidebarHeader>
+				<SidebarBrand
+					logo={
+						<Link
+							href="/"
+							aria-label="Home"
+							className="flex items-center justify-center no-underline"
+							onClick={() => closeMobileNav?.()}
+						>
+							<img
+								src="/logo-24.png"
+								alt=""
+								width={24}
+								height={24}
+								className="size-basalt-sidebar-brand-slot object-contain"
+							/>
+						</Link>
+					}
+					name="lyre"
+					version={`v${APP_VERSION}`}
+					action={<SidebarToggleAction dismissDrawer={dismissDrawer} />}
+				/>
 			</SidebarHeader>
-			{collapsed ? (
-				<>
-					<Button variant="ghost" size="icon" onClick={onToggle} aria-label="Expand sidebar">
-						<PanelLeft aria-hidden="true" />
-					</Button>
-					<Tooltip delayDuration={0}>
-						<TooltipTrigger asChild>
-							<SidebarIconItem onClick={openSearch} aria-label="Search (⌘K)">
-								<Search className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
-							</SidebarIconItem>
-						</TooltipTrigger>
-						<TooltipContent side="right" sideOffset={8}>
-							Search (⌘K)
-						</TooltipContent>
-					</Tooltip>
-					<SidebarNav>
-						<Tooltip delayDuration={0}>
-							<TooltipTrigger asChild>
-								<SidebarIconItem
-									active={pathname === "/"}
-									aria-label="Dashboard"
-									onClick={() => navigate("/")}
-								>
-									<LayoutDashboard className="h-4 w-4" strokeWidth={1.5} />
-								</SidebarIconItem>
-							</TooltipTrigger>
-							<TooltipContent side="right" sideOffset={8}>
-								Dashboard
-							</TooltipContent>
-						</Tooltip>
-						<Tooltip delayDuration={0}>
-							<TooltipTrigger asChild>
-								<SidebarIconItem
-									active={isRecordingsPage}
-									aria-label="Recordings"
-									onClick={() => navigate("/recordings")}
-								>
-									<Mic className="h-4 w-4" strokeWidth={1.5} />
-								</SidebarIconItem>
-							</TooltipTrigger>
-							<TooltipContent side="right" sideOffset={8}>
-								Recordings
-							</TooltipContent>
-						</Tooltip>
-						{isRecordingsPage && <FolderSidebarCollapsed />}
-						{settingsItems.map((item) => {
-							const isActive = isNavItemActive(item, pathname);
-							return (
-								<Tooltip key={item.href} delayDuration={0}>
-									<TooltipTrigger asChild>
-										<SidebarIconItem
-											active={isActive}
-											aria-label={item.label}
-											onClick={() => navigate(item.href)}
-										>
-											<item.icon className="h-4 w-4" strokeWidth={1.5} />
-										</SidebarIconItem>
-									</TooltipTrigger>
-									<TooltipContent side="right" sideOffset={8}>
-										{item.label}
-									</TooltipContent>
-								</Tooltip>
-							);
-						})}
-					</SidebarNav>
-					<SidebarFooter>
-						<Tooltip delayDuration={0}>
-							<TooltipTrigger asChild>
-								<button
-									type="button"
-									onClick={signOut}
-									className="cursor-pointer"
-									aria-label="Sign out"
-								>
-									{avatar}
-								</button>
-							</TooltipTrigger>
-							<TooltipContent side="right" sideOffset={8}>
-								{userName} — Sign out
-							</TooltipContent>
-						</Tooltip>
-					</SidebarFooter>
-				</>
-			) : (
-				<>
-					<div className="px-basalt-nav-inset">
-						<SidebarSearch onClick={openSearch}>Search</SidebarSearch>
-					</div>
-					<SidebarNav>
-						<SidebarGroup label="General">
-							<SidebarItem active={pathname === "/"} onClick={() => navigate("/")}>
-								<LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-								<span className="flex-1 truncate text-left">Dashboard</span>
-							</SidebarItem>
-						</SidebarGroup>
-						<SidebarGroup label="Recordings">
-							<FolderSidebar />
-						</SidebarGroup>
-						<SidebarGroup label="Settings">
-							{settingsItems.map((item) => (
-								<SidebarItem
-									key={item.href}
-									active={isNavItemActive(item, pathname)}
-									onClick={() => navigate(item.href)}
-								>
-									<item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
-									<span className="flex-1 truncate text-left">{item.label}</span>
-								</SidebarItem>
-							))}
-						</SidebarGroup>
-					</SidebarNav>
-					<SidebarFooter>
-						<SidebarUser
-							name={userName}
-							email={session?.user?.email ?? ""}
-							avatar={avatar}
-							action={
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
-											<LogOut className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent side="top">Sign out</TooltipContent>
-								</Tooltip>
-							}
-						/>
-					</SidebarFooter>
-				</>
-			)}
+			<SidebarNav>
+				<SidebarSearch onClick={openSearch} shortcut="⌘K">
+					Search
+				</SidebarSearch>
+				<AppSidebarNav />
+			</SidebarNav>
+			<SidebarFooter>
+				<AppSidebarFooter />
+			</SidebarFooter>
 			<GlobalSearch />
 		</Sidebar>
+	);
+}
+
+export function AppSidebar({
+	collapsed,
+	onCollapsedChange,
+	dismissDrawer,
+}: {
+	collapsed: boolean;
+	onCollapsedChange: (collapsed: boolean) => void;
+	/** Mobile drawer: close the sheet instead of collapsing the rail. */
+	dismissDrawer?: () => void;
+}) {
+	return (
+		<SidebarProvider collapsed={collapsed} onCollapsedChange={onCollapsedChange}>
+			<AppSidebarChrome dismissDrawer={dismissDrawer} />
+		</SidebarProvider>
 	);
 }
