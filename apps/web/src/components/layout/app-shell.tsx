@@ -85,7 +85,7 @@ function AppShellInner({ children }: AppShellProps) {
 		document.getElementById("island-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
 	}, []);
 
-	const sidebar = <AppSidebar collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />;
+	const sidebar = <AppSidebar collapsed={collapsed} onCollapsedChange={setCollapsed} />;
 
 	return (
 		<BasaltAppShell>
@@ -103,7 +103,11 @@ function AppShellInner({ children }: AppShellProps) {
 						}}
 					>
 						<SheetTitle className="sr-only">Navigation</SheetTitle>
-						<AppSidebar collapsed={false} onToggle={() => setMobileOpen(false)} />
+						<AppSidebar
+							collapsed={false}
+							onCollapsedChange={() => {}}
+							onToggle={() => setMobileOpen(false)}
+						/>
 					</SheetContent>
 				</Sheet>
 			)}
