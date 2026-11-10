@@ -248,12 +248,7 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
 							action={
 								<Tooltip>
 									<TooltipTrigger asChild>
-										<Button
-											variant="ghost"
-											size="icon"
-											onClick={signOut}
-											aria-label="Sign out"
-										>
+										<Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
 											<LogOut className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
 										</Button>
 									</TooltipTrigger>
