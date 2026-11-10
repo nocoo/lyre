@@ -7,7 +7,7 @@ The original animal is retained byte-for-byte. This Refined pass adds the lyrebi
 | Surface                      | Asset                                                       | Treatment                                                                               |
 | ---------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | README header                | `assets/brand/icon-rounded.png`                             | Selected presentation at 128 px                                                         |
-| Expanded / collapsed sidebar | `apps/web/public/logo-24.png`                               | Transparent original; both sidebar states                                               |
+| Expanded / collapsed sidebar | `apps/web/public/logo-80.png`                               | Transparent original drawn at 24 px; both sidebar states                                |
 | Loading screen               | `apps/web/public/logo-80.png`                               | Transparent original displayed as a small header mark                                   |
 | Browser icons                | `apps/web/public/favicon.png; favicon.ico`                  | Transparent 32 px PNG and decoded 16/32 px ICO                                          |
 | Apple touch / Open Graph     | `apps/web/public/apple-touch-icon.png; opengraph-image.png` | Square 180 px touch icon; rounded presentation on the existing 1200 × 630 zinc canvas   |

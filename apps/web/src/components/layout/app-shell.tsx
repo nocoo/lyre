@@ -1,22 +1,18 @@
-import { Button, ContentIsland, Sheet, SheetContent, SheetTitle } from "@nocoo/basalt";
-import { AppHeader } from "@nocoo/basalt/components/app-header";
+import { ContentIsland, Sheet, SheetContent, SheetTitle } from "@nocoo/basalt";
+import { AppHeader, AppHeaderMenuButton, ProjectLinks } from "@nocoo/basalt/components/app-header";
 import {
 	AppMain,
 	AppSkipLink,
 	AppShell as BasaltAppShell,
 } from "@nocoo/basalt/components/app-shell";
-import { useTheme } from "@nocoo/basalt/providers/theme";
-import { Menu } from "lucide-react";
+import { ThemeToggle } from "@nocoo/basalt/components/theme-toggle";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocationPathname } from "@/lib/router-compat";
 import { BreadcrumbsProvider, useBreadcrumbs } from "./breadcrumbs-context";
-import { GitHubLink } from "./github-link";
-import { HeaderTooltip, HexlyLink } from "./header-links";
 import { MobileNavCloseProvider } from "./mobile-nav-close";
 import { ScrollToTop } from "./scroll-to-top";
 import { AppSidebar } from "./sidebar";
-import { ThemeToggle } from "./theme-toggle";
 
 interface AppShellProps {
 	children: React.ReactNode;
@@ -60,7 +56,6 @@ function AppShellInner({ children }: AppShellProps) {
 	const navigationTrigger = useRef<HTMLButtonElement>(null);
 	const { items: breadcrumbItems } = useBreadcrumbs();
 	const pathname = useLocationPathname();
-	const { theme } = useTheme();
 	const [showScrollTop, setShowScrollTop] = useState(false);
 	const trail = headerTrail(pathname, breadcrumbItems);
 
@@ -119,26 +114,16 @@ function AppShellInner({ children }: AppShellProps) {
 				<AppHeader
 					leading={
 						isMobile ? (
-							<HeaderTooltip label="Open navigation">
-								<Button
-									ref={navigationTrigger}
-									variant="ghost"
-									size="icon"
-									onClick={() => setMobileOpen(true)}
-									aria-label="Open navigation"
-								>
-									<Menu aria-hidden="true" />
-								</Button>
-							</HeaderTooltip>
+							<AppHeaderMenuButton ref={navigationTrigger} onClick={() => setMobileOpen(true)} />
 						) : null
 					}
 					breadcrumbs={trail.breadcrumbs}
+					breadcrumbsLabel="Breadcrumb"
 					title={trail.title}
 					actions={
 						<>
-							<GitHubLink />
-							<HexlyLink />
-							<ThemeToggle aria-label={`Toggle theme (now ${theme})`} />
+							<ProjectLinks github="nocoo/lyre" hexly="lyre" name="Lyre" />
+							<ThemeToggle />
 						</>
 					}
 				/>

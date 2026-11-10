@@ -22,16 +22,7 @@ import {
 	TooltipTrigger,
 } from "@nocoo/basalt";
 import { useSidebar } from "@nocoo/basalt/components/sidebar";
-import {
-	Bot,
-	HardDrive,
-	Key,
-	LayoutDashboard,
-	LogOut,
-	Mic,
-	PanelLeft,
-	Settings,
-} from "lucide-react";
+import { Bot, HardDrive, Key, LayoutDashboard, LogOut, Mic, Settings } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router";
 import { GlobalSearch } from "@/components/global-search";
@@ -62,17 +53,6 @@ function openSearch() {
 
 function signOut() {
 	window.location.href = ACCESS_LOGOUT_URL;
-}
-
-function SidebarToggleAction({ dismissDrawer }: { dismissDrawer?: () => void }) {
-	if (dismissDrawer) {
-		return (
-			<Button variant="ghost" size="icon-sm" aria-label="Close navigation" onClick={dismissDrawer}>
-				<PanelLeft aria-hidden="true" />
-			</Button>
-		);
-	}
-	return <SidebarToggle />;
 }
 
 function AppSidebarNav() {
@@ -174,7 +154,6 @@ function AppSidebarNav() {
 
 function AppSidebarFooter() {
 	const { data: session } = useSession();
-	const { collapsed } = useSidebar();
 	const userName = session?.user?.name ?? "User";
 	const userImage = session?.user?.image;
 	const userInitial = userName[0] ?? "?";
@@ -187,21 +166,6 @@ function AppSidebarFooter() {
 			</AvatarFallback>
 		</Avatar>
 	);
-
-	if (collapsed) {
-		return (
-			<Tooltip delayDuration={0}>
-				<TooltipTrigger asChild>
-					<button type="button" onClick={signOut} className="cursor-pointer" aria-label="Sign out">
-						{avatar}
-					</button>
-				</TooltipTrigger>
-				<TooltipContent side="right" sideOffset={8}>
-					{userName} — Sign out
-				</TooltipContent>
-			</Tooltip>
-		);
-	}
 
 	return (
 		<SidebarUser
@@ -236,18 +200,18 @@ function AppSidebarChrome({ dismissDrawer }: { dismissDrawer?: () => void }) {
 							className="flex items-center justify-center no-underline"
 							onClick={() => closeMobileNav?.()}
 						>
-							<img
-								src="/logo-24.png"
-								alt=""
-								width={24}
-								height={24}
-								className="size-basalt-sidebar-brand-slot object-contain"
-							/>
+							<img src="/logo-80.png" alt="" width={24} height={24} />
 						</Link>
 					}
 					name="lyre"
 					version={`v${APP_VERSION}`}
-					action={<SidebarToggleAction dismissDrawer={dismissDrawer} />}
+					action={
+						dismissDrawer ? (
+							<SidebarToggle mode="dismiss" onDismiss={dismissDrawer} />
+						) : (
+							<SidebarToggle />
+						)
+					}
 				/>
 			</SidebarHeader>
 			<SidebarNav>
