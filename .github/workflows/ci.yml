@@ -1,3 +1,5 @@
+# CI slot standard v1 (nocoo/base-ci docs/slots.md): impl S1–G2, B1, L1, L2, L3, Z1 via quality.yml;
+# na L1.5, P1 in slot-status. nocoo/base-ci v2026.12: top-level slot jobs, L2/L3 browsers/artifacts.
 name: CI
 
 on:
@@ -6,6 +8,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   l1-hook-selftest:
@@ -19,7 +24,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup JS and dependencies
-        uses: nocoo/base-ci/.github/actions/setup-js@633a5545fcfec91b688840650d4edf3e9cc1abbd
+        uses: nocoo/base-ci/.github/actions/setup-js@1ea10ecab22b72512399485391603fe03a161016 # v2026.12
         with:
           package-manager: bun
           runtime-version: "1.4.0"
@@ -37,15 +42,43 @@ jobs:
         run: bun run gate:l1-selftest
 
   quality:
-    uses: nocoo/base-ci/.github/workflows/quality.yml@633a5545fcfec91b688840650d4edf3e9cc1abbd # v2026.10
+    uses: nocoo/base-ci/.github/workflows/quality.yml@1ea10ecab22b72512399485391603fe03a161016 # v2026.12
     with:
       runtime-version: "1.4.0"
-      install-policy: "trusted"
-      coverage-path: "coverage"
-      prepare-command: "bun run build"
-      test-command: "bun run test:coverage"
-      typecheck-command: "bun run typecheck"
+      node-version: "26.12.1"
+      install-policy: trusted
+      coverage-path: coverage
+      prepare-command: bun run build
+      test-command: bun run test:coverage
+      typecheck-command: bun run typecheck
+      gitleaks-config: .gitleaks.toml
+      build: true
+      build-command: bun run build
+      workflow-lint: true
+      workflow-lint-required-workflow: nocoo/base-ci/.github/workflows/deploy-worker.yml
+      workflow-lint-yamllint: true
       l2: true
-      l2-command: "bun run test:e2e"
+      l2-command: bun run test:e2e
       l3: true
-      l3-command: "bun run test:e2e:bdd"
+      l3-browsers: chromium
+      l3-prepare-command: bun run build
+      l3-command: bun run test:e2e:bdd
+      l3-artifact-name: browser-evidence
+      l3-artifact-path: |
+        playwright-report/
+        test-results/bdd/
+      l3-artifact-retention-days: 14
+      env-json: '{"WRANGLER_SEND_METRICS": "false", "CI": "true"}'
+      slot-status: >-
+        {"S1": {"status": "impl"},
+        "S2": {"status": "impl"},
+        "S3": {"status": "impl"},
+        "G1": {"status": "impl"},
+        "G2": {"status": "impl"},
+        "B1": {"status": "impl"},
+        "L1": {"status": "impl"},
+        "L1.5": {"status": "na", "reason": "未接入 @cloudflare/vitest-pool-workers / miniflare Worker 运行时单测；L2/L3 以 wrangler dev 起服务"},
+        "L2": {"status": "impl"},
+        "L3": {"status": "impl"},
+        "P1": {"status": "na", "reason": "根 package.json 为 private，不发布 npm 包"},
+        "Z1": {"status": "impl"}}
