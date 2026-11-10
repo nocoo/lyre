@@ -116,7 +116,6 @@ function AppShellInner({ children }: AppShellProps) {
 									ref={navigationTrigger}
 									variant="ghost"
 									size="icon"
-									className="h-8 w-8"
 									onClick={() => setMobileOpen(true)}
 									aria-label="Open navigation"
 								>
