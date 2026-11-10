@@ -55,6 +55,7 @@ endpoint).
 
 The Pull direction allows Backy to trigger automatic backups by calling
 Lyre's webhook endpoint.
+
 1. Navigate to **Settings → General**
 2. Scroll to the **Pull Webhook** section
 3. Click **Generate Key** to create a pull key
@@ -166,6 +167,7 @@ X-Webhook-Key: {pullKey}
 ```
 
 **Flow:**
+
 1. Validate `X-Webhook-Key` → find userId
 2. Read the user's Push config (webhookUrl + apiKey)
 3. Export all user data and push to Backy
@@ -278,12 +280,14 @@ Backy settings are stored in the D1 `settings` table (key-value store):
 ### Environment Detection
 
 The `environment` field sent with each backup is derived from `NODE_ENV`:
+
 - `production` → `"prod"`
 - Anything else → `"dev"`
 
 ### Backup Contents
 
 Each backup includes all user data (metadata only, no audio files):
+
 - Folders and tags
 - Recordings (metadata + OSS keys)
 - Transcription jobs and transcriptions
@@ -294,6 +298,7 @@ Each backup includes all user data (metadata only, no audio files):
 ## Integrating Backy in Other Projects
 
 To integrate Backy in a new project, you need:
+
 1. **A webhook URL and API key** from the Backy dashboard
 2. **A push endpoint** that:
    - Exports your data as JSON

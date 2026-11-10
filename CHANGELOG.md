@@ -92,7 +92,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - chore: upgrade basalt to 2.1.7 (5aae610)
 - Remove unused apps/web mock-data module (70b0710)
 
-
 ## v1.8.1 (2026-09-09)
 
 ### 🚀 Features
@@ -113,7 +112,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - docs: standardize bilingual project readme (3acc949)
 - test: isolate native host and opt in to audio capture (0e50ca0)
 - chore: defer lyre logo adoption (f22d7fa)
-
 
 ## v1.8.0 (2026-09-04)
 
@@ -181,7 +179,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - chore(deps): upgrade hono, react-router, postcss, sharp for CVE fixes (121bb82)
 - refactor(web): shrink first-paint loader to logo + pulse (da03a26)
 
-
 ## v1.7.0 (2026-07-15)
 
 ### 🚀 Features
@@ -211,7 +208,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - docs(macos): sync SCK-unavailable semantics with shipped code (6e516e1)
 - docs(macos): add v2.0 process-tap addendum to teams detector spec (3cf745b)
 
-
 ## v1.6.19 (2026-07-07)
 
 ### 🚀 Features
@@ -240,7 +236,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - docs(macos): refine teams detector spec after joint review (44024ff)
 - docs: add teams-meeting-detector spec (07) (106ef27)
 
-
 ## v1.6.18 (2026-07-07)
 
 ### 🚀 Features
@@ -267,7 +262,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - docs(macos): refine teams detector spec after joint review (f5ae0a3)
 - docs: add teams-meeting-detector spec (07) (3d600f9)
 
-
 ## v1.6.17 (2026-07-03)
 
 ### 🚀 Features
@@ -278,7 +272,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 ### 🐛 Bug Fixes
 
 - fix(web): cap cassette cover art at 200px, enforce full-width fit (2432120)
-
 
 ## v1.6.16 (2026-07-03)
 
@@ -312,7 +305,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - docs(macos): rewrite UI upgrade plan around macOS-native constraints (4b83a35)
 - docs(macos): plan Basalt B-6 UI upgrade for the macOS app (1b12fef)
 
-
 ## v1.6.15 (2026-07-01)
 
 ### 🚀 Features
@@ -323,13 +315,11 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 
 - fix(macos): downmix dual-track M4A to single track before upload (0364206)
 
-
 ## v1.6.14 (2026-07-01)
 
 ### 🐛 Bug Fixes
 
 - fix(macos): enable AVAssetWriter faststart so browsers can decode M4A (7d6233f)
-
 
 ## v1.6.13 (2026-07-01)
 
@@ -342,7 +332,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 
 - revert(playback): drop response-content-type override on play-url (19745c0)
 
-
 ## v1.6.12 (2026-07-01)
 
 ### 🐛 Bug Fixes
@@ -350,20 +339,17 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - fix(web): remove progress bar CSS transition for smooth RAF updates (bb990f9)
 - fix(playback): serve M4A with audio/mp4 Content-Type (4496d18)
 
-
 ## v1.6.11 (2026-07-01)
 
 ### 📝 Other Changes
 
 - chore(macos): add ad-hoc DMG build pipeline (bun run macos:dmg) (6fbf12c)
 
-
 ## v1.6.10 (2026-06-29)
 
 ### 🚀 Features
 
 - feat(ai): add authType (apiKey | bearer) for custom provider (d84a3e4)
-
 
 ## v1.6.9 (2026-06-29)
 
@@ -425,7 +411,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - chore(hooks): add L2 API E2E to pre-push gate (dbc9e01)
 - test: align e2e suites after AI settings rename and add display-skip (4b1b9e2)
 
-
 ## v1.6.8 (2026-05-12)
 
 ### 🚀 Features
@@ -447,7 +432,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - test(api): sync route-test helper with ASR settings route (a3bd38f)
 - test(e2e): add route coverage for GET/PUT /api/settings/asr (5ec2c45)
 
-
 ## v1.6.7 (2026-05-12)
 
 ### 🐛 Bug Fixes
@@ -458,7 +442,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 ### 📝 Other Changes
 
 - chore: add .claude/ to .gitignore (5a3423b)
-
 
 ## v1.6.6 (2026-05-12)
 
@@ -530,7 +513,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - ci: upgrade base-ci to v2026.1 (0ec7e21)
 - ci(g2): add gitleaks to pre-commit and osv-scanner to pre-push (3b14c66)
 
-
 ## v1.6.5 (2026-04-18)
 
 ### 🚀 Features
@@ -597,7 +579,6 @@ This release deploys the Web/Worker fix; it does not publish a new macOS install
 - docs: renumber active docs (03→01, 04→02) (0c55332)
 - chore: archive stale planning docs (3e86c17)
 - docs: clarify apple development signing (2e17a3a)
-
 
 All notable changes to this project will be documented in this file.
 

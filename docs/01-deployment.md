@@ -23,6 +23,7 @@ Cloudflare Access  →  Worker `lyre`
 
 The Worker decodes the `Cf-Access-Jwt-Assertion` header set by Cloudflare
 Access. Configure an Access application in the Cloudflare dashboard:
+
 1. **Zero Trust → Access → Applications → Add an application → Self-hosted**
 2. Hostname: the Worker's custom domain (e.g. `lyre.example.com`)
 3. Add an Access policy with the email allowlist you want to grant access to.
@@ -122,6 +123,7 @@ In the OSS Console, **bucket → Access Control → Cross-Origin Resource Sharin
 
 Lyre uses [DashScope](https://dashscope.aliyuncs.com/) for transcription
 (`qwen3-asr-flash-filetrans`).
+
 1. Open the [DashScope console](https://dashscope.console.aliyun.com/) and
    activate DashScope (free to activate, pay-per-use).
 2. **API-KEY Management → Create API Key**.

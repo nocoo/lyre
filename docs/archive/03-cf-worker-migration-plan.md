@@ -160,6 +160,7 @@ type MeResponse = {
 ```
 
 实现要点：
+
 - worker `routes/me.ts` 拼装时，从 `c.get("accessEmail")` + JWT payload 拿 name；用 email 查 `users` 表读 `avatarUrl` 列（schema: `apps/web/src/db/schema.ts` 字段 `avatarUrl` → SQL 列 `avatar_url`）做 avatarUrl
 - device-token 路径下：用 `tokenUser.userId` 查同一张表
 - 前端 sidebar `useMe()` 数据形状与现 `useSession().user` 完全对齐（`name` / `image` → `name` / `avatarUrl`），改动量最小
@@ -190,12 +191,14 @@ server-only 代码（含 secrets、Node 内置模块）打进浏览器 bundle。
 ```
 
 强约束：
+
 - `packages/api/src/contracts/**/*` **不允许** import `node:*`、`@nocoo/next-ai/server`、`drizzle-orm/d1`、`hono/*` 等运行时模块；只放纯 type + 数据常量
 - `apps/web/src/**` **只允许** import `@lyre/api/contracts/*`，不准 import `@lyre/api`、`@lyre/api/services/*`、`@lyre/api/handlers/*`
 - ESLint `no-restricted-imports` 规则在 `apps/web/eslint.config.mjs` 强制
 - Wave B 第一个动作：先把 `services/ai.ts` 顶部的 provider metadata（id、displayName、model 列表、validation schema）抽到 `contracts/ai.ts`，server 侧 re-import 这个 contracts；UI 端切换 import path
 
 类似的"前端用了 server module"高风险点（Wave B 启动时全量盘点）：
+
 - `@/services/ai` ← `ai-settings.tsx`
 - `@/services/oss` ← `oss-storage.tsx`（如果有）
 - `@/services/asr` 类型 ← `transcript-viewer.tsx`（如果有）
@@ -215,6 +218,7 @@ server-only 代码（含 secrets、Node 内置模块）打进浏览器 bundle。
 | Wave E 清理          | 🗑️ 随 `apps/web_legacy/` 整目录删除一并消失；不需要单独 commit                                                                                 | —                                                                         | —                                                                                  |
 
 修正：
+
 - ❌ ~~"Wave B 删除 services/job-manager*.ts、services/job-event-hub.ts"~~ ← 错误，不能删，legacy 还在用
 - ✅ Wave B 仅做"物理迁移到 packages/api"，行为零变化；legacy 测试列表（`apps/web/package.json` 里的 job-manager / job-event-hub / use-job-events 测试用例）原样保留
 - ✅ 新 worker / 新 SPA 一出生就不挂 SSE
@@ -245,6 +249,7 @@ result JSON）本来就不在 SQLite 里，存 OSS。
 ### 决策点 2 — JobManager 后台轮询架构
 
 现 `JobManager`（`apps/web/src/services/job-manager.ts`）：
+
 - 进程启动时 lazy init，从 DB 加载所有 RUNNING/PENDING 的 ASR 任务
 - 每 `POLL_INTERVAL_MS` 轮询所有任务的 DashScope 状态
 - 状态变更回调 `JobEventHub` → SSE 推送给前端
@@ -282,6 +287,7 @@ Workers 支持流式 `Response`（`ReadableStream`），SSE 协议本身可行�
 `apps/macos` 已经走 device-token Bearer 调 `/api/upload/presign` 等接口。新
 worker 同时挂 `accessAuth`（Web）+ `bearerAuth`（device token）即可保持兼容。
 **无需 macOS 端改动**，前提是：
+
 - worker 域名与 Railway 域名一致（DNS 切换即可，token 不失效）
 - 或 macOS 端通过设置页改 server URL（已支持）
 
@@ -397,6 +403,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 | **Drizzle migration 文件兼容**               | 现 `drizzle-kit` 生成的 `.sql`（如有）                                              | 在 wrangler `d1 execute --file` 下可直接 apply                                                                                                                                               |
 
 操作步骤：
+
 1. 在 `packages/api/scripts/d1-spike/` 起一个独立 mini-app（不进 monorepo 主流程）
 2. 复制 `db/schema.ts` 全量 + 上述高风险路径的 1-2 个真实查询
 3. 用 wrangler 本地 D1（miniflare）跑通；记录每条不兼容点 + 解法到本节末尾的 spike-findings 表
@@ -421,6 +428,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 #### B.1 — Contracts 抽离（client-safe types 先行，仅前置 1 个文件即可解锁 UI）  ✅ 2026-04-26
 
 把所有 UI 直接 import 的 server-side 模块拆成 contracts 层：
+
 1. 新建 `packages/api/src/contracts/` 目录与 `package.json` `./contracts/*` exports（见决策点 7）
 2. 第一批必须先做的 contracts（被 UI 直接消费的）：
    - `contracts/ai.ts` — provider id/displayName/model 列表/zod schema（从 `services/ai.ts` 抽）
@@ -432,6 +440,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 #### B.2 — 物理迁移 lib/services/db 到 packages/api（保持行为不变）  ✅ 2026-04-26
 
 `git mv` 以下文件到 `packages/api/src/lib/`：
+
 - `db/{schema,index}.ts` + `db/repositories/*`
 - `services/{ai,asr,asr-provider,backup,backy,oss}.ts`
 - `services/{job-manager,job-manager-singleton,job-event-hub,job-processor}.ts` —— **保留运行**（决策点 8）；legacy `apps/web_legacy` 仍 import 这几个并继续在 next 进程内常驻；新 worker 不挂这些
@@ -440,6 +449,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 `apps/web_legacy` 加 `@lyre/api: workspace:*` 依赖，所有 `@/lib/*` `@/services/*` `@/db/*` 全替换为 `@lyre/api/*` subpath imports（**严格按 contracts vs services 分层**：UI 仅 contracts，route handlers 用 services + handlers）。
 
 **关键替换 — DB dialect**（B.0 spike 通过后实施）：
+
 - 新建 `packages/api/src/lib/db/d1-binding.ts`（Worker binding 实现给 apps/api 用，Drizzle `drizzle-orm/d1`）
 - legacy 持久化策略：**Wave B 期间 legacy 继续用 better-sqlite3** —— 把 dialect 切换隔离在 worker binding 一侧，避免 legacy 一夜变天。`packages/api/src/lib/db/index.ts` 导出根据 `RuntimeContext.db` 注入而非全局单例
 - legacy route adapter 内构造 `RuntimeContext`：dev/legacy `db = drizzleSqlite(better-sqlite3)`；worker `db = drizzleD1(c.env.DB)`
@@ -456,6 +466,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 例外：`apps/web_legacy/src/app/api/jobs/events/route.ts`（SSE）**不抽 handler**，整体保留在 legacy 里直到 Wave E 整目录删除（决策点 8）。
 
 可能的 handler 分组（共 32 个 route.ts → 估计 40+ 方法 handler）：
+
 - `recordings.ts` — list / create / get / update / delete / batch / play-url / download-url / words / transcribe / summarize
 - `folders.ts` / `tags.ts` — CRUD ×2 套
 - `search.ts` / `dashboard.ts` — query
@@ -466,6 +477,7 @@ requireAuth              # 至此仍既无 accessEmail 也无 tokenUser → 401
 - `live.ts`
 
 **RuntimeContext** 抽象（参考 backy Wave B）：
+
 ```ts
 export interface RuntimeContext {
 	db: DbAdapter; // Drizzle 实例：worker = drizzle(c.env.DB) 走 D1 binding；legacy = drizzle(better-sqlite3)
@@ -481,12 +493,14 @@ export interface RuntimeContext {
 
 **强约束**：handler 顶层不再读 `process.*`、不再 import 具体 SDK 客户端、不再
 import `next/*`。
+
 - `grep -r "process\." packages/api/src | grep -v __tests__` ≈ 空
 - `grep -r "from \"next" packages/api/src` 空
 
 #### B.4 — Coverage / 双 workspace 门禁  ✅ 2026-04-26
 
 照 backy Wave 1 「Coverage gate plumbing」：
+
 - `packages/api/scripts/check-coverage.ts`（90% 阈值，复制 web_legacy 那份）
 - `packages/api/eslint.config.mjs`（tseslint strict，无 Next/React）
 - 根 `package.json` fan-out `lint` / `typecheck` / `test` / `test:coverage` 到三个 workspace（web_legacy + api + packages/api）
@@ -494,6 +508,7 @@ import `next/*`。
 #### B.5 — JobManager 收尾（**不删**，仅准备 cron handler）  ✅ 2026-04-26
 
 按决策点 8 锁定的"保留 legacy SSE，新 worker 不挂"策略：
+
 - ❌ **不**删除 `services/job-manager*.ts`、`services/job-event-hub.ts`、`hooks/use-job-events.ts`、`/api/jobs/events/route.ts` —— legacy `apps/web_legacy` 期间继续依赖这些跑 SSE
 - ✅ 新建 `packages/api/src/handlers/jobs.ts` 中的 `cronTickHandler`（批量扫 RUNNING → 调 `pollJob` → 写 DB），**仅给新 worker 的 `scheduled()` 用**；legacy 不调
 - ✅ legacy 期间形成两套并存：legacy 进程内 JobManager 单例 + worker Cron（指向同一份数据 → Wave E 切流前 worker 用 test D1，不会双写 prod 数据）
@@ -502,6 +517,7 @@ import `next/*`。
 #### B.6 — DB 注入到 RuntimeContext（Wave C 前置）
 
 **B.6.a 基础设施 ✅ 2026-04-26**：
+
 - ✅ `packages/api/src/db/types.ts` 新增 `LyreDb` 类型别名
 - ✅ `packages/api/src/db/drivers/sqlite.ts` 抽出 Bun/better-sqlite3 driver（唯一 import `fs`/`bun:sqlite`/`better-sqlite3` 的位置）
 - ✅ `packages/api/src/db/drivers/d1.ts` 占位 D1 driver + `D1DatabaseLike` 接口
@@ -511,6 +527,7 @@ import `next/*`。
 - ✅ 测试 fixture `_fixtures/runtime-context.ts` 同样注入 `db`
 
 **B.6.b 渐进迁移 ⬜ Wave C 前必须完成**：
+
 - ✅ Repo 工厂化：`makeUsersRepo(db)`、`makeRecordingsRepo(db)` 等 8 个 + `makeRepos(db)` 聚合；保留旧 `usersRepo` 别名 = `makeUsersRepo(globalDb)`（2026-04-26）
 - ✅ Handler 层切 `ctx.db`：`packages/api/src/handlers/*` 全部 11 个文件；`api-auth.ts` 也改造为接收 `db: LyreDb`，legacy adapter 注入（2026-04-26）
 - ✅ Service 层接 `db?: LyreDb`：`job-processor.ts`（`pollJob`、`autoSummarize`）、`backy.ts`（`readBackySettings`/`readPullKey`/`savePullKey`/`deletePullKey`/`findUserIdByPullKey`）、`backup.ts`（`exportBackup`/`importBackup`/`pushBackupToBacky`）；optional 参数兼容 legacy 单例与测试（2026-04-26）
@@ -539,6 +556,7 @@ import `next/*`。
 #### Wave C.0 — Repo / service 层 async 化（前置 gate）  ✅
 
 来自 B.6.b.4 实测：当前 8 个 repo 共 40 个方法在 D1 dialect 下全部不能跑（细节见上方 spike-findings 表）。Wave C 装配 worker 前，先把 repo + 受影响的 service / handler 改 async：
+
 1. **8 个 repo 全部 async 化**：每个方法改 `async`，链尾 `await`，写入方法读 `result.meta.changes`（D1）—— 但 better-sqlite3 没 `meta` 字段；解法是引入 `LyreDb` 上的统一 `runResult` helper，由 driver 适配（sqlite driver 走 `result.changes`，d1 driver 走 `result.meta.changes`），repo 调 `helper.changes(result)`。
 2. **handlers**（11 个文件）→ 所有 `repos.xxx.findById(...)` 等 41 个 sync 调用点加 `await`，handler 函数已经是 async 没问题。
 3. **services**（`backup.ts`、`backy.ts`、`job-processor.ts`、`job-manager.ts`）→ 同步调用 repo 的地方加 `await`；`backup.importBackup` 的 `db.transaction` 改 `db.batch([...])`（B.0 spike finding #2）。
@@ -546,6 +564,7 @@ import `next/*`。
 5. 跑 `bun run api:test` + `bun run legacy:test` + `bun run legacy:test:e2e` 全绿。
 
 **验收**：
+
 - `bun test packages/api/scripts/d1-spike/repo-async.test.ts` 重新跑：把"全部 broken"断言反过来，证明 await 后全部 OK ✅（40/40 promise）
 - legacy 行为零回归 ✅（packages/api 127 tests pass）
 
@@ -562,6 +581,7 @@ import `next/*`。
 9. 本地：`bun --cwd apps/api dev`（`wrangler dev --port 7017 --local`）；`apps/web_legacy` 仍跑 7016 不冲突。
 
 **验收**：
+
 - `wrangler dev` 起得来，`curl http://localhost:7017/api/live` 200
 - 带 `E2E_SKIP_AUTH=true` 跑一份"指向 worker"的 L2 e2e（迁移现 e2e suite）全绿
 - `grep -r "next/server\|NextResponse" apps/api/src` 空
@@ -594,6 +614,7 @@ import `next/*`。
 9. `next-themes` 的替代：要么自写 ThemeContext + localStorage（参考 surety），要么 fork 一个无 next 依赖的 fork；**评估后决定**。
 
 **验收**：
+
 - `bun --cwd apps/web dev` + `bun --cwd apps/api dev` 联调，所有页面渲染、CRUD 跑通
 - L3 Playwright 全绿（runner 改起 vite + wrangler 双进程）
 - 无 console error / 404；FOUC 不闪
@@ -616,6 +637,7 @@ import `next/*`。
     - Railway 服务（保留 DB 备份导出文件）
 
 **验收**：
+
 - 生产域名走 Access，未登录跳 nocoo team SSO
 - 登录后所有功能与 web_legacy 一致
 - macOS 客户端调 worker 域名上传录音正常

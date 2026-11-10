@@ -21,21 +21,25 @@
 ### Hooks 对比
 
 **Dove pre-commit** (并行):
+
 ```
 typecheck | lint:staged | gate:secrets | gate:routes | gate:pages | test:coverage
 ```
 
 **Lyre pre-commit** (串行):
+
 ```
 gitleaks → lint → test → typecheck → macOS
 ```
 
 **Dove pre-push**:
+
 ```
 test:e2e:api | gate:deps
 ```
 
 **Lyre pre-push** (并行 — `scripts/pre-push.ts`):
+
 ```
 gate:deps | lint | typecheck | test:coverage + web:build | test:e2e (live) | macOS xcodebuild test | macOS swiftlint
 ```
@@ -68,15 +72,18 @@ gate:deps | lint | typecheck | test:coverage + web:build | test:e2e (live) | mac
 vitest 的 v8 coverage provider 原生支持 JSON output + per-file thresholds，与 dove 保持一致。
 
 **迁移范围**:
+
 - `packages/api/src/__tests__/` — 117 tests (核心)
 - `apps/api/src/__tests__/` — 25 tests
 - `apps/web/src/__tests__/` — 13 tests
 
 **新增文件**:
+
 - `vitest.config.ts` — 全局配置 (参考 dove)
 - `packages/api/vitest.config.ts` — workspace 配置
 
 **新增依赖**:
+
 - `vitest` — root devDependencies (或各 workspace)
 - `@vitest/coverage-v8` — 覆盖率 provider
 - `jsdom` 或 `happy-dom` — apps/web 测试需要 DOM 环境
@@ -95,6 +102,7 @@ apps/api 的 Worker glue tests 依赖 `packages/api/src/__tests__/_fixtures/test
 因此也只能留在 bun test。仅 apps/web 迁移到 vitest。覆盖率先按 workspace 独立统计，后续再考虑统一。
 
 **修改**:
+
 - `package.json` — `test` 脚本保持组合：`bun run web:test && bun run worker:test && bun run api:test`
   - `web:test` = `vitest run` (apps/web)
   - `worker:test` = `bun test` (apps/api，bun:sqlite 依赖)
@@ -109,6 +117,7 @@ apps/api 的 Worker glue tests 依赖 `packages/api/src/__tests__/_fixtures/test
 - `apps/web/src/__tests__/*.test.ts` — 改 import，添加 happy-dom 环境
 
 **验收**:
+
 - [x] `bun run test` 全绿 (apps/web vitest + apps/api bun test + packages/api bun test)
 - [x] `bun run web:test:coverage` 输出 JSON 格式 + 阈值生效
 - [x] `bun run api:test:coverage` 保持现有 Bun text gate 通过
@@ -124,6 +133,7 @@ apps/api 的 Worker glue tests 依赖 `packages/api/src/__tests__/_fixtures/test
 **目标**: 在真实 Worker runtime (wrangler dev --env test + local SQLite D1) 下运行关键 API 流程。
 
 **测试覆盖标准** (按 METHOD + path，非仅根路径):
+
 ```
 GET    /api/live
 GET    /api/me
@@ -140,6 +150,7 @@ HEAD   /api/backy/pull          (webhook auth)
 ```
 
 **新增文件**:
+
 - `e2e/api/` — Worker runtime E2E 测试目录
 - `scripts/run-e2e.ts` — 启动 `wrangler dev --env test` + 跑测试 + 清理
 - `scripts/check-route-coverage.ts` — 解析 route 覆盖，需处理：
@@ -150,10 +161,12 @@ HEAD   /api/backy/pull          (webhook auth)
     gate 检查 manifest vs e2e 测试文件的覆盖
 
 **修改**:
+
 - `package.json` 添加 `test:e2e` 脚本
 - `.husky/pre-push` 添加 L2 gate
 
 **验收**:
+
 - [x] `bun run test:e2e` 通过 (38 tests, 9 files)
 - [x] `bun run gate:routes` 通过 (49/49 routes covered)
 - [ ] CI L2 job 绿 (需确认 base-ci `enable-l2` input)
@@ -172,10 +185,12 @@ bun run gate:deps      # osv-scanner scan --lockfile=bun.lock (pre-push 语义)
 不要合并成默认"全部跑"，否则 pre-commit 可能变慢，pre-push 可能扫不到 staged secrets。
 
 **新增文件**:
+
 - `scripts/gate-secrets.ts` — gitleaks wrapper
 - `scripts/gate-deps.ts` — osv-scanner wrapper
 
 **验收**:
+
 - [x] `bun run gate:secrets` 在 pre-commit 中运行
 - [x] `bun run gate:deps` 在 pre-push 中运行
 
@@ -190,11 +205,13 @@ bun run gate:deps      # osv-scanner scan --lockfile=bun.lock (pre-push 语义)
 > 需先升级 base-ci 或自行在 CI workflow 中添加 L3 job。
 
 **登录态策略**:
+
 - 使用 `E2E_SKIP_AUTH=true` (env.test) 绕过 Cloudflare Access
 - Playwright 通过 `storageState` 复用登录态，避免每个 spec 重复登录
 - `/api/me` 返回合成测试用户，无需真实 SSO
 
 **API Fixture 策略**:
+
 - 每个 BDD spec 运行前 seed 测试数据 (recordings, folders, tags)
 - spec 运行后 cleanup，保证隔离
 - 使用 `wrangler d1 execute --local --file e2e/fixtures/schema.sql` 初始化
@@ -203,6 +220,7 @@ bun run gate:deps      # osv-scanner scan --lockfile=bun.lock (pre-push 语义)
 - **schema 来源**: 运行 `drizzle-kit generate` 生成 SQL，或从 `packages/api/src/db/schema.ts` 手动导出
 
 **页面覆盖标准** (按 route path):
+
 ```
 /                    (dashboard)
 /recordings          (list)
@@ -214,19 +232,23 @@ bun run gate:deps      # osv-scanner scan --lockfile=bun.lock (pre-push 语义)
 ```
 
 **未登录跳转测试**:
+
 - 本地 (`E2E_SKIP_AUTH=true`)：测 `/api/me` 401 后前端 `window.location.reload()` 行为
   (逻辑在 `apps/web/src/lib/api.ts:42`)
 - 生产/staging smoke：测 Cloudflare Access 重定向 (需真实 Access 配置，不在 E2E 范围内)
 
 **新增文件**:
+
 - `e2e/bdd/` — Playwright BDD 测试目录
 - `playwright.config.ts`
 - `scripts/check-page-coverage.ts`
 
 **新增依赖**:
+
 - `@playwright/test`
 
 **验收**:
+
 - [x] `bun run test:e2e:bdd` 通过
 - [x] `bun run gate:pages` 通过 (页面路径级别覆盖)
 - [ ] CI L3 job 绿 (需确认 base-ci `enable-l3` input)
@@ -245,10 +267,12 @@ time git commit --allow-empty -m "benchmark"
 
 **注意**: 当前 pre-commit 包含 `xcodebuild test` 和 `swiftlint` (见 `.husky/pre-commit:15`)，
 并行后可能吃 CPU、拉长总耗时。建议：
+
 - pre-commit: gitleaks + lint + typecheck + test (并行)
 - pre-push: 已并行 (osv-scanner | lint | typecheck | test:coverage + web:build | test:e2e (live) | macOS test | macOS lint)
 
 **验收**:
+
 - [x] pre-push 并行化落地 (`scripts/pre-push.ts`)
 - [ ] pre-commit 基线耗时记录
 - [ ] pre-commit 并行化后对比提升
@@ -264,6 +288,7 @@ time git commit --allow-empty -m "benchmark"
 例如 jobs.ts 覆盖率 80% 会被 recordings.ts 的 93% 拉到平均值以上。
 
 **短期改进** (保持 Bun，改进现有 gate):
+
 - 从"平均值"改成 per-file 最低值：任意 handler 文件低于阈值则失败
 - 解析更多指标：functions / branches / statements
 
@@ -273,6 +298,7 @@ const HANDLER_THRESHOLD = { lines: 90, functions: 90, branches: 80, statements: 
 ```
 
 **长期方案** (如需统一 JSON 覆盖率):
+
 - 将 packages/api handler tests 迁移到 vitest (需解决 bun:sqlite → better-sqlite3/D1 mock)
 - 或使用 Bun 原生 JSON/LCOV reporter (如后续 Bun 版本支持)
 
@@ -281,9 +307,11 @@ const HANDLER_THRESHOLD = { lines: 90, functions: 90, branches: 80, statements: 
 #### 7. 测试质量审计脚本
 
 **新增文件**:
+
 - `scripts/audit-test-quality.ts`
 
 **检查项**:
+
 - 测试文件命名规范 (`*.test.ts`)
 - 每个测试至少一个 assertion
 - 无 `.skip` / `.only` 遗留
@@ -300,9 +328,11 @@ const HANDLER_THRESHOLD = { lines: 90, functions: 90, branches: 80, statements: 
 **目标**: tag push 自动部署到 Cloudflare Workers
 
 **新增文件**:
+
 - `.github/workflows/release.yml`
 
 **策略**:
+
 ```
 v*.*.* tag push → version check (tag == package.json) → build → wrangler deploy
 main CI green   → auto-deploy latest (需 environment protection)
@@ -310,6 +340,7 @@ workflow_dispatch → 手动选择 tag 部署
 ```
 
 **安全要求**:
+
 - environment: `production` (需 GitHub environment protection rules)
 - concurrency: `deploy-worker-production` (cancel-in-progress: false)
 - secrets: `CLOUDFLARE_API_TOKEN` (需配置)

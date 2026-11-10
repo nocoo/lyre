@@ -81,6 +81,7 @@ if audioActivity.isBundleUsingInput(anyOf: teamsBundleIDs) == true {
 ### Symptom & Product goal
 
 用户使用 Lyre 录 Teams 会议时的两类事故：
+
 1. 会议开始了，人还没反应过来点录音 → 前 5–10 分钟没录到。
 2. 会议结束了，忘了停 → 磁盘 / OSS 上传 / ASR 都在录会后闲聊或屏幕背景音。
 
@@ -98,6 +99,7 @@ detector 会跟着常驻。如果检测机制在 Teams 未运行时也持续消�
 ### Constraint — 只做 Teams
 
 用户明确决策：只做 Teams。Zoom / Meet / Webex 不做。原因：
+
 - Teams 是用户主力会议工具，覆盖 > 90% 需求。
 - 每加一个平台，窗口标题识别规则 + bundle ID 白名单都要新增维护成本。
 - 多平台"通用会议检测"的开源实现（Recap / OpenOats）都不完美，
@@ -144,6 +146,7 @@ extension PermissionManager {
 ```
 
 Detector 在启动 / 每次 warm tick 前读该字段：
+
 - **未授权**：watcher 保持 warm/cold 档位不变，**跳过** `SCShareableContent.current` 调用，
   走 `handleObservationUnavailable()`：**保留 `confirmedActive` 不变**、**不 yield**（避免把
   临时授权缺口误当成 meeting-ended 事件而弹 Stop 提示），**不重复打日志**（每次会话最多一条 info），
@@ -176,6 +179,7 @@ Detector 在启动 / 每次 warm tick 前读该字段：
 | **hot**  | 当前判定"会议中"                        | **5 s**  | 同 warm；等 meeting 结束的信号                          |
 
 档位切换：
+
 - `cold → warm`：`NSWorkspace.didLaunchApplication` 通知里，`bundleIdentifier ∈ TEAMS_BUNDLE_IDS`
   → 立即切档，无需等下一个 30s tick。
 - `warm → cold`：`NSWorkspace.didTerminateApplication` 通知里，Teams 进程消失 → 立即切档。
@@ -211,6 +215,7 @@ onScreenCandidates =
 #### 判据（v1.3 收紧）
 
 只对 `onScreenCandidates` 应用规则；**任一命中即 active**（保留双判据的耐磨性，但每一条都收紧）：
+
 1. **数量判据（收紧）**：`onScreenCandidates.count >= 2`。要求两个 candidate 都已经过 on-screen + 尺寸达标过滤。Teams 平常 idle 只会有 1 个 on-screen 主窗；开会时会额外弹一个独立的、on-screen、大尺寸的会议窗口，仍能命中。
 2. **标题槽位判据（收紧）**：不再对整个 title 做 `contains("meeting")` 或简单后缀命中。改为**槽位化匹配**：
    - 用 " | "（U+0020 竖线 U+0020）分割 title，取第一段（即 Teams 用来放"会议主题"或"频道名"的槽位），记为 `head`。
@@ -246,6 +251,7 @@ onScreenCandidates =
 或者 tick 恰好落在窗口 close 的中间）。**必须去抖**，否则会出现"弹了又收又弹"的骚扰。
 
 规则（watcher 内部）：
+
 - 维护 `lastRawJudgement: Bool?`，代表"上一 tick 的原始判定"。
 - 维护 `confirmedActive: Bool?`，代表"已确认的会议状态"。
 - **只有连续 2 个 tick 的 raw 判定一致，才把 `confirmedActive` 切换到该值**。切换成功后，
@@ -254,12 +260,14 @@ onScreenCandidates =
 ### 启动时会议中的语义（v1 澄清，来自 Reviewer 反馈 #5）
 
 **统一规则**：
+
 1. Watcher 启动时，先跑一次 baseline tick（异步，不阻塞 start）。
 2. 无论 baseline 结果是 true 还是 false，都只**设置内部状态**，**不 yield 到 stream**。
 3. 之后所有从 baseline 出发的**变化**（经过去抖确认后），才 yield 到 stream。
 4. Coordinator 只消费 stream，因此启动时会议中的场景不会弹 start prompt。
 
 这条规则同时解决了：
+
 - 冷启动时正好在会议中不误弹（用户会去手动开 tray 里的 Start Recording）。
 - 冷启动时没有会议，之后开会仍能正常弹。
 
@@ -270,6 +278,7 @@ change from baseline that is active"的特殊 event，coordinator 增加一条 g
 ### Per-meeting suppression
 
 一场会议内**最多弹一次**每种提示：
+
 - 一次 `false→true` 切换 → 弹一次"开始录音"提示，无论用户按什么，本次会议不再弹（防连续骚扰）。
 - 一次 `true→false` 切换 → 弹一次"停止录音"提示，同样只弹一次。
 - 下一场会议（重新经历 `false→true`）→ 抑制标记复位，重新有资格弹。
@@ -282,6 +291,7 @@ change from baseline that is active"的特殊 event，coordinator 增加一条 g
 必须**丢弃**而非排队，否则用户会看到"关一个还有一个"的骚扰。
 
 规则：
+
 - Coordinator 维护 `isPromptPresented: Bool`。
 - 收到 event 时，先检查 `isPromptPresented` 与 per-meeting suppression；任一命中就丢弃。
 - 弹 alert 前置 `isPromptPresented = true`；`runModal()` 返回后（defer）复位。
@@ -478,6 +488,7 @@ final class RecordingActionController: RecordingActionHandling {
 ```
 
 **TrayMenu 侧改造**（同一 commit 内）：
+
 - 依赖类型改为 `@Bindable var actionController: RecordingActionController`（**concrete**，
   非 protocol —— 让 SwiftUI 观察 `elapsedDisplay` 与 `state` 变化能正常触发）；
 - 移除 `elapsedTimer` / `elapsedDisplay` / `startRecording()` / `stopRecording()` 私有方法
@@ -810,6 +821,7 @@ final class TeamsMeetingWatcher {
 ```
 
 **关键点**：
+
 - **`meetingEvents` 只 yield 已确认的状态变化**（Q2 定案 + Reviewer 反馈 #5）。baseline
   首次判定只 seed `confirmedActive`，**绝不 yield**。测试可以直接读 stream 断言 yield 序列。
 - **`.bufferingNewest(1)`**（Q2 定案）：alert 阻塞期间只保留最新状态，避免积压过时事件。
@@ -927,6 +939,7 @@ final class MeetingPromptCoordinator {
 ```
 
 **关键点**：
+
 - **消费 `AsyncStream`**（Q2 定案）：无 `withObservationTracking`、无 continuation
   竞争问题，事件模型确定且可测试（在测试里给 watcher 塞 fake events）。
 - **只读快照** `action.state`（我的补充点 B）：不长期观察 `recorder.state`，避免与
@@ -963,6 +976,7 @@ final class MeetingDetectionSettings {
 ```
 
 **关闭开关后的行为**（Reviewer 反馈"建议调整"；v1.1 收紧所有权，Reviewer 二轮 #5）：
+
 - **LyreApp 是唯一的 lifecycle owner**：只有 LyreApp 用 `.onChange(of: meetingSettings.isEnabled)` 观察开关变化，负责调 `watcher.suspend()` / `watcher.resume()`（见下节 [LyreApp 接线](#lyreapp-接线v1-明确reviewer-反馈-2v11-明确-lifecycle-owner)）。**Coordinator 不受开关直接控制**，在 App 生命周期内保持 `start()` 状态。
 - **Coordinator 不负责 watcher 生命周期**，也不响应开关的 start/stop：只在收到 event 时用 `settings.isEnabled` 做静默保护（防止 lifecycle 更新与 in-flight event 之间的赛跑）。
 - **Settings 类只写 UserDefaults**：不知道 watcher 也不知道 coordinator。
@@ -989,6 +1003,7 @@ Section("Meeting Detection") {
 ### LyreApp 接线（v1 明确，Reviewer 反馈 #2；v1.1 明确 lifecycle owner，Reviewer 二轮 #4/#5）
 
 需要新增的 `@State`：
+
 - `meetingSettings: MeetingDetectionSettings`
 - `meetingWatcher: TeamsMeetingWatcher`
 - `meetingCoordinator: MeetingPromptCoordinator`
@@ -996,6 +1011,7 @@ Section("Meeting Detection") {
 - `alertPresenter: AlertPresenting`（NSAlertPresenter 实例）
 
 `init()` 顺序：
+
 ```swift
 init() {
     let cfg = AppConfig()
@@ -1122,6 +1138,7 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 | `AlertPresenterTests`（optional）                                       | 保持 NSAlertPresenter 只是薄封装；如引入正式测试，用 UI test 或跳过                                                                                                                                                                                                                            |
 
 **注入策略**（v1.1 修订，Reviewer 二轮 #2）：
+
 - `TeamsMeetingWatcher`：`RunningAppsProviding` / `ShareableContentProviding` /
   `RecordingPermissions` 全 protocol 注入。
 - `MeetingPromptCoordinator`：`AlertPresenting` / `RecordingActionHandling` /
@@ -1206,6 +1223,7 @@ TrayMenu 改成从 concrete `actionController` 拿 state / elapsedDisplay / requ
 | C11         | `chore: update CLAUDE.md retrospective (if any macOS API learnings)`                         | 若 C6/C7/C8 学到 `SCShareableContent` / `AsyncStream` / `NSAlert` 的坑，写到 retrospective                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —                                                                                                                  |
 
 **约束**：
+
 - 每个 commit 都必须能过 pre-commit hook（`xcodebuild` + `swiftlint`）；C4 之后每步都
   需要至少能 build。
 - 不在 C4 之外的 commit 里做 tray refactor，避免 diff 混杂；detector 相关代码集中在
@@ -1272,6 +1290,7 @@ Phase 0 就是为暴露这类问题而存在。以下发现直接影响 C6 / C10
 ### 建议的判据修正（写进 C6 或 C10 决策依据）
 
 Phase 0 探针的输出直接推翻了"任一命中即算 active，宁误弹"的定案；实际观测到的 idle false positive 意味着若 C6 按当前文档实现，用户会在**打开 Teams 时立即被打扰**。给两条候选路径供 Reviewer / 哥 决策：
+
 - **路径 A（保守推荐）**：把 F1 + F2 + F3 的修正合并进 **C6**，避免 C6 上线即成已知 broken。具体：
   1. `judgeMeeting` 前置过滤：**只保留 `isOnScreen == true` 且 `frame.width >= 200 && frame.height >= 200` 的窗口作为 candidates**。这一步就消除了 F1 + F3。
   2. 收紧关键词判据：不再单独用 `contains("meeting")` / 后缀判据；改为**必须同时**满足"`title` 命中 `meetingTitleSuffix` **且** `title` 前缀（split by `|` 的第一段）命中 `meetingTitleKeywords` 或形如 `<subject>` / `<name>'s Meeting`"。用 " | " 拆分标题的第一段作为会议主题槽位，从而排除 Chat 频道名里出现的 "meeting" 字样。
@@ -1300,6 +1319,7 @@ Phase 0 探针的输出直接推翻了"任一命中即算 active，宁误弹"的
 ## Appendix B — DQ Manual Acceptance Results (C9)
 
 **记录约定**：每项 DQ 给出 3 段：
+
 - **契约**：期望行为（来自 [Manual acceptance](#manual-acceptancerelease-前必跑)）
 - **自动化证据**：codebase 里对应的实现锚点 + 单元测试
 - **手工验证**：本机实际观察结果（本 dev 机 2026-07-06 跑）；无法在此环境完成的项标 `⏳ 需要签名 build / 具体权限授予 / Teams 真实会议`，写明缺什么、下一步谁做
@@ -1332,6 +1352,7 @@ Phase 0 探针的输出直接推翻了"任一命中即算 active，宁误弹"的
 ```
 
 log 差异清楚验证了：
+
 - LyreApp init 里的启动分支双向都对（DQ-1 / DQ-6 baseline log 点）—— enabled 分支进入 `watcher.start()`；disabled 分支跳过，走静默
 - enabled 分支下 watcher 首次 warm tick 命中 SCK 未授权 → 走 `handleObservationUnavailable()` 静默路径（DQ-7）—— `Screen Recording not granted; detector stays inactive` 全过程只出现 **1 次**（`sckUnauthorizedLogged` 一次性 guard 生效）
 - disabled 分支下无 `Screen Recording` log，说明 watcher 完全没启动，`handleObservationUnavailable` 都不会触发
@@ -1463,6 +1484,7 @@ log 差异清楚验证了：
 ### v1.2 → v1.3 修订项（Phase 0 触发，Reviewer 定案 C3.5）
 
 Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次运行发现 idle 状态即被判 active（详见 [Appendix A](#appendix-a--phase-0-sckteams-window-probe-c3)）。Reviewer 定案：**判据契约变更必须在 C6 实现前用一个 doc-only 原子提交锁住，不能埋进 C6 implementation commit**。C3.5 (task #13) 落地本 v1.3：
+
 1. **前置过滤强制 `isOnScreen == true` + `frame >= 200×200`** — 消除 F1（offscreen renderer 打穿 count>=2）+ F3 里 1×1 / 小 helper 打穿的情况。
 2. **`ShareableWindow` 契约扩展**：新增 `isOnScreen: Bool` + `frame: CGRect` 字段；provider 必须携带，C6 概念代码同步更新。
 3. **标题槽位判据（收紧）**：不再对 title 做简单 `contains("meeting")` / 单独后缀命中；改为**同时**要求 title 命中 suffix + `head`（用 " | " 拆的第一段）是"会议主题"形态（`meeting…` 开头 / `'s meeting` 结尾 / 完全等于 `meeting`/`会议`/`會議`/`会议中`）。消除 F2（`Chat | ... | Microsoft Teams` 打穿）。
@@ -1474,6 +1496,7 @@ Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次
 ### v1.1 → v1.2 修订项
 
 来自 @MBP-Reviewer-A 2026-07-06 三轮审查（本 lyre-teams 线程 msg=586708d0），已合并：
+
 1. **Coordinator 依赖窄协议 `MeetingEventProviding`**（Reviewer 三轮 #1）：v1.1 里 coordinator init 参数是 concrete `TeamsMeetingWatcher`（final class），与"测试用 fake watcher + `feedEvent(_:)`" 冲突。新增：
 
    ```swift
@@ -1490,6 +1513,7 @@ Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次
 ### v1 → v1.1 修订项
 
 来自 @MBP-Reviewer-A 2026-07-06 二轮审查（本 lyre-teams 线程 msg=3b0d5c04），全部合并：
+
 1. **`RecordingActionHandling` 少 `elapsedDisplay` + TrayMenu 不应只拿 protocol**（Reviewer 二轮 #1）：
    - TrayMenu 依赖类型改为 concrete `@Bindable var actionController: RecordingActionController`，让 SwiftUI 对 `elapsedDisplay` / `state` 的 `@Observable` 观察生效。
    - `RecordingActionHandling` protocol 保留窄面（`state / requestStart / requestStop`），只给 coordinator 用。
@@ -1516,6 +1540,7 @@ Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次
 
 来自 @MBP-Reviewer-A 2026-07-06 首轮审查（本 lyre-teams 线程 msg=6e6d64d4）+ 我的独立扫码
 补充 A-D + 联合 Q1/Q2 定案，全部合并：
+
 1. **抽 `RecordingActionController`（Q1 定案）** — 解决 detector 绕过 tray 现有副作用
    （elapsed timer、`recordingsStore.refresh`）导致 UI 不同步的 bug。TrayMenu 和
    Coordinator 都走 `RecordingActionHandling` protocol；controller 由 LyreApp 拥有。
@@ -1532,6 +1557,7 @@ Phase 0 探针（`scripts/probe/teams-window-probe.swift`）在本 dev 机首次
 7. **原子提交拆分** — C1-C11 明细表（含 C10 条件 commit）；每个 commit 写出验证命令。
 
 我额外补充的：
+
 - **A.** Logger subsystem 统一 `Constants.subsystem`，不硬编码。
 - **B.** Coordinator 只读 `action.state` 快照，不长期观察，避免与 non-MainActor
   `RecordingManager` 竞争。
