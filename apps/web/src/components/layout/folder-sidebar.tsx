@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useMobileNavClose } from "@/components/layout/mobile-nav-close";
 import { useLocationPathname } from "@/lib/router-compat";
 import { cn } from "@/lib/utils";
 
@@ -288,6 +289,7 @@ function DeleteFolderDialog({
 // ── Main: Expanded folder sidebar ──
 
 export function FolderSidebar() {
+	const closeMobileNav = useMobileNavClose();
 	const navigate = useNavigate();
 	const pathname = useLocationPathname();
 	const [searchParams] = useSearchParams();
@@ -346,6 +348,7 @@ export function FolderSidebar() {
 			params.set("folder", folderId);
 		}
 		const query = params.toString();
+		closeMobileNav?.();
 		navigate(`/recordings${query ? `?${query}` : ""}`);
 	};
 
@@ -447,6 +450,7 @@ export function FolderSidebar() {
 // ── Collapsed: icon-only folder list ──
 
 export function FolderSidebarCollapsed() {
+	const closeMobileNav = useMobileNavClose();
 	const navigate = useNavigate();
 	const pathname = useLocationPathname();
 	const [searchParams] = useSearchParams();
@@ -481,6 +485,7 @@ export function FolderSidebarCollapsed() {
 			params.set("folder", folderId);
 		}
 		const query = params.toString();
+		closeMobileNav?.();
 		navigate(`/recordings${query ? `?${query}` : ""}`);
 	};
 

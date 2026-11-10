@@ -22,7 +22,17 @@ import {
 	TooltipTrigger,
 } from "@nocoo/basalt";
 import { useSidebar } from "@nocoo/basalt/components/sidebar";
-import { Bot, HardDrive, Key, LayoutDashboard, LogOut, Mic, Settings } from "lucide-react";
+import {
+	Bot,
+	HardDrive,
+	Key,
+	LayoutDashboard,
+	LogOut,
+	Mic,
+	PanelLeft,
+	Settings,
+} from "lucide-react";
+import { useCallback } from "react";
 import { useNavigate } from "react-router";
 import { GlobalSearch } from "@/components/global-search";
 import { useSession } from "@/hooks/use-me";
@@ -31,6 +41,7 @@ import { useLocationPathname } from "@/lib/router-compat";
 import { cn, getAvatarColor } from "@/lib/utils";
 import { APP_VERSION } from "@/lib/version";
 import { FolderSidebar, FolderSidebarCollapsed } from "./folder-sidebar";
+import { useMobileNavClose } from "./mobile-nav-close";
 
 const settingsItems = [
 	{ href: "/settings", label: "General", icon: Settings, exact: true },
@@ -53,26 +64,31 @@ function signOut() {
 	window.location.href = ACCESS_LOGOUT_URL;
 }
 
-function SidebarToggleAction({ onToggle }: { onToggle?: () => void }) {
-	return (
-		<SidebarToggle
-			onClick={
-				onToggle
-					? (event) => {
-							event.preventDefault();
-							onToggle();
-						}
-					: undefined
-			}
-		/>
-	);
+function SidebarToggleAction({ dismissDrawer }: { dismissDrawer?: () => void }) {
+	if (dismissDrawer) {
+		return (
+			<Button variant="ghost" size="icon-sm" aria-label="Close navigation" onClick={dismissDrawer}>
+				<PanelLeft aria-hidden="true" />
+			</Button>
+		);
+	}
+	return <SidebarToggle />;
 }
 
 function AppSidebarNav() {
 	const pathname = useLocationPathname();
 	const navigate = useNavigate();
+	const closeMobileNav = useMobileNavClose();
 	const { collapsed } = useSidebar();
 	const isRecordingsPage = isRecordingsPath(pathname);
+
+	const go = useCallback(
+		(to: string) => {
+			closeMobileNav?.();
+			navigate(to);
+		},
+		[closeMobileNav, navigate],
+	);
 
 	if (collapsed) {
 		return (
@@ -82,7 +98,7 @@ function AppSidebarNav() {
 						<SidebarIconItem
 							active={pathname === "/"}
 							aria-label="Dashboard"
-							onClick={() => navigate("/")}
+							onClick={() => go("/")}
 						>
 							<LayoutDashboard className="h-4 w-4" strokeWidth={1.5} />
 						</SidebarIconItem>
@@ -96,7 +112,7 @@ function AppSidebarNav() {
 						<SidebarIconItem
 							active={isRecordingsPage}
 							aria-label="Recordings"
-							onClick={() => navigate("/recordings")}
+							onClick={() => go("/recordings")}
 						>
 							<Mic className="h-4 w-4" strokeWidth={1.5} />
 						</SidebarIconItem>
@@ -114,7 +130,7 @@ function AppSidebarNav() {
 								<SidebarIconItem
 									active={isActive}
 									aria-label={item.label}
-									onClick={() => navigate(item.href)}
+									onClick={() => go(item.href)}
 								>
 									<item.icon className="h-4 w-4" strokeWidth={1.5} />
 								</SidebarIconItem>
@@ -132,7 +148,7 @@ function AppSidebarNav() {
 	return (
 		<>
 			<SidebarGroup label="General">
-				<SidebarItem active={pathname === "/"} onClick={() => navigate("/")}>
+				<SidebarItem active={pathname === "/"} onClick={() => go("/")}>
 					<LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.5} />
 					<span className="flex-1 truncate text-left">Dashboard</span>
 				</SidebarItem>
@@ -145,7 +161,7 @@ function AppSidebarNav() {
 					<SidebarItem
 						key={item.href}
 						active={isNavItemActive(item, pathname)}
-						onClick={() => navigate(item.href)}
+						onClick={() => go(item.href)}
 					>
 						<item.icon className="h-4 w-4 shrink-0" strokeWidth={1.5} />
 						<span className="flex-1 truncate text-left">{item.label}</span>
@@ -206,9 +222,11 @@ function AppSidebarFooter() {
 	);
 }
 
-function AppSidebarChrome({ onToggle }: { onToggle?: () => void }) {
+function AppSidebarChrome({ dismissDrawer }: { dismissDrawer?: () => void }) {
+	const closeMobileNav = useMobileNavClose();
+
 	return (
-		<Sidebar>
+		<Sidebar resizable={!dismissDrawer}>
 			<SidebarHeader>
 				<SidebarBrand
 					logo={
@@ -216,6 +234,7 @@ function AppSidebarChrome({ onToggle }: { onToggle?: () => void }) {
 							href="/"
 							aria-label="Home"
 							className="flex items-center justify-center no-underline"
+							onClick={() => closeMobileNav?.()}
 						>
 							<img
 								src="/logo-24.png"
@@ -228,7 +247,7 @@ function AppSidebarChrome({ onToggle }: { onToggle?: () => void }) {
 					}
 					name="lyre"
 					version={`v${APP_VERSION}`}
-					action={<SidebarToggleAction onToggle={onToggle} />}
+					action={<SidebarToggleAction dismissDrawer={dismissDrawer} />}
 				/>
 			</SidebarHeader>
 			<SidebarNav>
@@ -248,15 +267,16 @@ function AppSidebarChrome({ onToggle }: { onToggle?: () => void }) {
 export function AppSidebar({
 	collapsed,
 	onCollapsedChange,
-	onToggle,
+	dismissDrawer,
 }: {
 	collapsed: boolean;
 	onCollapsedChange: (collapsed: boolean) => void;
-	onToggle?: () => void;
+	/** Mobile drawer: close the sheet instead of collapsing the rail. */
+	dismissDrawer?: () => void;
 }) {
 	return (
 		<SidebarProvider collapsed={collapsed} onCollapsedChange={onCollapsedChange}>
-			<AppSidebarChrome onToggle={onToggle} />
+			<AppSidebarChrome dismissDrawer={dismissDrawer} />
 		</SidebarProvider>
 	);
 }
