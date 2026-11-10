@@ -23,6 +23,7 @@ uv run --with pillow python scripts/resize-logos.py
 ```
 
 The exact source, sampled palette, independent background layers, every export size, and frozen finishing recipe are archived in `nocoo/hexly.ai` under `artwork/logo-family/lyre/2026-09-07-03/finishing/01`. [source.json](source.json) records provenance and all master SHA-256 values. The separate UI theme palette is unchanged.
+
 - [Individual logo review](https://hexly.ai/logos/lyre)
 - [Local static review](https://index.dev.hexly.ai/artwork/logo-family/lyre/2026-09-07-03/review.html)
 - [Shared logo usage SOP](https://github.com/nocoo/hexly.ai/blob/main/docs/07-logo-usage-sop.md)

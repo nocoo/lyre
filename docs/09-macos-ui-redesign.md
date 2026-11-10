@@ -121,6 +121,7 @@ flowchart LR
 ## 验证与复现
 
 本次在 Apple Silicon、macOS 26.6.2、完整 Xcode 环境中验证：
+
 - Debug 测试构建通过；Swift Testing 汇总 **243 个测试定义、参数展开后 263 次通过、0 次失败、3 项跳过**。跳过的是显式关闭的真实录音 E2E 用例。
 - Release 构建通过，关闭代码签名用于本地验证。
 - SwiftLint strict 通过。现有 SDK 弃用与 `internal(set)` 冗余编译警告仍存在。

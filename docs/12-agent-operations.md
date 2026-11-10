@@ -68,7 +68,6 @@ lyre/
 - **Testing**: Swift Testing (`xcodebuild test`), SwiftLint (lint)
 - **Code Signing**: Release uses Developer ID Application + Manual signing (Team ID `93WWLTN9XU`). Set `LYRE_CODE_SIGN_IDENTITY` when building a DMG; `LYRE_ALLOW_ADHOC=1` explicitly opts into ad-hoc signing, which cannot preserve a stable TCC identity across updates.
 
-
 ## Architecture and release
 
 - **Single deployment unit**: `bun run deploy` builds the SPA into `apps/web/dist`, and Wrangler publishes the Worker with that directory bound as `ASSETS`. The browser hits one origin; static assets and `/api/*` are both served by the same Worker.

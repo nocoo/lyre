@@ -87,6 +87,7 @@ Every macOS release must attach its versioned DMG and `SHA256SUMS` to the matchi
 ## Retrospective
 
 Move accident narratives to [Retrospective.md](Retrospective.md); keep at most about ten concise recurring project rules here. Put architecture and operational detail in linked docs.
+
 - Swift 6 Sendable closures may need immutable `nonisolated` constants; do not suppress actor-safety warnings.
 - Keep modal prompt stream consumers non-blocking and gate buffered reentry.
 - Record accessibility/permission blockers as unverified manual scenarios, never as passed UI checks.

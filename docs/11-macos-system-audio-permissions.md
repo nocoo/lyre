@@ -22,6 +22,7 @@ v2.0.0 的权限界面与录音入口均依赖 `CGPreflightScreenCaptureAccess()
 ## Lyre 的处理
 
 `ScreenCapturePermissionProbe` 通过公开的 ScreenCaptureKit 内容查询核验访问能力。没有开始音频捕获，没有查询 TCC 数据库，也没有新增第三方依赖。
+
 - **被动检查**：启动、权限页的定时刷新和普通应用激活继续使用非交互式预检，不主动申请权限。
 - **显式检查**：Check、Refresh，以及权限尚未确认时的录音准备，使用实际内容查询。通过 Lyre 的 Settings 按钮打开系统设置，返回后也检查一次。
 - **实际结果优先**：查询成功后，旧的 false 预检不能把界面改回未授权；实际拒绝后，旧的 true 也不能把界面改成已允许。该结果只保存在当前进程内。

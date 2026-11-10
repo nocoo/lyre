@@ -31,6 +31,7 @@ A single Cloudflare Worker serves the web interface and API. D1 stores recording
 ### Web
 
 The [website](https://lyre.hexly.ai) requires an identity allowed by Cloudflare Access. The operator must configure OSS and DashScope first. Summaries also require a provider, model and credentials in AI settings.
+
 1. Upload audio and provide a title, description or folder. The web interface limits each file to 500 MiB.
 2. Open the recording and start transcription manually. Finishing an upload does not start transcription automatically.
 3. Once transcription completes, play the audio alongside its text, generate a summary, add notes or download the recording.
