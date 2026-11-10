@@ -236,13 +236,7 @@ function AppSidebarChrome({ dismissDrawer }: { dismissDrawer?: () => void }) {
 							className="flex items-center justify-center no-underline"
 							onClick={() => closeMobileNav?.()}
 						>
-							<img
-								src="/logo-24.png"
-								alt=""
-								width={24}
-								height={24}
-								className="size-basalt-sidebar-brand-slot object-contain"
-							/>
+							<img src="/logo-80.png" alt="" width={24} height={24} />
 						</Link>
 					}
 					name="lyre"
