@@ -3,7 +3,6 @@ import {
 	Avatar,
 	AvatarFallback,
 	AvatarImage,
-	Button,
 	Link,
 	Sidebar,
 	SidebarBrand,
@@ -22,7 +21,7 @@ import {
 	TooltipTrigger,
 } from "@nocoo/basalt";
 import { useSidebar } from "@nocoo/basalt/components/sidebar";
-import { Bot, HardDrive, Key, LayoutDashboard, LogOut, Mic, Settings } from "lucide-react";
+import { Bot, HardDrive, Key, LayoutDashboard, Mic, Settings } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router";
 import { GlobalSearch } from "@/components/global-search";
@@ -49,10 +48,6 @@ function openSearch() {
 			bubbles: true,
 		}),
 	);
-}
-
-function signOut() {
-	window.location.href = ACCESS_LOGOUT_URL;
 }
 
 function AppSidebarNav() {
@@ -172,16 +167,7 @@ function AppSidebarFooter() {
 			name={userName}
 			email={session?.user?.email ?? ""}
 			avatar={avatar}
-			action={
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
-							<LogOut className="h-4 w-4" aria-hidden="true" strokeWidth={1.5} />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent side="top">Sign out</TooltipContent>
-				</Tooltip>
-			}
+			signOutHref={ACCESS_LOGOUT_URL}
 		/>
 	);
 }
