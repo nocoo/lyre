@@ -1,5 +1,15 @@
 # Retrospective
 
+## 2026-11-14: Isolate executable names, not installation-directory names
+
+The missing-native-tool self-test assumed a SwiftLint directory would contain
+`swiftlint` in its name. Homebrew installs the command in `/opt/homebrew/bin`, so
+the probe left it available and rejected a healthy hook result. Build an owned
+PATH from real executable links, pass the healthy production hook first, then
+remove only the owned link for each native tool. Verify failed executable lookup
+and its exact missing-tool diagnostic; an arbitrary nonzero exit is not proof.
+Keep real tools untouched and retain every other negative probe.
+
 ## 2026-11-14: Locate the background trigger while a modal is open
 
 The new sidebar geometry suite initially used a default role locator to read the
