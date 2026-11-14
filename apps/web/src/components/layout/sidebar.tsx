@@ -154,7 +154,7 @@ function AppSidebarFooter() {
 	const userInitial = userName[0] ?? "?";
 
 	const avatar = (
-		<Avatar className="h-9 w-9 shrink-0">
+		<Avatar>
 			{userImage && <AvatarImage src={userImage} alt={userName} />}
 			<AvatarFallback className={cn("text-basalt-sm text-white", getAvatarColor(userName))}>
 				{userInitial}
@@ -224,9 +224,13 @@ export function AppSidebar({
 	/** Mobile drawer: close the sheet instead of collapsing the rail. */
 	dismissDrawer?: () => void;
 }) {
+	if (dismissDrawer) {
+		return <AppSidebarChrome dismissDrawer={dismissDrawer} />;
+	}
+
 	return (
 		<SidebarProvider collapsed={collapsed} onCollapsedChange={onCollapsedChange}>
-			<AppSidebarChrome dismissDrawer={dismissDrawer} />
+			<AppSidebarChrome />
 		</SidebarProvider>
 	);
 }
