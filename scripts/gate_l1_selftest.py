@@ -190,27 +190,56 @@ def measure_web_lane(wt: Path) -> tuple[float, float]:
 
 
 def run_unit_tests() -> bool:
-    proc = run_cmd([sys.executable, "-B", str(ROOT / "scripts/test_pre_commit.py")], cwd=ROOT)
+    proc = run_cmd(
+        [sys.executable, "-B", "-m", "unittest", "discover", "-s", "scripts", "-p", "test_*.py"],
+        cwd=ROOT,
+    )
     return proc.returncode == 0
+
+
+@contextmanager
+def controlled_tool_path(environment: dict[str, str]):
+    with tempfile.TemporaryDirectory(prefix="lyre-l1-tools-") as temporary:
+        directory = Path(temporary)
+        for entry in environment.get("PATH", "").split(os.pathsep):
+            source = Path(entry)
+            if not source.is_dir():
+                continue
+            for tool in source.iterdir():
+                target = directory / tool.name
+                if tool.is_file() and os.access(tool, os.X_OK) and not target.exists():
+                    target.symlink_to(tool.resolve())
+        yield {**environment, "PATH": str(directory)}
 
 
 def missing_tool_rejects() -> bool:
     required = [name for name in gate.TOOLS if name not in gate.WEB_TOOLS]
+    environment = {**os.environ, **gate.ENV}
+    command = [sys.executable, "-B", str(ROOT / "scripts/pre-commit.py")]
     for tool in required:
-        if shutil.which(tool, path=gate.ENV.get("PATH", "")) is None:
-            proc = run_cmd([sys.executable, str(ROOT / "scripts/pre-commit.py")], cwd=ROOT)
-            return proc.returncode != 0
-    # Native toolchain present (macOS CI/dev): verify hook still requires every tool.
-    env = dict(gate.ENV)
-    path = env.get("PATH", "")
-    trimmed = os.pathsep.join(part for part in path.split(os.pathsep) if "swiftlint" not in part.lower())
-    env["PATH"] = trimmed
-    proc = run_cmd(
-        [sys.executable, str(ROOT / "scripts/pre-commit.py")],
-        cwd=ROOT,
-        env={**os.environ, **env},
-    )
-    return proc.returncode != 0
+        if shutil.which(tool, path=environment.get("PATH", "")) is None:
+            proc = run_cmd(command, cwd=ROOT, env=environment)
+            return proc.returncode != 0 and f"Missing required tool: {tool}" in proc.stderr
+    with controlled_tool_path(environment) as isolated:
+        if any(shutil.which(tool, path=isolated["PATH"]) is None for tool in gate.TOOLS):
+            return False
+        healthy = run_cmd(command, cwd=ROOT, env=isolated)
+        if healthy.returncode != 0:
+            print(healthy.stdout + healthy.stderr, file=sys.stderr)
+            return False
+        for tool in required:
+            link = Path(isolated["PATH"]) / tool
+            original = link.readlink()
+            link.unlink()
+            try:
+                if shutil.which(tool, path=isolated["PATH"]) is not None:
+                    return False
+                proc = run_cmd(command, cwd=ROOT, env=isolated)
+                if proc.returncode == 0 or f"Missing required tool: {tool}" not in proc.stderr:
+                    return False
+            finally:
+                link.symlink_to(original)
+    return True
 
 
 def build_probes() -> list[tuple[str, bool, callable]]:
