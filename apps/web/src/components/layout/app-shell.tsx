@@ -1,4 +1,4 @@
-import { ContentIsland, Sheet, SheetContent, SheetTitle } from "@nocoo/basalt";
+import { ContentIsland, SidebarDrawer } from "@nocoo/basalt";
 import { AppHeader, AppHeaderMenuButton, ProjectLinks } from "@nocoo/basalt/components/app-header";
 import {
 	AppMain,
@@ -6,7 +6,7 @@ import {
 	AppShell as BasaltAppShell,
 } from "@nocoo/basalt/components/app-shell";
 import { ThemeToggle } from "@nocoo/basalt/components/theme-toggle";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocationPathname } from "@/lib/router-compat";
 import { BreadcrumbsProvider, useBreadcrumbs } from "./breadcrumbs-context";
@@ -54,6 +54,7 @@ function AppShellInner({ children }: AppShellProps) {
 	const [collapsed, setCollapsed] = useState(false);
 	const [mobileOpen, setMobileOpen] = useState(false);
 	const navigationTrigger = useRef<HTMLButtonElement>(null);
+	const drawerId = useId();
 	const { items: breadcrumbItems } = useBreadcrumbs();
 	const pathname = useLocationPathname();
 	const [showScrollTop, setShowScrollTop] = useState(false);
@@ -63,13 +64,6 @@ function AppShellInner({ children }: AppShellProps) {
 	useEffect(() => {
 		setMobileOpen(false);
 	}, [pathname]);
-
-	useEffect(() => {
-		document.body.style.overflow = mobileOpen ? "hidden" : "";
-		return () => {
-			document.body.style.overflow = "";
-		};
-	}, [mobileOpen]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: pathname triggers the effect on route change
 	useEffect(() => {
@@ -89,32 +83,33 @@ function AppShellInner({ children }: AppShellProps) {
 			{!isMobile ? (
 				sidebar
 			) : (
-				<Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-					<SheetContent
-						side="left"
-						className="w-[260px] max-w-[260px] border-0 bg-basalt-background p-0"
-						onEscapeKeyDown={() => setMobileOpen(false)}
-						onCloseAutoFocus={(event) => {
-							event.preventDefault();
-							navigationTrigger.current?.focus();
-						}}
-					>
-						<SheetTitle className="sr-only">Navigation</SheetTitle>
-						<MobileNavCloseProvider value={() => setMobileOpen(false)}>
-							<AppSidebar
-								collapsed={false}
-								onCollapsedChange={() => {}}
-								dismissDrawer={() => setMobileOpen(false)}
-							/>
-						</MobileNavCloseProvider>
-					</SheetContent>
-				</Sheet>
+				<SidebarDrawer
+					id={drawerId}
+					open={mobileOpen}
+					onOpenChange={setMobileOpen}
+					returnFocusRef={navigationTrigger}
+					title="Navigation"
+					description="Application navigation links and actions."
+				>
+					<MobileNavCloseProvider value={() => setMobileOpen(false)}>
+						<AppSidebar
+							collapsed={false}
+							onCollapsedChange={setCollapsed}
+							dismissDrawer={() => setMobileOpen(false)}
+						/>
+					</MobileNavCloseProvider>
+				</SidebarDrawer>
 			)}
 			<AppMain>
 				<AppHeader
 					leading={
 						isMobile ? (
-							<AppHeaderMenuButton ref={navigationTrigger} onClick={() => setMobileOpen(true)} />
+							<AppHeaderMenuButton
+								ref={navigationTrigger}
+								aria-controls={drawerId}
+								aria-expanded={mobileOpen}
+								onClick={() => setMobileOpen(true)}
+							/>
 						) : null
 					}
 					breadcrumbs={trail.breadcrumbs}
