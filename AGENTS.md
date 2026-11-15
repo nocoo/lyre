@@ -53,25 +53,24 @@ bun run gate:pages
 
 ## Verification
 
-6DQ retains its name. Former G1 is merged into L1; L2/L3, G2 and D1 retain their scope. Status: `enforced`, `planned`, `manual`, or `N/A`; partial enforcement below does not certify the full required bar.
-L1 requires statements, branches, functions and lines each ≥95%, with no skipped/focused tests; preserve any stricter package threshold. Native tools must identify unmeasured metrics as gaps.
-L1 static analysis requires check-only strict analysis/formatting with zero errors/warnings. G2 requires dependency and secret scans, with missing required scanners failing.
+Quality follows System1 v1.3.0 Native Mode (`nocoo/base-ci v2026.15`) in `.github/workflows/quality-slots.yml` and `.github/workflows/ci.yml`. Status: `enforced`, `planned`, `manual`, or `N/A`.
 
-| Dimension            | Status   | Required proof and current evidence/gap                                                                                                                                       |
-| -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| L1 TypeScript        | enforced | Web lane measured 2026-11-09 (`bun run gate:l1-selftest` + CI `l1-hook-selftest`); vitest v8 four metrics ≥95%. Detail in L1 evidence below.                                  |
-| L1 Swift             | planned  | Native lane not verified on Linux CI; hook fails closed without full Xcode toolchain. macOS cold/hot hook timing still open.                                                  |
-| L2 API / native      | planned  | Local real-HTTP API tests run before push; require 100% routes including errors/auth. Native tests use test hosts; live capture/OS integration needs a separate fixture lane. |
-| L3 web / desktop     | planned  | CI runs Playwright BDD and page/route audit scripts exist; all-page and native interaction proof is incomplete. Permissions/UI-only cases remain manual with exact evidence.  |
-| L1 static TS / Swift | enforced | Hooks run Biome with errors on warnings, typecheck and strict SwiftLint; native compilation uses the full Xcode toolchain.                                                    |
-| G2                   | enforced | Secret/dependency gates fail when gitleaks or OSV is absent; CI also scans.                                                                                                   |
-| D1                   | planned  | Unit DBs are per suite and native runs get unique DerivedData; Worker API/BDD use default local state rather than unique persist directories with marker/cleanup guards.      |
+| Slot              | Status   | Evidence                                                                           |
+| ----------------- | -------- | ---------------------------------------------------------------------------------- |
+| `S1` Types        | enforced | `bun run typecheck` (pre-commit + CI)                                              |
+| `S2` Lint         | enforced | `bun run lint` (Biome + SwiftLint in pre-commit; Biome in CI)                      |
+| `S3` Workflow     | enforced | SHA-pinned workflow action check in CI                                             |
+| `G1` Secrets      | enforced | `gitleaks` (`.gitleaks.toml`) in pre-commit + CI                                   |
+| `G2` Dependencies | enforced | `osv-scanner` (`bun.lock`) in pre-push + CI                                        |
+| `B1` Build        | enforced | `bun run build` in CI                                                              |
+| `L1` Unit         | enforced | `bun run test:coverage` + `bun run gate:l1-selftest` in CI                         |
+| `L2` Runtime      | N/A      | Runtime verified via `wrangler dev` in `L3`/`L4`                                   |
+| `L3` Integration  | enforced | `bun run test:e2e` in CI + pre-push                                                |
+| `L4` E2E          | enforced | `bun run test:e2e:bdd` (Playwright Chromium) in CI                                 |
+| `P1` Package      | N/A      | Private monorepo, not published to npm                                             |
+| `Z1` Gate         | enforced | `quality / Z1: Gate` required status check on `main` (includes `l1-hook-selftest`) |
 
-Pre-commit executes the staged `scripts/pre-commit.py`, exports the index, links installed JS packages read-only with snapshot-local workspace links and caches, and runs check-only secrets, lint, types, coverage and native tests. Required tools/reports, empty or skipped required tests, failed checks, signals and an eight-minute bound reject. All outputs are temporary; secrets inspect the real index. Pre-push builds the SPA, then runs dependency scan, lint/types, coverage, local API E2E, native tests and SwiftLint in parallel.
-
-Target hooks: pre-commit checks L1 against the index snapshot (`git checkout-index`) in <30s; pre-push checks L2 and G2 in parallel against every stdin push ref/commit in <3min, plus build where applicable. L3 runs in CI or an explicit manual lane.
-
-L1 evidence (Linux web lane, 2026-11-09): Hook chain `.husky/pre-commit` → `python3 scripts/pre-commit.py` (index snapshot via `git checkout-index`). Missing `swiftlint`/`xcodebuild`/`xcrun` → exit **1** (verified; no silent pass). Web lane cold **~7.7s** / warm **~7.5s**; coverage statements **99.14%**, branches **96.81%**, functions **98.24%**, lines **99.65%**. Self-test `bun run gate:l1-selftest` rejects: UT failure, single-metric coverage floor, lint error/warning, type error, vitest `.only`/skip, staged-bad/unstaged-good, malformed coverage JSON, sequential abort before later stages, missing tools, timeout (unit tests), empty/skipped suites. Native xcodebuild/SwiftLint pass and end-to-end <30s hook remain **unverified** without macOS.
+Pre-commit executes the staged `scripts/pre-commit.py`, exports the index, links installed JS packages read-only with snapshot-local workspace links and caches, and runs check-only secrets, lint, types, coverage and native tests. Pre-push builds the SPA, then runs dependency scan, lint/types, coverage, local API E2E, native tests and SwiftLint in parallel.
 Never bypass commit/push hooks, force-push, or use autofix in checks. Documentation changes do not authorize deploying or implementing new gates.
 
 ## Resources / Isolation
