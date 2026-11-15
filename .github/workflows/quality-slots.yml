@@ -25,7 +25,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@777bbe4f9bacab8a91d8c01974480a6ee23d28e0 # v2026.15
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: trusted
       - run: bun run typecheck
@@ -38,7 +38,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@777bbe4f9bacab8a91d8c01974480a6ee23d28e0 # v2026.15
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: trusted
       - run: bun run lint
@@ -95,7 +95,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@777bbe4f9bacab8a91d8c01974480a6ee23d28e0 # v2026.15
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: trusted
       - run: bun run build
@@ -108,7 +108,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@777bbe4f9bacab8a91d8c01974480a6ee23d28e0 # v2026.15
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: trusted
       - run: bun run build && bun run test:coverage
@@ -128,7 +128,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@777bbe4f9bacab8a91d8c01974480a6ee23d28e0 # v2026.15
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: trusted
       - run: bun run build && bun run test:e2e
@@ -141,7 +141,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@777bbe4f9bacab8a91d8c01974480a6ee23d28e0 # v2026.15
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: trusted
       - run: bun run build && bunx playwright install --with-deps chromium && bun run test:e2e:bdd
@@ -174,7 +174,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@777bbe4f9bacab8a91d8c01974480a6ee23d28e0 # v2026.15
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: trusted
       - uses: nocoo/base-ci/.github/actions/setup-security-scanners@777bbe4f9bacab8a91d8c01974480a6ee23d28e0 # v2026.15
