@@ -10,16 +10,16 @@
 	},
 	"dependencies": {
 		"@lyre/api": "workspace:*",
-		"ai": "7.0.162",
+		"ai": "7.0.173",
 		"drizzle-orm": "^0.45.4",
-		"hono": "4.13.17",
-		"jose": "6.2.15"
+		"hono": "4.13.18",
+		"jose": "6.2.17"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "5.20261024.1",
 		"@types/bun": "^1.4.4",
 		"@types/node": "26.6.6",
 		"typescript": "^7.0.2",
-		"wrangler": "4.156.2"
+		"wrangler": "4.162.0"
 	}
 }
