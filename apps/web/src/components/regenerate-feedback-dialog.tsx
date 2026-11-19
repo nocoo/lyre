@@ -22,7 +22,7 @@ import {
 	DialogTitle,
 } from "@nocoo/basalt";
 import { InputArea } from "@nocoo/basalt/components/input-area";
-import { Sparkles } from "lucide-react";
+import { Sparkles } from "@nocoo/basalt/icons";
 import { useEffect, useState } from "react";
 
 const DEFAULT_MAX_LENGTH = 2000;

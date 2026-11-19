@@ -1,5 +1,5 @@
-import { Skeleton } from "@/components/ui/skeleton";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
+import { Skeleton } from "@/components/skeleton";
 
 interface ChartCardSkeletonProps {
 	/** Tailwind width class for the title bar (default "w-32"). */
@@ -12,10 +12,7 @@ interface ChartCardSkeletonProps {
  * Loading skeleton for a chart card (icon + title header + chart body).
  * Matches the `rounded-basalt-card bg-basalt-secondary` shell used by dashboard charts.
  */
-export function ChartCardSkeleton({
-	titleWidth = "w-32",
-	chartHeight,
-}: ChartCardSkeletonProps) {
+export function ChartCardSkeleton({ titleWidth = "w-32", chartHeight }: ChartCardSkeletonProps) {
 	return (
 		<LayerCard className="p-4 md:p-5 h-full">
 			<div className="mb-4 flex items-center gap-2">

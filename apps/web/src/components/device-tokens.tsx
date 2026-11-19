@@ -1,8 +1,8 @@
 import { Badge, Button, Input, Label } from "@nocoo/basalt";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
-import { Check, Copy, Key, Loader2, Plus, Smartphone, Trash2 } from "lucide-react";
+import { Check, Copy, Key, Loader2, Plus, Smartphone, Trash2 } from "@nocoo/basalt/icons";
 import { useCallback, useEffect, useState } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/skeleton";
 
 interface TokenListItem {
 	id: string;

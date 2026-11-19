@@ -8,9 +8,9 @@ import {
 } from "@lyre/api/contracts/ai";
 import { Badge, Button, Input, Label } from "@nocoo/basalt";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
-import { Bot, Check, Loader2, Plug, Save, X } from "lucide-react";
+import { Bot, Check, Loader2, Plug, Save, X } from "@nocoo/basalt/icons";
 import { useCallback, useEffect, useState } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/skeleton";
 
 interface AiSettings {
 	provider: AiProvider | "";

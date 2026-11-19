@@ -1,9 +1,9 @@
 import { ASR_FILETRANS_MODELS, DEFAULT_ASR_MODEL } from "@lyre/api/contracts/asr";
 import { Button, Label } from "@nocoo/basalt";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
-import { AudioWaveform, Check, Loader2, Save } from "lucide-react";
+import { AudioWaveform, Check, Loader2, Save } from "@nocoo/basalt/icons";
 import { useCallback, useEffect, useState } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/skeleton";
 
 interface AsrSettings {
 	model: string;

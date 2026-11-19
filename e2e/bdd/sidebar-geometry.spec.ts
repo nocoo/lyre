@@ -14,7 +14,7 @@ for (const theme of ["light", "dark"] as const) {
 			const avatar = user.locator('[class~="h-basalt-9"]');
 			const brand = sidebar.locator('[data-slot="sidebar-brand-copy"]');
 			const logo = sidebar.locator('[data-slot="sidebar-brand-logo"] img');
-			await expect(sidebar).toHaveCSS("width", "260px");
+			await expect(sidebar).toHaveCSS("width", "240px");
 			await expect(avatar).toHaveCSS("width", "36px");
 			await expect(avatar).toHaveCSS("height", "36px");
 			await expect(user.locator("p").nth(1)).toHaveCSS("line-height", "16px");
@@ -50,7 +50,7 @@ for (const theme of ["light", "dark"] as const) {
 				contentType: "application/json",
 			});
 			await sidebar.getByRole("button", { name: "Expand sidebar" }).click();
-			await expect(sidebar).toHaveCSS("width", "260px");
+			await expect(sidebar).toHaveCSS("width", "240px");
 			await expect(brand).toBeVisible();
 			await sidebar.getByRole("button", { name: "General", exact: true }).last().click();
 			await expect(page).toHaveURL(/\/settings$/);
@@ -76,10 +76,10 @@ for (const theme of ["light", "dark"] as const) {
 			expect(await menu.getAttribute("aria-controls")).toBe(await drawer.getAttribute("id"));
 			await expect(drawer).toHaveAccessibleName("Navigation");
 			await expect(drawer).toHaveAccessibleDescription("Application navigation links and actions.");
-			await expect(drawer).toHaveCSS("width", "260px");
+			await expect(drawer).toHaveCSS("width", "240px");
 			await expect(drawer).toHaveCSS("padding", "0px");
 			const sidebar = drawer.locator("[data-basalt-sidebar]");
-			await expect(sidebar).toHaveCSS("width", "260px");
+			await expect(sidebar).toHaveCSS("width", "240px");
 			await expect(sidebar).not.toHaveAttribute("data-collapsed", "");
 			await expect(page.locator("[data-basalt-sidebar]")).toHaveCount(1);
 			const avatar = sidebar.locator('[data-slot="sidebar-user"] [class~="h-basalt-9"]');

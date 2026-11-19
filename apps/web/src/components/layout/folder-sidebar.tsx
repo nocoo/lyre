@@ -48,7 +48,7 @@ import {
 	Radio,
 	Star,
 	Trash2,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useMobileNavClose } from "@/components/layout/mobile-nav-close";

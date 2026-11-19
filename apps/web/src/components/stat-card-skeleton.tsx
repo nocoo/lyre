@@ -1,5 +1,5 @@
-import { Skeleton } from "@/components/ui/skeleton";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
+import { Skeleton } from "@/components/skeleton";
 
 /**
  * Loading skeleton for a stat cell (label + big value + optional helper).
