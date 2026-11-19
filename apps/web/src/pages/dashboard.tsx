@@ -1,7 +1,7 @@
 import { CHART_COLORS, chart, chartAxis } from "@lyre/api/lib/palette";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
-import { Clock, Database, Files, FileWarning, HardDrive, Mic } from "lucide-react";
+import { Clock, Database, Files, FileWarning, HardDrive, Mic } from "@nocoo/basalt/icons";
 import { useEffect, useState } from "react";
 import {
 	Area,
@@ -17,8 +17,8 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-import { ChartCardSkeleton } from "@/components/ui/chart-card-skeleton";
-import { StatCardSkeleton } from "@/components/ui/stat-card-skeleton";
+import { ChartCardSkeleton } from "@/components/chart-card-skeleton";
+import { StatCardSkeleton } from "@/components/stat-card-skeleton";
 
 /** Safe chart color accessor (falls back to first color on out-of-bounds). */
 function chartColor(index: number): string {

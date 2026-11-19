@@ -9,7 +9,7 @@ import {
 	HardDrive,
 	Mic,
 	Sparkles,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { Link } from "react-router";
 import type { RecordingCardVM } from "@/lib/recordings-list-vm";
 import { cn } from "@/lib/utils";

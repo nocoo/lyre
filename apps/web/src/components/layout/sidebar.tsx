@@ -21,7 +21,7 @@ import {
 	TooltipTrigger,
 } from "@nocoo/basalt";
 import { useSidebar } from "@nocoo/basalt/components/sidebar";
-import { Bot, HardDrive, Key, LayoutDashboard, Mic, Settings } from "lucide-react";
+import { Bot, HardDrive, Key, LayoutDashboard, Mic, Settings } from "@nocoo/basalt/icons";
 import { useCallback } from "react";
 import { useNavigate } from "react-router";
 import { GlobalSearch } from "@/components/global-search";

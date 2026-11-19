@@ -30,13 +30,13 @@ import {
 	Square,
 	Trash2,
 	X,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useSetBreadcrumbs } from "@/components/layout";
 import { RecordingListItem } from "@/components/recording-list-item";
 import { RecordingTileCard } from "@/components/recording-tile-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/skeleton";
 import { UploadDialog } from "@/components/upload-dialog";
 import { useJobEvents } from "@/hooks/use-job-events";
 import {

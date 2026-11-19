@@ -33,10 +33,10 @@ import {
 	RefreshCw,
 	Trash2,
 	User,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { StatCardSkeleton } from "@/components/ui/stat-card-skeleton";
+import { Skeleton } from "@/components/skeleton";
+import { StatCardSkeleton } from "@/components/stat-card-skeleton";
 import { cn } from "@/lib/utils";
 
 // ── Types (matching API response) ──

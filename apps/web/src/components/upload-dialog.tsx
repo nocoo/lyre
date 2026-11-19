@@ -14,7 +14,7 @@ import {
 	Input,
 	Label,
 } from "@nocoo/basalt";
-import { AlertCircle, Check, FileAudio, Loader2, Upload, X } from "lucide-react";
+import { AlertCircle, Check, FileAudio, Loader2, Upload, X } from "@nocoo/basalt/icons";
 import { type ChangeEvent, type DragEvent, useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 

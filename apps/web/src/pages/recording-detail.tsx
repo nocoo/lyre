@@ -16,12 +16,6 @@ import {
 	AlertDialogTrigger,
 	Badge,
 	Button,
-	CommandEmpty,
-	CommandGroup,
-	CommandInput,
-	CommandItem,
-	CommandList,
-	CommandSeparator,
 	Input,
 	Popover,
 	PopoverContent,
@@ -31,7 +25,6 @@ import {
 import { InputArea } from "@nocoo/basalt/components/input-area";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
-import { Command } from "cmdk";
 import {
 	AlertCircle,
 	ArrowLeft,
@@ -56,15 +49,15 @@ import {
 	Tag,
 	Trash2,
 	X,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { AudioPlayer, type AudioPlayerHandle } from "@/components/audio-player";
 import { useSetBreadcrumbs } from "@/components/layout";
+import { Markdown } from "@/components/markdown";
 import { RegenerateFeedbackDialog } from "@/components/regenerate-feedback-dialog";
+import { Skeleton } from "@/components/skeleton";
 import { TranscriptViewer } from "@/components/transcript-viewer";
-import { Markdown } from "@/components/ui/markdown";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useJobEvents } from "@/hooks/use-job-events";
 import { getTagColor } from "@/lib/badge-colors";
 import { toRecordingDetailVM } from "@/lib/recording-detail-vm";
@@ -1408,31 +1401,40 @@ function EditableProperties({
 							<ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
 						</Button>
 					</PopoverTrigger>
-					<PopoverContent className="w-48 p-0" align="start">
-						<Command>
-							<CommandList>
-								<CommandGroup>
-									<CommandItem onSelect={() => onFolderChange(null)} className="gap-2">
-										<Check
-											className={`h-3.5 w-3.5 ${selectedFolderId === null ? "opacity-100" : "opacity-0"}`}
-										/>
-										<span className="text-basalt-muted-foreground">No folder</span>
-									</CommandItem>
-									{allFolders.map((folder) => (
-										<CommandItem
-											key={folder.id}
-											onSelect={() => onFolderChange(folder.id)}
-											className="gap-2"
-										>
-											<Check
-												className={`h-3.5 w-3.5 ${selectedFolderId === folder.id ? "opacity-100" : "opacity-0"}`}
-											/>
-											{folder.name}
-										</CommandItem>
-									))}
-								</CommandGroup>
-							</CommandList>
-						</Command>
+					<PopoverContent className="w-48 p-1" align="start">
+						<div
+							className="max-h-60 overflow-y-auto space-y-0.5"
+							role="listbox"
+							aria-label="Folders"
+						>
+							<button
+								type="button"
+								role="option"
+								aria-selected={selectedFolderId === null}
+								onClick={() => onFolderChange(null)}
+								className="flex w-full items-center gap-2 rounded-basalt-control px-2 py-1.5 text-sm text-left transition-colors hover:bg-basalt-accent"
+							>
+								<Check
+									className={`h-3.5 w-3.5 shrink-0 ${selectedFolderId === null ? "opacity-100" : "opacity-0"}`}
+								/>
+								<span className="text-basalt-muted-foreground">No folder</span>
+							</button>
+							{allFolders.map((folder) => (
+								<button
+									key={folder.id}
+									type="button"
+									role="option"
+									aria-selected={selectedFolderId === folder.id}
+									onClick={() => onFolderChange(folder.id)}
+									className="flex w-full items-center gap-2 rounded-basalt-control px-2 py-1.5 text-sm text-left transition-colors hover:bg-basalt-accent"
+								>
+									<Check
+										className={`h-3.5 w-3.5 shrink-0 ${selectedFolderId === folder.id ? "opacity-100" : "opacity-0"}`}
+									/>
+									<span className="truncate">{folder.name}</span>
+								</button>
+							))}
+						</div>
 					</PopoverContent>
 				</Popover>
 			</div>
@@ -1480,66 +1482,65 @@ function EditableProperties({
 							</Button>
 						</PopoverTrigger>
 						<PopoverContent className="w-56 p-0" align="start">
-							<Command>
-								<CommandInput
+							<div className="border-b border-basalt-border p-1.5">
+								<Input
 									placeholder="Search tags..."
 									value={newTagName}
-									onValueChange={onNewTagNameChange}
+									onChange={(e) => onNewTagNameChange(e.target.value)}
+									className="h-8 text-sm"
 								/>
-								<CommandList>
-									<CommandEmpty>
-										{newTagName.trim() ? (
-											<button
-												type="button"
-												className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-basalt-muted-foreground hover:text-basalt-foreground"
-												onClick={onCreateTag}
-												disabled={creatingTag}
-											>
-												<Plus className="h-3.5 w-3.5" />
-												Create &ldquo;{newTagName.trim()}&rdquo;
-											</button>
-										) : (
-											"No tags found."
-										)}
-									</CommandEmpty>
-									<CommandGroup>
-										{allTags.map((tag) => {
-											const color = getTagColor(tag.name);
-											return (
-												<CommandItem
-													key={tag.id}
-													onSelect={() => onToggleTag(tag.id)}
-													className="gap-2"
-												>
-													<Check
-														className={`h-3.5 w-3.5 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
-													/>
-													<span className={cn("h-2.5 w-2.5 rounded-full shrink-0", color.bg)} />
-													{tag.name}
-												</CommandItem>
-											);
-										})}
-									</CommandGroup>
-									{newTagName.trim() &&
-										!allTags.some(
-											(t) => t.name.toLowerCase() === newTagName.trim().toLowerCase(),
-										) && (
-											<>
-												<CommandSeparator />
-												<CommandGroup>
-													<CommandItem
-														onSelect={onCreateTag}
-														disabled={creatingTag}
-														className="gap-2"
+							</div>
+							<div className="max-h-60 overflow-y-auto p-1 space-y-0.5">
+								{(() => {
+									const query = newTagName.trim().toLowerCase();
+									const filteredTags = query
+										? allTags.filter((t) => t.name.toLowerCase().includes(query))
+										: allTags;
+									const exactMatch = allTags.some((t) => t.name.toLowerCase() === query);
+									return (
+										<>
+											{filteredTags.length === 0 && !query && (
+												<p className="px-2 py-1.5 text-sm text-basalt-muted-foreground">
+													No tags found.
+												</p>
+											)}
+											{filteredTags.map((tag) => {
+												const color = getTagColor(tag.name);
+												return (
+													<button
+														key={tag.id}
+														type="button"
+														onClick={() => onToggleTag(tag.id)}
+														className="flex w-full items-center gap-2 rounded-basalt-control px-2 py-1.5 text-sm text-left transition-colors hover:bg-basalt-accent"
 													>
-														<Plus className="h-3.5 w-3.5" />
+														<Check
+															className={`h-3.5 w-3.5 shrink-0 ${selectedTagIds.includes(tag.id) ? "opacity-100" : "opacity-0"}`}
+														/>
+														<span className={cn("h-2.5 w-2.5 rounded-full shrink-0", color.bg)} />
+														<span className="truncate">{tag.name}</span>
+													</button>
+												);
+											})}
+											{newTagName.trim() && !exactMatch && (
+												<>
+													{filteredTags.length > 0 && (
+														<div className="my-1 h-px bg-basalt-border" />
+													)}
+													<button
+														type="button"
+														onClick={onCreateTag}
+														disabled={creatingTag}
+														className="flex w-full items-center gap-2 rounded-basalt-control px-2 py-1.5 text-sm text-left text-basalt-muted-foreground transition-colors hover:bg-basalt-accent hover:text-basalt-foreground"
+													>
+														<Plus className="h-3.5 w-3.5 shrink-0" />
 														Create &ldquo;{newTagName.trim()}&rdquo;
-													</CommandItem>
-												</CommandGroup>
-											</>
-										)}
-								</CommandList>
-							</Command>
+													</button>
+												</>
+											)}
+										</>
+									);
+								})()}
+							</div>
 						</PopoverContent>
 					</Popover>
 				</div>

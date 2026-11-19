@@ -1,5 +1,5 @@
 import { Button } from "@nocoo/basalt";
-import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "@nocoo/basalt/icons";
 import type { AudioPlayerVM } from "@/lib/audio-player-vm";
 
 interface CassettePlayerProps {

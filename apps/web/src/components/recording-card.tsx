@@ -1,6 +1,6 @@
 import { Badge } from "@nocoo/basalt";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
-import { Calendar, Clock, HardDrive, Mic } from "lucide-react";
+import { Calendar, Clock, HardDrive, Mic } from "@nocoo/basalt/icons";
 import { Link } from "react-router";
 import type { RecordingCardVM } from "@/lib/recordings-list-vm";
 

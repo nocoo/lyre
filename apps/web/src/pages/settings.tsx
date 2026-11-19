@@ -26,10 +26,10 @@ import {
 	Webhook,
 	X,
 	XCircle,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSetBreadcrumbs } from "@/components/layout";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/skeleton";
 import { getTagColor } from "@/lib/badge-colors";
 import { cn } from "@/lib/utils";
 

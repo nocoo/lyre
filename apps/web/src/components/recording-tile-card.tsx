@@ -1,6 +1,14 @@
 import { Badge, Checkbox } from "@nocoo/basalt";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
-import { AlertCircle, Clock, FileAudio, FolderOpen, HardDrive, Mic, Sparkles } from "lucide-react";
+import {
+	AlertCircle,
+	Clock,
+	FileAudio,
+	FolderOpen,
+	HardDrive,
+	Mic,
+	Sparkles,
+} from "@nocoo/basalt/icons";
 import { Link } from "react-router";
 import type { RecordingCardVM } from "@/lib/recordings-list-vm";
 import { cn } from "@/lib/utils";

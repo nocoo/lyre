@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.1.9 (2026-11-19)
+
+### Changed
+
+- Upgrade `@nocoo/basalt` to `^3.5.1`, relocate the 4 domain UI components out of `components/ui/`, drop direct `cmdk` and `lucide-react` dependencies, adopt 2-line Basalt CSS, and align `240px` sidebar geometry assertions.
+
 ## v2.1.7 (2026-11-03)
 
 ### Maintenance

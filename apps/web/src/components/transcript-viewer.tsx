@@ -1,5 +1,5 @@
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
-import { Check, ChevronDown, Copy, FileText, Loader2 } from "lucide-react";
+import { Check, ChevronDown, Copy, FileText, Loader2 } from "@nocoo/basalt/icons";
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import {
 	findActiveSentenceIndex,

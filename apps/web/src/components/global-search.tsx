@@ -7,7 +7,7 @@ import {
 	CommandList,
 	CommandPalette,
 } from "@nocoo/basalt";
-import { Clock, FolderOpen, Mic } from "lucide-react";
+import { Clock, FolderOpen, Mic } from "@nocoo/basalt/icons";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { formatDuration, formatRelativeTime } from "@/lib/recordings-list-vm";
