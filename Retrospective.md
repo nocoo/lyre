@@ -1,5 +1,22 @@
 # Retrospective
 
+## 2026-11-21: Release script review round — bind every wait to the exact evidence
+
+The first version of the rewritten `scripts/release.ts` waited for _a_
+successful CI run and _a_ successful deployment of the release commit, without
+keeping the CI run ID or proving that the deployment was the one triggered by
+that CI run. It also created the tag on whatever HEAD was when the waiting
+ended. Three general rules came out of the review: record the identifier of
+the evidence you waited for and re-check it in the next step (the deploy log
+prints `Resolved release source <sha> run <ci-run-id>`, which binds the
+deployment to both); pass the commit SHA explicitly to `git tag` instead of
+relying on the moving HEAD; and assume branch protection — a direct push of a
+fresh commit to a ruleset-protected `main` is rejected, so the script must
+offer the pull-request path and resume from the merged commit without
+re-bumping the version or duplicating the CHANGELOG entry. Strict
+`tsc --noEmit` on the script also caught a parameter named `run` shadowing the
+shell helper: typecheck the release tooling itself, not only the app.
+
 ## 2026-11-20: A tag push raced the CI run it was supposed to prove
 
 The `v2.1.9` tag was pushed three seconds after the release commit landed on

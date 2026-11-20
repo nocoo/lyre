@@ -134,14 +134,36 @@ after CI and the deployment are green.
 `scripts/release.ts` follows that order and aborts without creating a tag when
 any step is not green:
 
-1. commit the version bump,
+1. commit the version bump (or reuse an already merged release commit),
 2. push the commit to `origin main`,
-3. wait for the successful main `CI` run of that commit,
-4. wait for the matching `Release` (Worker deployment) run,
-5. create and push the annotated version tag,
-6. create the GitHub Release.
+3. wait for the successful main `CI` run of that commit and record its run ID,
+4. wait for the `Release` (Worker deployment) run and verify in its log that
+   `release-source` proved exactly that CI run (`Resolved release source <sha>
+   run <ci-run-id>`),
+5. confirm `https://lyre.hexly.ai/api/live` reports the released version,
+6. create the annotated tag **on the release commit** and push it,
+7. create the GitHub Release as a **draft**.
 
 `bun run release -- --dry-run` prints the same sequence without side effects.
+
+### Protected main and resumable releases
+
+`main` is protected by a ruleset that requires `quality / Z1: Gate`, so a
+fresh release commit cannot be pushed directly. When GitHub rejects the direct
+push, the script prints the pull request fallback (`chore/release-v<version>`
+branch, merged **without squashing** so the release commit keeps its SHA) and
+exits before any tag exists.
+
+Re-running `bun run release -- <version>` after the merge resumes from the
+merged commit: the version files already carry the version, so the script
+skips the bump, the CHANGELOG entry (no duplicates) and the commit, and waits
+for the CI run and the deployment of that commit. A bare `bun run release`
+that would skip an untagged version already merged to `main` is refused.
+
+Failure states are distinct: a failure before step 6 leaves no tag and nothing
+published; a failure after the tag push leaves a pushed tag with a draft
+GitHub Release that still needs the DMG and `SHA256SUMS` attached before it is
+published.
 
 ### Copyable macOS recovery guidance
 
