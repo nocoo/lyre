@@ -1,5 +1,36 @@
 # Retrospective
 
+## 2026-11-20: A tag push raced the CI run it was supposed to prove
+
+The `v2.1.9` tag was pushed three seconds after the release commit landed on
+`main`, while that commit's `CI` run was still executing. The Release workflow
+had both a `push` tag trigger and a `workflow_run` trigger, so the tag run
+failed the fail-closed `release-source` proof ("No successful
+`.github/workflows/ci.yml` run on main for `4aaf530`") while the `workflow_run`
+deploy of the same commit succeeded minutes later. The tag trigger could only
+ever lose that race or deploy the same commit a second time; it was removed.
+The retry of the failed run also failed because the pinned base-ci release
+filtered the run list with `status=completed`; base-ci v2026.16 dropped that
+filter and this repository is now pinned to it.
+
+`scripts/release.ts` had the same defect in a milder form: it pushed the commit
+and the tag back to back. It now pushes the commit to `origin main`, waits for
+the successful `CI` run of that commit and for the matching `Release`
+deployment, and only then creates the annotated tag, pushes it, and creates the
+GitHub Release. Any non-green step aborts the release before a tag exists.
+
+Two general rules: a deploy trigger must carry evidence that is already green
+instead of a ref that merely points at a commit, and a tag must be the last
+step of a release, never the trigger of one.
+
+## 2026-11-20: `Path.is_file()` crashes on protected dangling symlinks
+
+The `gate:l1-selftest` self-test crashed with `PermissionError:
+/usr/sbin/weakpass_edit` while it built its isolated PATH. `pathlib.Path.is_file()`
+propagates `EACCES`, while `os.path.isfile()` reports it as "not a file"; the
+helper now uses `os.path.isfile()` so an unreadable PATH entry is skipped
+instead of aborting the whole gate.
+
 ## 2026-11-14: Isolate executable names, not installation-directory names
 
 The missing-native-tool self-test assumed a SwiftLint directory would contain

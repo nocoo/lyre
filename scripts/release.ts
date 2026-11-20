@@ -2,9 +2,23 @@
 /**
  * Automated release script for lyre monorepo.
  *
- * Bumps version across all workspace package.json files,
- * syncs lockfile, generates CHANGELOG entries from conventional commits,
- * commits, tags, pushes, and creates a GitHub release.
+ * Bumps version across all workspace package.json files, syncs lockfile,
+ * generates CHANGELOG entries from conventional commits, and then releases in
+ * the order required by docs/12-agent-operations.md:
+ *
+ *   1. commit the version bump,
+ *   2. push the commit to origin main,
+ *   3. wait for the main CI run of that commit to succeed,
+ *   4. wait for the matching Worker deployment (Release workflow) to succeed,
+ *   5. create and push the annotated version tag,
+ *   6. create the GitHub Release.
+ *
+ * Tagging before CI has proven the commit must not happen: the tag push races
+ * the in-flight main CI run, the fail-closed release-source proof rejects it
+ * ("No successful .github/workflows/ci.yml run on main for <sha>"), and a tag
+ * pushed after CI passes would deploy the same commit a second time. The
+ * Release workflow therefore has no `push` tag trigger — `workflow_run` on a
+ * successful main CI run owns the production deployment.
  *
  * Usage:
  *   bun run release              # patch bump (default)
@@ -30,6 +44,14 @@ const PACKAGE_JSON = pathResolve(PROJECT_ROOT, "package.json");
 const CHANGELOG = pathResolve(PROJECT_ROOT, "CHANGELOG.md");
 const MACOS_PROJECT_YML = pathResolve(PROJECT_ROOT, "apps/macos/project.yml");
 
+const REMOTE = "origin";
+const RELEASE_BRANCH = "main";
+const CI_WORKFLOW_FILE = "ci.yml";
+const DEPLOY_WORKFLOW_FILE = "release.yml";
+const POLL_SECONDS = 15;
+const CI_TIMEOUT_MINUTES = 45;
+const DEPLOY_TIMEOUT_MINUTES = 30;
+
 // Workspace package.json files to keep in sync
 const WORKSPACE_PACKAGES = [
 	pathResolve(PROJECT_ROOT, "apps/web/package.json"),
@@ -41,14 +63,33 @@ const WORKSPACE_PACKAGES = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-function run(cmd: string, opts?: { dryRun?: boolean; cwd?: string }): string {
+function run(cmd: string, opts?: { dryRun?: boolean; cwd?: string; quiet?: boolean }): string {
 	const cwd = opts?.cwd ?? PROJECT_ROOT;
 	if (opts?.dryRun) {
 		console.log(`  [dry-run] ${cmd}`);
 		return "";
 	}
-	console.log(`  $ ${cmd}`);
+	if (!opts?.quiet) {
+		console.log(`  $ ${cmd}`);
+	}
 	return execSync(cmd, { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "inherit"] }).trim();
+}
+
+function runStatus(cmd: string, opts?: { cwd?: string }): number {
+	try {
+		execSync(cmd, {
+			cwd: opts?.cwd ?? PROJECT_ROOT,
+			stdio: ["pipe", "pipe", "ignore"],
+		});
+		return 0;
+	} catch (error) {
+		const code = (error as { status?: number }).status;
+		return typeof code === "number" ? code : 1;
+	}
+}
+
+function sleepSeconds(seconds: number): void {
+	execSync(`sleep ${seconds}`, { stdio: "ignore" });
 }
 
 function readJson(path: string): Record<string, unknown> {
@@ -75,6 +116,53 @@ function ensureCleanWorkingTree(): void {
 		for (const line of status.split("\n")) {
 			console.error(`   ${line}`);
 		}
+		process.exit(1);
+	}
+}
+
+/**
+ * The release commit has to land on `main` so that the CI run proving it and
+ * the deployment triggered by it belong to the release branch.
+ */
+function ensureReleaseBranch(): void {
+	const branch = run("git rev-parse --abbrev-ref HEAD");
+	if (branch !== RELEASE_BRANCH) {
+		console.error(
+			`\n❌ Releases must be cut from '${RELEASE_BRANCH}', current branch is '${branch}'.\n`,
+		);
+		process.exit(1);
+	}
+}
+
+/**
+ * Refuse to release from a stale local main: the push below has to be a fast
+ * forward, otherwise the CI run we wait for would not be the run of the
+ * released commit.
+ */
+function ensureUpToDateWithRemote(): void {
+	run(`git fetch ${REMOTE} ${RELEASE_BRANCH}`);
+	const local = run("git rev-parse HEAD");
+	const remote = run(`git rev-parse ${REMOTE}/${RELEASE_BRANCH}`);
+	if (local !== remote) {
+		console.error(
+			`\n❌ Local ${RELEASE_BRANCH} (${local}) is not ${REMOTE}/${RELEASE_BRANCH} (${remote}).\n`,
+		);
+		console.error(`   Sync it first: git pull --rebase ${REMOTE} ${RELEASE_BRANCH}\n`);
+		process.exit(1);
+	}
+}
+
+/**
+ * The CI / deployment evidence and the GitHub Release come from the GitHub
+ * API, so an unauthenticated `gh` must fail before anything is pushed.
+ */
+function ensureGitHubCli(): void {
+	if (runStatus("gh --version") !== 0) {
+		console.error("\n❌ The GitHub CLI (`gh`) is required to release.\n");
+		process.exit(1);
+	}
+	if (runStatus("gh auth status") !== 0) {
+		console.error("\n❌ `gh` is not authenticated. Run `gh auth login` first.\n");
 		process.exit(1);
 	}
 }
@@ -184,6 +272,68 @@ function generateChangelog(newVersion: string, dryRun: boolean): string {
 }
 
 // ---------------------------------------------------------------------------
+// GitHub Actions evidence
+// ---------------------------------------------------------------------------
+
+interface WorkflowRun {
+	databaseId: number;
+	status: string;
+	conclusion: string;
+	event: string;
+	headBranch: string;
+	url: string;
+}
+
+function listWorkflowRuns(workflowFile: string, sha: string): WorkflowRun[] {
+	const out = run(
+		`gh run list --workflow ${workflowFile} --branch ${RELEASE_BRANCH} --commit ${sha} --limit 20 --json databaseId,status,conclusion,event,headBranch,url`,
+		{ quiet: true },
+	);
+	if (!out.trim()) return [];
+	const parsed: unknown = JSON.parse(out);
+	return Array.isArray(parsed) ? (parsed as WorkflowRun[]) : [];
+}
+
+/**
+ * Block until the workflow run for `sha` succeeded.
+ *
+ * Fails closed: a failed or missing run aborts the release before any tag is
+ * created, so a broken commit can never be published as a release.
+ */
+function waitForSuccessfulRun(
+	workflowFile: string,
+	sha: string,
+	timeoutMinutes: number,
+	label: string,
+	pick: (runs: WorkflowRun[]) => WorkflowRun[],
+): void {
+	const deadline = Date.now() + timeoutMinutes * 60_000;
+	for (;;) {
+		const runs = listWorkflowRuns(workflowFile, sha);
+		const selected = pick(runs);
+		if (!selected) {
+			console.log(`   Waiting for the ${label} run of ${sha.slice(0, 7)} to appear...`);
+		} else if (selected.status === "completed") {
+			if (selected.conclusion === "success") {
+				console.log(`   ${label} succeeded: ${selected.url}`);
+				return;
+			}
+			console.error(`\n❌ ${label} run ${selected.url} concluded '${selected.conclusion}'.\n`);
+			console.error(`   Inspect it, fix the cause, then re-run the release. No tag was created.\n`);
+			process.exit(1);
+		} else {
+			console.log(`   ${label} still running: ${selected.url}`);
+		}
+		if (Date.now() >= deadline) {
+			console.error(`\n❌ Timed out after ${timeoutMinutes} min waiting for the ${label} run.\n`);
+			console.error(`   No tag was created.\n`);
+			process.exit(1);
+		}
+		sleepSeconds(POLL_SECONDS);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -199,9 +349,12 @@ function main(): void {
 
 	console.log(`\n📦 Release: v${currentVersion} → v${newVersion}${dryRun ? " (dry-run)" : ""}\n`);
 
-	// 0. Pre-flight: ensure clean working tree
+	// 0. Pre-flight: clean tree, release branch, up-to-date main
 	if (!dryRun) {
 		ensureCleanWorkingTree();
+		ensureReleaseBranch();
+		ensureUpToDateWithRemote();
+		ensureGitHubCli();
 	}
 
 	// 1. Bump version in root package.json
@@ -241,8 +394,8 @@ function main(): void {
 		console.log("   No commits found since last tag.");
 	}
 
-	// 5. Commit and tag
-	console.log("5️⃣  Committing and tagging...");
+	// 5. Commit the release changes (no tag yet)
+	console.log("5️⃣  Committing release changes...");
 	const releaseFiles = [
 		"package.json",
 		"apps/web/package.json",
@@ -256,16 +409,71 @@ function main(): void {
 		"apps/macos/Lyre.xcodeproj/xcshareddata/xcschemes/LyreTests.xcscheme",
 	].filter((p) => existsSync(pathResolve(PROJECT_ROOT, p)));
 	run(`git add ${releaseFiles.join(" ")}`, { dryRun });
-	run(`git commit -m "chore: release v${newVersion}"`, { dryRun });
-	run(`git tag v${newVersion}`, { dryRun });
 
-	// 6. Push
-	console.log("\n6️⃣  Pushing...");
-	run("git push", { dryRun });
-	run(`git push origin v${newVersion}`, { dryRun });
+	// A retry of an already prepared version has nothing to commit; keep going
+	// so the tag and the GitHub Release can still be created.
+	const alreadyPrepared = dryRun ? false : runStatus("git diff --cached --quiet") === 0;
+	if (alreadyPrepared) {
+		console.log("   No version changes to commit — reusing the current HEAD commit.");
+	} else {
+		run(`git commit -m "chore: release v${newVersion}"`, { dryRun });
+	}
+	const releaseSha = dryRun ? "<release-commit-sha>" : run("git rev-parse HEAD");
+	console.log(`   Release commit: ${releaseSha}`);
 
-	// 7. GitHub release
-	console.log("\n7️⃣  Creating GitHub release...");
+	// 6. Push the release commit first — the tag may only follow a proven CI run
+	console.log(`\n6️⃣  Pushing the release commit to ${REMOTE} ${RELEASE_BRANCH}...`);
+	run(`git push ${REMOTE} HEAD:${RELEASE_BRANCH}`, { dryRun });
+
+	// 7. Wait for the main CI run of the release commit
+	console.log("\n7️⃣  Waiting for main CI to succeed...");
+	if (dryRun) {
+		console.log(`   [dry-run] wait for a successful ${CI_WORKFLOW_FILE} run of ${releaseSha}`);
+	} else {
+		waitForSuccessfulRun(
+			CI_WORKFLOW_FILE,
+			releaseSha,
+			CI_TIMEOUT_MINUTES,
+			"CI",
+			(runs) =>
+				runs
+					.filter((run) => run.event === "push" && run.headBranch === RELEASE_BRANCH)
+					.sort((a, b) => b.databaseId - a.databaseId)[0],
+		);
+	}
+
+	// 8. Wait for the Worker deployment the successful CI run triggered
+	console.log("\n8️⃣  Waiting for the Worker deployment to succeed...");
+	if (dryRun) {
+		console.log(`   [dry-run] wait for a successful ${DEPLOY_WORKFLOW_FILE} run of ${releaseSha}`);
+	} else {
+		waitForSuccessfulRun(
+			DEPLOY_WORKFLOW_FILE,
+			releaseSha,
+			DEPLOY_TIMEOUT_MINUTES,
+			"Deployment",
+			(runs) => {
+				const triggered = runs
+					.filter((run) => run.event === "workflow_run")
+					.sort((a, b) => b.databaseId - a.databaseId);
+				return triggered[0] ?? runs.sort((a, b) => b.databaseId - a.databaseId)[0];
+			},
+		);
+	}
+
+	// 9. Tag and push the tag — only now, with green CI and a live deployment
+	console.log(`\n9️⃣  Tagging v${newVersion}...`);
+	const tagExists =
+		!dryRun && runStatus(`git rev-parse -q --verify refs/tags/v${newVersion}`) === 0;
+	if (tagExists) {
+		console.log(`   Tag v${newVersion} already exists — keeping it.`);
+	} else {
+		run(`git tag -a v${newVersion} -m "Release v${newVersion}"`, { dryRun });
+	}
+	run(`git push ${REMOTE} v${newVersion}`, { dryRun });
+
+	// 10. GitHub release
+	console.log("\n🔟  Creating GitHub release...");
 	const releaseNotes = changelogEntry || `Release v${newVersion}`;
 	const notesFile = `/tmp/lyre-release-notes-${newVersion}.md`;
 	if (!dryRun) {

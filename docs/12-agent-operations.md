@@ -115,6 +115,34 @@ Version is managed from the **root `package.json`** as the single source of trut
 6. Push through the normal hooks, verify CI for the release commit, and verify the matching Worker deployment (including migrations before dependent code). Push the version tag and publish its GitHub Release with the versioned DMG and `SHA256SUMS` attached. The release helper alone does not package or attach native artifacts.
 7. Include the changelog, direct download/checksum links, actual signing/notarization status, and the following recovery guidance and permission reauthorization note directly in the GitHub Release body (do not require users to find them in repository docs). Verify the uploaded asset digest against the local DMG and `/api/live` against the released version.
 
+### Release automation (CD triggers and ordering)
+
+`.github/workflows/release.yml` deploys the Worker to production only from
+evidence that is already green:
+
+| Trigger             | Deploys when                                                           |
+| ------------------- | ---------------------------------------------------------------------- |
+| `workflow_run`      | The `CI` workflow on `main` completed with `event == push` and success |
+| `workflow_dispatch` | Manually, with `source-run-id` (a successful main CI run) and/or `tag` |
+
+There is deliberately **no** `push` tag trigger. A tag pushed while the same
+commit's main CI is still running loses the fail-closed `release-source` proof
+(`No successful .github/workflows/ci.yml run on main for <sha>`), and a tag
+pushed after CI passes deploys the same commit twice. The tag is created only
+after CI and the deployment are green.
+
+`scripts/release.ts` follows that order and aborts without creating a tag when
+any step is not green:
+
+1. commit the version bump,
+2. push the commit to `origin main`,
+3. wait for the successful main `CI` run of that commit,
+4. wait for the matching `Release` (Worker deployment) run,
+5. create and push the annotated version tag,
+6. create the GitHub Release.
+
+`bun run release -- --dry-run` prints the same sequence without side effects.
+
 ### Copyable macOS recovery guidance
 
 After downloading from this repository's Release page and checking `SHA256SUMS`,

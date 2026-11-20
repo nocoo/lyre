@@ -1,18 +1,28 @@
 name: Release
 
+# Production CD is driven by a successful CI run on `main` (workflow_run) or by
+# a manual dispatch that names a proven CI run / an already released tag.
+#
+# A `push` tag trigger is intentionally absent: a tag pushed while the same
+# commit's main CI is still running loses the fail-closed release-source proof
+# ("No successful .github/workflows/ci.yml run on main for <sha>"), and a tag
+# pushed after CI passes deploys the same commit a second time. Tags are
+# pushed by `scripts/release.ts` only after CI and the matching deployment
+# have succeeded.
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_run:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
+      source-run-id:
+        description: "Successful CI run ID on main to deploy (omit when tag is given)"
+        required: false
+        type: string
       tag:
-        description: "Tag to deploy (e.g. v0.4.4)"
-        required: true
+        description: "Released tag to deploy (e.g. v2.1.9); omit when source-run-id is given"
+        required: false
         type: string
 
 permissions:
@@ -23,7 +33,6 @@ jobs:
   deploy:
     name: Deploy Worker
     if: >-
-      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.event == 'push' &&
@@ -33,9 +42,9 @@ jobs:
       required-quality-check: "quality / Z1: Gate"
       expected-workflow-path: ".github/workflows/ci.yml"
       expected-workflow-name: "CI"
-      source-run-id: ${{ github.event_name == 'workflow_run' && format('{0}', github.event.workflow_run.id) || '' }}
-      tag: ${{ github.event_name == 'push' && github.ref_name || inputs.tag || '' }}
-      package-version-match: ${{ github.event_name != 'workflow_run' }}
+      source-run-id: ${{ github.event_name == 'workflow_run' && format('{0}', github.event.workflow_run.id) || inputs.source-run-id }}
+      tag: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+      package-version-match: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
       runtime-version: "1.4.0"
       install-policy: "blocked"
       build-command: "bun run web:build"
