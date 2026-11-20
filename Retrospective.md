@@ -1,5 +1,84 @@
 # Retrospective
 
+## 2026-11-21: Release script review round 4 — runtime traps in the helper itself
+
+Bun's `execFileSync` returns `null` (not a string) when `stdio: "inherit"`, so
+`.trim()` on its result crashed the very commit/push steps the release
+depends on; always null-check child-process output. Version files are now
+written only after switching to the release branch, so a failed preparation
+leaves `main` clean. The finishing phase releases the main-line commit that
+introduced the version (`git log --first-parent -S"version": …` on
+`origin/main`) instead of `HEAD`, because `main` may already carry later
+unrelated commits — with `--first-parent` the found commit is always one that
+was pushed to `main` and therefore has push-CI evidence. Health checking
+distinguishes "no HTTP status at all" (transport failure, curl exit 7/28 or
+code 000) from any answered non-200 status, which is a deployment fault.
+Semver now rejects leading zeros.
+
+## 2026-11-21: Release script review round 3 — never push an unproven commit to a protected branch
+
+The second version still tried to `git push origin main` for the release
+commit and only handled the rejection afterwards. A release flow must not
+plan on pushing a commit that has not passed CI to a branch whose ruleset
+requires exactly that check, and it must not rely on an admin bypass. The
+helper now has two phases: it prepares `chore/release-v<version>` and hands
+the merge to a pull request, and it finishes the release only from the merged
+`main` tip. Two more refinements from this round: compare evidence exactly
+(a regex capture of `Resolved release source <sha> run <id>` with both groups
+checked, iterating every deployment run for the SHA instead of trusting the
+newest), and distinguish an HTTP error from an unreachable host in the health
+check — a 502 from `/api/live` is a broken deployment, not a network hiccup.
+Shell string concatenation was replaced with argv arrays throughout, so
+unvalidated input can never reach a shell.
+
+## 2026-11-21: Release script review round — bind every wait to the exact evidence
+
+The first version of the rewritten `scripts/release.ts` waited for _a_
+successful CI run and _a_ successful deployment of the release commit, without
+keeping the CI run ID or proving that the deployment was the one triggered by
+that CI run. It also created the tag on whatever HEAD was when the waiting
+ended. Three general rules came out of the review: record the identifier of
+the evidence you waited for and re-check it in the next step (the deploy log
+prints `Resolved release source <sha> run <ci-run-id>`, which binds the
+deployment to both); pass the commit SHA explicitly to `git tag` instead of
+relying on the moving HEAD; and assume branch protection — a direct push of a
+fresh commit to a ruleset-protected `main` is rejected, so the script must
+offer the pull-request path and resume from the merged commit without
+re-bumping the version or duplicating the CHANGELOG entry. Strict
+`tsc --noEmit` on the script also caught a parameter named `run` shadowing the
+shell helper: typecheck the release tooling itself, not only the app.
+
+## 2026-11-20: A tag push raced the CI run it was supposed to prove
+
+The `v2.1.9` tag was pushed three seconds after the release commit landed on
+`main`, while that commit's `CI` run was still executing. The Release workflow
+had both a `push` tag trigger and a `workflow_run` trigger, so the tag run
+failed the fail-closed `release-source` proof ("No successful
+`.github/workflows/ci.yml` run on main for `4aaf530`") while the `workflow_run`
+deploy of the same commit succeeded minutes later. The tag trigger could only
+ever lose that race or deploy the same commit a second time; it was removed.
+The retry of the failed run also failed because the pinned base-ci release
+filtered the run list with `status=completed`; base-ci v2026.16 dropped that
+filter and this repository is now pinned to it.
+
+`scripts/release.ts` had the same defect in a milder form: it pushed the commit
+and the tag back to back. It now pushes the commit to `origin main`, waits for
+the successful `CI` run of that commit and for the matching `Release`
+deployment, and only then creates the annotated tag, pushes it, and creates the
+GitHub Release. Any non-green step aborts the release before a tag exists.
+
+Two general rules: a deploy trigger must carry evidence that is already green
+instead of a ref that merely points at a commit, and a tag must be the last
+step of a release, never the trigger of one.
+
+## 2026-11-20: `Path.is_file()` crashes on protected dangling symlinks
+
+The `gate:l1-selftest` self-test crashed with `PermissionError:
+/usr/sbin/weakpass_edit` while it built its isolated PATH. `pathlib.Path.is_file()`
+propagates `EACCES`, while `os.path.isfile()` reports it as "not a file"; the
+helper now uses `os.path.isfile()` so an unreadable PATH entry is skipped
+instead of aborting the whole gate.
+
 ## 2026-11-14: Isolate executable names, not installation-directory names
 
 The missing-native-tool self-test assumed a SwiftLint directory would contain

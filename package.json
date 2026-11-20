@@ -21,7 +21,8 @@
 		"test:coverage": "vitest run --coverage",
 		"test:macos": "bun run scripts/test-macos.ts",
 		"test:macos:live": "bun run scripts/test-macos.ts --live",
-		"typecheck": "bun run web:typecheck && bun run worker:typecheck && bun run api:typecheck",
+		"typecheck": "bun run web:typecheck && bun run worker:typecheck && bun run api:typecheck && bun run scripts:typecheck",
+		"scripts:typecheck": "tsc --noEmit -p scripts/tsconfig.json",
 		"deploy": "bun run web:build && bun run --cwd apps/api deploy",
 		"web:dev": "bun run --cwd apps/web dev",
 		"web:build": "bun run --cwd apps/web build",
@@ -45,9 +46,11 @@
 		"@biomejs/biome": "2.6.6",
 		"@playwright/test": "1.65.1",
 		"@types/better-sqlite3": "9.6.0",
+		"@types/bun": "^1.4.4",
 		"@vitest/coverage-v8": "5.1.0",
 		"better-sqlite3": "13.2.0",
 		"husky": "^9.1.7",
+		"typescript": "^7.0.2",
 		"vitest": "5.1.0"
 	},
 	"overrides": {

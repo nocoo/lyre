@@ -115,6 +115,79 @@ Version is managed from the **root `package.json`** as the single source of trut
 6. Push through the normal hooks, verify CI for the release commit, and verify the matching Worker deployment (including migrations before dependent code). Push the version tag and publish its GitHub Release with the versioned DMG and `SHA256SUMS` attached. The release helper alone does not package or attach native artifacts.
 7. Include the changelog, direct download/checksum links, actual signing/notarization status, and the following recovery guidance and permission reauthorization note directly in the GitHub Release body (do not require users to find them in repository docs). Verify the uploaded asset digest against the local DMG and `/api/live` against the released version.
 
+### Release automation (CD triggers and ordering)
+
+`.github/workflows/release.yml` deploys the Worker to production only from
+evidence that is already green:
+
+| Trigger             | Deploys when                                                           |
+| ------------------- | ---------------------------------------------------------------------- |
+| `workflow_run`      | The `CI` workflow on `main` completed with `event == push` and success |
+| `workflow_dispatch` | Manually, with `source-run-id` (a successful main CI run) and/or `tag` |
+
+There is deliberately **no** `push` tag trigger. A tag pushed while the same
+commit's main CI is still running loses the fail-closed `release-source` proof
+(`No successful .github/workflows/ci.yml run on main for <sha>`), and a tag
+pushed after CI passes deploys the same commit twice. The tag is created only
+after CI and the deployment are green.
+
+`scripts/release.ts` never pushes `origin main` directly: `main` is protected
+by a ruleset that requires `quality / Z1: Gate`, so the release commit always
+arrives through a pull request that ran CI. The helper has two phases.
+
+**Phase 1 — prepare** (`bun run release`, run on `main` while `package.json`
+still carries the old version):
+
+1. switch to a fresh `chore/release-v<version>` branch **before any file is
+   touched**, so a failure can never leave the `main` working tree dirty,
+2. bump the version everywhere and regenerate the Xcode project,
+3. sync the lockfile and write the CHANGELOG entry (never duplicating one),
+4. commit everything on the release branch through the normal hooks and push
+   that branch,
+5. print the `gh pr create` command; the PR is merged **without squashing** so
+   the release commit keeps its SHA.
+
+**Phase 2 — finish** (`bun run release -- <version>`, run on `main` after the
+merge, when `package.json` already carries the version):
+
+1. resolve the release commit: the main-line commit on `origin/main` that
+   introduced the version (also correct when later unrelated commits have
+   landed on `main`), or an explicit `--sha=<full-sha>` that must already be
+   merged into `origin/main`,
+2. wait for the successful main `CI` run of that commit and record its run ID,
+3. wait for the `Release` (Worker deployment) run and verify in its log that
+   `release-source` proved exactly that CI run (`Resolved release source <sha>
+   run <ci-run-id>`, compared exactly); when several deployment runs exist for
+   the same SHA, the one that proves that CI run is selected,
+4. confirm `https://lyre.hexly.ai/api/live` answers HTTP 200 with the released
+   version — any other HTTP status (3xx/4xx/5xx) is a deployment fault and
+   aborts; only a request that completes without any status (curl exit 7/28,
+   code 000) counts as unreachable,
+5. create the annotated tag **on the release commit** and push it; the local
+   and the remote tag state are judged together, and any existing tag
+   pointing elsewhere aborts the release,
+6. create the GitHub Release as a **draft**.
+
+Every non-green or non-matching step aborts before the tag exists.
+`bun run release -- --dry-run` prints either phase without side effects and
+without any network request.
+
+### Protected main and resumable releases
+
+Re-running the helper resumes from the recorded state instead of repeating
+work: the version files decide the phase, the remote tag decides whether the
+tag step is done, the CHANGELOG entry is never duplicated, and a prepared
+release branch is completed (pushed again, then handed to the PR) rather than
+recreated. A bare `bun run release` that would skip an untagged version
+already merged to `main` is refused.
+
+Failure states are distinct: a failure before the tag step leaves no tag and
+nothing published; a failure after the tag push leaves a pushed tag whose
+GitHub Release may still be missing. When finishing, the helper reports which
+of the three release states it found — a **draft release** (attach the macOS
+DMG and `SHA256SUMS`, then publish), a **published release** (nothing to do),
+or **only the remote tag** (it then creates the draft).
+
 ### Copyable macOS recovery guidance
 
 After downloading from this repository's Release page and checking `SHA256SUMS`,

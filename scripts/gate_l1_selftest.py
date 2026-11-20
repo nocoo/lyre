@@ -207,7 +207,9 @@ def controlled_tool_path(environment: dict[str, str]):
                 continue
             for tool in source.iterdir():
                 target = directory / tool.name
-                if tool.is_file() and os.access(tool, os.X_OK) and not target.exists():
+                # os.path.isfile swallows the EACCES that Path.is_file raises for
+                # protected dangling symlinks such as /usr/sbin/weakpass_edit.
+                if os.path.isfile(tool) and os.access(tool, os.X_OK) and not target.exists():
                     target.symlink_to(tool.resolve())
         yield {**environment, "PATH": str(directory)}
 
