@@ -1,6 +1,6 @@
 # Agent architecture and release details
 
-Detailed project constraints and procedures. The root [CLAUDE.md](../CLAUDE.md) defines the quality contract and records current enforcement gaps.
+Detailed project constraints and procedures. The root [AGENTS.md](../AGENTS.md) defines the quality contract and records current enforcement gaps.
 
 ## Layout and stack
 
@@ -20,7 +20,7 @@ lyre/
 ├── .husky/         Git hooks (pre-commit, pre-push)
 ├── package.json    Bun workspaces root
 ├── README.md
-├── CLAUDE.md
+├── AGENTS.md
 ├── CHANGELOG.md
 └── LICENSE
 ```
@@ -66,7 +66,7 @@ lyre/
 - **Build**: xcodegen → Xcode project → `xcodebuild`
 - **Networking**: URLSession (async/await)
 - **Testing**: Swift Testing (`xcodebuild test`), SwiftLint (lint)
-- **Code Signing**: Release uses Developer ID Application + Manual signing (Team ID `93WWLTN9XU`). Set `LYRE_CODE_SIGN_IDENTITY` when building a DMG; `LYRE_ALLOW_ADHOC=1` explicitly opts into ad-hoc signing, which cannot preserve a stable TCC identity across updates.
+- **Code Signing**: Release uses Developer ID Application + Manual signing (Team ID `93WWLTN9XU`). Set `LYRE_CODE_SIGN_IDENTITY` when building a DMG; `LYRE_ALLOW_ADHOC=1` explicitly opts into ad-hoc signing, which cannot preserve a stable TCC identity across updates. Test ad-hoc flags are not release signing.
 
 ## Architecture and release
 
@@ -113,7 +113,7 @@ Version is managed from the **root `package.json`** as the single source of trut
 
 5. Mount the DMG read-only. Check the bundled `CFBundleShortVersionString`, verify its signature with `codesign --verify --deep --strict`, and verify Apple silicon / Intel slices with `lipo -archs`. Generate `SHA256SUMS` using the DMG basename.
 6. Push through the normal hooks, verify CI for the release commit, and verify the matching Worker deployment (including migrations before dependent code). Push the version tag and publish its GitHub Release with the versioned DMG and `SHA256SUMS` attached. The release helper alone does not package or attach native artifacts.
-7. Include the changelog, direct download/checksum links, actual signing/notarization status, and the following recovery guidance directly in the GitHub Release body. Verify the uploaded asset digest against the local DMG and `/api/live` against the released version.
+7. Include the changelog, direct download/checksum links, actual signing/notarization status, and the following recovery guidance and permission reauthorization note directly in the GitHub Release body (do not require users to find them in repository docs). Verify the uploaded asset digest against the local DMG and `/api/live` against the released version.
 
 ### Copyable macOS recovery guidance
 

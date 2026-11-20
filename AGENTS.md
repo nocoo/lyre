@@ -1,92 +1,63 @@
 # Lyre
 
-Audio recording, transcription and word-level playback across a web app and native macOS recorder.
-Profile: ts-worker-web + native-tool (Swift).
-Direction: [README.md](README.md). Frameworks must preserve this handbook.
-
-## Sources of Truth
-
-This file is the quality contract; hooks, CI and config are enforcement. Close implementation gaps without lowering the contract. Historical test results are not evidence of a current passing run.
-
-| Fact                 | Where                                                                               |
-| -------------------- | ----------------------------------------------------------------------------------- |
-| Setup / architecture | [development](docs/08-development.md), [agent details](docs/12-agent-operations.md) |
-| Version              | root `package.json`; workspaces and `apps/macos/project.yml` stay aligned           |
-| API / test scope     | `packages/api`, `vitest.config.ts`, `scripts/run-e2e.ts`                            |
-| Native / gates       | `scripts/test-macos.ts`, `.husky`, `scripts/pre-push.ts`, CI                        |
-| Accidents            | [Retrospective.md](Retrospective.md)                                                |
-| Machine workflow     | global `AGENTS.md` and Git rules                                                    |
-
-## Project Invariants
-
-- One Worker serves `/api/*` and the built Vite SPA. Keep `packages/api` framework-agnostic with request-scoped `RuntimeContext` and `makeRepos(db)`; no global DB/env singleton.
-- Verify Access JWT signature/issuer/audience and fail closed; bearer device tokens are a separate native path. Test auth bypass must remain unavailable in production.
-- Missing `DASHSCOPE_API_KEY` selects mock ASR. Cron polls jobs; the SPA polls `/api/jobs`. Real recordings, OSS, ASR and AI providers require explicit live-test scope.
-- Register mic and system streams separately, mix aligned samples before encoding, and retain single-source fallback/backpressure. Never concatenate streams into doubled recordings.
-- Preserve native permissions and signing identity. Only explicit live recording tests may request capture; default native tests disable live audio. Keep lucide-react as the only web icon library.
-
-## Stack / Layout
-
-| Component    | Path / choice                                                     |
-| ------------ | ----------------------------------------------------------------- |
-| Web / Worker | `apps/web` Vite/React; `apps/api` Hono/D1/ASSETS                  |
-| Core API     | `packages/api`; Drizzle, Aliyun OSS/DashScope, AI SDK             |
-| Native       | `apps/macos`; Swift 6, SwiftUI/AppKit, ScreenCaptureKit, xcodegen |
+Audio recording, transcription, and word-level playback across a Vite/React/`@nocoo/basalt` SPA (`apps/web`), Cloudflare Worker (`apps/api`, Hono/D1/ASSETS), shared API library (`packages/api`, Drizzle/OSS/DashScope/AI SDK), and native macOS Swift 6 menu-bar recorder (`apps/macos`, SwiftUI/AppKit/ScreenCaptureKit/xcodegen).
+Docs: [README.md](README.md) · [Development](docs/08-development.md) · [Architecture & Release](docs/12-agent-operations.md) · [Retrospective](Retrospective.md)
 
 ## Commands
 
-Run from root with Bun, Node 22.22+ (22.x), 24.x or 26+, macOS 15+, full Xcode, Python 3, xcodegen, SwiftLint, gitleaks and OSV. Use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` per command if Command Line Tools is selected. Use tracked env examples; local tests need no live provider secrets.
+Run from root with Bun, Node 22.22+ (22.x), 24.x, or 26+, macOS 15+, full Xcode, Python 3, xcodegen, SwiftLint, `gitleaks`, and `osv-scanner`. Prefix commands with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` if `xcode-select` points to Command Line Tools. Env var names live in [docs/08-development.md](docs/08-development.md) and `apps/api/wrangler.toml`; local tests need no live provider secrets.
 
-```bash
+```sh
 bun install --frozen-lockfile
-bun run lint
-bun run typecheck
-bun run build
-bun run test:coverage
+bun run worker:dev               # 127.0.0.1:7017 (wrangler dev --env test)
+bun run web:dev                  # https://lyre.dev.hexly.ai -> 127.0.0.1:7016
+bun run typecheck                # S1 (web + worker + api)
+bun run lint                     # S2 Biome check-only, 0 warnings
+bun run build                    # B1 builds SPA into apps/api/static
+bun run test:coverage            # L1 >= 95% on scoped modules (vitest.config.ts)
 bun run gate:l1-selftest         # L1 hook negative probes + web-lane timing (auto cleanup)
-bun run test:macos               # isolated, live audio disabled
-bun run test:e2e                 # local Worker API tests
-bun run test:e2e:bdd             # local browser tests
-bun run gate:routes
-bun run gate:pages
+bun run test:macos               # isolated native tests, live audio disabled
+bun run test:e2e                 # L3 local Worker API tests (:7017)
+bun run test:e2e:bdd             # L4 Playwright Chromium browser tests (:27016)
+bun run gate:routes              # verify API route test coverage
+bun run gate:pages               # verify web page test coverage
 ```
 
-## Verification
+## Invariants
 
-Quality follows System1 v1.3.0 Native Mode (`nocoo/base-ci v2026.15`) in `.github/workflows/quality-slots.yml` and `.github/workflows/ci.yml`. Status: `enforced`, `planned`, `manual`, or `N/A`.
+- **Single Worker & DI**: One Worker serves `/api/*` and built Vite SPA (`ASSETS`). Keep `packages/api` framework-agnostic with request-scoped `RuntimeContext` and `makeRepos(db)`; no global DB/env singleton.
+- **Fail-closed auth**: Verify Cloudflare Access JWT signature, issuer, and audience and fail closed; native macOS uses bearer device tokens separately. `E2E_SKIP_AUTH=true` must remain unavailable in production.
+- **Version alignment**: Root `package.json` is the single version source of truth; keep workspace `package.json` files and `apps/macos/project.yml` (`MARKETING_VERSION`) aligned.
+- **ASR, cron & live scope**: Missing `DASHSCOPE_API_KEY` selects mock ASR. Cron polls jobs; the SPA polls `/api/jobs`. Real recordings, OSS, ASR, and AI providers require explicit live-test scope.
+- **macOS dual-stream audio**: Register mic and system streams separately, mix aligned samples before encoding, and keep single-source fallback/backpressure. Never concatenate streams into doubled recordings.
+- **Native permissions & UI**: Preserve native permissions and signing identity; default native tests disable live audio and only explicit live tests may capture. Keep `lucide-react` as the sole web icon library.
+- **Swift 6 & modal streams**: Use immutable `nonisolated` constants in `@Sendable` closures; never suppress actor-safety warnings. Keep modal prompt stream consumers non-blocking and gate buffered reentry.
+- **Verification discipline**: Record accessibility/permission blockers as unverified manual scenarios, never passed UI checks. Historical runs are not current evidence; never bypass hooks or use autofix in checks.
+- **Release & deploy**: Deploys require explicit authorization; doc edits never authorize deploys or new gates. Apply D1 migrations before dependent Worker deploys; verify exact-revision CI and `/api/live`.
+- **macOS signing**: Sign releases with Developer ID; `LYRE_ALLOW_ADHOC=1` is explicit and cannot promise stable TCC or notarization. Test ad-hoc flags are not release signing.
+- **GitHub Release DMG**: Build exact-commit DMG + `SHA256SUMS` in an isolated dir, verify mounted version/signature/archs, and attach both to GitHub Release ([runbook](docs/12-agent-operations.md)).
+- **Release notes**: State actual signing/notarization status and put copyable Lyre-scoped quarantine/signature recovery commands and permission reauthorization notes directly in the Release page, not only in docs.
 
-| Slot              | Status   | Evidence                                                                           |
-| ----------------- | -------- | ---------------------------------------------------------------------------------- |
-| `S1` Types        | enforced | `bun run typecheck` (pre-commit + CI)                                              |
-| `S2` Lint         | enforced | `bun run lint` (Biome + SwiftLint in pre-commit; Biome in CI)                      |
-| `S3` Workflow     | enforced | SHA-pinned workflow action check in CI                                             |
-| `G1` Secrets      | enforced | `gitleaks` (`.gitleaks.toml`) in pre-commit + CI                                   |
-| `G2` Dependencies | enforced | `osv-scanner` (`bun.lock`) in pre-push + CI                                        |
-| `B1` Build        | enforced | `bun run build` in CI                                                              |
-| `L1` Unit         | enforced | `bun run test:coverage` + `bun run gate:l1-selftest` in CI                         |
-| `L2` Runtime      | N/A      | Runtime verified via `wrangler dev` in `L3`/`L4`                                   |
-| `L3` Integration  | enforced | `bun run test:e2e` in CI + pre-push                                                |
-| `L4` E2E          | enforced | `bun run test:e2e:bdd` (Playwright Chromium) in CI                                 |
-| `P1` Package      | N/A      | Private monorepo, not published to npm                                             |
-| `Z1` Gate         | enforced | `quality / Z1: Gate` required status check on `main` (includes `l1-hook-selftest`) |
+## Quality & Local Gates
 
-Pre-commit executes the staged `scripts/pre-commit.py`, exports the index, links installed JS packages read-only with snapshot-local workspace links and caches, and runs check-only secrets, lint, types, coverage and native tests. Pre-push builds the SPA, then runs dependency scan, lint/types, coverage, local API E2E, native tests and SwiftLint in parallel.
-Never bypass commit/push hooks, force-push, or use autofix in checks. Documentation changes do not authorize deploying or implementing new gates.
+Follows `system1-quality`; CI slot definitions and pinned `nocoo/base-ci` revision live in `.github/workflows/quality-slots.yml` (called by `.github/workflows/ci.yml`; `quality / Z1: Gate` required on `main`, including `l1-hook-selftest`). Close gaps without lowering the contract. Status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
-## Resources / Isolation
+- **Exceptions / gaps**: `L2 Runtime` is `N/A` (verified via `wrangler dev` in `L3`/`L4`); `P1 Package` is `N/A` (private repo). Linux CI runs Biome-only for `S2`; SwiftLint and `test:macos` run locally.
+- **Coverage scope**: `L1` enforces 95% on scoped JS in `vitest.config.ts` (wiring, repos, 5 handlers in `L3`/`L4`); native pre-commit enforces 33% line / 39% function interim floors (target 95%).
+- **Pre-commit**: Installed via `bun run prepare` (`.husky/`). Runs staged `scripts/pre-commit.py` on an exported index snapshot (read-only deps, snapshot-local links/caches): `G1`, `S2`, `S1`, `L1`, and native tests.
+- **Pre-push**: `.husky/pre-push` (`scripts/pre-push.ts`) builds the SPA (`web:build`), then runs `G2` (`osv-scanner`), `S2` (Biome + SwiftLint), `S1`, `L1`, `L3` (`test:e2e`), and `test:macos` in parallel.
 
-API E2E uses loopback 7017; BDD uses 27016. `--env test` here names local bindings, not a provisioned remote environment; schema commands use `--local`. Current runners lack `--persist-to` and may share default state, so serialize them. Require future per-run local SQLite/storage, `NODE_ENV=test`, checked markers and guarded cleanup. Native run artifacts live under `test-results/macos/run-*`.
+## Resources & Isolation
 
-## Operations / Release
+| Lane      | Endpoint / State                                               | Boundary                                                             |
+| --------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Dev       | `lyre.dev.hexly.ai` -> `127.0.0.1:7016`, Worker `:7017`        | Local `lyre-db-test`; never bring live `.dev.vars` into test copies  |
+| API / BDD | `127.0.0.1:7017` (`L3`), `:27016` + `test-results/bdd/` (`L4`) | `--env test` is local-only; schema uses `--local`; serialize runs    |
+| Native    | `test-results/macos/run-*`                                     | Live audio disabled by default; separate from `test-results/bdd/`    |
+| Prod      | `https://lyre.hexly.ai`, D1 `lyre-db`, OSS `lyre`              | Read-only unless authorized; `[env.test]` shares `OSS_BUCKET="lyre"` |
 
-Apply D1 migrations before an authorized Worker deployment. [Release details](docs/12-agent-operations.md) cover synchronized versions, xcodegen, changelog and DMG packaging. Releases use Developer ID; `LYRE_ALLOW_ADHOC=1` is explicit and cannot promise stable TCC or notarization. Test ad-hoc flags are not release signing.
-
-Every macOS release must attach its versioned DMG and `SHA256SUMS` to the matching GitHub Release. Build from the exact release commit in an isolated directory, verify the mounted app's version, signature integrity and architectures, and state the actual signing/notarization status. Include copyable, Lyre-scoped quarantine and signature recovery commands directly in the Release page, plus the permission reauthorization note; do not require users to find them in repository docs. Publish matching Web/Worker changes and verify exact-revision CI and the deployed `/api/live` version.
+- **Runner state**: API/BDD runners lack `--persist-to` and share `apps/api/.wrangler/state`, so serialize them. Future runners must add per-run SQLite/storage, `NODE_ENV=test`, checked markers, and guarded cleanup.
 
 ## Retrospective
 
-Move accident narratives to [Retrospective.md](Retrospective.md); keep at most about ten concise recurring project rules here. Put architecture and operational detail in linked docs.
-
-- Swift 6 Sendable closures may need immutable `nonisolated` constants; do not suppress actor-safety warnings.
-- Keep modal prompt stream consumers non-blocking and gate buffered reentry.
-- Record accessibility/permission blockers as unverified manual scenarios, never as passed UI checks.
+Record incident narratives in [Retrospective.md](Retrospective.md); promote recurring project constraints to `Invariants` above and enforceable safeguards to tests/hooks.
