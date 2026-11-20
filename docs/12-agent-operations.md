@@ -138,28 +138,34 @@ arrives through a pull request that ran CI. The helper has two phases.
 **Phase 1 — prepare** (`bun run release`, run on `main` while `package.json`
 still carries the old version):
 
-1. bump the version everywhere and regenerate the Xcode project,
-2. sync the lockfile and write the CHANGELOG entry (never duplicating one),
-3. commit everything on the release branch `chore/release-v<version>` through
-   the normal hooks and push that branch,
-4. print the `gh pr create` command; the PR is merged **without squashing** so
+1. switch to a fresh `chore/release-v<version>` branch **before any file is
+   touched**, so a failure can never leave the `main` working tree dirty,
+2. bump the version everywhere and regenerate the Xcode project,
+3. sync the lockfile and write the CHANGELOG entry (never duplicating one),
+4. commit everything on the release branch through the normal hooks and push
+   that branch,
+5. print the `gh pr create` command; the PR is merged **without squashing** so
    the release commit keeps its SHA.
 
 **Phase 2 — finish** (`bun run release -- <version>`, run on `main` after the
 merge, when `package.json` already carries the version):
 
-1. resolve the release commit: the commit that set `package.json` to the
-   version (or an explicit `--sha=<full-sha>`, which must equal the `main`
-   tip), anchored at `origin/main`'s tip,
+1. resolve the release commit: the main-line commit on `origin/main` that
+   introduced the version (also correct when later unrelated commits have
+   landed on `main`), or an explicit `--sha=<full-sha>` that must already be
+   merged into `origin/main`,
 2. wait for the successful main `CI` run of that commit and record its run ID,
 3. wait for the `Release` (Worker deployment) run and verify in its log that
    `release-source` proved exactly that CI run (`Resolved release source <sha>
    run <ci-run-id>`, compared exactly); when several deployment runs exist for
    the same SHA, the one that proves that CI run is selected,
 4. confirm `https://lyre.hexly.ai/api/live` answers HTTP 200 with the released
-   version (any other HTTP status is a deployment fault and aborts),
-5. create the annotated tag **on the release commit** and push it; an existing
-   local or remote tag pointing elsewhere aborts the release,
+   version — any other HTTP status (3xx/4xx/5xx) is a deployment fault and
+   aborts; only a request that completes without any status (curl exit 7/28,
+   code 000) counts as unreachable,
+5. create the annotated tag **on the release commit** and push it; the local
+   and the remote tag state are judged together, and any existing tag
+   pointing elsewhere aborts the release,
 6. create the GitHub Release as a **draft**.
 
 Every non-green or non-matching step aborts before the tag exists.

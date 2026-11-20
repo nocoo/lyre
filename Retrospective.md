@@ -1,5 +1,20 @@
 # Retrospective
 
+## 2026-11-21: Release script review round 4 — runtime traps in the helper itself
+
+Bun's `execFileSync` returns `null` (not a string) when `stdio: "inherit"`, so
+`.trim()` on its result crashed the very commit/push steps the release
+depends on; always null-check child-process output. Version files are now
+written only after switching to the release branch, so a failed preparation
+leaves `main` clean. The finishing phase releases the main-line commit that
+introduced the version (`git log --first-parent -S"version": …` on
+`origin/main`) instead of `HEAD`, because `main` may already carry later
+unrelated commits — with `--first-parent` the found commit is always one that
+was pushed to `main` and therefore has push-CI evidence. Health checking
+distinguishes "no HTTP status at all" (transport failure, curl exit 7/28 or
+code 000) from any answered non-200 status, which is a deployment fault.
+Semver now rejects leading zeros.
+
 ## 2026-11-21: Release script review round 3 — never push an unproven commit to a protected branch
 
 The second version still tried to `git push origin main` for the release
