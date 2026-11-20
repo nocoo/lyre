@@ -2,40 +2,45 @@
 /**
  * Automated release script for lyre monorepo.
  *
- * Bumps the version across all workspace package.json files, syncs the
- * lockfile, generates the CHANGELOG entry from conventional commits, and then
- * releases in the order required by docs/12-agent-operations.md:
+ * Two phases, because `main` is protected by a ruleset that requires the
+ * "quality / Z1: Gate" check and a fresh release commit must never be pushed
+ * straight to it:
  *
- *   1. commit the version bump (or reuse an already committed release),
- *   2. push that commit to origin main (skipped when it is already merged),
- *   3. wait for the successful main CI run of that commit,
- *   4. wait for the Worker deployment that proved exactly that CI run,
- *   5. check the production health endpoint,
- *   6. create and push the annotated version tag bound to that commit,
- *   7. create the GitHub Release as a draft.
+ *   bun run release [-- <bump|version>]   phase 1: prepare the release branch
+ *   bun run release -- <version>          phase 2: finish the release
  *
- * `main` is protected by a ruleset that requires the "quality / Z1: Gate"
- * check, so a fresh release commit cannot be pushed directly. The script
- * detects the rejected push and asks for a pull request instead; the re-run
- * resumes from the merged commit without bumping the version again and
- * without duplicating the CHANGELOG entry.
+ * Phase 1 (run on `main` while package.json still carries the old version)
+ * bumps the version everywhere, regenerates the Xcode project, syncs the
+ * lockfile, writes the CHANGELOG entry, commits everything on the release
+ * branch `chore/release-v<version>` and pushes that branch through the normal
+ * hooks. It then prints the pull request command; the PR carries the CI
+ * evidence and is merged without squashing so the release commit keeps its
+ * SHA. `origin main` is never pushed directly.
  *
- * A deploy trigger must carry evidence that is already green: the tag is the
- * last step of a release, never the trigger of one. The GitHub Release stays a
- * draft until the macOS DMG and SHA256SUMS are attached.
+ * Phase 2 (run on `main` after the merge, when package.json already carries
+ * the version) resolves the release commit from the version bump (or an
+ * explicit `--sha`), waits for its successful main CI run, waits for the
+ * Worker deployment whose log proves exactly that CI run, checks the
+ * production health endpoint, creates the annotated tag on that commit,
+ * pushes it and creates the GitHub Release as a draft.
+ *
+ * Fail-closed everywhere: a non-green or non-matching step aborts before the
+ * tag exists. Re-runs resume: the version files decide the phase, the remote
+ * tag decides whether the tag step is done, and the CHANGELOG entry is never
+ * duplicated.
  *
  * Usage:
- *   bun run release              # patch bump (default)
+ *   bun run release              # patch bump (default), phase 1
  *   bun run release -- minor     # minor bump
  *   bun run release -- major     # major bump
- *   bun run release -- 2.0.0     # explicit version (also used to resume)
+ *   bun run release -- 2.0.0     # explicit version: phase 1, then phase 2
  *   bun run release -- --dry-run # preview without side effects
  *
  * Env:
  *   Requires `gh` CLI authenticated for GitHub release creation.
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
 
@@ -55,10 +60,15 @@ const DEPLOY_WORKFLOW_FILE = "release.yml";
 const POLL_SECONDS = 15;
 const CI_TIMEOUT_MINUTES = 45;
 const DEPLOY_TIMEOUT_MINUTES = 30;
-const COMMAND_TIMEOUT_MS = 120_000;
+const QUERY_TIMEOUT_MS = 120_000;
+const HOOK_TIMEOUT_MS = 30 * 60_000;
 const PRODUCTION_LIVE_URL = "https://lyre.hexly.ai/api/live";
 const HEALTH_ATTEMPTS = 3;
 const HEALTH_RETRY_SECONDS = 5;
+
+const VERSION_RE = /^\d+\.\d+\.\d+$/;
+const SHA_RE = /^[0-9a-f]{40}$/;
+const PROOF_RE = /Resolved release source ([0-9a-f]{40}) run ([0-9]+)/g;
 
 // Workspace package.json files to keep in sync
 const WORKSPACE_PACKAGES = [
@@ -68,55 +78,65 @@ const WORKSPACE_PACKAGES = [
 ].filter((p) => existsSync(p));
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Process execution (argv arrays only; no shell, no string interpolation)
 // ---------------------------------------------------------------------------
 
-interface RunOptions {
-	dryRun?: boolean;
+interface ExecOptions {
 	cwd?: string;
 	quiet?: boolean;
 	timeout?: number;
+	dryRun?: boolean;
+	inheritAll?: boolean;
 }
 
-function run(cmd: string, opts?: RunOptions): string {
-	const cwd = opts?.cwd ?? PROJECT_ROOT;
+function display(command: string, args: string[]): string {
+	return [command, ...args].join(" ");
+}
+
+function exec(command: string, args: string[], opts?: ExecOptions): string {
 	if (opts?.dryRun) {
-		console.log(`  [dry-run] ${cmd}`);
+		console.log(`  [dry-run] ${display(command, args)}`);
 		return "";
 	}
 	if (!opts?.quiet) {
-		console.log(`  $ ${cmd}`);
+		console.log(`  $ ${display(command, args)}`);
 	}
+	const timeout = opts?.timeout ?? QUERY_TIMEOUT_MS;
 	try {
-		return execSync(cmd, {
-			cwd,
+		return execFileSync(command, args, {
+			cwd: opts?.cwd ?? PROJECT_ROOT,
 			encoding: "utf-8",
-			stdio: ["pipe", "pipe", "inherit"],
-			timeout: opts?.timeout ?? COMMAND_TIMEOUT_MS,
+			stdio: opts?.inheritAll ? "inherit" : ["pipe", "pipe", "inherit"],
+			timeout,
 		}).trim();
 	} catch (error) {
-		const failure = error as { status?: number | null; signal?: string };
+		const failure = error as Error & { signal?: string | null };
 		if (failure.signal === "SIGTERM") {
-			throw new Error(
-				`Command timed out after ${(opts?.timeout ?? COMMAND_TIMEOUT_MS) / 1000}s: ${cmd}`,
-			);
+			failure.message = `Timed out after ${timeout / 1000}s: ${display(command, args)}`;
 		}
-		throw error;
+		throw failure;
 	}
 }
 
-function runStatus(cmd: string, opts?: { cwd?: string; timeout?: number }): number {
-	try {
-		execSync(cmd, {
-			cwd: opts?.cwd ?? PROJECT_ROOT,
-			stdio: ["pipe", "pipe", "ignore"],
-			timeout: opts?.timeout ?? COMMAND_TIMEOUT_MS,
-		});
+function execStatus(command: string, args: string[], opts?: ExecOptions): number {
+	if (opts?.dryRun) {
+		console.log(`  [dry-run] ${display(command, args)}`);
 		return 0;
-	} catch (error) {
-		const code = (error as { status?: number | null }).status;
-		return typeof code === "number" ? code : 1;
 	}
+	const result = spawnSync(command, args, {
+		cwd: opts?.cwd ?? PROJECT_ROOT,
+		encoding: "utf-8",
+		stdio: "ignore",
+		timeout: opts?.timeout ?? QUERY_TIMEOUT_MS,
+	});
+	if (result.error) {
+		return 1;
+	}
+	return result.status ?? 1;
+}
+
+function sleepSeconds(seconds: number): void {
+	spawnSync("sleep", [String(seconds)], { stdio: "ignore" });
 }
 
 function fail(message: string, hint?: string): never {
@@ -127,10 +147,6 @@ function fail(message: string, hint?: string): never {
 	process.exit(1);
 }
 
-function sleepSeconds(seconds: number): void {
-	execSync(`sleep ${seconds}`, { stdio: "ignore" });
-}
-
 function readJson(path: string): Record<string, unknown> {
 	return JSON.parse(readFileSync(path, "utf-8"));
 }
@@ -139,121 +155,27 @@ function writeJson(path: string, data: Record<string, unknown>): void {
 	writeFileSync(path, `${JSON.stringify(data, null, "\t")}\n`);
 }
 
+function rootVersion(): string {
+	return String(readJson(PACKAGE_JSON).version ?? "");
+}
+
 // ---------------------------------------------------------------------------
-// Git helpers
+// Validation
 // ---------------------------------------------------------------------------
 
-function gitSha(ref: string): string {
-	return run(`git rev-parse ${ref}`).trim();
-}
-
-function localTagExists(tag: string): boolean {
-	return runStatus(`git rev-parse -q --verify refs/tags/${tag}`) === 0;
-}
-
-/** Commit a local tag points at; annotated tags are dereferenced. */
-function localTagCommit(tag: string): string {
-	return run(`git rev-list -n 1 refs/tags/${tag}`).trim();
-}
-
-/**
- * Commit a remote tag points at, or "" when the remote has no such tag.
- * `git ls-remote` reports the tag object for annotated tags and the commit
- * for lightweight tags; the `^{}` ref peels an annotated tag to its commit.
- */
-function remoteTagCommit(tag: string): string {
-	const out = run(`git ls-remote ${REMOTE} "refs/tags/${tag}" "refs/tags/${tag}^{}"`);
-	let direct = "";
-	let peeled = "";
-	for (const line of out.split("\n")) {
-		const [sha, ref] = line.split(/\s+/);
-		if (!sha || !ref) continue;
-		if (ref === `refs/tags/${tag}`) direct = sha;
-		if (ref === `refs/tags/${tag}^{}`) peeled = sha;
+function assertSemver(value: string, label: string): void {
+	if (!VERSION_RE.test(value)) {
+		fail(`${label} "${value}" is not a strict x.y.z version.`);
 	}
-	return peeled || direct;
-}
-
-/**
- * Abort if the working tree has uncommitted changes.
- * Prevents accidentally bundling unrelated files into a release commit.
- */
-function ensureCleanWorkingTree(): void {
-	const status = execSync("git status --porcelain", {
-		cwd: PROJECT_ROOT,
-		encoding: "utf-8",
-	}).trim();
-
-	if (status) {
-		console.error("\n❌ Working tree is dirty. Commit or stash changes before releasing.\n");
-		console.error("Uncommitted files:");
-		for (const line of status.split("\n")) {
-			console.error(`   ${line}`);
-		}
-		process.exit(1);
-	}
-}
-
-/**
- * The release commit has to land on `main` so that the CI run proving it and
- * the deployment triggered by it belong to the release branch.
- */
-function ensureReleaseBranch(): void {
-	const branch = run("git rev-parse --abbrev-ref HEAD");
-	if (branch !== RELEASE_BRANCH) {
-		fail(
-			`Releases must be cut from '${RELEASE_BRANCH}', current branch is '${branch}'.`,
-			`   Switch first: git switch ${RELEASE_BRANCH}\n`,
-		);
-	}
-}
-
-/**
- * Refuse to release from a diverged local main: the push has to be a fast
- * forward of origin/main, otherwise the CI run we wait for would not be the
- * run of the released commit.
- */
-function ensureUpToDateWithRemote(): void {
-	run(`git fetch ${REMOTE} ${RELEASE_BRANCH}`);
-	if (runStatus(`git merge-base --is-ancestor ${REMOTE}/${RELEASE_BRANCH} HEAD`) !== 0) {
-		fail(
-			`Local ${RELEASE_BRANCH} has diverged from ${REMOTE}/${RELEASE_BRANCH}.`,
-			`   Sync it first: git pull --rebase ${REMOTE} ${RELEASE_BRANCH}\n`,
-		);
-	}
-}
-
-/**
- * The GitHub API, the run list and the release evidence come from `gh`.
- */
-function ensureGitHubCli(): void {
-	if (runStatus("gh --version") !== 0) {
-		fail("The GitHub CLI (`gh`) is required to release.");
-	}
-	if (runStatus("gh auth status") !== 0) {
-		fail("`gh` is not authenticated.", "   Run `gh auth login` first.\n");
-	}
-}
-
-/**
- * A version whose commit is already on origin/main but which has no tag is an
- * unfinished release. Bumping past it would skip a published version number.
- */
-function assertNoSkippedVersion(currentVersion: string, targetVersion: string): void {
-	if (currentVersion === targetVersion) return;
-	const tag = `v${currentVersion}`;
-	if (localTagExists(tag) || remoteTagCommit(tag)) return;
-	if (gitSha("HEAD") !== gitSha(`${REMOTE}/${RELEASE_BRANCH}`)) return;
-	fail(
-		`v${currentVersion} is committed on ${REMOTE} ${RELEASE_BRANCH} but has no tag.`,
-		`   Finish that release first:  bun run release -- ${currentVersion}\n` +
-			`   A bare "bun run release" would skip v${currentVersion}.\n`,
-	);
 }
 
 function bumpVersion(current: string, bump: string): string {
-	// If bump looks like an explicit semver, return it directly
-	if (/^\d+\.\d+\.\d+/.test(bump)) return bump;
+	if (bump.includes(".")) {
+		if (!VERSION_RE.test(bump)) {
+			fail(`Version "${bump}" is not a strict x.y.z version.`);
+		}
+		return bump;
+	}
 
 	const parts = current.split(".").map(Number);
 	const major = parts[0] ?? 0;
@@ -267,8 +189,126 @@ function bumpVersion(current: string, bump: string): string {
 		case "patch":
 			return `${major}.${minor}.${patch + 1}`;
 		default:
-			throw new Error(`Unknown bump type: ${bump}`);
+			fail(`Unknown bump type "${bump}"; use major, minor, patch or x.y.z.`);
 	}
+}
+
+/** Optional explicit release SHA: `--sha=<sha>` (full 40 hex characters). */
+function parseShaArgument(args: string[]): string {
+	const raw = args.find((a) => a.startsWith("--sha="))?.slice("--sha=".length) ?? "";
+	if (!raw) return "";
+	if (!SHA_RE.test(raw)) {
+		fail(`--sha must be a full 40-character commit SHA, got "${raw}".`);
+	}
+	return raw;
+}
+
+// ---------------------------------------------------------------------------
+// Git helpers
+// ---------------------------------------------------------------------------
+
+function gitOut(args: string[], opts?: ExecOptions): string {
+	return exec("git", args, opts);
+}
+
+function gitSha(ref: string, opts?: ExecOptions): string {
+	return gitOut(["rev-parse", ref], { quiet: true, ...opts }).toLowerCase();
+}
+
+function currentBranch(): string {
+	return gitOut(["rev-parse", "--abbrev-ref", "HEAD"], { quiet: true });
+}
+
+function localRefExists(ref: string): boolean {
+	return execStatus("git", ["rev-parse", "--q", "--verify", ref], { quiet: true }) === 0;
+}
+
+/** Commit a local tag points at; annotated tags are dereferenced. */
+function localTagCommit(tag: string): string {
+	return gitOut(["rev-list", "-n", "1", `refs/tags/${tag}`], { quiet: true }).toLowerCase();
+}
+
+/** Commit a remote tag points at, or "" when the remote has no such tag. */
+function remoteTagCommit(tag: string, dryRun: boolean): string {
+	const out = exec("git", ["ls-remote", REMOTE, `refs/tags/${tag}`, `refs/tags/${tag}^{}`], {
+		quiet: true,
+		dryRun,
+	});
+	let direct = "";
+	let peeled = "";
+	for (const line of out.split("\n")) {
+		const [sha, ref] = line.split(/\s+/);
+		if (!sha || !ref) continue;
+		if (ref === `refs/tags/${tag}`) direct = sha;
+		if (ref === `refs/tags/${tag}^{}`) peeled = sha;
+	}
+	return (peeled || direct).toLowerCase();
+}
+
+function remoteBranchTip(branch: string, dryRun: boolean): string {
+	const out = exec("git", ["ls-remote", REMOTE, `refs/heads/${branch}`], {
+		quiet: true,
+		dryRun,
+	});
+	return out.split(/\s+/)[0]?.toLowerCase() ?? "";
+}
+
+/**
+ * Abort if the working tree has uncommitted changes.
+ * Prevents accidentally bundling unrelated files into a release commit.
+ */
+function ensureCleanWorkingTree(): void {
+	const status = gitOut(["status", "--porcelain"], { quiet: true });
+	if (status) {
+		console.error("\n❌ Working tree is dirty. Commit or stash changes before releasing.\n");
+		console.error("Uncommitted files:");
+		for (const line of status.split("\n")) {
+			console.error(`   ${line}`);
+		}
+		process.exit(1);
+	}
+}
+
+function ensureGitHubCli(): void {
+	if (execStatus("gh", ["--version"], { quiet: true }) !== 0) {
+		fail("The GitHub CLI (`gh`) is required to release.");
+	}
+	if (execStatus("gh", ["auth", "status"], { quiet: true }) !== 0) {
+		fail("`gh` is not authenticated.", "   Run `gh auth login` first.\n");
+	}
+}
+
+/**
+ * Refuse to release from a diverged local main: the release branch has to be
+ * cut from the current origin/main, and the finishing phase has to run on the
+ * merged tip.
+ */
+function ensureSyncedWithRemote(): void {
+	exec("git", ["fetch", REMOTE, RELEASE_BRANCH], { quiet: true });
+	if (
+		execStatus("git", ["merge-base", "--is-ancestor", `${REMOTE}/${RELEASE_BRANCH}`, "HEAD"]) !== 0
+	) {
+		fail(
+			`Local ${RELEASE_BRANCH} has diverged from ${REMOTE}/${RELEASE_BRANCH}.`,
+			`   Sync it first: git pull --rebase ${REMOTE} ${RELEASE_BRANCH}\n`,
+		);
+	}
+}
+
+/**
+ * A version whose commit is already on origin/main but which has no tag is an
+ * unfinished release. Bumping past it would skip a published version number.
+ */
+function assertNoSkippedVersion(currentVersion: string, targetVersion: string): void {
+	if (currentVersion === targetVersion) return;
+	const tag = `v${currentVersion}`;
+	if (localRefExists(`refs/tags/${tag}`) || remoteTagCommit(tag, false)) return;
+	if (gitSha("HEAD") !== gitSha(`${REMOTE}/${RELEASE_BRANCH}`)) return;
+	fail(
+		`v${currentVersion} is committed on ${REMOTE} ${RELEASE_BRANCH} but has no tag.`,
+		`   Finish that release first:  bun run release -- ${currentVersion}\n` +
+			`   A bare "bun run release" would skip v${currentVersion}.\n`,
+	);
 }
 
 /**
@@ -301,9 +341,7 @@ function updateMacosVersion(newVersion: string, dryRun: boolean): void {
  */
 function regenerateXcodeProject(dryRun: boolean): void {
 	if (!existsSync(MACOS_PROJECT_YML)) return;
-
-	const macosDir = pathResolve(PROJECT_ROOT, "apps/macos");
-	run("xcodegen generate", { dryRun, cwd: macosDir });
+	exec("xcodegen", ["generate"], { dryRun, cwd: pathResolve(PROJECT_ROOT, "apps/macos") });
 }
 
 // ---------------------------------------------------------------------------
@@ -326,14 +364,15 @@ function findChangelogEntry(version: string): string {
 
 /** The CHANGELOG entry for `version` built from the commits since the last tag. */
 function buildChangelogEntry(version: string): string {
-	const lastTag = run("git describe --tags --abbrev=0 2>/dev/null || echo ''").trim();
+	const lastTag =
+		gitOut(["describe", "--tags", "--abbrev=0"], { quiet: true }) ||
+		gitOut(["rev-list", "--max-parents=0", "HEAD"], { quiet: true });
 	const range = lastTag ? `${lastTag}..HEAD` : "HEAD";
-	const rawLog = run(`git log ${range} --pretty=format:"%s (%h)" --no-merges`);
+	const rawLog = gitOut(["log", range, "--pretty=format:%s (%h)", "--no-merges"], { quiet: true });
 
 	if (!rawLog) return "";
 
 	const lines = rawLog.split("\n").filter(Boolean);
-
 	const categories = {
 		"🚀 Features": [] as string[],
 		"🐛 Bug Fixes": [] as string[],
@@ -401,8 +440,22 @@ function remainingMs(deadline: Deadline): number {
 }
 
 function listWorkflowRuns(workflowFile: string, sha: string, timeout: number): WorkflowRun[] {
-	const out = run(
-		`gh run list --workflow ${workflowFile} --branch ${RELEASE_BRANCH} --commit ${sha} --limit 20 --json databaseId,status,conclusion,event,headBranch,headSha,url`,
+	const out = exec(
+		"gh",
+		[
+			"run",
+			"list",
+			"--workflow",
+			workflowFile,
+			"--branch",
+			RELEASE_BRANCH,
+			"--commit",
+			sha,
+			"--limit",
+			"20",
+			"--json",
+			"databaseId,status,conclusion,event,headBranch,headSha,url",
+		],
 		{ quiet: true, timeout },
 	);
 	if (!out.trim()) return [];
@@ -410,21 +463,25 @@ function listWorkflowRuns(workflowFile: string, sha: string, timeout: number): W
 	return Array.isArray(parsed) ? (parsed as WorkflowRun[]) : [];
 }
 
+type WaitOutcome =
+	| { status: "accepted"; run: WorkflowRun; detail: string }
+	| { status: "pending"; detail: string }
+	| { status: "rejected"; detail: string };
+
 interface WaitOptions {
 	workflowFile: string;
 	sha: string;
 	deadline: Deadline;
-	select: (runs: WorkflowRun[]) => WorkflowRun | undefined;
-	/** null accepts the run, a string rejects it with the reason. */
-	accept: (run: WorkflowRun) => string | null;
+	evaluate: (runs: WorkflowRun[], remaining: number) => WaitOutcome;
 	rejectionHint?: string;
 }
 
 /**
- * Block until a workflow run for `sha` is accepted.
+ * Block until `evaluate` accepts a workflow run for `sha`.
  *
  * Fails closed: a failed, mismatched or missing run aborts the release before
- * any tag is created, so a broken commit can never be published.
+ * any tag is created, and a result that arrives after the deadline is not
+ * accepted.
  */
 function waitForWorkflowRun(options: WaitOptions): WorkflowRun {
 	for (;;) {
@@ -438,7 +495,7 @@ function waitForWorkflowRun(options: WaitOptions): WorkflowRun {
 		const runs = listWorkflowRuns(
 			options.workflowFile,
 			options.sha,
-			Math.min(COMMAND_TIMEOUT_MS, remaining),
+			Math.min(QUERY_TIMEOUT_MS, remaining),
 		);
 		if (remainingMs(options.deadline) <= 0) {
 			fail(
@@ -447,56 +504,68 @@ function waitForWorkflowRun(options: WaitOptions): WorkflowRun {
 			);
 		}
 
-		const candidate = options.select(runs);
-		if (!candidate) {
-			console.log(
-				`   Waiting for the ${options.workflowFile} run of ${options.sha.slice(0, 7)} to appear...`,
-			);
-		} else if (candidate.status !== "completed") {
-			console.log(`   ${options.workflowFile} still running: ${candidate.url}`);
-		} else {
-			const rejection = options.accept(candidate);
-			if (rejection === null) {
-				console.log(`   ${options.workflowFile} succeeded: ${candidate.url}`);
-				return candidate;
+		const outcome = options.evaluate(runs, remainingMs(options.deadline));
+		if (outcome.status === "accepted") {
+			if (remainingMs(options.deadline) <= 0) {
+				fail(
+					`Timed out after ${options.deadline.label} waiting for a ${options.workflowFile} run of ${options.sha}.`,
+					`   The proof arrived after the deadline and was not accepted. No tag was created.\n`,
+				);
 			}
+			console.log(`   ${options.workflowFile} ${outcome.detail}: ${outcome.run.url}`);
+			return outcome.run;
+		}
+		if (outcome.status === "rejected") {
 			fail(
-				`${options.workflowFile} run ${candidate.url} rejected: ${rejection}.`,
+				`${options.workflowFile}: ${outcome.detail}`,
 				options.rejectionHint ?? `   No tag was created.\n`,
 			);
 		}
+		console.log(`   ${outcome.detail}`);
 
-		const sleepMs = Math.min(POLL_SECONDS * 1000, Math.max(0, remainingMs(options.deadline)));
-		if (sleepMs <= 0) continue;
-		sleepSeconds(sleepMs / 1000);
+		const sleepSecondsToUse = Math.min(
+			POLL_SECONDS,
+			Math.ceil(remainingMs(options.deadline) / 1000),
+		);
+		if (sleepSecondsToUse <= 0) continue;
+		sleepSeconds(sleepSecondsToUse);
 	}
 }
 
 /**
  * Proof that a deployment run resolved exactly the given CI run and commit.
- * The release-source action prints the proven SHA and run ID into its log.
+ * The release-source action prints the proven SHA and run ID into its log;
+ * both are compared exactly, never by substring.
  */
 function deploymentProvesRun(
 	deployment: WorkflowRun,
 	sha: string,
 	ciRunId: number,
+	timeout: number,
 ): { ok: boolean; detail: string } {
 	let log: string;
 	try {
-		log = run(`gh run view ${deployment.databaseId} --log`, { quiet: true });
+		log = exec("gh", ["run", "view", String(deployment.databaseId), "--log"], {
+			quiet: true,
+			timeout,
+		});
 	} catch (error) {
-		return { ok: false, detail: `its log could not be read (${(error as Error).message})` };
+		return { ok: false, detail: `log could not be read (${(error as Error).message})` };
 	}
-	const expected = `Resolved release source ${sha} run ${ciRunId}`;
-	if (log.includes(expected)) {
-		return { ok: true, detail: expected };
+	let first: string | null = null;
+	for (const match of log.matchAll(PROOF_RE)) {
+		const provenSha = match[1] ?? "";
+		const provenRun = match[2] ?? "";
+		if (first === null) first = `Resolved release source ${provenSha} run ${provenRun}`;
+		if (provenSha === sha && provenRun === String(ciRunId)) {
+			return { ok: true, detail: `proved CI run ${provenRun} on ${provenSha.slice(0, 7)}` };
+		}
 	}
-	const found = /Resolved release source [0-9a-f]{40} run \d+/.exec(log);
 	return {
 		ok: false,
-		detail: found
-			? `it proved "${found[0]}" instead of "${expected}"`
-			: `it contains no release-source proof of "${expected}"`,
+		detail: first
+			? `proved "${first}" instead of CI run ${ciRunId} on ${sha.slice(0, 7)}`
+			: "contains no release-source proof",
 	};
 }
 
@@ -506,37 +575,51 @@ function deploymentProvesRun(
 
 /**
  * Confirm the production Worker answers with the released version.
- * The deployment run verifies the same endpoint; this is the local
- * confirmation. A version mismatch is fatal, an unreachable endpoint is not:
- * the deploy run's own verify-command is the recorded evidence.
+ * An HTTP answer that is not 200 is a deployment fault and is fatal; only a
+ * request that could not be completed at all (DNS, timeout, refused) counts
+ * as "unreachable", and even then the deployment run's own verify-command
+ * remains the recorded evidence.
  */
 function verifyProductionHealth(version: string): void {
+	const bodyFile = `/tmp/lyre-live-${version}.json`;
 	for (let attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt++) {
-		let body: string;
+		let code: string;
 		try {
-			body = run(`curl -fsS --max-time 20 ${PRODUCTION_LIVE_URL}`, {
-				quiet: true,
-				timeout: 30_000,
-			});
+			code = exec(
+				"curl",
+				["-sS", "--max-time", "20", "-o", bodyFile, "-w", "%{http_code}", PRODUCTION_LIVE_URL],
+				{ quiet: true, timeout: 30_000 },
+			);
 		} catch {
 			console.log(`   ${PRODUCTION_LIVE_URL} unreachable (attempt ${attempt}/${HEALTH_ATTEMPTS}).`);
 			sleepSeconds(HEALTH_RETRY_SECONDS);
 			continue;
 		}
+		if (code !== "200") {
+			fail(
+				`${PRODUCTION_LIVE_URL} answered HTTP ${code}; the deployment is unhealthy.`,
+				`   No tag was created. Fix the deployment, then re-run:\n     bun run release -- ${version}\n`,
+			);
+		}
 		let reported = "";
 		try {
-			reported = String((JSON.parse(body) as { version?: string }).version ?? "");
+			reported = String(
+				(JSON.parse(readFileSync(bodyFile, "utf-8")) as { version?: string }).version ?? "",
+			);
 		} catch {
-			reported = "";
+			fail(
+				`${PRODUCTION_LIVE_URL} returned HTTP 200 with a body that is not the live JSON.`,
+				`   No tag was created.\n`,
+			);
 		}
-		if (reported === version) {
-			console.log(`   ${PRODUCTION_LIVE_URL} reports v${reported}.`);
-			return;
+		if (reported !== version) {
+			fail(
+				`${PRODUCTION_LIVE_URL} reports v${reported || "?"} but the release is v${version}.`,
+				`   The deployment does not match the released version. No tag was created.\n`,
+			);
 		}
-		fail(
-			`${PRODUCTION_LIVE_URL} reports v${reported || "?"} but the release is v${version}.`,
-			`   The deployment does not match the released version. No tag was created.\n`,
-		);
+		console.log(`   ${PRODUCTION_LIVE_URL} reports v${reported}.`);
+		return;
 	}
 	console.log(
 		`   Could not reach ${PRODUCTION_LIVE_URL} locally; the deployment run's own verify-command is the recorded evidence.`,
@@ -545,11 +628,11 @@ function verifyProductionHealth(version: string): void {
 
 /**
  * Create the annotated tag on the release commit, or prove that an existing
- * tag points at exactly that commit.
+ * local and remote tag points at exactly that commit.
  */
-function ensureTag(version: string, sha: string, dryRun: boolean): void {
+function ensureTag(version: string, sha: string, dryRun: boolean): "created" | "already-pushed" {
 	const tag = `v${version}`;
-	if (localTagExists(tag)) {
+	if (localRefExists(`refs/tags/${tag}`)) {
 		const local = localTagCommit(tag);
 		if (local !== sha) {
 			fail(
@@ -559,10 +642,10 @@ function ensureTag(version: string, sha: string, dryRun: boolean): void {
 		}
 		console.log(`   Local tag ${tag} already points at the release commit.`);
 	} else {
-		run(`git tag -a ${tag} ${sha} -m "v${version}"`, { dryRun });
+		exec("git", ["tag", "-a", tag, sha, "-m", tag], { dryRun });
 	}
 
-	const remote = remoteTagCommit(tag);
+	const remote = remoteTagCommit(tag, dryRun);
 	if (remote) {
 		if (remote !== sha) {
 			fail(
@@ -570,10 +653,140 @@ function ensureTag(version: string, sha: string, dryRun: boolean): void {
 				`   Move or delete the remote tag before releasing. No tag was pushed.\n`,
 			);
 		}
-		console.log(`   Remote tag ${tag} already points at the release commit.`);
-		return;
+		console.log(
+			`   Remote tag ${tag} already points at the release commit — the tag step is done.`,
+		);
+		return "already-pushed";
 	}
-	run(`git push ${REMOTE} ${tag}`, { dryRun });
+	exec("git", ["push", REMOTE, tag], { dryRun, timeout: HOOK_TIMEOUT_MS, inheritAll: true });
+	return "created";
+}
+
+interface ReleaseView {
+	isDraft: boolean;
+	url: string;
+}
+
+function viewRelease(tag: string): ReleaseView | null {
+	try {
+		const out = exec("gh", ["release", "view", tag, "--json", "isDraft,url"], { quiet: true });
+		return JSON.parse(out) as ReleaseView;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Create the GitHub Release as a draft, and report precisely which of the
+ * three states is present: a draft, a published release, or only the tag.
+ */
+function ensureGitHubRelease(
+	version: string,
+	notes: string,
+	dryRun: boolean,
+	tagState: string,
+): void {
+	const tag = `v${version}`;
+	if (!dryRun) {
+		const view = viewRelease(tag);
+		if (view) {
+			if (view.isDraft) {
+				console.log(`   Draft release already exists: ${view.url}`);
+				console.log(
+					`   Attach the macOS DMG and SHA256SUMS, then publish it (docs/12-agent-operations.md).`,
+				);
+			} else {
+				console.log(`   Published release already exists: ${view.url} — nothing to create.`);
+			}
+			return;
+		}
+	}
+	if (tagState === "already-pushed") {
+		console.log(`   Only the remote tag exists so far — creating the draft release.`);
+	}
+	const notesFile = `/tmp/lyre-release-notes-${version}.md`;
+	if (!dryRun) {
+		writeFileSync(notesFile, notes);
+	}
+	exec("gh", ["release", "create", tag, "--draft", "--title", tag, "--notes-file", notesFile], {
+		dryRun,
+	});
+	console.log(`   Draft release created. Attach the macOS DMG and SHA256SUMS, then publish it.`);
+}
+
+/**
+ * Phase 1: commit the version bump on the release branch and push the branch.
+ * `origin main` is never pushed directly; the PR carries the CI evidence.
+ */
+function prepareReleaseBranch(targetVersion: string, dryRun: boolean): void {
+	const branch = `chore/release-v${targetVersion}`;
+	const remoteTip = remoteBranchTip(branch, dryRun);
+
+	if (localRefExists(`refs/heads/${branch}`)) {
+		console.log(`\n5️⃣  The release branch ${branch} already exists — completing it.`);
+		exec("git", ["switch", branch], { dryRun });
+		if (!dryRun && rootVersion() !== targetVersion) {
+			fail(
+				`Branch ${branch} carries v${rootVersion()}, not v${targetVersion}.`,
+				`   Delete the stale branch or pass the matching version.\n`,
+			);
+		}
+	} else {
+		console.log(`\n5️⃣  Committing the release changes on ${branch}...`);
+		exec("git", ["switch", "-c", branch], { dryRun });
+		const releaseFiles = [
+			"package.json",
+			"apps/web/package.json",
+			"apps/api/package.json",
+			"packages/api/package.json",
+			"bun.lock",
+			"CHANGELOG.md",
+			"apps/macos/project.yml",
+			"apps/macos/Lyre.xcodeproj/project.pbxproj",
+			"apps/macos/Lyre.xcodeproj/xcshareddata/xcschemes/Lyre.xcscheme",
+			"apps/macos/Lyre.xcodeproj/xcshareddata/xcschemes/LyreTests.xcscheme",
+		].filter((p) => existsSync(pathResolve(PROJECT_ROOT, p)));
+		exec("git", ["add", ...releaseFiles], { dryRun });
+		exec("git", ["commit", "-m", `chore: release v${targetVersion}`], {
+			dryRun,
+			timeout: HOOK_TIMEOUT_MS,
+			inheritAll: true,
+		});
+	}
+
+	const localTip = dryRun ? "<branch-tip>" : gitSha("HEAD");
+	if (remoteTip && remoteTip === localTip) {
+		console.log(`   ${REMOTE}/${branch} is already up to date.`);
+	} else {
+		console.log(`\n6️⃣  Pushing ${branch} through the normal hooks...`);
+		try {
+			exec("git", ["push", "-u", REMOTE, branch], {
+				dryRun,
+				timeout: HOOK_TIMEOUT_MS,
+				inheritAll: true,
+			});
+		} catch (error) {
+			fail(
+				`Pushing ${branch} failed: ${(error as Error).message}`,
+				`   The prepared branch is kept. Fix the cause and re-run:\n     bun run release -- ${targetVersion}\n`,
+			);
+		}
+	}
+
+	console.log(`\n✅ Release branch ${branch} is ready.`);
+	console.log(
+		`\n   ${RELEASE_BRANCH} is ruleset-protected; merge the release commit through a pull request:\n`,
+	);
+	console.log(
+		`     gh pr create --base ${RELEASE_BRANCH} --head ${branch} --title "chore: release v${targetVersion}" --body "Release v${targetVersion}"`,
+	);
+	console.log(`     # merge the PR without squashing so the release commit keeps its SHA\n`);
+	console.log(`   After the merge, finish the release:\n`);
+	console.log(`     git switch ${RELEASE_BRANCH}`);
+	console.log(
+		`     git fetch ${REMOTE} ${RELEASE_BRANCH} && git reset --hard ${REMOTE}/${RELEASE_BRANCH}`,
+	);
+	console.log(`     bun run release -- ${targetVersion}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -583,58 +796,67 @@ function ensureTag(version: string, sha: string, dryRun: boolean): void {
 function main(): void {
 	const args = process.argv.slice(2);
 	const dryRun = args.includes("--dry-run");
-	const bumpArg = args.find((a) => a !== "--dry-run" && a !== "--") ?? "patch";
+	const bumpArg =
+		args.find((a) => a !== "--dry-run" && a !== "--" && !a.startsWith("--sha")) ?? "patch";
+	const explicitSha = parseShaArgument(args);
 
-	// Read current version
-	const rootPkg = readJson(PACKAGE_JSON);
-	const currentVersion = rootPkg.version as string;
+	const currentVersion = rootVersion();
+	assertSemver(currentVersion, "package.json version");
 	const targetVersion = bumpVersion(currentVersion, bumpArg);
-	const resuming = currentVersion === targetVersion;
+	assertSemver(targetVersion, "target version");
+
+	const branch = dryRun ? RELEASE_BRANCH : currentBranch();
+	const releaseBranchName = `chore/release-v${targetVersion}`;
+	const finishing = currentVersion === targetVersion;
 
 	console.log(
 		`\n📦 Release: v${currentVersion} → v${targetVersion}${dryRun ? " (dry-run)" : ""}\n`,
 	);
-	if (resuming) {
-		console.log(
-			`   Resuming v${targetVersion}: the version is already committed on ${RELEASE_BRANCH}.\n`,
+	console.log(
+		finishing
+			? `   Finishing v${targetVersion}: the version is already committed.\n`
+			: `   Preparing v${targetVersion}: the version bump goes through a release branch and a PR.\n`,
+	);
+
+	if (branch !== RELEASE_BRANCH && branch !== releaseBranchName) {
+		fail(
+			`Releases run from '${RELEASE_BRANCH}' (or the release branch '${releaseBranchName}'), current branch is '${branch}'.`,
+			`   Switch first: git switch ${RELEASE_BRANCH}\n`,
 		);
 	}
 
-	// 0. Pre-flight: clean tree, release branch, synced main, authenticated gh
+	// 0. Pre-flight: clean tree, synced main, authenticated gh, no skipped version
 	if (!dryRun) {
 		ensureCleanWorkingTree();
-		ensureReleaseBranch();
-		ensureUpToDateWithRemote();
 		ensureGitHubCli();
+		ensureSyncedWithRemote();
 		assertNoSkippedVersion(currentVersion, targetVersion);
 	}
 
-	let releaseSha = "";
-	let notes = "";
+	// Already on the release branch: complete it (push it, then hand over to
+	// the pull request), whatever the version files say.
+	if (branch === releaseBranchName) {
+		prepareReleaseBranch(targetVersion, dryRun);
+		return;
+	}
 
-	if (resuming) {
-		// The release commit is already merged; reuse it without touching it.
-		releaseSha = gitSha("HEAD");
-		if (!dryRun && releaseSha !== gitSha(`${REMOTE}/${RELEASE_BRANCH}`)) {
+	// Phase 1: prepare the release branch and hand over to the pull request.
+	if (!finishing) {
+		if (!dryRun && gitSha("HEAD") !== gitSha(`${REMOTE}/${RELEASE_BRANCH}`)) {
 			fail(
-				`The release commit ${releaseSha.slice(0, 7)} is not on ${REMOTE} ${RELEASE_BRANCH}.`,
-				`   Merge the release commit into ${RELEASE_BRANCH} first, then re-run:\n` +
-					`     bun run release -- ${targetVersion}\n`,
+				`Local ${RELEASE_BRANCH} is ahead of ${REMOTE}/${RELEASE_BRANCH}.`,
+				`   A release commit must reach ${RELEASE_BRANCH} through a pull request. Keep it on a\n` +
+					`   branch and move local ${RELEASE_BRANCH} back:\n` +
+					`     git branch ${releaseBranchName}\n` +
+					`     git reset --hard ${REMOTE}/${RELEASE_BRANCH}\n` +
+					`     git switch ${releaseBranchName}\n` +
+					`   Then re-run: bun run release -- ${targetVersion}\n`,
 			);
 		}
-		notes = findChangelogEntry(targetVersion);
-		if (!notes) {
-			notes = buildChangelogEntry(targetVersion);
-			console.log(
-				`   CHANGELOG.md has no entry for v${targetVersion}; the release notes are built from the commits since the last tag.`,
-			);
-		}
-		console.log(
-			`1️⃣  Reusing the merged release commit ${releaseSha.slice(0, 7)} — no version bump, no commit, no push.\n`,
-		);
-	} else {
+
 		// 1. Bump version in root package.json
 		console.log("1️⃣  Bumping versions...");
+		const rootPkg = readJson(PACKAGE_JSON);
 		if (!dryRun) {
 			rootPkg.version = targetVersion;
 			writeJson(PACKAGE_JSON, rootPkg);
@@ -661,83 +883,80 @@ function main(): void {
 
 		// 3. Sync lockfile
 		console.log("\n3️⃣  Syncing lockfile...");
-		run("bun install", { dryRun });
+		exec("bun", ["install"], { dryRun, timeout: HOOK_TIMEOUT_MS });
 
 		// 4. Generate changelog
 		console.log("\n4️⃣  Generating CHANGELOG...");
 		const existingEntry = findChangelogEntry(targetVersion);
 		if (existingEntry) {
-			notes = existingEntry;
 			console.log(`   CHANGELOG entry for v${targetVersion} already exists — keeping it.`);
 		} else {
-			notes = buildChangelogEntry(targetVersion);
-			if (!dryRun) {
-				prependChangelog(notes);
+			const entry = buildChangelogEntry(targetVersion);
+			if (entry) {
+				console.log(entry);
+				if (!dryRun) {
+					prependChangelog(entry);
+				}
+			} else {
+				console.log("   No commits found since last tag.");
 			}
 		}
-		if (notes) {
-			console.log(notes);
-		} else {
-			console.log("   No commits found since last tag.");
-		}
 
-		// 5. Commit the release changes (no tag yet)
-		console.log("\n5️⃣  Committing release changes...");
-		const releaseFiles = [
-			"package.json",
-			"apps/web/package.json",
-			"apps/api/package.json",
-			"packages/api/package.json",
-			"bun.lock",
-			"CHANGELOG.md",
-			"apps/macos/project.yml",
-			"apps/macos/Lyre.xcodeproj/project.pbxproj",
-			"apps/macos/Lyre.xcodeproj/xcshareddata/xcschemes/Lyre.xcscheme",
-			"apps/macos/Lyre.xcodeproj/xcshareddata/xcschemes/LyreTests.xcscheme",
-		].filter((p) => existsSync(pathResolve(PROJECT_ROOT, p)));
-		run(`git add ${releaseFiles.join(" ")}`, { dryRun });
-
-		// A retry of an already prepared version has nothing to commit; keep
-		// going so the tag and the GitHub Release can still be created.
-		const alreadyPrepared = dryRun ? false : runStatus("git diff --cached --quiet") === 0;
-		if (alreadyPrepared) {
-			console.log("   No version changes to commit — reusing the current HEAD commit.");
-		} else {
-			run(`git commit -m "chore: release v${targetVersion}"`, { dryRun });
-		}
-		releaseSha = dryRun ? "<release-commit-sha>" : gitSha("HEAD");
-		console.log(`   Release commit: ${releaseSha}`);
-
-		// 6. Push the release commit first — the tag may only follow a proven CI run
-		console.log(`\n6️⃣  Pushing the release commit to ${REMOTE} ${RELEASE_BRANCH}...`);
-		if (!dryRun) {
-			try {
-				run(`git push ${REMOTE} HEAD:${RELEASE_BRANCH}`);
-			} catch {
-				fail(
-					`GitHub rejected the direct push to ${REMOTE} ${RELEASE_BRANCH}.`,
-					`   The ${RELEASE_BRANCH} ruleset requires the "quality / Z1: Gate" check on the\n` +
-						`   new SHA, so a fresh release commit cannot be pushed directly. Push it\n` +
-						`   through a pull request instead:\n\n` +
-						`     git switch -c chore/release-v${targetVersion}\n` +
-						`     git push -u ${REMOTE} chore/release-v${targetVersion}\n` +
-						`     # open a PR into ${RELEASE_BRANCH} and merge it without squashing,\n` +
-						`     # so the release commit keeps its SHA\n` +
-						`     git switch ${RELEASE_BRANCH}\n` +
-						`     git fetch ${REMOTE} ${RELEASE_BRANCH} && git reset --hard ${REMOTE}/${RELEASE_BRANCH}\n\n` +
-						`   Then finish the release with:\n` +
-						`     bun run release -- ${targetVersion}\n\n` +
-						`   The re-run resumes from the merged commit: it does not re-bump the\n` +
-						`   version and does not duplicate the CHANGELOG entry.\n`,
-				);
-			}
-		} else {
-			run(`git push ${REMOTE} HEAD:${RELEASE_BRANCH}`, { dryRun });
-		}
+		// 5. Commit on the release branch, 6. push it, then hand over to the PR.
+		prepareReleaseBranch(targetVersion, dryRun);
+		return;
 	}
 
-	// 7. Wait for the main CI run of the release commit
-	console.log("\n7️⃣  Waiting for main CI to succeed...");
+	// Phase 2: finish the release on the merged main tip.
+	if (branch !== RELEASE_BRANCH) {
+		fail(
+			`Finishing runs on '${RELEASE_BRANCH}', current branch is '${branch}'.`,
+			`   Merge the release pull request, then:\n` +
+				`     git switch ${RELEASE_BRANCH}\n` +
+				`     git fetch ${REMOTE} ${RELEASE_BRANCH} && git reset --hard ${REMOTE}/${RELEASE_BRANCH}\n` +
+				`     bun run release -- ${targetVersion}\n`,
+		);
+	}
+
+	// 1. Resolve the release commit deterministically.
+	console.log("1️⃣  Resolving the release commit...");
+	const head = gitSha("HEAD");
+	if (!dryRun && head !== gitSha(`${REMOTE}/${RELEASE_BRANCH}`)) {
+		fail(
+			`The release commit ${head.slice(0, 7)} is not on ${REMOTE} ${RELEASE_BRANCH}.`,
+			`   Merge the release pull request, sync local ${RELEASE_BRANCH}, then re-run:\n` +
+				`     bun run release -- ${targetVersion}\n`,
+		);
+	}
+	if (explicitSha && explicitSha !== head) {
+		fail(
+			`--sha ${explicitSha} is not the current ${RELEASE_BRANCH} tip ${head}.`,
+			`   The continuous deployment only proves the ${RELEASE_BRANCH} tip; pass the tip SHA or omit --sha.\n`,
+		);
+	}
+	const releaseSha = head;
+
+	const bumpCommit = findVersionBumpCommit(targetVersion);
+	if (!bumpCommit) {
+		fail(
+			`No commit found that sets package.json to v${targetVersion}.`,
+			`   Pass the release commit explicitly: bun run release -- ${targetVersion} --sha <full-sha>\n`,
+		);
+	}
+	console.log(
+		`   Version v${targetVersion} was set by ${bumpCommit.slice(0, 7)}; releasing the ${RELEASE_BRANCH} tip ${releaseSha.slice(0, 7)}.`,
+	);
+
+	let notes = findChangelogEntry(targetVersion);
+	if (!notes) {
+		notes = buildChangelogEntry(targetVersion);
+		console.log(
+			`   CHANGELOG.md has no entry for v${targetVersion}; the release notes are built from the commits since the last tag.`,
+		);
+	}
+
+	// 2. Wait for the main CI run of the release commit.
+	console.log("\n2️⃣  Waiting for main CI to succeed...");
 	let ciRunId = 0;
 	if (dryRun) {
 		console.log(`   [dry-run] wait for a successful ${CI_WORKFLOW_FILE} run of ${releaseSha}`);
@@ -746,24 +965,40 @@ function main(): void {
 			workflowFile: CI_WORKFLOW_FILE,
 			sha: releaseSha,
 			deadline: createDeadline(CI_TIMEOUT_MINUTES, `${CI_TIMEOUT_MINUTES} min`),
-			select: (runs) =>
-				runs
+			evaluate: (runs) => {
+				const candidate = runs
 					.filter(
 						(run) =>
 							run.event === "push" &&
 							run.headBranch === RELEASE_BRANCH &&
 							run.headSha === releaseSha,
 					)
-					.sort((a, b) => b.databaseId - a.databaseId)[0],
-			accept: (run) => (run.conclusion === "success" ? null : `it concluded '${run.conclusion}'`),
+					.sort((a, b) => b.databaseId - a.databaseId)[0];
+				if (!candidate) {
+					return {
+						status: "pending",
+						detail: `waiting for the CI run of ${releaseSha.slice(0, 7)} to appear`,
+					};
+				}
+				if (candidate.status !== "completed") {
+					return { status: "pending", detail: `CI still running: ${candidate.url}` };
+				}
+				if (candidate.conclusion !== "success") {
+					return {
+						status: "rejected",
+						detail: `CI run ${candidate.url} concluded '${candidate.conclusion}'`,
+					};
+				}
+				return { status: "accepted", run: candidate, detail: "succeeded" };
+			},
 			rejectionHint: `   Fix the failing CI run, then re-run:\n     bun run release -- ${targetVersion}\n`,
 		});
 		ciRunId = ciRun.databaseId;
 		console.log(`   CI run ${ciRunId} proved ${releaseSha.slice(0, 7)}.`);
 	}
 
-	// 8. Wait for the Worker deployment that proved exactly that CI run
-	console.log("\n8️⃣  Waiting for the Worker deployment to succeed...");
+	// 3. Wait for the Worker deployment that proves exactly that CI run.
+	console.log("\n3️⃣  Waiting for the Worker deployment to succeed...");
 	if (dryRun) {
 		console.log(`   [dry-run] wait for a successful ${DEPLOY_WORKFLOW_FILE} run of ${releaseSha}`);
 	} else {
@@ -771,16 +1006,51 @@ function main(): void {
 			workflowFile: DEPLOY_WORKFLOW_FILE,
 			sha: releaseSha,
 			deadline: createDeadline(DEPLOY_TIMEOUT_MINUTES, `${DEPLOY_TIMEOUT_MINUTES} min`),
-			select: (runs) =>
-				runs
+			evaluate: (runs, remaining) => {
+				const candidates = runs
 					.filter((run) => run.event === "workflow_run" && run.headSha === releaseSha)
-					.sort((a, b) => b.databaseId - a.databaseId)[0],
-			accept: (run) => {
-				if (run.conclusion !== "success") {
-					return `it concluded '${run.conclusion}'`;
+					.sort((a, b) => b.databaseId - a.databaseId);
+				if (candidates.length === 0) {
+					return {
+						status: "pending",
+						detail: `waiting for the deployment run of ${releaseSha.slice(0, 7)} to appear`,
+					};
 				}
-				const proof = deploymentProvesRun(run, releaseSha, ciRunId);
-				return proof.ok ? null : `it did not prove CI run ${ciRunId} (${proof.detail})`;
+				const failures: string[] = [];
+				let running = "";
+				for (const deployment of candidates) {
+					if (deployment.status !== "completed") {
+						running = deployment.url;
+						continue;
+					}
+					if (deployment.conclusion !== "success") {
+						failures.push(`run ${deployment.databaseId} concluded '${deployment.conclusion}'`);
+						continue;
+					}
+					const proof = deploymentProvesRun(
+						deployment,
+						releaseSha,
+						ciRunId,
+						Math.min(QUERY_TIMEOUT_MS, remaining),
+					);
+					if (proof.ok) {
+						return { status: "accepted", run: deployment, detail: proof.detail };
+					}
+					failures.push(`run ${deployment.databaseId} (${deployment.url}) ${proof.detail}`);
+				}
+				if (running) {
+					return { status: "pending", detail: `deployment still running: ${running}` };
+				}
+				if (failures.length > 0) {
+					return {
+						status: "rejected",
+						detail: `no deployment run proves CI run ${ciRunId} on ${releaseSha.slice(0, 7)}: ${failures.join("; ")}`,
+					};
+				}
+				return {
+					status: "pending",
+					detail: `waiting for the deployment run of ${releaseSha.slice(0, 7)}`,
+				};
 			},
 			rejectionHint:
 				`   The deployment must prove CI run ${ciRunId} on ${releaseSha.slice(0, 7)}.\n` +
@@ -788,43 +1058,41 @@ function main(): void {
 		});
 	}
 
-	// 9. Confirm the production Worker answers with the released version
-	console.log("\n9️⃣  Checking the production health endpoint...");
+	// 4. Confirm the production Worker answers with the released version.
+	console.log("\n4️⃣  Checking the production health endpoint...");
 	if (dryRun) {
 		console.log(`   [dry-run] check ${PRODUCTION_LIVE_URL} reports v${targetVersion}`);
 	} else {
 		verifyProductionHealth(targetVersion);
 	}
 
-	// 10. Tag and push the tag — only now, with green CI and a live deployment
-	console.log(`\n🔟  Tagging v${targetVersion}...`);
-	ensureTag(targetVersion, releaseSha, dryRun);
+	// 5. Tag and push the tag — only now, with green CI and a live deployment.
+	console.log(`\n5️⃣  Tagging v${targetVersion} on ${releaseSha.slice(0, 7)}...`);
+	const tagState = ensureTag(targetVersion, releaseSha, dryRun);
 
-	// 11. GitHub release — a draft until the DMG and SHA256SUMS are attached
-	console.log("\n1️⃣1️⃣  Creating the GitHub release draft...");
-	const releaseNotes = notes || `Release v${targetVersion}`;
-	const notesFile = `/tmp/lyre-release-notes-${targetVersion}.md`;
-	if (dryRun) {
-		run(
-			`gh release create v${targetVersion} --draft --title "v${targetVersion}" --notes-file ${notesFile}`,
-			{ dryRun },
-		);
-	} else {
-		if (runStatus(`gh release view v${targetVersion}`) === 0) {
-			console.log(`   GitHub release v${targetVersion} already exists — keeping it as a draft.`);
-		} else {
-			writeFileSync(notesFile, releaseNotes);
-			run(
-				`gh release create v${targetVersion} --draft --title "v${targetVersion}" --notes-file ${notesFile}`,
-			);
-		}
-	}
+	// 6. GitHub release — a draft until the DMG and SHA256SUMS are attached.
+	console.log("\n6️⃣  Creating the GitHub release draft...");
+	ensureGitHubRelease(targetVersion, notes || `Release v${targetVersion}`, dryRun, tagState);
 
 	console.log(`\n✅ Released v${targetVersion}!`);
-	console.log(
-		`   The GitHub release is a draft: attach the macOS DMG and SHA256SUMS, then publish it\n` +
-			`   (see docs/12-agent-operations.md).\n`,
+}
+
+/**
+ * The commit that introduced `"version": "<version>"` in the root
+ * package.json — the deterministic anchor of a resumed release.
+ */
+function findVersionBumpCommit(version: string): string {
+	const out = exec(
+		"git",
+		["log", `-S"version": "${version}"`, "--format=%H", "-n", "1", "--", "package.json"],
+		{ quiet: true },
 	);
+	const sha = out.split("\n")[0]?.toLowerCase() ?? "";
+	if (!SHA_RE.test(sha)) return "";
+	if (execStatus("git", ["merge-base", "--is-ancestor", sha, "HEAD"], { quiet: true }) !== 0) {
+		return "";
+	}
+	return sha;
 }
 
 main();

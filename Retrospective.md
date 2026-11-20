@@ -1,5 +1,21 @@
 # Retrospective
 
+## 2026-11-21: Release script review round 3 — never push an unproven commit to a protected branch
+
+The second version still tried to `git push origin main` for the release
+commit and only handled the rejection afterwards. A release flow must not
+plan on pushing a commit that has not passed CI to a branch whose ruleset
+requires exactly that check, and it must not rely on an admin bypass. The
+helper now has two phases: it prepares `chore/release-v<version>` and hands
+the merge to a pull request, and it finishes the release only from the merged
+`main` tip. Two more refinements from this round: compare evidence exactly
+(a regex capture of `Resolved release source <sha> run <id>` with both groups
+checked, iterating every deployment run for the SHA instead of trusting the
+newest), and distinguish an HTTP error from an unreachable host in the health
+check — a 502 from `/api/live` is a broken deployment, not a network hiccup.
+Shell string concatenation was replaced with argv arrays throughout, so
+unvalidated input can never reach a shell.
+
 ## 2026-11-21: Release script review round — bind every wait to the exact evidence
 
 The first version of the rewritten `scripts/release.ts` waited for _a_
