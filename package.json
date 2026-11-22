@@ -51,7 +51,7 @@
 		"better-sqlite3": "13.2.0",
 		"husky": "^9.1.7",
 		"typescript": "^7.0.2",
-		"vitest": "5.1.0"
+		"vitest": "5.1.1"
 	},
 	"overrides": {
 		"ws": "^8.21.0",
