@@ -43,15 +43,15 @@
 		"macos:dmg": "bash scripts/build-dmg.sh"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.6.6",
+		"@biomejs/biome": "2.6.8",
 		"@playwright/test": "1.65.1",
 		"@types/better-sqlite3": "9.6.0",
-		"@types/bun": "^1.4.4",
-		"@vitest/coverage-v8": "5.1.0",
+		"@types/bun": "^1.4.5",
+		"@vitest/coverage-v8": "5.1.1",
 		"better-sqlite3": "13.2.0",
 		"husky": "^9.1.7",
 		"typescript": "^7.0.2",
-		"vitest": "5.1.0"
+		"vitest": "5.1.1"
 	},
 	"overrides": {
 		"ws": "^8.21.0",
@@ -71,7 +71,8 @@
 		},
 		"browserslist": "^4.28.7",
 		"nanoid": "^3.3.18",
-		"source-map-js": "^1.2.2"
+		"source-map-js": "^1.2.2",
+		"tailwind-merge": "^3.7.1"
 	},
 	"trustedDependencies": [
 		"@biomejs/biome",
