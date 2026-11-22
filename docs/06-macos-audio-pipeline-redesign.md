@@ -940,12 +940,12 @@ they are ready).
 **Operator hand-off checklist**:
 
 - [ ] Run the manual 6DQ (DQ-1 through DQ-6) — script lives in
-  `#lyre-macos-rebuild:f3202873`.
+      `#lyre-macos-rebuild:f3202873`.
 - [ ] If any DQ fails per the trigger list in `Task #7 6DQ status`,
-  re-open task #8 and design a fallback.
+      re-open task #8 and design a fallback.
 - [ ] If 6DQ passes, push the twelve rollout commits plus this
-  closeout commit (thirteen total) to `origin/main` (or split
-  into PR(s) per local convention) at the operator's discretion.
+      closeout commit (thirteen total) to `origin/main` (or split
+      into PR(s) per local convention) at the operator's discretion.
 
 ## Non-goals
 

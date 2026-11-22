@@ -103,10 +103,10 @@ grep -rn "Font\.system(size:" Lyre/Theme/  # must be empty
 - [ ] C1 合并后手工过一遍 4 个 tab，确认视觉零变化
 - [ ] 确认 `xcodegen generate` 已把新 Theme/ 目录扫入 project
 - [ ] 确认 `elapsedTimer` 审计结果：`stopElapsedTimer()` 只在 stopRecording
-  路径调用；tray menu 无 onDisappear。**审计结论**：录音中直接 Quit
-  会泄漏 timer，但进程即将退出所以无影响；**不修**。写在 C10 的
-  Swift 源码注释里作为技术债标记；**不进 CHANGELOG / Release notes**
-  （这是内部生命周期审计，不是用户可见变更）
+      路径调用；tray menu 无 onDisappear。**审计结论**：录音中直接 Quit
+      会泄漏 timer，但进程即将退出所以无影响；**不修**。写在 C10 的
+      Swift 源码注释里作为技术债标记；**不进 CHANGELOG / Release notes**
+      （这是内部生命周期审计，不是用户可见变更）
 
 Stage 1 pass 后再进 Stage 2。
 
@@ -232,7 +232,7 @@ public struct PhaseBadge: View {
 - [ ] C2 / C3 / C4 全 merge 后 `xcodebuild test` 全绿
 - [ ] 手工启 App：视觉仍**零变化**（无 view 消费）
 - [ ] `grep -rn "\.frame(height:" apps/macos/Lyre/Components/` 人工审查每处
-  是否会锁 Dynamic Type
+      是否会锁 Dynamic Type
 
 Stage 2 pass 后再进 Stage 3。
 
@@ -512,7 +512,7 @@ binding）。
   grep -rn "Font\.system(size:" apps/macos/Lyre/                    # empty
   ```
 - [ ] 手工冒烟：录音 → 停止 → 上传 → 播放 → 删除 → 权限重开 → 设置改 →
-  切 dark/light 全路径无回归
+      切 dark/light 全路径无回归
 - [ ] Release notes 草稿准备：`feat(macos): Basalt visual identity`
 
 ---

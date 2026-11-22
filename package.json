@@ -43,7 +43,7 @@
 		"macos:dmg": "bash scripts/build-dmg.sh"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.6.6",
+		"@biomejs/biome": "2.6.8",
 		"@playwright/test": "1.65.1",
 		"@types/better-sqlite3": "9.6.0",
 		"@types/bun": "^1.4.4",
