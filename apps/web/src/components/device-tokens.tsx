@@ -262,7 +262,7 @@ export function DeviceTokensSection() {
 								<div className="flex items-center gap-2">
 									<span className="text-sm font-medium">{token.name}</span>
 									{token.lastUsedAt && (
-										<Badge variant="secondary" className="text-[10px]">
+										<Badge variant="soft" className="text-[10px]">
 											Used {formatRelativeTime(token.lastUsedAt)}
 										</Badge>
 									)}

@@ -47,7 +47,7 @@ export function RecordingTileCard({
 					)}
 				</div>
 				<div className="flex items-center gap-1.5">
-					<Badge variant={recording.status.variant} className="text-[10px]">
+					<Badge tone={recording.status.tone} className="text-[10px]">
 						{recording.status.label}
 					</Badge>
 					{recording.format !== "—" && (

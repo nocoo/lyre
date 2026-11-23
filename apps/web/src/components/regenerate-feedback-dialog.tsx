@@ -21,7 +21,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@nocoo/basalt";
-import { InputArea } from "@nocoo/basalt/components/input-area";
+import { Textarea } from "@nocoo/basalt/components/textarea";
 import { Sparkles } from "@nocoo/basalt/icons";
 import { useEffect, useState } from "react";
 
@@ -63,7 +63,7 @@ export function RegenerateFeedbackDialog({
 					</DialogDescription>
 				</DialogHeader>
 
-				<InputArea
+				<Textarea
 					autoFocus
 					value={feedback}
 					onChange={(e) => setFeedback(e.target.value)}

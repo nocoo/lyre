@@ -247,7 +247,7 @@ function OrganizationSection() {
 			setFolders((prev) => [...prev, folder]);
 			toast.success(`Created folder "${name}"`);
 		} else {
-			toast.error("Failed to create folder");
+			toast.danger("Failed to create folder");
 		}
 	};
 
@@ -261,7 +261,7 @@ function OrganizationSection() {
 			setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)));
 			toast.success(`Renamed to "${name}"`);
 		} else {
-			toast.error("Failed to rename folder");
+			toast.danger("Failed to rename folder");
 		}
 	};
 
@@ -271,7 +271,7 @@ function OrganizationSection() {
 			setFolders((prev) => prev.filter((f) => f.id !== id));
 			toast.success("Folder deleted");
 		} else {
-			toast.error("Failed to delete folder");
+			toast.danger("Failed to delete folder");
 		}
 	};
 
@@ -293,7 +293,7 @@ function OrganizationSection() {
 				toast.success(`Created tag "${name}"`);
 			}
 		} else {
-			toast.error("Failed to create tag");
+			toast.danger("Failed to create tag");
 		}
 	};
 
@@ -307,9 +307,9 @@ function OrganizationSection() {
 			setTags((prev) => prev.map((t) => (t.id === id ? { ...t, name } : t)));
 			toast.success(`Renamed to "${name}"`);
 		} else if (res.status === 409) {
-			toast.error("A tag with that name already exists");
+			toast.danger("A tag with that name already exists");
 		} else {
-			toast.error("Failed to rename tag");
+			toast.danger("Failed to rename tag");
 		}
 	};
 
@@ -319,7 +319,7 @@ function OrganizationSection() {
 			setTags((prev) => prev.filter((t) => t.id !== id));
 			toast.success("Tag deleted");
 		} else {
-			toast.error("Failed to delete tag");
+			toast.danger("Failed to delete tag");
 		}
 	};
 
@@ -438,7 +438,7 @@ function BackupSection() {
 		try {
 			const res = await fetch("/api/settings/backup/export");
 			if (!res.ok) {
-				toast.error("Failed to export data");
+				toast.danger("Failed to export data");
 				return;
 			}
 			const data = await res.json();
@@ -456,7 +456,7 @@ function BackupSection() {
 			URL.revokeObjectURL(url);
 			toast.success("Backup exported successfully");
 		} catch {
-			toast.error("Failed to export data");
+			toast.danger("Failed to export data");
 		} finally {
 			setExporting(false);
 		}
@@ -470,7 +470,7 @@ function BackupSection() {
 			try {
 				parsed = JSON.parse(text);
 			} catch {
-				toast.error("Invalid JSON file");
+				toast.danger("Invalid JSON file");
 				return;
 			}
 
@@ -486,10 +486,10 @@ function BackupSection() {
 				toast.success(`Imported ${total} records successfully`);
 			} else {
 				const err = (await res.json()) as { error: string };
-				toast.error(err.error || "Import failed");
+				toast.danger(err.error || "Import failed");
 			}
 		} catch {
-			toast.error("Failed to import data");
+			toast.danger("Failed to import data");
 		} finally {
 			setImporting(false);
 			// Reset file input so re-selecting same file works
@@ -614,7 +614,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 function EnvironmentBadge({ environment, className }: { environment: string; className?: string }) {
 	const isProd = environment.toLowerCase() === "prod";
 	return (
-		<Badge variant={isProd ? "blue" : "success"} className={className}>
+		<Badge tone={isProd ? "info" : "success"} className={className}>
 			{environment.toUpperCase()}
 		</Badge>
 	);
@@ -738,10 +738,10 @@ function BackySection() {
 				setSaved(true);
 				setTimeout(() => setSaved(false), 2000);
 			} else {
-				toast.error("Failed to save Backy settings");
+				toast.danger("Failed to save Backy settings");
 			}
 		} catch {
-			toast.error("Failed to save Backy settings");
+			toast.danger("Failed to save Backy settings");
 		} finally {
 			setSaving(false);
 		}
@@ -782,12 +782,12 @@ function BackySection() {
 				// Refresh history after successful push
 				loadHistory();
 			} else {
-				toast.error(data.error || "Push failed");
+				toast.danger(data.error || "Push failed");
 			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Network error";
 			setResult({ success: false, error: message });
-			toast.error("Failed to push backup");
+			toast.danger("Failed to push backup");
 		} finally {
 			setPushing(false);
 		}
@@ -914,13 +914,13 @@ function BackySection() {
 						Test Connection
 					</Button>
 					{testStatus === "success" && (
-						<Badge variant="success" className="text-xs">
+						<Badge tone="success" className="text-xs">
 							<Check className="mr-1 h-3 w-3" />
 							Connected
 						</Badge>
 					)}
 					{testStatus === "error" && (
-						<Badge variant="destructive" className="text-xs">
+						<Badge tone="danger" className="text-xs">
 							<X className="mr-1 h-3 w-3" />
 							{testError}
 						</Badge>
@@ -1029,7 +1029,7 @@ function BackySection() {
 								Remote History
 							</h3>
 							{history && (
-								<Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-1">
+								<Badge variant="soft" className="text-[10px] px-1.5 py-0 ml-1">
 									{history.total_backups} {history.total_backups === 1 ? "backup" : "backups"}
 								</Badge>
 							)}
@@ -1149,10 +1149,10 @@ function PullWebhookSection() {
 				setHasPullKey(true);
 				toast.success(hasPullKey ? "Pull key regenerated" : "Pull key generated");
 			} else {
-				toast.error("Failed to generate pull key");
+				toast.danger("Failed to generate pull key");
 			}
 		} catch {
-			toast.error("Failed to generate pull key");
+			toast.danger("Failed to generate pull key");
 		} finally {
 			setGenerating(false);
 		}
@@ -1167,10 +1167,10 @@ function PullWebhookSection() {
 				setHasPullKey(false);
 				toast.success("Pull key revoked");
 			} else {
-				toast.error("Failed to revoke pull key");
+				toast.danger("Failed to revoke pull key");
 			}
 		} catch {
-			toast.error("Failed to revoke pull key");
+			toast.danger("Failed to revoke pull key");
 		} finally {
 			setRevoking(false);
 		}
@@ -1182,7 +1182,7 @@ function PullWebhookSection() {
 			setCopied(which);
 			setTimeout(() => setCopied(null), 2000);
 		} catch {
-			toast.error("Failed to copy");
+			toast.danger("Failed to copy");
 		}
 	};
 

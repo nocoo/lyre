@@ -193,11 +193,11 @@ function FolderRow({
 				</span>
 
 				{isOrphan ? (
-					<Badge variant="warning" className="text-[10px] shrink-0">
+					<Badge tone="warning" className="text-[10px] shrink-0">
 						orphan
 					</Badge>
 				) : (
-					<Badge variant="success" className="text-[10px] shrink-0">
+					<Badge tone="success" className="text-[10px] shrink-0">
 						linked
 					</Badge>
 				)}
@@ -273,7 +273,7 @@ function UserSection({
 					<span className="text-xs text-basalt-muted-foreground">{totalFiles} files</span>
 					<span className="text-sm font-mono font-medium">{formatBytes(totalSize)}</span>
 					{totalOrphans > 0 && (
-						<Badge variant="warning" className="text-[10px]">
+						<Badge tone="warning" className="text-[10px]">
 							{totalOrphans} orphan{totalOrphans > 1 ? "s" : ""}
 						</Badge>
 					)}
@@ -375,7 +375,7 @@ export function OssStorageSection() {
 			const result = (await res.json()) as OssScanResult;
 			setData(result);
 		} catch (err) {
-			toast.error("Failed to scan OSS storage");
+			toast.danger("Failed to scan OSS storage");
 			console.error(err);
 		} finally {
 			setLoading(false);
@@ -445,7 +445,7 @@ export function OssStorageSection() {
 			// Re-scan after cleanup
 			await scan();
 		} catch (err) {
-			toast.error("Failed to clean up orphan files");
+			toast.danger("Failed to clean up orphan files");
 			console.error(err);
 		} finally {
 			setCleaning(false);
@@ -594,7 +594,7 @@ export function OssStorageSection() {
 									Cannot be attributed to any user
 								</span>
 							</div>
-							<Badge variant="warning" className="text-[10px]">
+							<Badge tone="warning" className="text-[10px]">
 								{data.unlinkedResults.length} orphan{data.unlinkedResults.length > 1 ? "s" : ""}
 							</Badge>
 						</div>

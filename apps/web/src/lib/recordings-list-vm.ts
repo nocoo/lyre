@@ -13,6 +13,7 @@ import type {
 	RecordingStatus,
 	Tag,
 } from "@lyre/api/lib/types";
+import type { BadgeTone } from "@nocoo/basalt/components/badge";
 
 // ── Formatting helpers ──
 
@@ -90,14 +91,14 @@ export function formatSampleRate(rate: number | null): string {
 
 export interface StatusInfo {
 	label: string;
-	variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info";
+	tone: BadgeTone;
 }
 
 const STATUS_MAP: Record<RecordingStatus, StatusInfo> = {
-	uploaded: { label: "Uploaded", variant: "secondary" },
-	transcribing: { label: "Transcribing", variant: "warning" },
-	completed: { label: "Completed", variant: "success" },
-	failed: { label: "Failed", variant: "destructive" },
+	uploaded: { label: "Uploaded", tone: "neutral" },
+	transcribing: { label: "Transcribing", tone: "warning" },
+	completed: { label: "Completed", tone: "success" },
+	failed: { label: "Failed", tone: "danger" },
 };
 
 export function getStatusInfo(status: RecordingStatus): StatusInfo {

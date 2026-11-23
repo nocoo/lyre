@@ -22,7 +22,7 @@ export function RecordingCard({ recording }: RecordingCardProps) {
 							<h3 className="text-sm font-medium text-basalt-foreground truncate">
 								{recording.title}
 							</h3>
-							<Badge variant={recording.status.variant} className="shrink-0">
+							<Badge tone={recording.status.tone} className="shrink-0">
 								{recording.status.label}
 							</Badge>
 						</div>
@@ -59,7 +59,7 @@ export function RecordingCard({ recording }: RecordingCardProps) {
 						{recording.colorTags.map((tag) => (
 							<Badge
 								key={tag.id}
-								variant="secondary"
+								variant="soft"
 								className={`text-[10px] ${tag.bgClass} ${tag.textClass}`}
 							>
 								{tag.name}

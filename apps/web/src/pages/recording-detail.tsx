@@ -22,9 +22,9 @@ import {
 	PopoverTrigger,
 	toast,
 } from "@nocoo/basalt";
-import { InputArea } from "@nocoo/basalt/components/input-area";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { Textarea } from "@nocoo/basalt/components/textarea";
 import {
 	AlertCircle,
 	ArrowLeft,
@@ -682,7 +682,7 @@ function RecordingDetailContent({ id }: { id: string }) {
 				title={
 					<span className="flex min-w-0 items-center gap-2.5">
 						<span className="truncate">{vm.metadata.title}</span>
-						<Badge variant={vm.metadata.status.variant} className="shrink-0">
+						<Badge tone={vm.metadata.status.tone} className="shrink-0">
 							{vm.metadata.status.label}
 						</Badge>
 					</span>
@@ -1556,7 +1556,7 @@ function EditableProperties({
 					Notes
 					{notesSaving && <Loader2 className="h-3 w-3 animate-spin" />}
 				</label>
-				<InputArea
+				<Textarea
 					id="recording-notes"
 					value={notes}
 					onChange={(e) => onNotesChange(e.target.value)}

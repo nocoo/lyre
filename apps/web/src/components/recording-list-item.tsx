@@ -47,7 +47,7 @@ export function RecordingListItem({
 			<div className="flex-1 min-w-0">
 				<h3 className="text-sm font-medium text-basalt-foreground truncate">{recording.title}</h3>
 				<div className="mt-1 flex items-center gap-1.5">
-					<Badge variant={recording.status.variant} className="shrink-0 text-[10px]">
+					<Badge tone={recording.status.tone} className="shrink-0 text-[10px]">
 						{recording.status.label}
 					</Badge>
 					{recording.format !== "—" && (

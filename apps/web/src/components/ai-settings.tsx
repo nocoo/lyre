@@ -467,13 +467,13 @@ export function AiSettingsSection() {
 				</Button>
 
 				{testStatus === "success" && (
-					<Badge variant="success" className="text-xs">
+					<Badge tone="success" className="text-xs">
 						<Check className="mr-1 h-3 w-3" />
 						Connected
 					</Badge>
 				)}
 				{testStatus === "error" && (
-					<Badge variant="destructive" className="text-xs">
+					<Badge tone="danger" className="text-xs">
 						<X className="mr-1 h-3 w-3" />
 						{testError}
 					</Badge>

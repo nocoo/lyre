@@ -125,14 +125,14 @@ export function GlobalSearch() {
 									<div className="flex items-center gap-2">
 										<span className="text-sm font-medium truncate">{result.title}</span>
 										<Badge
-											variant={
+											tone={
 												result.status === "completed"
 													? "success"
 													: result.status === "failed"
-														? "destructive"
+														? "danger"
 														: result.status === "transcribing"
 															? "warning"
-															: "secondary"
+															: "neutral"
 											}
 											className="text-[10px] shrink-0"
 										>

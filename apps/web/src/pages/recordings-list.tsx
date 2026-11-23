@@ -357,7 +357,7 @@ function RecordingsPageInner() {
 							{BULK_FILTER_PRESETS.map((preset) => (
 								<Badge
 									key={preset.id}
-									variant="secondary"
+									variant="soft"
 									className="cursor-pointer"
 									title={preset.description}
 									onClick={() => applyPresetFilter(preset.id)}
@@ -398,7 +398,7 @@ function RecordingsPageInner() {
 								{STATUS_OPTIONS.map((opt) => (
 									<Badge
 										key={opt.value}
-										variant={statusFilter === opt.value ? "default" : "secondary"}
+										variant={statusFilter === opt.value ? "solid" : "soft"}
 										className="cursor-pointer"
 										onClick={() => {
 											setStatusFilter(opt.value);
@@ -419,7 +419,7 @@ function RecordingsPageInner() {
 								{SORT_OPTIONS.map((opt) => (
 									<Badge
 										key={opt.value}
-										variant={sortField === opt.value ? "default" : "secondary"}
+										variant={sortField === opt.value ? "solid" : "soft"}
 										className="cursor-pointer gap-1"
 										role="button"
 										aria-pressed={sortField === opt.value}
