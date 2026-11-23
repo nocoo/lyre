@@ -1,4 +1,12 @@
-import { ContentIsland, SidebarDrawer } from "@nocoo/basalt";
+import {
+	ContentIsland,
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetHeader,
+	SheetTitle,
+	SidebarProvider,
+} from "@nocoo/basalt";
 import { AppHeader, AppHeaderMenuButton, ProjectLinks } from "@nocoo/basalt/components/app-header";
 import {
 	AppMain,
@@ -83,22 +91,35 @@ function AppShellInner({ children }: AppShellProps) {
 			{!isMobile ? (
 				sidebar
 			) : (
-				<SidebarDrawer
-					id={drawerId}
-					open={mobileOpen}
-					onOpenChange={setMobileOpen}
-					returnFocusRef={navigationTrigger}
-					title="Navigation"
-					description="Application navigation links and actions."
-				>
-					<MobileNavCloseProvider value={() => setMobileOpen(false)}>
-						<AppSidebar
-							collapsed={false}
-							onCollapsedChange={setCollapsed}
-							dismissDrawer={() => setMobileOpen(false)}
-						/>
-					</MobileNavCloseProvider>
-				</SidebarDrawer>
+				<Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+					<SheetContent
+						id={drawerId}
+						data-slot="sidebar-drawer"
+						side="left"
+						showCloseButton={false}
+						className="basalt-sidebar-drawer max-h-dvh w-[var(--basalt-size-sidebar-width)] max-w-[var(--basalt-size-sidebar-width)] border-r-0 bg-basalt-background p-0 sm:p-0"
+						onCloseAutoFocus={(event) => {
+							if (navigationTrigger.current) {
+								event.preventDefault();
+								navigationTrigger.current.focus();
+							}
+						}}
+					>
+						<SheetHeader className="sr-only">
+							<SheetTitle>Navigation</SheetTitle>
+							<SheetDescription>Application navigation links and actions.</SheetDescription>
+						</SheetHeader>
+						<SidebarProvider collapsed={false}>
+							<MobileNavCloseProvider value={() => setMobileOpen(false)}>
+								<AppSidebar
+									collapsed={false}
+									onCollapsedChange={setCollapsed}
+									dismissDrawer={() => setMobileOpen(false)}
+								/>
+							</MobileNavCloseProvider>
+						</SidebarProvider>
+					</SheetContent>
+				</Sheet>
 			)}
 			<AppMain>
 				<AppHeader
