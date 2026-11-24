@@ -43,6 +43,39 @@ jobs:
           install-policy: trusted
       - run: bun run lint
 
+  s2-swift-lint:
+    name: "SwiftLint (macOS)"
+    runs-on: macos-latest
+    timeout-minutes: 10
+    outputs:
+      tested-sha: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.local/share/swiftlint
+          key: ${{ runner.os }}-swiftlint-0.65.1
+      - name: Install verified SwiftLint
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.local/share/swiftlint"
+          echo "${HOME}/.local/share/swiftlint" >> "$GITHUB_PATH"
+          export PATH="${HOME}/.local/share/swiftlint:${PATH}"
+          if ! command -v swiftlint >/dev/null || [ "$(swiftlint version)" != "0.65.1" ]; then
+            curl -fsSL -o /tmp/swiftlint.zip \
+              https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip
+            echo "c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0  /tmp/swiftlint.zip" | shasum -a 256 -c -
+            rm -rf "${HOME}/.local/share/swiftlint"
+            mkdir -p "${HOME}/.local/share/swiftlint"
+            unzip -q /tmp/swiftlint.zip -d "${HOME}/.local/share/swiftlint"
+          fi
+          test "$(swiftlint version)" = "0.65.1"
+      - name: Run SwiftLint
+        working-directory: apps/macos
+        run: swiftlint lint --strict
+
   s3-workflow:
     name: "S3: Workflow"
     runs-on: ubuntu-latest
@@ -197,6 +230,7 @@ jobs:
       - l4-e2e
       - p1-package
       - l1-hook-selftest
+      - s2-swift-lint
     outputs:
       tested-sha: ${{ github.sha }}
     steps:
@@ -204,6 +238,7 @@ jobs:
         run: |
           echo "s1-types: ${{ needs.s1-types.result }}"
           echo "s2-lint: ${{ needs.s2-lint.result }}"
+          echo "s2-swift-lint: ${{ needs.s2-swift-lint.result }}"
           echo "s3-workflow: ${{ needs.s3-workflow.result }}"
           echo "g1-secrets: ${{ needs.g1-secrets.result }}"
           echo "g2-dependencies: ${{ needs.g2-dependencies.result }}"
@@ -217,6 +252,7 @@ jobs:
           for r in \
             "${{ needs.s1-types.result }}" \
             "${{ needs.s2-lint.result }}" \
+            "${{ needs.s2-swift-lint.result }}" \
             "${{ needs.s3-workflow.result }}" \
             "${{ needs.g1-secrets.result }}" \
             "${{ needs.g2-dependencies.result }}" \
