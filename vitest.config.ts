@@ -17,6 +17,8 @@ export default defineConfig({
 		},
 	},
 	test: {
+		allowOnly: false,
+		passWithNoTests: false,
 		environment: "node",
 		include: [
 			"scripts/**/*.test.ts",
