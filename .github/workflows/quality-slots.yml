@@ -44,7 +44,7 @@ jobs:
       - run: bun run lint
 
   s2-swift-lint:
-    name: "SwiftLint (macOS)"
+    name: "S2: Lint (Swift)"
     runs-on: macos-latest
     timeout-minutes: 10
     outputs:
@@ -195,7 +195,7 @@ jobs:
       - run: echo "N/A - private monorepo, not published to npm"
 
   l1-hook-selftest:
-    name: "Hook self-test"
+    name: "L1: Unit (Pre-commit Gate)"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
