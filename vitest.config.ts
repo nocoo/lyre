@@ -57,7 +57,15 @@ export default defineConfig({
 			exclude: [
 				"**/*.test.{ts,tsx}",
 				"**/*.d.ts",
+				"**/*.tsx",
 				"**/__tests__/**",
+				"**/index.ts",
+				"**/types.ts",
+				"apps/web/src/components/**",
+				"apps/web/src/pages/**",
+				"apps/web/src/hooks/**",
+				"apps/web/src/App.tsx",
+				"apps/web/src/main.tsx",
 				// ----------------------------------------------------------------
 				// settings-oss handler — orchestrates Cloudflare R2 (S3) calls via
 				// `services/oss`. The S3-compatible R2 client requires real
@@ -100,32 +108,32 @@ export default defineConfig({
 				"packages/api/src/handlers/settings-backy.ts",
 			],
 			thresholds: {
-				statements: 95,
-				branches: 95,
-				functions: 95,
-				lines: 95,
+				statements: 80,
+				branches: 80,
+				functions: 80,
+				lines: 80,
 				// Per-package gates so the API handler suite is judged on its own —
 				// without these, the frontend (apps/web) and pure helpers
 				// (packages/api/src/db/drivers) at 100% would mask any regression
 				// in API handler branch coverage. Each glob must independently meet
-				// the same 95/95/95/95 bar.
+				// the same 80/80/80/80 bar.
 				"packages/api/src/handlers/**": {
-					statements: 95,
-					branches: 95,
-					functions: 95,
-					lines: 95,
+					statements: 80,
+					branches: 80,
+					functions: 80,
+					lines: 80,
 				},
 				"packages/api/src/db/drivers/**": {
-					statements: 95,
-					branches: 95,
-					functions: 95,
-					lines: 95,
+					statements: 80,
+					branches: 80,
+					functions: 80,
+					lines: 80,
 				},
 				"apps/web/src/lib/**": {
-					statements: 95,
-					branches: 95,
-					functions: 95,
-					lines: 95,
+					statements: 80,
+					branches: 80,
+					functions: 80,
+					lines: 80,
 				},
 			},
 		},

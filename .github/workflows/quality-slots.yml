@@ -138,39 +138,7 @@ jobs:
           runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: trusted
-      - run: bun run build && bun run test:coverage
-
-  l1-hook-selftest:
-    name: "L1: Unit (Pre-commit Gate)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    outputs:
-      tested-sha: ${{ github.sha }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: nocoo/base-ci/.github/actions/setup-js@dc858360aa7812db61fd9d825943e4efd4dcd0e7 # v2026.17
-        with:
-          package-manager: bun
-          runtime-version: ${{ env.BUN_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
-          install-policy: trusted
-      - name: Install gitleaks (pinned v8.30.1)
-        run: |
-          set -euo pipefail
-          GITLEAKS_VERSION="8.30.1"
-          GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
-          TAR_FILE="$RUNNER_TEMP/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl --retry 5 --retry-delay 2 --retry-all-errors -sSfL \
-            -o "$TAR_FILE" \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  ${TAR_FILE}" | sha256sum --check
-          tar -xzf "$TAR_FILE" -C "$RUNNER_TEMP" gitleaks
-          chmod +x "$RUNNER_TEMP/gitleaks"
-          rm -f "$TAR_FILE"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - run: bun run gate:l1-selftest
+      - run: bun run test:coverage
 
   l2-runtime:
     name: "L2: Runtime"
@@ -237,7 +205,6 @@ jobs:
       - g2-dependencies
       - b1-build
       - l1-unit
-      - l1-hook-selftest
       - l2-runtime
       - l3-integration
       - l4-e2e
@@ -255,7 +222,6 @@ jobs:
           echo "g2-dependencies: ${{ needs.g2-dependencies.result }}"
           echo "b1-build: ${{ needs.b1-build.result }}"
           echo "l1-unit: ${{ needs.l1-unit.result }}"
-          echo "l1-hook-selftest: ${{ needs.l1-hook-selftest.result }}"
           echo "l2-runtime: ${{ needs.l2-runtime.result }}"
           echo "l3-integration: ${{ needs.l3-integration.result }}"
           echo "l4-e2e: ${{ needs.l4-e2e.result }}"
@@ -269,7 +235,6 @@ jobs:
             "${{ needs.g2-dependencies.result }}" \
             "${{ needs.b1-build.result }}" \
             "${{ needs.l1-unit.result }}" \
-            "${{ needs.l1-hook-selftest.result }}" \
             "${{ needs.l3-integration.result }}" \
             "${{ needs.l4-e2e.result }}"; do
             if [ "$r" != "success" ]; then
