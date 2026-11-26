@@ -43,7 +43,7 @@ bun run gate:pages               # verify web page test coverage
 
 Follows `system1-quality`; CI slot definitions and pinned `nocoo/base-ci` revision live in `.github/workflows/quality-slots.yml` (called by `.github/workflows/ci.yml`; `quality / Z1: Gate` required on `main`). Close gaps without lowering the contract. Status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
-- **Exceptions / gaps**: `L2 Runtime` is `N/A` (verified via `wrangler dev` in `L3`/`L4`); `P1 Package` is `N/A` (private repo). CI runs Biome (`S2`) and macOS SwiftLint; `test:macos` runs locally.
+- **Exceptions / gaps**: `L2 Runtime` is `N/A` (verified via `wrangler dev` in `L3`/`L4`). `P1 Package` runs `wrangler deploy --env="" --dry-run` in `apps/api` reusing `B1` (`enforced`); `L3` and `L4` reuse `B1` (`apps/api/static`). CI runs Biome (`S2`) and macOS SwiftLint; `test:macos` runs locally.
 - **Coverage scope**: `L1` enforces 80% on scoped JS in `vitest.config.ts` (wiring, repos, Views, 5 handlers in `L3`/`L4` excluded); native pre-commit enforces 33% line / 39% function interim floors (target 95%).
 - **Pre-commit**: Installed via `bun run prepare` (`.husky/`). Runs staged `scripts/pre-commit.py` on an exported index snapshot (read-only deps, snapshot-local links/caches): `G1`, `S2`, `S1`, `L1`, and native tests.
 - **Pre-push**: `.husky/pre-push` (`scripts/pre-push.ts`) builds the SPA (`web:build`), then runs `G2` (`osv-scanner`), `S2` (Biome + SwiftLint), `S1`, `L1`, `L3` (`test:e2e`), and `test:macos` in parallel.
