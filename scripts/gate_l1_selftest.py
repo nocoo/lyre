@@ -263,7 +263,7 @@ def build_probes() -> list[tuple[str, bool, callable]]:
         )
 
     def setup_coverage_branches(wt: Path) -> None:
-        text = original_vitest.replace("branches: 95", "branches: 100", 1)
+        text = original_vitest.replace("branches: 85", "branches: 100", 1)
         stage_file(wt, VITEST_CONFIG.relative_to(ROOT), text)
 
     def setup_lint_error(wt: Path) -> None:

@@ -48,8 +48,15 @@ export default defineConfig({
 			include: [
 				// Pure handler logic — exercised by packages/api/src/__tests__/handlers/*.
 				"packages/api/src/handlers/**/*.ts",
+				// Pure domain services & helpers — exercised by packages/api/src/__tests__/services/* & author-profile.test.ts.
+				"packages/api/src/services/ai.ts",
+				"packages/api/src/services/job-processor.ts",
+				"packages/api/src/lib/author-profile.ts",
 				// Driver-agnostic helpers — exercised by result.test.ts + batch.test.ts.
 				"packages/api/src/db/drivers/**/*.ts",
+				// Worker security middleware — exercised by apps/api/src/__tests__/*.
+				"apps/api/src/middleware/access-auth.ts",
+				"apps/api/src/middleware/csrf-guard.ts",
 				// Frontend pure helpers — exercised by apps/web/src/__tests__/*.
 				"apps/web/src/lib/api.ts",
 				"apps/web/src/lib/utils.ts",
@@ -108,32 +115,32 @@ export default defineConfig({
 				"packages/api/src/handlers/settings-backy.ts",
 			],
 			thresholds: {
-				statements: 80,
-				branches: 80,
-				functions: 80,
-				lines: 80,
+				statements: 90,
+				branches: 85,
+				functions: 90,
+				lines: 90,
 				// Per-package gates so the API handler suite is judged on its own —
 				// without these, the frontend (apps/web) and pure helpers
 				// (packages/api/src/db/drivers) at 100% would mask any regression
 				// in API handler branch coverage. Each glob must independently meet
-				// the same 80/80/80/80 bar.
+				// the same 90/85 bar.
 				"packages/api/src/handlers/**": {
-					statements: 80,
-					branches: 80,
-					functions: 80,
-					lines: 80,
+					statements: 90,
+					branches: 85,
+					functions: 90,
+					lines: 90,
 				},
 				"packages/api/src/db/drivers/**": {
-					statements: 80,
-					branches: 80,
-					functions: 80,
-					lines: 80,
+					statements: 90,
+					branches: 85,
+					functions: 90,
+					lines: 90,
 				},
 				"apps/web/src/lib/**": {
-					statements: 80,
-					branches: 80,
-					functions: 80,
-					lines: 80,
+					statements: 90,
+					branches: 85,
+					functions: 90,
+					lines: 90,
 				},
 			},
 		},

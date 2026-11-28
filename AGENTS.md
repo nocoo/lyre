@@ -14,7 +14,7 @@ bun run web:dev                  # https://lyre.dev.hexly.ai -> 127.0.0.1:7016
 bun run typecheck                # S1 (web + worker + api)
 bun run lint                     # S2 Biome check-only, 0 warnings
 bun run build                    # B1 builds SPA into apps/api/static
-bun run test:coverage            # L1 >= 80% on scoped modules (vitest.config.ts)
+bun run test:coverage            # L1 >= 90/85% on scoped modules (vitest.config.ts)
 bun run gate:l1-selftest         # L1 hook negative probes + web-lane timing (auto cleanup)
 bun run test:macos               # isolated native tests, live audio disabled
 bun run test:e2e                 # L3 local Worker API tests (:7017)
@@ -44,7 +44,7 @@ bun run gate:pages               # verify web page test coverage
 Follows `system1-quality`; CI slot definitions and pinned `nocoo/base-ci` revision live in `.github/workflows/quality-slots.yml` (called alongside `D1`–`D5` Worker deploy by `.github/workflows/pipeline.yml`; `quality / Z1: Gate` required on `main`). Close gaps without lowering the contract. Status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
 - **Exceptions / gaps**: `L2 Runtime` is `N/A` (verified via `wrangler dev` in `L3`/`L4`). `P1 Package` runs `wrangler deploy --env="" --dry-run` in `apps/api` reusing `B1` (`enforced`); `L3` and `L4` reuse `B1` (`apps/api/static`). CI runs Biome (`S2`) and macOS SwiftLint; `test:macos` runs locally.
-- **Coverage scope**: `L1` enforces 80% on scoped JS in `vitest.config.ts` (wiring, repos, Views, 5 handlers in `L3`/`L4` excluded); native pre-commit enforces 33% line / 39% function interim floors (target 95%).
+- **Coverage scope**: `L1` enforces 90% stmts/funcs/lines and 85% branches on scoped JS in `vitest.config.ts` (handlers, drivers, `ai.ts`, `job-processor.ts`, `author-profile.ts`, `access-auth.ts`, `csrf-guard.ts`, `apps/web/src/lib/{api,utils}.ts`); native pre-commit enforces 33% line / 39% function interim floors (target 95%).
 - **Pre-commit**: Installed via `bun run prepare` (`.husky/`). Runs staged `scripts/pre-commit.py` on an exported index snapshot (read-only deps, snapshot-local links/caches): `G1`, `S2`, `S1`, `L1`, and native tests.
 - **Pre-push**: `.husky/pre-push` (`scripts/pre-push.ts`) builds the SPA (`web:build`), then runs `G2` (`osv-scanner`), `S2` (Biome + SwiftLint), `S1`, `L1`, `L3` (`test:e2e`), and `test:macos` in parallel.
 
